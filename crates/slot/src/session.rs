@@ -304,12 +304,13 @@ impl Session {
         self.showing_polaroids() || self.held()
     }
 
+    /// Menus and shutdown can pause the game while its phase remains Playing.
     fn playing(&self) -> bool {
         matches!(self.app.phase(), Phase::Playing { .. }) && !self.held()
     }
 
     fn held(&self) -> bool {
-        self.app.power_menu().is_some() || self.app.game_menu_open() || self.app.shutting_down()
+        self.app.game_menu_open() || self.app.shutting_down()
     }
 
     fn dozing(&self) -> bool {

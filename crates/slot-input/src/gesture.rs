@@ -40,7 +40,9 @@ pub enum Action {
     ColourCorrectionToggle,
     PowerPress,
     PowerTap,
+    /// The hold threshold, while the button is still down. Starts graceful shutdown.
     PowerHold,
+    /// Released after a hold. Shutdown has already started; this is not a short tap.
     PowerOff,
     LidClose,
     LidOpen,

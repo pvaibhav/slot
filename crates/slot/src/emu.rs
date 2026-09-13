@@ -533,6 +533,7 @@ impl Worker {
                 self.apply(cmd, core.as_mut(), &mut transport, &mut cable, &link);
             }
 
+            // stepping frames: a local shutdown, or
             if let Some(t) = transport.as_mut() {
                 match cable.as_mut() {
                     Some(c) => {

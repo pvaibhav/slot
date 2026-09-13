@@ -151,6 +151,8 @@ fn power_on_a_dozing_device_brings_the_screen_back_before_the_menu() {
     );
     assert!(all_black(&dozing), "the doze left something on the screen");
 
+    // And POWER pressed again. The press, held: the screen has to come back before shutdown
+    // starts, not a second after it.
     input.0.push_back(vec![RawEvent::Down(Btn::Power)]);
     f.advance(&mut input);
     let woken = composed(&mut f, &mut c, "woken");
@@ -169,18 +171,18 @@ fn power_on_a_dozing_device_brings_the_screen_back_before_the_menu() {
         f.advance(&mut input);
         std::thread::sleep(Duration::from_millis(8));
     }
-    let menu = composed(&mut f, &mut c, "menu");
+    let shutdown = composed(&mut f, &mut c, "shutdown");
     assert_eq!(
         backlight.load(Ordering::Relaxed),
         lit,
-        "the menu is up on a panel nobody can see"
+        "the shutdown message is on a panel nobody can see"
     );
     assert!(
-        any_ink(&menu),
-        "the menu's own rows are not on the panel to be read"
+        any_ink(&shutdown),
+        "the shutdown message is not on the panel to be read"
     );
     assert_ne!(
-        menu, woken,
-        "the hold never raised the menu over what was underneath it"
+        shutdown, woken,
+        "the hold never showed shutdown over what was underneath it"
     );
 }

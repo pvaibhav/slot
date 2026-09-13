@@ -13,7 +13,6 @@ use slot::session::Session;
 use slot_gfx::Draw;
 use slot_input::{Action, Btn, Millis, RawEvent, POWER_HOLD_MS};
 use slot_store::{read_slot_state, write_slot_state, Core, Platform, SlotState, StateRing};
-use slot_ui::PowerChoice;
 
 use slot::link_radio::{RadioJob, RadioJobs};
 
@@ -142,39 +141,10 @@ fn the_backlight_follows_brightness_from_boot() {
 }
 
 #[test]
-fn the_menu_covers_the_screen_in_the_case_materials() {
-    let d = tmp_root_with_carts(&["Emerald"]);
-    let mut a = app_playing_in(d.path(), "Emerald");
-    a.apply(Action::PowerHold);
-
-    let mut out = Vec::new();
-    a.draw(&mut out);
-
-    match out.first() {
-        Some(Draw::Rect { w, h, colour, .. }) => {
-            assert_eq!(
-                *colour,
-                slot_ui::opening(),
-                "the ground is the case's opening"
-            );
-            assert!(*w > 0.0 && *h > 0.0, "and it covers the panel");
-        }
-        other => panic!("the menu drew {other:?} rather than a ground"),
-    }
-    assert_eq!(
-        out.len(),
-        1,
-        "nothing of the previous phase survives the menu"
-    );
-}
-
-#[test]
 fn a_power_off_draws_a_shutdown_screen_over_everything() {
     let d = tmp_root_with_carts(&["Emerald"]);
     let mut a = app_playing_in(d.path(), "Emerald");
     a.apply(Action::PowerHold);
-    a.apply(Action::GbaDown(Btn::Down));
-    a.apply(Action::GbaDown(Btn::A));
 
     let mut out = Vec::new();
     a.draw(&mut out);
@@ -194,82 +164,12 @@ fn a_power_off_draws_a_shutdown_screen_over_everything() {
 }
 
 #[test]
-fn a_hold_opens_the_menu_and_commits_nothing() {
-    let d = tmp_root_with_carts(&["Emerald"]);
-    let mut a = app_playing_in(d.path(), "Emerald");
-    a.apply(Action::PowerHold);
-    assert_eq!(a.power_menu(), Some(0), "the menu opens on Restart");
-    assert!(!a.powering_off() && !a.restarting());
-    assert!(
-        StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
-            .read_resume()
-            .unwrap()
-            .is_some(),
-        "durable before the menu is even read: the user may hold on to the PMIC's own cutoff"
-    );
-}
-
-#[test]
-fn the_menu_moves_and_wraps_at_both_ends() {
-    let d = tmp_root_with_carts(&["Emerald"]);
-    let mut a = app_playing_in(d.path(), "Emerald");
-    let last = PowerChoice::ALL.len() - 1;
-    a.apply(Action::PowerHold);
-    a.apply(Action::GbaDown(Btn::Up));
-    assert_eq!(a.power_menu(), Some(last), "up from the top did not wrap");
-    a.apply(Action::GbaDown(Btn::Down));
-    assert_eq!(a.power_menu(), Some(0), "down from the bottom did not wrap");
-    for i in 1..=last {
-        a.apply(Action::GbaDown(Btn::Down));
-        assert_eq!(a.power_menu(), Some(i));
-    }
-}
-
-#[test]
-fn b_leaves_the_menu_without_doing_anything() {
-    let d = tmp_root_with_carts(&["Emerald"]);
-    let mut a = app_playing_in(d.path(), "Emerald");
-    a.apply(Action::PowerHold);
-    a.apply(Action::GbaDown(Btn::B));
-    assert_eq!(a.power_menu(), None);
-    assert!(!a.powering_off() && !a.restarting());
-    assert!(
-        matches!(a.phase(), Phase::Playing { .. }),
-        "back to the game"
-    );
-}
-
-#[test]
-fn each_row_commits_to_its_own_outcome() {
-    for (down, want) in [(0, "restart"), (1, "off")] {
-        let d = tmp_root_with_carts(&["Emerald"]);
-        let mut a = app_playing_in(d.path(), "Emerald");
-        a.apply(Action::PowerHold);
-        for _ in 0..down {
-            a.apply(Action::GbaDown(Btn::Down));
-        }
-        a.apply(Action::GbaDown(Btn::A));
-        assert_eq!(
-            a.power_menu(),
-            None,
-            "{want}: the menu closes on the choice"
-        );
-        match want {
-            "restart" => assert!(a.restarting() && !a.powering_off()),
-            _ => assert!(a.powering_off() && !a.restarting()),
-        }
-    }
-}
-
-#[test]
 fn the_shutdown_screen_is_up_before_the_machine_may_stop() {
     let d = tmp_root_with_carts(&["Emerald"]);
     let mut a = app_playing_in(d.path(), "Emerald");
     a.apply(Action::PowerHold);
-    a.apply(Action::GbaDown(Btn::Down));
-    a.apply(Action::GbaDown(Btn::A));
 
-    assert!(a.powering_off(), "the choice decides immediately");
+    assert!(a.powering_off(), "the hold starts shutdown immediately");
     assert!(
         !a.ready_to_power_off(),
         "but the binary may not act until the screen has been presented"
@@ -305,23 +205,7 @@ fn a_dozing_device_powers_off_by_itself_rather_than_waiting_for_the_lid() {
     );
 }
 
-#[test]
-fn the_power_menu_holds_the_core_still() {
-    let d = tmp_root_with_real_carts(&["Advance Wars", "Emerald"]);
-    let (mut s, _motor) = session_with_platform(d.path());
-    let mut now = 0;
-    play(&mut s, &mut now);
-    assert_eq!(
-        s.observed_speed(),
-        Some(Speed::Normal),
-        "the core should be running, or this test proves nothing"
-    );
-
-    hold_power(&mut s, &mut now);
-    assert_eq!(s.app().power_menu(), Some(0), "the menu never opened");
-    await_paused(&mut s);
-}
-
+/// A device with five seconds of rcK ahead of it is
 #[test]
 fn a_committed_shutdown_holds_the_core_still() {
     let d = tmp_root_with_real_carts(&["Advance Wars", "Emerald"]);
@@ -330,15 +214,13 @@ fn a_committed_shutdown_holds_the_core_still() {
     play(&mut s, &mut now);
 
     hold_power(&mut s, &mut now);
-    s.app_mut().apply(Action::GbaDown(Btn::Down));
-    s.app_mut().apply(Action::GbaDown(Btn::A));
-    assert!(s.app().powering_off(), "Power Off is the second row");
+    assert!(s.app().powering_off(), "the hold starts shutdown");
     s.update(DT);
     await_paused(&mut s);
 }
 
 #[test]
-fn power_pressed_while_dozing_lights_the_panel_before_the_menu_is_raised() {
+fn power_pressed_while_dozing_lights_the_panel_before_shutdown() {
     let d = tmp_root_with_carts(&["Emerald"]);
     clocked(d.path());
     let mut s = Session::boot(d.path().to_path_buf());
@@ -374,19 +256,16 @@ fn power_pressed_while_dozing_lights_the_panel_before_the_menu_is_raised() {
         "the panel came on over a device still dozing behind it"
     );
 
+    // turns the device off — and now its message is on a panel the user can read.
     let pressed = now;
     while now < pressed + POWER_HOLD_MS + FRAME_MS {
         step(&mut s, &mut now);
     }
-    assert_eq!(
-        s.app().power_menu(),
-        Some(0),
-        "the hold no longer raises the menu"
-    );
+    assert!(s.app().powering_off(), "the hold no longer starts shutdown");
     assert_eq!(
         backlight.load(Ordering::Relaxed),
         lit,
-        "the menu is up on a panel nobody can see"
+        "the shutdown message is on a panel nobody can see"
     );
 }
 
@@ -432,6 +311,7 @@ fn await_paused(s: &mut Session) {
     }
 }
 
+/// POWER down, then frames until the gesture layer's hold threshold fires.
 fn hold_power(s: &mut Session, now: &mut Millis) {
     let pressed = *now;
     event(s, RawEvent::Down(Btn::Power), now);
@@ -515,4 +395,28 @@ fn a_shut_lid_over_a_session_takes_its_network_down_too() {
         "the session's own network must come down before the driver does: {jobs:?}"
     );
     assert!(jobs.contains(&RadioJob::Cool));
+}
+
+/// Releasing POWER and pressing a former menu button cannot cancel or delay shutdown.
+#[test]
+fn shutdown_ignores_further_input_without_resetting_its_deadline() {
+    let d = tmp_root_with_carts(&["Emerald"]);
+    let mut a = app_playing_in(d.path(), "Emerald");
+    a.apply(Action::PowerHold);
+    let held_at = a.now();
+    a.tick_ms(held_at + 200);
+    for action in [
+        Action::PowerOff,
+        Action::PowerHold,
+        Action::GbaDown(Btn::B),
+        Action::GbaDown(Btn::A),
+        Action::PowerTap,
+        Action::LidClose,
+        Action::LidOpen,
+    ] {
+        a.apply(action);
+        assert!(a.powering_off());
+    }
+    a.tick_ms(held_at + 250);
+    assert!(a.ready_to_power_off());
 }

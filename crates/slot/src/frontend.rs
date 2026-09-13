@@ -9,8 +9,8 @@ use slot_ui::{
     date_time_text, gb_cart_shadow, hhmm, hint_face, icon_face, menu_face, photo_face,
     quick_caret_face, quick_label_face, quick_legend_faces, quick_value_face, set_clock_hint_face,
     socket_face, sticker_face, title_face, toast_face, wallpaper_face, word_face, GbShell, Icon,
-    LinkBadge, PowerChoice, QuickMenuFaces, QuickRow, QuickValue, StickerFields, Toast, UndoFace,
-    ALERT_PX, BOLT_PX, HUD_ICON_PX, HUD_INK, LEGEND,
+    LinkBadge, QuickMenuFaces, QuickRow, QuickValue, StickerFields, Toast, UndoFace, ALERT_PX,
+    BOLT_PX, HUD_ICON_PX, HUD_INK, LEGEND,
 };
 
 use crate::app::{App, LinkRow, Phase};
@@ -142,25 +142,11 @@ impl Frontend {
         let alert = icon_face(Icon::Alert, ALERT_PX, ALERT_INK);
         let alert = compositor.create_texture(alert.w, alert.h, &alert.rgba);
         self.session.app_mut().set_alert_face(alert);
-        let lines = PowerChoice::ALL
-            .iter()
-            .map(|c| {
-                let f = menu_face(match c {
-                    PowerChoice::Restart => "Restarting",
-                    PowerChoice::PowerOff => "Powering Down",
-                });
-                (compositor.create_texture(f.w, f.h, &f.rgba), f.w, f.h)
-            })
-            .collect();
-        self.session.app_mut().set_shutdown_faces(lines);
-        let menu = PowerChoice::ALL
-            .iter()
-            .map(|c| {
-                let f = menu_face(c.text());
-                (compositor.create_texture(f.w, f.h, &f.rgba), f.w, f.h)
-            })
-            .collect();
-        self.session.app_mut().set_power_menu_faces(menu);
+        // Upload before shutdown, while the GPU is available.
+        let f = menu_face("Powering Down");
+        let face = (compositor.create_texture(f.w, f.h, &f.rgba), f.w, f.h);
+        self.session.app_mut().set_shutdown_face(face);
+        // legend. At boot, so moving through the menu or changing a
         let mut up = |f: UndoFace| (compositor.create_texture(f.w, f.h, &f.rgba), f.w, f.h);
         let labels = QuickRow::ALL
             .iter()
@@ -181,6 +167,8 @@ impl Frontend {
             carets,
             legend,
         });
+        // blank chip in flight and its shadow, in `Core::ALL` order. Uploaded at boot so
+        // the first frame of a lid coming off is not spent in a rasteriser.
         let sockets = slot_store::Core::ALL
             .iter()
             .map(|c| {
@@ -382,14 +370,6 @@ impl Frontend {
 
     pub fn powering_off(&self) -> bool {
         self.session.app().ready_to_power_off()
-    }
-
-    pub fn restarting(&self) -> bool {
-        self.session.app().ready_to_restart()
-    }
-
-    pub fn restart(&mut self) {
-        self.session.app_mut().restart();
     }
 
     pub fn poweroff(&mut self) {

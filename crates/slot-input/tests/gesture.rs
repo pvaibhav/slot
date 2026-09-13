@@ -186,8 +186,9 @@ fn power_flushes_on_the_press_and_locks_on_the_release() {
     assert_eq!(g.feed(Up(Btn::Power), 80), vec![PowerTap]);
 }
 
+/// The hold fires once while POWER is down, without waiting for release.
 #[test]
-fn power_held_past_the_threshold_raises_the_menu_and_the_release_does_nothing() {
+fn power_held_past_the_threshold_requests_shutdown_once() {
     let mut g = Gestures::new();
     g.feed(Down(Btn::Power), 0);
     assert!(g.tick(POWER_HOLD_MS - 1).is_empty());

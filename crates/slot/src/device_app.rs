@@ -99,9 +99,6 @@ pub fn run() {
         pacer.wait();
         let began = Instant::now();
         frontend.advance(&mut input);
-        if frontend.restarting() {
-            frontend.restart();
-        }
         if frontend.powering_off() {
             frontend.poweroff();
             return;

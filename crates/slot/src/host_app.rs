@@ -66,9 +66,6 @@ impl ApplicationHandler for Slot {
                 }
                 surface.request_redraw();
                 self.frontend.advance(&mut self.input);
-                if self.frontend.restarting() {
-                    self.frontend.restart();
-                }
                 if self.frontend.powering_off() {
                     self.frontend.poweroff();
                     events.exit();

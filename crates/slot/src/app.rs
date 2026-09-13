@@ -12,10 +12,10 @@ use slot_store::{
 use slot_ui::{
     board_from, board_zoom, draw_backdrop, draw_empty_slot, draw_footer, draw_slot_name,
     draw_sticker, ease, grown, lid_at, lid_from, lift_of, on_board, shelf_cart_at, ClockPicker,
-    Draw, FfState, GbShell, Hud, HudKind, Icon, LinkBadge, Millis, Placed, Polaroids, PowerChoice,
-    QuickMenu, QuickMenuFaces, QuickRow, QuickValue, Refusal, Shelf, SlotChrome, TexId, Toast,
-    BOARD_W, BOARD_X, CART_W, CHIP_H, CHIP_U, CHIP_V, CHIP_W, HINT_EDGE, HINT_H, HOP_LIFT,
-    SHADOW_H, SHADOW_W, SOCKET_H, SOCKET_U, SOCKET_V, SOCKET_W, TURN_PAD,
+    Draw, FfState, GbShell, Hud, HudKind, Icon, LinkBadge, Millis, Placed, Polaroids, QuickMenu,
+    QuickMenuFaces, QuickRow, QuickValue, Refusal, Shelf, SlotChrome, TexId, Toast, BOARD_W,
+    BOARD_X, CART_W, CHIP_H, CHIP_U, CHIP_V, CHIP_W, HINT_EDGE, HINT_H, HOP_LIFT, SHADOW_H,
+    SHADOW_W, SOCKET_H, SOCKET_U, SOCKET_V, SOCKET_W, TURN_PAD,
 };
 
 use crate::audio::Sfx;
@@ -61,8 +61,6 @@ const PLAY_HOLD_MS: Millis = 500;
 
 const SHUTDOWN_SHOW_MS: Millis = 250;
 
-const POWER_MENU_PITCH: f32 = 44.0;
-const POWER_MENU_BAR_INSET: f32 = 4.0;
 const CORE_PICKER_RECEDE: f32 = 0.26;
 
 const SLOT_NAME_IN_MS: Millis = 200;
@@ -263,9 +261,8 @@ pub struct App {
     refusal: Option<Refusal>,
     refused_from: Option<f32>,
     alert_face: Option<TexId>,
-    shutdown_faces: Vec<(TexId, u32, u32)>,
-    power_menu: Option<usize>,
-    power_menu_faces: Vec<(TexId, u32, u32)>,
+    /// Uploaded at boot for the brief shutdown screen.
+    shutdown_face: Option<(TexId, u32, u32)>,
     core_picker: Option<CorePicker>,
     core_board_face: Option<TexId>,
     core_lid_face: Option<TexId>,
@@ -275,6 +272,7 @@ pub struct App {
     core_blank_chip_face: Option<TexId>,
     core_chip_shadow_face: Option<TexId>,
     core_legend_faces: Vec<(TexId, u32)>,
+    /// than a phase: `Phase::Playing` is
     game_menu: Option<GameMenu>,
     link_sprites: Option<LinkSprites>,
     link_hardware: LinkKind,
@@ -290,7 +288,6 @@ pub struct App {
     link_legend_faces: Vec<(TexId, u32)>,
     starting: Option<LinkStarting>,
     link_transport: Option<(u16, Box<dyn LinkChannel>)>,
-    restarting: bool,
     act_at: Millis,
     root: Option<PathBuf>,
     state: SlotState,
@@ -368,9 +365,7 @@ impl App {
             refusal: None,
             refused_from: None,
             alert_face: None,
-            shutdown_faces: Vec::new(),
-            power_menu: None,
-            power_menu_faces: Vec::new(),
+            shutdown_face: None,
             core_picker: None,
             core_board_face: None,
             core_lid_face: None,
@@ -395,7 +390,6 @@ impl App {
             link_legend_faces: Vec::new(),
             starting: None,
             link_transport: None,
-            restarting: false,
             act_at: 0,
             root: None,
             state: SlotState::default(),
@@ -932,27 +926,9 @@ impl App {
         self.powering_off && self.now() >= self.act_at
     }
 
-    pub fn ready_to_restart(&self) -> bool {
-        self.restarting && self.now() >= self.act_at
-    }
-
+    /// Whether the shutdown screen is on the panel.
     pub fn shutting_down(&self) -> bool {
-        self.powering_off || self.restarting
-    }
-
-    pub fn restarting(&self) -> bool {
-        self.restarting
-    }
-
-    pub fn restart(&mut self) {
-        self.settle_saves();
-        if let Some(power) = &mut self.power {
-            power.restart();
-        }
-    }
-
-    pub fn power_menu(&self) -> Option<usize> {
-        self.power_menu
+        self.powering_off
     }
 
     pub fn core_picker(&self) -> Option<Core> {
@@ -1047,12 +1023,8 @@ impl App {
     }
 
     pub fn apply(&mut self, action: Action) {
-        if self.power_menu.is_some() {
-            match action {
-                Action::LidClose => return self.doze(),
-                Action::LidOpen => return self.wake(),
-                _ => return self.power_menu_input(action),
-            }
+        if self.shutting_down() {
+            return;
         }
         match action {
             Action::LidClose => return self.doze(),
@@ -1062,6 +1034,8 @@ impl App {
                     self.end_link();
                     return;
                 }
+                // gets the shutdown message from the same press on a panel they can read.
+                // shutdown — and nothing needs to: the next press overwrites it.
                 self.woke_on_press = matches!(self.phase, Phase::Doze { .. });
                 if self.woke_on_press {
                     self.wake();
@@ -1069,7 +1043,8 @@ impl App {
                 return self.flush_resume();
             }
             Action::PowerTap => return self.power_press(),
-            Action::PowerHold => return self.open_power_menu(),
+            Action::PowerHold => return self.hold_power(),
+            // The hold already committed to shutdown; its release has no further action.
             Action::PowerOff => return,
             _ => {}
         }
@@ -1676,10 +1651,6 @@ impl App {
     }
 
     pub fn draw(&self, out: &mut Vec<Draw>) {
-        if let Some(index) = self.power_menu {
-            self.draw_power_menu(index, out);
-            return;
-        }
         if self.shutting_down() {
             out.push(Draw::Rect {
                 x: 0.0,
@@ -1688,12 +1659,7 @@ impl App {
                 h: OUT_H as f32,
                 colour: [0.0, 0.0, 0.0, 1.0],
             });
-            let which = if self.restarting {
-                PowerChoice::Restart
-            } else {
-                PowerChoice::PowerOff
-            };
-            if let Some((tex, w, h)) = self.shutdown_faces.get(which.index()).copied() {
+            if let Some((tex, w, h)) = self.shutdown_face {
                 out.push(Draw::Tex {
                     x: ((OUT_W - w) / 2) as f32,
                     y: ((OUT_H - h) / 2) as f32,
@@ -1869,12 +1835,8 @@ impl App {
         self.alert_face = Some(face);
     }
 
-    pub fn set_shutdown_faces(&mut self, faces: Vec<(TexId, u32, u32)>) {
-        self.shutdown_faces = faces;
-    }
-
-    pub fn set_power_menu_faces(&mut self, faces: Vec<(TexId, u32, u32)>) {
-        self.power_menu_faces = faces;
+    pub fn set_shutdown_face(&mut self, face: (TexId, u32, u32)) {
+        self.shutdown_face = Some(face);
     }
 
     pub fn set_core_board_faces(&mut self, board: TexId, lid: TexId) {
@@ -1926,22 +1888,6 @@ impl App {
 
     pub fn link_sprites_ready(&self) -> bool {
         self.link_sprites.is_some()
-    }
-
-    fn draw_power_menu(&self, index: usize, out: &mut Vec<Draw>) {
-        out.push(Draw::Rect {
-            x: 0.0,
-            y: 0.0,
-            w: OUT_W as f32,
-            h: OUT_H as f32,
-            colour: slot_ui::opening(),
-        });
-        draw_menu_rows(
-            &self.power_menu_faces,
-            Some(index),
-            centred_top(self.power_menu_faces.len()),
-            out,
-        );
     }
 
     fn core_picker_shown(&self) -> Option<CorePicker> {
@@ -2252,6 +2198,8 @@ impl App {
         }
     }
 
+    /// The one function every doze actually goes through: `LidClose` and
+    /// `PowerTap` by way of `power_press` both return
     fn doze(&mut self) {
         if self.link_active() {
             self.end_link();
@@ -2305,44 +2253,15 @@ impl App {
         }
     }
 
-    fn open_power_menu(&mut self) {
-        if self.power_menu.is_some() {
-            return;
-        }
+    /// Save before starting graceful shutdown, ahead of the PMIC's hardware cutoff.
+    /// End a live link before pausing, without saving a state captured during the link.
+    fn hold_power(&mut self) {
         if self.link_active() {
-            return self.refuse();
+            self.end_link();
+        } else {
+            self.flush_resume();
         }
-        self.flush_resume();
-        self.power_menu = Some(0);
-    }
-
-    fn power_menu_input(&mut self, action: Action) {
-        let Some(index) = self.power_menu else {
-            return;
-        };
-        let last = PowerChoice::ALL.len() - 1;
-        match action {
-            Action::GbaDown(Btn::Up) => {
-                self.power_menu = Some(if index == 0 { last } else { index - 1 })
-            }
-            Action::GbaDown(Btn::Down) => {
-                self.power_menu = Some(if index >= last { 0 } else { index + 1 })
-            }
-            Action::GbaDown(Btn::B) => self.power_menu = None,
-            Action::GbaDown(Btn::A) => {
-                self.power_menu = None;
-                self.close_game_menu();
-                match PowerChoice::ALL[index] {
-                    PowerChoice::Restart => {
-                        self.restarting = true;
-                        self.act_at = self.now() + SHUTDOWN_SHOW_MS;
-                        self.set_led(LedState::Off);
-                    }
-                    PowerChoice::PowerOff => self.begin_power_off(),
-                }
-            }
-            _ => {}
-        }
+        self.begin_power_off();
     }
 
     fn open_core_picker(&mut self) {
@@ -2394,6 +2313,7 @@ impl App {
         if self.game_menu.is_some() {
             return;
         }
+        // This overlay pauses the core (`Session::held` names it, and `sync_speed` maps that to
         if self.link_active() {
             return self.refuse();
         }
@@ -2646,7 +2566,8 @@ impl App {
     }
 
     fn poll_link(&mut self) {
-        if self.power_menu.is_some() {
+        // A link must not start after shutdown has committed to pausing the core.
+        if self.shutting_down() {
             return;
         }
         let Some(mut starting) = self.starting.take() else {
@@ -2700,6 +2621,8 @@ impl App {
         if self.powering_off {
             return;
         }
+        // End any live link before shutdown pauses the core. This also covers critical
+        // battery shutdown, where no power-button press ended the link first.
         if self.link_active() {
             self.end_link();
         }
@@ -3127,37 +3050,4 @@ fn free_stamp(ring: &StateRing, now: i64) -> String {
         stamp = format_stamp(secs);
     }
     stamp
-}
-
-fn centred_top(rows: usize) -> f32 {
-    (OUT_H as f32 - POWER_MENU_PITCH * rows as f32) / 2.0
-}
-
-fn draw_menu_rows(
-    faces: &[(TexId, u32, u32)],
-    index: Option<usize>,
-    top: f32,
-    out: &mut Vec<Draw>,
-) {
-    for (row, (tex, w, h)) in faces.iter().copied().enumerate() {
-        let y = top + POWER_MENU_PITCH * row as f32;
-        let x = ((OUT_W as f32 - w as f32) / 2.0).round();
-        if index == Some(row) {
-            out.push(Draw::Rect {
-                x,
-                y: y + POWER_MENU_BAR_INSET,
-                w: w as f32,
-                h: POWER_MENU_PITCH - 2.0 * POWER_MENU_BAR_INSET,
-                colour: slot_ui::edge(),
-            });
-        }
-        out.push(Draw::Tex {
-            x,
-            y: y + (POWER_MENU_PITCH - h as f32) / 2.0,
-            w: w as f32,
-            h: h as f32,
-            tex,
-            alpha: 1.0,
-        });
-    }
 }

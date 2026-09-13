@@ -158,6 +158,8 @@ fn a_line_the_reader_does_not_know_is_skipped() {
     );
 }
 
+/// A fresh card enables rumble and colour correction, with silent fast forward at the
+/// default speed. A saved colour-correction preference still overrides this default.
 #[test]
 fn a_first_boot_rumbles_and_fast_forwards_silently_at_the_default() {
     let s = SlotState::default();

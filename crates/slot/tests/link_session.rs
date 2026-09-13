@@ -293,20 +293,21 @@ fn a_live_session_refuses_to_open_the_switcher() {
     );
 }
 
+/// Holding POWER ends the link before shutdown pauses the core.
 #[test]
-fn a_live_session_refuses_to_open_the_power_menu() {
+fn a_power_hold_ends_a_live_session_and_powers_off() {
     let d = tmp_root_with_carts(&["Emerald"]);
     let mut a = app_playing_in(d.path(), "Emerald");
     a.begin_link(0);
-
     a.apply(Action::PowerHold);
+    assert!(!a.link_active());
+    assert!(a.powering_off());
     assert!(
-        a.power_menu().is_none(),
-        "the power menu pauses the core, which a session forbids"
-    );
-    assert!(
-        a.refusal_active(a.now()),
-        "a refused power-menu open must shake"
+        StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
+            .read_resume()
+            .unwrap()
+            .is_none(),
+        "a linked state must not be saved"
     );
 }
 
@@ -362,6 +363,7 @@ fn a_power_tap_ends_a_live_session_and_dozes_in_the_same_tap() {
     assert!(matches!(a.phase(), Phase::Playing { .. }));
 }
 
+/// `LidClose` calls `doze` directly, so it
 #[test]
 fn a_lid_close_ends_a_live_session_and_dozes() {
     let d = tmp_root_with_carts(&["Emerald"]);

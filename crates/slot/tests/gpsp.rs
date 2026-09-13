@@ -133,7 +133,10 @@ fn mgba_is_given_its_own_frameskip_and_none_of_gpsps() {
     let _g = common::core_lock();
     let mut core = slot_retro::LibretroCore::open(&path).expect("open mgba");
     slot::core::apply_core_options(&mut core, Core::Mgba, "rfu", true, false);
-    assert_eq!(core.option("mgba_interframe_blending").as_deref(), Some("lcd_ghosting"));
+    assert_eq!(
+        core.option("mgba_interframe_blending").as_deref(),
+        Some("lcd_ghosting")
+    );
     assert_eq!(
         core.option("gpsp_serial"),
         None,
