@@ -178,18 +178,18 @@ fn colour_correction_flips_on_either_arrow_and_saves() {
     let (d, mut a, _) = on_carousel();
     open_at(&mut a, QuickRow::ColourCorrection);
     assert!(
-        !a.colour_correction(),
-        "the row did not open on the default, which is off"
+        a.colour_correction(),
+        "the row did not open on the default, which is on"
     );
     assert_eq!(
         a.quick_value(QuickRow::ColourCorrection),
-        Some(QuickValue::Off)
+        Some(QuickValue::On)
     );
     for (btn, want) in [
-        (Btn::Right, true),
-        (Btn::Left, false),
-        (Btn::Left, true),
         (Btn::Right, false),
+        (Btn::Left, true),
+        (Btn::Left, false),
+        (Btn::Right, true),
     ] {
         press(&mut a, btn);
         assert_eq!(a.colour_correction(), want, "{btn:?}");
@@ -211,7 +211,7 @@ fn colour_correction_leaves_the_settings_around_it_alone() {
     open_at(&mut a, QuickRow::ColourCorrection);
     press(&mut a, Btn::Right);
     let s = read_slot_state(d.path());
-    assert!(s.colour_correction, "the row never took");
+    assert!(!s.colour_correction, "the row never took");
     assert_eq!(
         (s.ff_speed, s.ff_sound, s.rumble),
         (

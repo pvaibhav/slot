@@ -164,7 +164,7 @@ fn a_first_boot_rumbles_and_fast_forwards_silently_at_the_default() {
     assert!(s.rumble, "boots with the motor off");
     assert_eq!(s.ff_speed, FF_SPEED_DEFAULT);
     assert!(!s.ff_sound, "boots with fast forward audible");
-    assert!(!s.colour_correction, "boots with the picture tinted");
+    assert!(s.colour_correction, "boots without colour correction");
 }
 
 #[test]
@@ -191,7 +191,7 @@ fn a_card_from_before_the_settings_keeps_all_its_values() {
             rumble: true,
             ff_speed: FF_SPEED_DEFAULT,
             ff_sound: false,
-            colour_correction: false,
+            colour_correction: true,
         }
     );
 }
@@ -273,7 +273,7 @@ fn an_out_of_range_setting_falls_back_to_its_default() {
         let s = read_slot_state(d.path());
         assert_eq!(
             (s.rumble, s.ff_speed, s.ff_sound, s.colour_correction),
-            (true, FF_SPEED_DEFAULT, false, false),
+            (true, FF_SPEED_DEFAULT, false, true),
             "accepted {bad:?}"
         );
         assert_eq!(

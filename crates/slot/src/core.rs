@@ -136,11 +136,13 @@ pub fn apply_core_options(
         core.set_option("mgba_sgb_borders", "OFF");
         core.set_option("mgba_gb_colors_preset", "1");
         core.set_option("mgba_gb_colors", "GBC Dark Green →A");
+        core.set_option("mgba_interframe_blending", "lcd_ghosting");
         if let Some((key, value)) = colour_option(which, colour) {
             core.set_option(key, value);
         }
     }
     if which == Core::Gpsp {
+        core.set_option("gpsp_frame_mixing", "enabled");
         core.set_option("gpsp_serial", serial);
         if bios {
             core.set_option("gpsp_boot_mode", "bios");
