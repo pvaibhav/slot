@@ -3,18 +3,31 @@
 use std::fs;
 use std::os::unix::fs::{symlink, PermissionsExt};
 use std::process::{Child, Command, Stdio};
+use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
+// The service scans the shared /proc namespace for competing radio owners.
+// Keep each fake radio exclusive even with the default parallel test runner.
+static RADIO: Mutex<()> = Mutex::new(());
+
 struct Rig {
+    _radio: MutexGuard<'static, ()>,
     dir: TempDir,
     daemon: Option<Child>,
 }
 impl Rig {
     fn new() -> Self {
+        Self::with_radio(true)
+    }
+    fn with_radio(ready: bool) -> Self {
+        let radio = RADIO.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::tempdir().unwrap();
         for p in ["System", "bin", "net/wlan0", "net/wlan1", "run"] {
             fs::create_dir_all(dir.path().join(p)).unwrap();
+        }
+        if !ready {
+            fs::remove_dir(dir.path().join("net/wlan0")).unwrap();
         }
         let script = dir.path().join("bin/mock");
         fs::write(&script,r#"#!/bin/sh
@@ -82,7 +95,7 @@ exit 0
         .unwrap();
         fs::write(
             dir.path().join("System/wifi.toml"),
-            "[[networks]]\nssid='Home'\npassword='private-password'\n",
+            "[[networks]]\nssid='Home'\npassword='private-password'\n[[networks]]\nssid='Absent'\npassword='password-two'\n",
         )
         .unwrap();
         slot_store::write_slot_state(
@@ -94,7 +107,11 @@ exit 0
             },
         )
         .unwrap();
-        let mut r = Self { dir, daemon: None };
+        let mut r = Self {
+            _radio: radio,
+            dir,
+            daemon: None,
+        };
         r.start();
         r
     }
@@ -265,4 +282,25 @@ fn an_unavailable_first_profile_falls_back_and_missing_config_stops_only_home() 
         .call(&["service", "status"])
         .contains("home_connected=false"));
     assert_eq!(r.record("wlan1.wpa.pid"), link);
+}
+
+#[test]
+fn delayed_boot_radio_does_not_skip_the_preferred_network() {
+    let r = Rig::with_radio(false);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        if r.call(&["service", "status"])
+            .contains("home_error=RADIO_UNAVAILABLE")
+        {
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert!(!r.dir.path().join("run/wlan0.wpa.pid").exists());
+    fs::create_dir(r.dir.path().join("net/wlan0")).unwrap();
+    // The preferred network connects within the radio retry interval. Trying
+    // the absent second profile first would instead stall for 25 seconds.
+    r.wait_connected();
+    assert!(r.record("wlan0.conf").contains("ssid=486f6d65"));
 }

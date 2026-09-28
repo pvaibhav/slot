@@ -374,15 +374,22 @@ impl Home {
         let Some(profile) = self.profiles.get(self.next) else {
             return;
         };
-        self.next += 1;
+        // BaseOS initializes the radio asynchronously. Waiting for the interface
+        // must not consume a profile and skip the preferred network at boot.
         if !net_exists("wlan0") {
             self.error = "RADIO_UNAVAILABLE";
             self.retry = now + Duration::from_secs(5);
             return;
         }
-        let _ = output("rfkill", &["unblock", "wifi"]);
+        if let Err(e) = output("rfkill", &["unblock", "wifi"]) {
+            self.error = e;
+            self.retry = now + Duration::from_secs(3);
+            return;
+        }
         match self.interface.start(profile, None, false) {
             Ok(()) => {
+                self.next += 1;
+                self.error = "";
                 self.deadline = now + Duration::from_secs(25);
             }
             Err(e) => {
