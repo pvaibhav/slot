@@ -87,6 +87,10 @@ pub trait RetroCore: Send {
     fn set_frame_skip(&mut self, _skip: bool) {}
     fn video_xrgb8888(&self) -> &[u8];
     fn take_audio(&mut self) -> Vec<i16>;
+    /// Hands a buffer from `take_audio` back once its samples have been used, so the core can
+    /// fill it again instead of allocating a fresh one every frame batch. A core that does not
+    /// reuse buffers drops it, which is what the default does.
+    fn recycle_audio(&mut self, _buf: Vec<i16>) {}
     fn serialize(&mut self) -> Result<Vec<u8>, CoreError>;
     fn unserialize(&mut self, data: &[u8]) -> Result<(), CoreError>;
     fn save_ram(&self) -> Option<Vec<u8>>;

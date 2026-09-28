@@ -254,6 +254,9 @@ impl RetroCore for Probe {
     fn take_audio(&mut self) -> Vec<i16> {
         self.inner.take_audio()
     }
+    fn recycle_audio(&mut self, buf: Vec<i16>) {
+        self.inner.recycle_audio(buf);
+    }
     fn serialize(&mut self) -> Result<Vec<u8>, CoreError> {
         self.inner.serialize()
     }
