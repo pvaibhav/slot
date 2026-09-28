@@ -40,6 +40,7 @@ struct Status {
     reconnect: AtomicBool,
     // Zero means unknown; otherwise percent + 1, keeping Default valid.
     progress: AtomicU8,
+    pending: AtomicBool,
 }
 
 impl Status {
@@ -169,6 +170,10 @@ impl Service {
 
     pub fn sync_progress(&self) -> Option<u8> {
         self.status.progress.load(Ordering::Acquire).checked_sub(1)
+    }
+
+    pub fn sync_pending(&self) -> bool {
+        self.status.pending.load(Ordering::Acquire) || self.status.unsaved.load(Ordering::Acquire)
     }
 
     pub fn sync_status(&self) -> SyncStatus {

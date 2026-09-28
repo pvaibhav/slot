@@ -331,6 +331,14 @@ pub(crate) fn run(
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
         // The denominator is only known after ROM metadata discovery finishes.
+        status.pending.store(
+            !library.is_empty()
+                || library_failed
+                || badges.pending()
+                || store.lock().unwrap().unlocks.values().any(|u| !u.synced)
+                || active.as_ref().is_some_and(|game| !game.ready),
+            std::sync::atomic::Ordering::Release,
+        );
         status.progress.store(
             if library.is_empty() && badges.pending() {
                 badges.percent() + 1
@@ -497,6 +505,14 @@ pub(crate) fn run(
             badges.step(&mut http);
             deferred_error.map_or(Ok(()), Err)
         })();
+        status.pending.store(
+            !library.is_empty()
+                || library_failed
+                || badges.pending()
+                || store.lock().unwrap().unlocks.values().any(|u| !u.synced)
+                || active.as_ref().is_some_and(|game| !game.ready),
+            std::sync::atomic::Ordering::Release,
+        );
         status.progress.store(
             if library.is_empty() && badges.pending() {
                 badges.percent() + 1

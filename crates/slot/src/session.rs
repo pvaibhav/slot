@@ -107,6 +107,10 @@ impl Session {
         self.achievements.sync_progress()
     }
 
+    pub fn achievement_sync_pending(&self) -> bool {
+        self.achievements.sync_pending()
+    }
+
     pub fn achievement_sync_status(&self) -> slot_achievements::SyncStatus {
         self.achievements.sync_status()
     }

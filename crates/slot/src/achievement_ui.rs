@@ -141,8 +141,9 @@ impl Notifications {
             }
         }
         let status = session.achievement_sync_status();
+        let visible = status == SyncStatus::Syncing || session.achievement_sync_pending();
         let icon = self.sync.and_then(|face| {
-            (status != SyncStatus::Disabled).then_some(SyncIndicator {
+            visible.then_some(SyncIndicator {
                 face,
                 turn: if status == SyncStatus::Syncing {
                     self.started.elapsed().as_secs_f32() % 2.0 * std::f32::consts::PI
@@ -151,7 +152,6 @@ impl Notifications {
                 },
                 alpha: match status {
                     SyncStatus::Syncing => 0.9,
-                    SyncStatus::Ready => 0.55,
                     _ => 0.35,
                 },
                 attention: matches!(status, SyncStatus::Offline | SyncStatus::Attention),
