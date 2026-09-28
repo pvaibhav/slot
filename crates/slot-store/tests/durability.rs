@@ -158,15 +158,22 @@ fn a_line_the_reader_does_not_know_is_skipped() {
     );
 }
 
-/// A fresh card enables rumble and colour correction, with silent fast forward at the
-/// default speed. A saved colour-correction preference still overrides this default.
+/// What a card that has never been asked gets: the motor on, fast forward at the default,
+/// silent, and the picture the core's own colours. The speed is the one constant here that has
+/// moved — it was four, inherited from when gpSP ran its interpreter and could not serve more,
+/// and is now six, chosen on the device.
+///
+/// Colour correction off is not an aesthetic preference being enshrined: it is what every card
+/// already renders as, because both cores default their own option off and slot never set it.
+/// A default of on would change the look of every existing library on the strength of an
+/// update nobody asked for.
 #[test]
 fn a_first_boot_rumbles_and_fast_forwards_silently_at_the_default() {
     let s = SlotState::default();
     assert!(s.rumble, "boots with the motor off");
     assert_eq!(s.ff_speed, FF_SPEED_DEFAULT);
     assert!(!s.ff_sound, "boots with fast forward audible");
-    assert!(s.colour_correction, "boots without colour correction");
+    assert!(!s.colour_correction, "boots with the picture tinted");
 }
 
 #[test]
@@ -193,7 +200,7 @@ fn a_card_from_before_the_settings_keeps_all_its_values() {
             rumble: true,
             ff_speed: FF_SPEED_DEFAULT,
             ff_sound: false,
-            colour_correction: true,
+            colour_correction: false,
         }
     );
 }
@@ -275,7 +282,7 @@ fn an_out_of_range_setting_falls_back_to_its_default() {
         let s = read_slot_state(d.path());
         assert_eq!(
             (s.rumble, s.ff_speed, s.ff_sound, s.colour_correction),
-            (true, FF_SPEED_DEFAULT, false, true),
+            (true, FF_SPEED_DEFAULT, false, false),
             "accepted {bad:?}"
         );
         assert_eq!(

@@ -48,7 +48,7 @@ impl Default for SlotState {
             rumble: true,
             ff_speed: FF_SPEED_DEFAULT,
             ff_sound: false,
-            colour_correction: true,
+            colour_correction: false,
         }
     }
 }

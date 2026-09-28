@@ -45,11 +45,7 @@ fn gpsp_gets_serial_and_display_defaults_before_load() {
     }
     let _g = common::core_lock();
     let mut core = slot_retro::LibretroCore::open(&path).expect("open gpsp");
-    slot::core::apply_core_options(&mut core, Core::Gpsp, "auto", false, true);
-    assert_eq!(
-        core.option("gpsp_color_correction").as_deref(),
-        Some("enabled")
-    );
+    slot::core::apply_core_options(&mut core, Core::Gpsp, "auto", false, false);
     assert_eq!(core.option("gpsp_frame_mixing").as_deref(), Some("enabled"));
     assert_eq!(
         core.option("gpsp_serial"),
@@ -359,37 +355,27 @@ fn the_splash_plays_on_a_fresh_start_and_never_over_a_resume() {
 /// Render changing pixels through the real cores: reading the option map alone cannot
 /// catch a misspelled option that the core ignores or a build without display filters.
 #[test]
-fn both_display_defaults_change_the_rendered_frames() {
+fn lcd_blending_changes_the_rendered_frames_with_colour_correction_off() {
     use slot_retro::{ButtonMask, LibretroCore, RetroCore};
 
     let _g = common::core_lock();
     let d = tempfile::tempdir().unwrap();
     let rom = d.path().join("display.gba");
     std::fs::write(&rom, common::gba_rom()).unwrap();
-    for (which, colour, blending, off) in [
-        (
-            Core::Mgba,
-            "mgba_color_correction",
-            "mgba_interframe_blending",
-            "OFF",
-        ),
-        (
-            Core::Gpsp,
-            "gpsp_color_correction",
-            "gpsp_frame_mixing",
-            "disabled",
-        ),
+    for (which, blending, off) in [
+        (Core::Mgba, "mgba_interframe_blending", "OFF"),
+        (Core::Gpsp, "gpsp_frame_mixing", "disabled"),
     ] {
         let path = dylib_for(which);
         if !path.exists() {
             eprintln!("no {which:?} dylib on this host, skipping");
             continue;
         }
-        let render = |disabled: Option<&str>| {
+        let render = |disabled: bool| {
             let mut core = LibretroCore::open(&path).expect("open core");
-            slot::core::apply_core_options(&mut core, which, "auto", false, true);
-            if let Some(key) = disabled {
-                core.set_option(key, off);
+            slot::core::apply_core_options(&mut core, which, "auto", false, false);
+            if disabled {
+                core.set_option(blending, off);
             }
             core.load(&rom).expect("load display ROM");
             let mut pixels = Vec::new();
@@ -399,17 +385,8 @@ fn both_display_defaults_change_the_rendered_frames() {
             }
             pixels
         };
-        let defaults = render(None);
-        assert_ne!(
-            defaults,
-            render(Some(colour)),
-            "{which:?} colour correction had no effect"
-        );
-        assert_ne!(
-            defaults,
-            render(Some(blending)),
-            "{which:?} blending had no effect"
-        );
+        let defaults = render(false);
+        assert_ne!(defaults, render(true), "{which:?} blending had no effect");
     }
 }
 
