@@ -23,6 +23,7 @@ enum PixelFormat {
 }
 
 struct Host {
+    memory: Vec<MemoryDescriptor>,
     video: Vec<u8>,
     format: PixelFormat,
     audio: Vec<i16>,
@@ -75,6 +76,25 @@ unsafe extern "C" fn set_rumble_state(port: c_uint, effect: c_uint, strength: u1
 
 unsafe extern "C" fn environment(cmd: c_uint, data: *mut c_void) -> bool {
     match cmd {
+        SET_MEMORY_MAPS => {
+            if data.is_null() {
+                return false;
+            }
+            let map = &*(data as *const MemoryMap);
+            if map.num_descriptors > 1024 || (map.num_descriptors > 0 && map.descriptors.is_null())
+            {
+                return false;
+            }
+            with_host(|h| {
+                h.memory = if map.num_descriptors == 0 {
+                    Vec::new()
+                } else {
+                    std::slice::from_raw_parts(map.descriptors, map.num_descriptors as usize)
+                        .to_vec()
+                };
+            })
+            .is_some()
+        }
         GET_CAN_DUPE => {
             if data.is_null() {
                 return false;
@@ -469,6 +489,7 @@ impl LibretroCore {
             return Err(CoreError::Unsupported(format!("libretro api {version}")));
         }
         let mut host = Box::new(Host {
+            memory: Vec::new(),
             video: vec![0; VIDEO_BYTES],
             format: PixelFormat::Xrgb8888,
             audio: Vec::new(),
@@ -531,6 +552,53 @@ impl Drop for LibretroCore {
 }
 
 impl RetroCore for LibretroCore {
+    fn achievement_memory(&self, ram: &mut [u8]) -> [usize; 3] {
+        if ram.len() < 0x58000 {
+            return [0; 3];
+        }
+        let mut valid = [0; 3];
+        // rcheevos consoleinfo.c: IWRAM first, then EWRAM, then cartridge SRAM.
+        for (i, (physical, offset, size)) in [
+            (0x03000000, 0, 0x8000),
+            (0x02000000, 0x8000, 0x40000),
+            (0x0e000000, 0x48000, 0x10000),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if let Some(d) =
+                self.host.memory.iter().find(|d| {
+                    d.start == physical && d.disconnect == 0 && !d.ptr.is_null() && d.len > 0
+                })
+            {
+                let n = d.len.min(size);
+                // The core owns the descriptors' memory until unload and no core function
+                // runs concurrently. `offset` is the libretro offset from ptr to the region.
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        (d.ptr as *const u8).add(d.offset),
+                        ram[offset..].as_mut_ptr(),
+                        n,
+                    );
+                }
+                valid[i] = n;
+            } else if i == 2 {
+                let p = unsafe { (self.api.get_memory_data)(MEMORY_SAVE_RAM) };
+                let n = unsafe { (self.api.get_memory_size)(MEMORY_SAVE_RAM) }.min(size);
+                if !p.is_null() && n > 0 {
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            p as *const u8,
+                            ram[offset..].as_mut_ptr(),
+                            n,
+                        );
+                    }
+                    valid[i] = n;
+                }
+            }
+        }
+        valid
+    }
     fn set_option(&mut self, key: &str, value: &str) {
         LibretroCore::set_option(self, key, value);
     }
@@ -680,6 +748,7 @@ mod tests {
 
     fn host_with(options: HashMap<String, CString>, options_dirty: bool) -> Box<Host> {
         Box::new(Host {
+            memory: Vec::new(),
             video: vec![0; VIDEO_BYTES],
             format: PixelFormat::Xrgb8888,
             audio: Vec::new(),

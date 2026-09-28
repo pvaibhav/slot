@@ -15,6 +15,30 @@ pub const GET_VARIABLE_UPDATE: c_uint = 17;
 pub const GET_RUMBLE_INTERFACE: c_uint = 23;
 pub const GET_LOG_INTERFACE: c_uint = 27;
 pub const GET_SAVE_DIRECTORY: c_uint = 31;
+pub const SET_MEMORY_MAPS: c_uint = 36 | 0x10000;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MemoryDescriptor {
+    pub flags: u64,
+    pub ptr: *mut c_void,
+    pub offset: usize,
+    pub start: usize,
+    pub select: usize,
+    pub disconnect: usize,
+    pub len: usize,
+    pub addrspace: *const c_char,
+}
+
+// Descriptors move with the exclusively owned LibretroCore. They are read only between
+// calls on its emulator thread and are discarded before the core's memory is freed.
+unsafe impl Send for MemoryDescriptor {}
+
+#[repr(C)]
+pub struct MemoryMap {
+    pub descriptors: *const MemoryDescriptor,
+    pub num_descriptors: c_uint,
+}
 pub const SET_AUDIO_BUFFER_STATUS_CALLBACK: c_uint = 62;
 pub const SET_NETPACKET_INTERFACE: c_uint = 78;
 

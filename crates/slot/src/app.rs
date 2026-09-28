@@ -317,6 +317,7 @@ pub struct App {
     slot_letter: Option<char>,
     shelf_named: Option<Millis>,
     shelf_clock: slot_ui::Printed,
+    achievement_sync: Option<slot_ui::SyncIndicator>,
     hud: Hud,
     screen: f32,
     game_ready: bool,
@@ -419,6 +420,7 @@ impl App {
             slot_letter: None,
             shelf_named: None,
             shelf_clock: slot_ui::Printed::default(),
+            achievement_sync: None,
             hud: Hud::new(),
             screen: 0.0,
             game_ready: false,
@@ -682,6 +684,10 @@ impl App {
 
     pub fn set_shelf_clock_face(&mut self, face: TexId, w: u32) {
         self.shelf_clock = slot_ui::Printed::new(face, w);
+    }
+
+    pub fn set_achievement_sync(&mut self, icon: Option<slot_ui::SyncIndicator>) {
+        self.achievement_sync = icon;
     }
 
     pub fn phase(&self) -> &Phase {
@@ -1716,6 +1722,9 @@ impl App {
                     self.shelf_clock,
                     out,
                 );
+                if let Some(icon) = self.achievement_sync {
+                    slot_ui::draw_footer_sync(self.shelf_clock, icon, out);
+                }
             }
             Phase::About => {
                 draw_backdrop(self.wallpaper, out);

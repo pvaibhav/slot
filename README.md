@@ -8,6 +8,11 @@ A full user guide can be found at [slot-cfw.fyi](https://slot-cfw.fyi).
 
 Release notes can be found in the [changelog](CHANGELOG.md).
 
+## RetroAchievements
+
+Optional [RetroAchievements](crates/slot-achievements/README.md) support uses TOML configuration,
+automatic offline preparation and synchronization, and brief achievement notifications.
+
 ## AI Disclosure
 
 The Rust frontend was put together by Claude Opus. I reviewed everything that was

@@ -72,6 +72,12 @@ impl From<std::io::Error> for CoreError {
 }
 
 pub trait RetroCore: Send {
+    /// Copies RA's GBA address space (IWRAM, EWRAM, SRAM) into a 0x58000-byte buffer.
+    /// Returns the valid length of each region; absent memory is never treated as zero RAM.
+    /// Called only on the emulator thread, between frames. No core pointers leave that thread.
+    fn achievement_memory(&self, _ram: &mut [u8]) -> [usize; 3] {
+        [0; 3]
+    }
     fn load(&mut self, rom: &Path) -> Result<(), CoreError>;
     fn run_frame(&mut self, input: ButtonMask);
     fn run_frame_linked(&mut self, p1: ButtonMask, _p2: ButtonMask) {

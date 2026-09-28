@@ -5,6 +5,21 @@ use fontdue::{Font, FontSettings};
 
 use crate::CartFace;
 
+/// A small trophy for earned achievements, independent of the HUD glyph frame.
+pub fn achievement_icon_face(px: u32) -> CartFace {
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+      <g fill="none" stroke="#d6be7a" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M7 4h10v6a5 5 0 0 1-10 0zM7 6H4v3a4 4 0 0 0 4 4m9-7h3v3a4 4 0 0 1-4 4M12 15v5m-4 0h8"/>
+      </g>
+    </svg>"##;
+    CartFace {
+        rgba: crate::art::render_svg(svg, px, px)
+            .unwrap_or_else(|| vec![0; (px * px * 4) as usize]),
+        w: px,
+        h: px,
+    }
+}
+
 const SYMBOLS_TTF: &[u8] = include_bytes!("../assets/SymbolsNerdFontMono-Regular.ttf");
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]

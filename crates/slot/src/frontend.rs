@@ -27,6 +27,7 @@ const DOZE_TIMEOUT: Duration = Duration::from_secs(180);
 const ALERT_INK: [u8; 3] = [0xf0, 0xb4, 0x3c];
 
 pub struct Frontend {
+    achievements: crate::achievement_ui::Notifications,
     session: Session,
     start: Instant,
     last: Instant,
@@ -87,6 +88,7 @@ impl Frontend {
             .app_mut()
             .set_power(Power::new(platform, DOZE_TIMEOUT));
         Frontend {
+            achievements: crate::achievement_ui::Notifications::new(),
             session,
             start: now,
             last: now,
@@ -329,7 +331,9 @@ impl Frontend {
             &mut self.switcher,
         );
         self.draws.clear();
+        self.achievements.update(&mut self.session, compositor);
         self.session.app().draw(&mut self.draws);
+        self.achievements.draw(&self.session, &mut self.draws);
         compositor.draw_list(&self.draws);
     }
 
@@ -369,7 +373,7 @@ impl Frontend {
     }
 
     pub fn powering_off(&self) -> bool {
-        self.session.app().ready_to_power_off()
+        self.session.app().ready_to_power_off() && self.session.achievement_flush_ready()
     }
 
     pub fn poweroff(&mut self) {

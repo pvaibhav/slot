@@ -1,0 +1,22 @@
+[package]
+name = "slot-achievements"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+slot-retro = { path = "../slot-retro" }
+slot-store = { path = "../slot-store" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = { version = "1", default-features = false, features = ["std", "parse", "serde"] }
+md5 = "0.7"
+png.workspace = true
+ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
+
+[build-dependencies]
+cc = "1"
+
+[dev-dependencies]
+tempfile.workspace = true

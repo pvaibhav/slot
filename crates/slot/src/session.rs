@@ -15,6 +15,7 @@ use crate::input::Pad;
 use crate::persist;
 
 pub struct Session {
+    achievements: slot_achievements::Service,
     root: PathBuf,
     app: App,
     emu: Option<EmuHandle>,
@@ -35,6 +36,7 @@ impl Session {
             eprintln!("slot: audio: {e}");
         }
         Session {
+            achievements: slot_achievements::Service::start(root.clone()),
             app: App::boot(&root),
             root,
             emu: None,
@@ -55,9 +57,16 @@ impl Session {
         if rate == 0 {
             return;
         }
-        let mut samples = sfx.render(rate);
+        self.mix_sfx(sfx.render(rate));
+    }
+
+    /// A clip prepared off-thread, mixed at the current volume when it reaches the screen.
+    pub(crate) fn mix_sfx(&mut self, mut samples: Vec<i16>) {
+        if samples.is_empty() {
+            return;
+        }
         crate::audio::volume::apply(&mut samples, self.app.output_volume());
-        ring.mix(&samples);
+        self.sink.ring().mix(&samples);
     }
 
     pub fn audio_queued(&self) -> usize {
@@ -82,6 +91,18 @@ impl Session {
 
     pub fn app(&self) -> &App {
         &self.app
+    }
+
+    pub fn take_achievement_notice(&self) -> Option<slot_achievements::Notice> {
+        self.achievements.take_notice()
+    }
+
+    pub fn achievement_flush_ready(&self) -> bool {
+        self.achievements.flush_ready()
+    }
+
+    pub fn achievement_sync_status(&self) -> slot_achievements::SyncStatus {
+        self.achievements.sync_status()
     }
 
     pub fn app_mut(&mut self) -> &mut App {
@@ -404,7 +425,14 @@ impl Session {
         let ring = self.sink.ring();
         let emu = match player.filter(|_| platform == Platform::Gba) {
             Some(p) => EmuHandle::spawn_linked(opened.core, rom, ring, sav, resume, p),
-            None => EmuHandle::spawn(opened.core, rom, ring, sav, resume),
+            None => {
+                let tracked = if opened.named && player.is_none() {
+                    self.achievements.wrap(opened.core)
+                } else {
+                    opened.core
+                };
+                EmuHandle::spawn(tracked, rom, ring, sav, resume)
+            }
         };
         emu.set_volume(self.app.output_volume());
         emu.set_driven(self.driven);
