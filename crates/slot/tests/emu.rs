@@ -216,6 +216,7 @@ fn fast_forward_runs_the_chosen_number_of_core_frames_per_present() {
 struct Probe {
     inner: MockCore,
     cost: Duration,
+    skip_stall: Option<Duration>,
     skip: bool,
     log: Arc<Mutex<Vec<bool>>>,
 }
@@ -226,6 +227,7 @@ impl Probe {
         let probe = Box::new(Probe {
             inner: MockCore::new(),
             cost,
+            skip_stall: None,
             skip: false,
             log: log.clone(),
         });
@@ -241,6 +243,11 @@ impl RetroCore for Probe {
         self.log.lock().expect("the skip log").push(self.skip);
         if !self.cost.is_zero() {
             std::thread::sleep(self.cost);
+        }
+        if self.skip {
+            if let Some(stall) = self.skip_stall.take() {
+                std::thread::sleep(stall);
+            }
         }
         self.inner.run_frame(input);
     }
@@ -366,6 +373,40 @@ fn a_present_runs_what_it_can_afford_rather_than_the_whole_ceiling() {
          never stopped it and the ceiling of {FAST_STEPS_MAX} did",
         per * 5.0
     );
+}
+
+/// A scheduling stall while skipping must not trap every later batch at one frame:
+/// those batches contain no skipped sample to replace the inflated estimate.
+#[test]
+fn fast_forward_recovers_after_one_slow_skipped_frame() {
+    let (mut core, log) = Probe::new(Duration::ZERO);
+    core.skip_stall = Some(Duration::from_millis(40));
+    let emu = EmuHandle::spawn(
+        core,
+        PathBuf::from("mock"),
+        Arc::new(slot::audio::Ring::new(0)),
+        None,
+        None,
+    );
+    assert!(wait_for(|| emu.state() == CoreState::Ready));
+    // At most one skipped frame per batch. The first is the deliberate stall;
+    // a second proves a later batch recovered, rather than continuing the same one.
+    emu.set_fast_steps(2);
+    emu.set_ff_sound(false);
+    emu.set_speed(Speed::Fast);
+    assert!(
+        wait_for(|| log.lock().unwrap().iter().filter(|&&skip| skip).count() >= 2),
+        "one stalled skipped frame permanently disabled fast-forward"
+    );
+    let (frames, presents) = held_counts(&emu);
+    emu.set_speed(Speed::Fast);
+    std::thread::sleep(Duration::from_millis(250));
+    let (after_frames, after_presents) = held_counts(&emu);
+    let ran = after_frames - frames;
+    let shown = after_presents - presents;
+    assert!(shown > 0);
+    assert!(ran > shown, "fast-forward fell back to one frame per batch");
+    assert!(ran <= shown * 2, "recovery exceeded the requested ceiling");
 }
 
 fn counting(sink: StubSink) -> Arc<AtomicUsize> {
