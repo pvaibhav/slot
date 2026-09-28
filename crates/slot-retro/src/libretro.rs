@@ -410,6 +410,10 @@ pub struct LibretroCore {
     rom_path: Option<CString>,
     av: AvInfo,
     loaded: bool,
+    /// `retro_serialize_size` costs nearly a whole serialization in mGBA, so the answer is
+    /// kept until something that can change it happens: a load, an option, a link change, or a
+    /// refused serialize.
+    state_size: Option<usize>,
     _lib: Library,
 }
 
@@ -445,6 +449,7 @@ impl LibretroCore {
     }
 
     pub fn set_option(&mut self, key: &str, value: &str) {
+        self.state_size = None;
         if !self.host.declared.is_empty() {
             match self.host.declared.get(key) {
                 None => eprintln!("slot-retro: core declares no option {key:?}, setting it anyway"),
@@ -526,11 +531,13 @@ impl LibretroCore {
                 sample_rate: 0.0,
             },
             loaded: false,
+            state_size: None,
             _lib: lib,
         })
     }
 
     fn unload(&mut self) {
+        self.state_size = None;
         if !self.loaded {
             return;
         }
@@ -663,10 +670,17 @@ impl RetroCore for LibretroCore {
     }
 
     fn serialize(&mut self) -> Result<Vec<u8>, CoreError> {
-        let size = unsafe { (self.api.serialize_size)() };
-        if size == 0 {
-            return Err(CoreError::State("core reports no state".into()));
-        }
+        let size = match self.state_size {
+            Some(size) => size,
+            None => {
+                let size = unsafe { (self.api.serialize_size)() };
+                if size == 0 {
+                    return Err(CoreError::State("core reports no state".into()));
+                }
+                self.state_size = Some(size);
+                size
+            }
+        };
         let mut buf = vec![0u8; size];
         let ok = {
             let _a = Active::bind(&mut self.host);
@@ -675,11 +689,13 @@ impl RetroCore for LibretroCore {
         if ok {
             Ok(buf)
         } else {
+            self.state_size = None;
             Err(CoreError::State("serialize refused".into()))
         }
     }
 
     fn unserialize(&mut self, data: &[u8]) -> Result<(), CoreError> {
+        self.state_size = None;
         let ok = {
             let _a = Active::bind(&mut self.host);
             unsafe { (self.api.unserialize)(data.as_ptr() as *const c_void, data.len()) }
@@ -724,6 +740,7 @@ impl RetroCore for LibretroCore {
     }
 
     fn start_link(&mut self, client_id: u16) {
+        self.state_size = None;
         let _a = Active::bind(&mut self.host);
         unsafe { begin_link(client_id) };
     }
@@ -734,6 +751,7 @@ impl RetroCore for LibretroCore {
     }
 
     fn stop_link(&mut self) {
+        self.state_size = None;
         let _a = Active::bind(&mut self.host);
         unsafe { halt_link() };
     }
