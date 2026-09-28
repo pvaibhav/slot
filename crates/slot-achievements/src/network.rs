@@ -237,6 +237,7 @@ fn prefetch(
     let (game, ids) = if id == 0 {
         (
             Game {
+                presence: String::new(),
                 id: 0,
                 console: 5,
                 title: "No achievements for this ROM".into(),
@@ -449,6 +450,7 @@ pub(crate) fn run(
                         storage::write(&dir.join(format!("{}.json", game.hash)), &(&data, &ids))
                             .map_err(|_| Failure::Invalid)?;
                         badges.enqueue(&data);
+                        ping(&mut http, auth, &status, game, &data)?;
                         let _ = prepared.send(Prepared {
                             generation: game.generation,
                             hash: game.hash.clone(),
@@ -461,20 +463,10 @@ pub(crate) fn run(
                         game.last_ping = Instant::now();
                     }
                 } else if game.ready && game.last_ping.elapsed() >= Duration::from_secs(120) {
-                    // Session heartbeat has no rich presence or on-device browser.
                     let cached: (Game, BTreeSet<u32>) =
                         storage::read(&dir.join(format!("{}.json", game.hash)))
                             .map_err(|_| Failure::Invalid)?;
-                    call(
-                        &mut http,
-                        auth,
-                        "ping",
-                        &[
-                            ("g", cached.0.id.to_string()),
-                            ("h", "0".into()),
-                            ("m", game.hash.clone()),
-                        ],
-                    )?;
+                    ping(&mut http, auth, &status, game, &cached.0)?;
                     game.last_ping = Instant::now();
                 }
             }
@@ -640,6 +632,83 @@ mod tests {
             };
             assert_eq!(award(&mut http, &auth, &unlock, 50), Err(Failure::Rejected));
             assert!(!http.fields.iter().any(|(k, _)| k == "o"));
+        }
+    }
+}
+
+fn ping(
+    http: &mut impl Transport,
+    auth: &Auth,
+    status: &Status,
+    active: &Active,
+    game: &Game,
+) -> Result<(), Failure> {
+    let presence = status
+        .presence
+        .lock()
+        .unwrap()
+        .as_ref()
+        .filter(|(generation, text)| *generation == active.generation && !text.is_empty())
+        .map(|(_, text)| text.clone())
+        .unwrap_or_else(|| format!("Playing {}", game.title));
+    call(
+        http,
+        auth,
+        "ping",
+        &[
+            ("g", game.id.to_string()),
+            ("h", "0".into()),
+            ("x", active.hash.clone()),
+            ("m", presence),
+        ],
+    )?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod presence_tests {
+    use super::*;
+    #[test]
+    fn heartbeat_uses_current_generation_and_separate_hash_field() {
+        struct Capture(Vec<(String, String)>);
+        impl Transport for Capture {
+            fn call(&mut self, fields: &[(&str, String)]) -> Result<Value, Failure> {
+                self.0 = fields
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.clone()))
+                    .collect();
+                Ok(serde_json::json!({"Success":true}))
+            }
+        }
+        let mut http = Capture(vec![]);
+        let auth = Auth {
+            username: "test".into(),
+            token: "fixture".into(),
+        };
+        let status = Status::default();
+        let active = Active {
+            generation: 2,
+            hash: "rom-hash".into(),
+            ready: true,
+            online: true,
+            last_ping: Instant::now(),
+        };
+        let game = Game {
+            id: 1,
+            console: 5,
+            title: "Test".into(),
+            presence: String::new(),
+            achievements: vec![],
+        };
+        for (generation, text, expected) in [
+            (1, "Old game", "Playing Test"),
+            (2, "Level 3", "Level 3"),
+            (2, "", "Playing Test"),
+        ] {
+            *status.presence.lock().unwrap() = Some((generation, text.into()));
+            ping(&mut http, &auth, &status, &active, &game).unwrap();
+            assert!(http.0.contains(&("m".into(), expected.into())));
+            assert!(http.0.contains(&("x".into(), "rom-hash".into())));
         }
     }
 }

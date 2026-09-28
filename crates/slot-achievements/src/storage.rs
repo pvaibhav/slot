@@ -46,6 +46,8 @@ pub(crate) struct Achievement {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct Game {
+    #[serde(rename = "RichPresencePatch", default)]
+    pub presence: String,
     #[serde(rename = "ID")]
     pub id: u32,
     #[serde(rename = "ConsoleID")]

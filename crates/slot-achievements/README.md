@@ -112,3 +112,8 @@ task build:device
 A real account and an on-device offline/online session are still needed to verify live
 server acceptance and handheld performance. The tests never send an achievement to a real
 account.
+
+Rich presence scripts are cached with game data and evaluated on the achievement
+worker. Starting an online game immediately publishes a playing status; heartbeats
+refresh it every two minutes using the game's rich presence, with a title fallback.
+Presence is live-only: offline activity is not replayed as a current playing status.

@@ -41,6 +41,8 @@ struct Status {
     // Zero means unknown; otherwise percent + 1, keeping Default valid.
     progress: AtomicU8,
     pending: AtomicBool,
+    // Shared only by the evaluator and HTTP workers, never gameplay/UI.
+    presence: Mutex<Option<(u64, String)>>,
 }
 
 impl Status {
@@ -295,6 +297,7 @@ fn run(
     let mut playing: Option<Playing> = None;
     let mut unsaved = BTreeMap::new();
     let mut retried = Instant::now();
+    let mut presence_updated = Instant::now();
     loop {
         if retried.elapsed() >= Duration::from_secs(1) {
             retry_unsaved(&mut unsaved, &store, &notices);
@@ -316,6 +319,7 @@ fn run(
                 Ok(Control::Load(load)) => {
                     generation = load.generation;
                     playing = None;
+                    *status.presence.lock().unwrap() = None;
                     // Cached games can start evaluating even while the HTTP worker is
                     // waiting on a timeout or preparing another ROM in the library.
                     let dir = store.lock().unwrap().dir.clone();
@@ -343,6 +347,7 @@ fn run(
                 Ok(Control::Unload(id)) if id == generation => {
                     generation = 0;
                     playing = None;
+                    *status.presence.lock().unwrap() = None;
                     let _ = loads.send(None);
                 }
                 Ok(_) => {}
@@ -357,6 +362,7 @@ fn run(
             if let Some(game) = playing.as_mut() {
                 // Preserve hits for unchanged definitions. Retire removed/unlocked entries
                 // and activate new or revised definitions when online data arrives.
+                game.runtime.activate_presence(&prepared.game.presence);
                 let store = store.lock().unwrap();
                 let mut updated = BTreeMap::new();
                 for achievement in prepared.game.achievements {
@@ -392,6 +398,7 @@ fn run(
             let Some(mut runtime) = runtime::Runtime::new() else {
                 continue;
             };
+            runtime.activate_presence(&prepared.game.presence);
             let store = store.lock().unwrap();
             let mut achievements = BTreeMap::new();
             let mut unsupported = 0;
@@ -442,6 +449,12 @@ fn run(
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => return,
             Err(mpsc::RecvTimeoutError::Timeout) => {}
+        }
+        if presence_updated.elapsed() >= Duration::from_secs(1) {
+            *status.presence.lock().unwrap() = playing
+                .as_ref()
+                .map(|game| (game.generation, game.runtime.presence()));
+            presence_updated = Instant::now();
         }
         status.unsaved.store(!unsaved.is_empty(), Ordering::Release);
     }

@@ -42,13 +42,15 @@ static void event(const rc_runtime_event_t *ev) {
 }
 
 size_t slot_ra_frame(rc_runtime_t *runtime, const uint8_t *ram, const size_t *valid,
-                     uint32_t *earned, size_t capacity) {
+                     uint32_t *earned, size_t capacity, char *presence, size_t presence_size) {
     slot_frame frame = { ram, valid, earned, capacity, 0, 0 };
     current = &frame;
     rc_runtime_validate_addresses(runtime, event, valid_address);
     rc_runtime_do_frame(runtime, event, peek, NULL, NULL);
+    rc_runtime_get_richpresence(runtime, presence, presence_size, peek, NULL, NULL);
+    presence[presence_size - 1] = 0;
     current = NULL;
     /* An invalid indirect read cannot count as an observed zero or satisfy a trigger. */
-    if (frame.invalid) { rc_runtime_reset(runtime); return 0; }
+    if (frame.invalid) { presence[0] = 0; rc_runtime_reset(runtime); return 0; }
     return frame.count;
 }

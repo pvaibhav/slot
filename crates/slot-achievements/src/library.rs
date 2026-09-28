@@ -93,7 +93,7 @@ pub(crate) fn pending(root: &Path, dir: &Path, now: u64) -> VecDeque<PathBuf> {
             // Refresh definitions and server unlocks weekly, and reconsider unknown ROMs.
             fingerprint(path).ok() != Some((entry.size, entry.modified_ns))
                 || entry.checked_at == 0
-                || entry.badge_version == 0
+                || entry.badge_version < 2
                 || now.saturating_sub(entry.checked_at) >= 7 * 86400
                 || !dir.join(format!("{}.json", entry.hash)).exists()
         })
@@ -107,7 +107,7 @@ pub(crate) fn checked(dir: &Path, path: &Path, now: u64) {
     let mut index: Index = storage::read(&index_path).unwrap_or_default();
     if let Some(entry) = index.get_mut(path) {
         entry.checked_at = now;
-        entry.badge_version = 1;
+        entry.badge_version = 2;
     }
     let _ = storage::write(&index_path, &index);
 }

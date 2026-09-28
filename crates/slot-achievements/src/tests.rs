@@ -18,6 +18,7 @@ fn achievement(definition: &str) -> Achievement {
 
 fn game() -> Game {
     Game {
+        presence: String::new(),
         id: 1,
         console: 5,
         title: "Test game".into(),
@@ -134,7 +135,14 @@ impl network::Transport for Server {
             "patch" => json!({"Success":true,"PatchData":game()}),
             "unlocks" => json!({"Success":true,"UserUnlocks":[]}),
             "startsession" => json!({"Success":true,"Unlocks":[],"HardcoreUnlocks":[]}),
-            "awardachievement" | "ping" => json!({"Success":true}),
+            "ping" => {
+                assert!(fields
+                    .iter()
+                    .any(|(k, v)| *k == "m" && v == "Playing Test game"));
+                assert!(fields.iter().any(|(k, v)| *k == "x" && v.len() == 32));
+                json!({"Success":true})
+            }
+            "awardachievement" => json!({"Success":true}),
             _ => panic!("unexpected API {request}"),
         })
     }
@@ -620,4 +628,51 @@ fn cache_percentage_counts_unique_badges_and_resumes_from_disk() {
     restarted.step(&mut http);
     assert_eq!(restarted.percent(), 100);
     assert!(!restarted.pending());
+}
+
+#[test]
+fn rich_presence_tracks_memory_and_clears_invalid_replacements() {
+    let mut runtime = runtime::Runtime::new().unwrap();
+    assert!(runtime.activate_presence("Display:\n?0xH000000=1?In the castle\nOn the map"));
+    let mut ram = vec![0; RAM_SIZE];
+    runtime.frame(&ram, &[0x8000, 0x40000, 0x10000]);
+    assert_eq!(runtime.presence(), "On the map");
+    ram[0] = 1;
+    runtime.frame(&ram, &[0x8000, 0x40000, 0x10000]);
+    assert_eq!(runtime.presence(), "In the castle");
+    assert!(!runtime.activate_presence("not a valid script"));
+    runtime.frame(&ram, &[0x8000, 0x40000, 0x10000]);
+    assert!(runtime.presence().is_empty());
+}
+
+#[test]
+fn rich_presence_cache_accepts_old_data_and_retains_new_scripts() {
+    let mut value = serde_json::to_value(game()).unwrap();
+    value.as_object_mut().unwrap().remove("RichPresencePatch");
+    assert!(serde_json::from_value::<Game>(value)
+        .unwrap()
+        .presence
+        .is_empty());
+    let mut data = game();
+    data.presence = "Display:\nOn the map".into();
+    let root = configured();
+    let path = root.path().join("game.json");
+    storage::write(&path, &data).unwrap();
+    assert_eq!(
+        storage::read::<Game>(&path).unwrap().presence,
+        data.presence
+    );
+}
+
+#[test]
+fn loading_a_game_sends_presence_without_waiting_for_heartbeat() {
+    let root = configured();
+    let rom = root.path().join("Games/GBA/Test.gba");
+    std::fs::write(&rom, b"fixture ROM").unwrap();
+    let (calls, requests) = mpsc::channel();
+    let service = Service::start_with(root.path().into(), Server { calls });
+    wait_for(|| service.enabled.load(Ordering::Acquire));
+    let mut core = service.wrap(Box::<TestCore>::default());
+    core.load(&rom).unwrap();
+    wait_for(|| requests.try_iter().any(|request| request == "ping"));
 }
