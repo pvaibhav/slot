@@ -146,3 +146,29 @@ fn no_reading_draws_nothing() {
     draw_gauge(24.0, 400.0, None, percent_face(), None, &mut out);
     assert!(out.is_empty());
 }
+
+#[test]
+fn footer_wifi_clears_battery_percent_and_charging_bolt() {
+    use slot_ui::{draw_footer, draw_home_wifi};
+    let wifi = TexId::from_raw(888);
+    let mut out = Vec::new();
+    let battery = at(100, Charge::Charging);
+    let percent = Printed {
+        face: Some(TexId::from_raw(889)),
+        w: 60,
+    };
+    draw_footer(
+        battery,
+        percent,
+        Some(TexId::from_raw(890)),
+        Printed::default(),
+        &mut out,
+    );
+    let right = quads(&out)
+        .iter()
+        .map(|(x, _, w, _)| x + w)
+        .fold(0.0, f32::max);
+    let before = out.len();
+    draw_home_wifi(battery, percent, Some(wifi), &mut out);
+    assert!(matches!(out[before],Draw::Tex{x,tex,..} if tex==wifi && x>=right+10.0));
+}

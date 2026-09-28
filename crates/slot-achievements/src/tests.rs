@@ -78,6 +78,48 @@ impl network::Transport for Offline {
 struct Server {
     calls: mpsc::Sender<String>,
 }
+
+#[test]
+fn wifi_reconnect_wakes_offline_sync_without_restarting_or_opening_a_game() {
+    struct Reconnect {
+        online: Arc<AtomicBool>,
+        server: Server,
+    }
+    impl network::Transport for Reconnect {
+        fn call(&mut self, fields: &[(&str, String)]) -> Result<Value, network::Failure> {
+            if self.online.load(Ordering::Acquire) {
+                self.server.call(fields)
+            } else {
+                Err(network::Failure::Network)
+            }
+        }
+    }
+    let root = configured();
+    let mut store = Store::open(root.path(), "Player").unwrap();
+    store
+        .record(Unlock {
+            id: 7,
+            hash: "abcdef".into(),
+            earned_at: network::now(),
+            synced: false,
+        })
+        .unwrap();
+    let online = Arc::new(AtomicBool::new(false));
+    let (calls, _) = mpsc::channel();
+    let service = Service::start_with(
+        root.path().into(),
+        Reconnect {
+            online: online.clone(),
+            server: Server { calls },
+        },
+    );
+    wait_for(|| service.sync_status() == SyncStatus::Offline);
+    online.store(true, Ordering::Release);
+    service.network_available();
+    // wait_for's five-second deadline is much shorter than the thirty-second backoff.
+    wait_for(|| service.sync_status() == SyncStatus::Ready);
+    assert!(Store::open(root.path(), "Player").unwrap().unlocks[&7].synced);
+}
 impl network::Transport for Server {
     fn badge(&mut self, name: &str) -> Result<Vec<u8>, network::Failure> {
         let _ = self.calls.send(format!("badge:{name}"));

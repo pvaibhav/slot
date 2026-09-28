@@ -75,6 +75,7 @@ fn the_quick_menu_renders_full_screen() {
     for (name, selected) in [
         ("fast-forward", QuickRow::FastForward),
         ("colour-correction", QuickRow::ColourCorrection),
+        ("home-wifi", QuickRow::HomeWifi),
         ("date-time", QuickRow::DateTime),
         ("about", QuickRow::About),
     ] {

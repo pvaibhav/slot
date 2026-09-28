@@ -4,8 +4,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Sender};
 #[cfg(feature = "device")]
 use std::sync::OnceLock;
-#[cfg(any(feature = "device", test))]
-use std::{path::Path, process::Command};
 
 use crate::link_net::Cancel;
 
@@ -33,7 +31,10 @@ pub enum RadioFail {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RadioJob {
+    /// Desired home connectivity, independent of the Link lease.
+    Home(bool),
     Warm,
+    /// Release Link preparation, retaining the home connection.
     Cool,
     Down,
 }
@@ -42,6 +43,11 @@ pub trait RadioJobs: Send {
     fn ask(&mut self, job: RadioJob);
 
     fn warmed(&self) -> bool;
+
+    /// Observed home association plus a LAN address, never the desired menu flag.
+    fn home_connected(&self) -> bool {
+        false
+    }
 }
 
 pub struct RadioQueue;
@@ -53,34 +59,63 @@ pub fn radio_jobs() -> Box<dyn RadioJobs> {
 #[cfg(feature = "device")]
 impl RadioJobs for RadioQueue {
     fn ask(&mut self, job: RadioJob) {
+        if job == RadioJob::Home(false) {
+            HOME_CONNECTED.store(false, Ordering::SeqCst);
+        }
         let _ = queue().send(job);
     }
 
     fn warmed(&self) -> bool {
         WARM.load(Ordering::SeqCst)
     }
+    fn home_connected(&self) -> bool {
+        HOME_CONNECTED.load(Ordering::SeqCst)
+    }
 }
 
 #[cfg(feature = "device")]
 static WARM: AtomicBool = AtomicBool::new(false);
+#[cfg(feature = "device")]
+static HOME_CONNECTED: AtomicBool = AtomicBool::new(false);
 
 #[cfg(feature = "device")]
 fn queue() -> &'static Sender<RadioJob> {
     static Q: OnceLock<Sender<RadioJob>> = OnceLock::new();
     Q.get_or_init(|| {
         let (tx, rx) = channel::<RadioJob>();
-        std::thread::spawn(move || {
-            for job in rx {
-                match job {
-                    RadioJob::Warm => WARM.store(run("warm"), Ordering::SeqCst),
-                    RadioJob::Cool => {
-                        WARM.store(false, Ordering::SeqCst);
-                        run("cool");
-                    }
-                    RadioJob::Down => {
-                        WARM.store(false, Ordering::SeqCst);
-                        down();
-                    }
+        std::thread::spawn(move || loop {
+            let job = match rx.recv_timeout(std::time::Duration::from_secs(3)) {
+                Ok(job) => job,
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    let connected = helper()
+                        .args(["service", "status"])
+                        .output()
+                        .ok()
+                        .filter(|o| o.status.success())
+                        .is_some_and(|o| {
+                            String::from_utf8_lossy(&o.stdout)
+                                .split_whitespace()
+                                .any(|v| v == "home_connected=true")
+                        });
+                    HOME_CONNECTED.store(connected, Ordering::SeqCst);
+                    continue;
+                }
+            };
+            match job {
+                RadioJob::Home(enabled) => {
+                    let _ = helper()
+                        .args(["home", if enabled { "on" } else { "off" }])
+                        .status();
+                }
+                RadioJob::Warm => WARM.store(run("warm"), Ordering::SeqCst),
+                RadioJob::Cool => {
+                    WARM.store(false, Ordering::SeqCst);
+                    run("cool");
+                }
+                RadioJob::Down => {
+                    WARM.store(false, Ordering::SeqCst);
+                    down();
                 }
             }
         });
@@ -88,31 +123,32 @@ fn queue() -> &'static Sender<RadioJob> {
     })
 }
 
-#[cfg(any(feature = "device", test))]
-fn link_command(root: &Path, verb: &str) -> Command {
-    let mut cmd = Command::new("/bin/sh");
-    cmd.arg(root.join("System/slotlink.sh"))
-        .arg("link")
-        .arg(verb);
-    cmd
-}
-
+/// Always resolve the helper from this card, never PATH's OS helper.
 #[cfg(feature = "device")]
-fn link(verb: &str) -> Command {
+fn helper() -> std::process::Command {
     let root = std::env::var_os("SLOT_ROOT").unwrap_or_else(|| "/mnt/sdcard".into());
-    link_command(Path::new(&root), verb)
+    let mut c = std::process::Command::new("/bin/sh");
+    c.arg(std::path::Path::new(&root).join("System/ags-net"));
+    c.env("SLOT_ROOT", root)
+        .env("SLOT_OWNER_PID", std::process::id().to_string());
+    c
 }
 
+/// A best-effort preparation/cleanup command served by the bundled daemon.
 #[cfg(feature = "device")]
 fn run(sub: &str) -> bool {
-    link(sub).status().is_ok_and(|status| status.success())
+    helper()
+        .arg("link")
+        .arg(sub)
+        .status()
+        .is_ok_and(|status| status.success())
 }
 
 #[cfg(feature = "device")]
 pub fn up(role: LinkRole, cancel: &Cancel) -> Result<(), RadioFail> {
-    let mut child = link(role.arg())
-        .spawn()
-        .map_err(|e| RadioFail::Radio(format!("link {} would not start: {e}", role.arg())))?;
+    let mut child = helper().arg("link").arg(role.arg()).spawn().map_err(|e| {
+        RadioFail::Radio(format!("ags-net link {} would not start: {e}", role.arg()))
+    })?;
     loop {
         if cancel.is_cancelled() {
             let _ = child.kill();
@@ -136,7 +172,7 @@ pub fn up(role: LinkRole, cancel: &Cancel) -> Result<(), RadioFail> {
 
 #[cfg(feature = "device")]
 pub fn down() {
-    let _ = link("down").status();
+    let _ = helper().arg("link").arg("down").status();
 }
 
 #[cfg(not(feature = "device"))]
@@ -172,23 +208,6 @@ mod tests {
         jobs.ask(RadioJob::Warm);
         jobs.ask(RadioJob::Cool);
         jobs.ask(RadioJob::Down);
-    }
-
-    fn argv(cmd: &Command) -> Vec<String> {
-        std::iter::once(cmd.get_program())
-            .chain(cmd.get_args())
-            .map(|a| a.to_string_lossy().into_owned())
-            .collect()
-    }
-
-    #[test]
-    fn a_link_runs_the_cards_script_through_sh() {
-        let d = tempfile::tempdir().unwrap();
-        let script = d.path().join("System/slotlink.sh");
-        assert_eq!(
-            argv(&link_command(d.path(), "host")),
-            ["/bin/sh", script.to_str().unwrap(), "link", "host"]
-        );
     }
 
     #[cfg(not(feature = "device"))]

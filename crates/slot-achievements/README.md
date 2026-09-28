@@ -9,7 +9,8 @@ The notification slides and fades in, gives the badge a small pop, then fades aw
 The total duration includes both transitions. A small trophy is used only when a badge is
 missing or invalid; showing an unlock never waits for a download.
 
-Create `System/retroachievements.toml` on the card:
+Copy the bundled `System/retroachievements.toml.example` to `System/retroachievements.toml`
+on the card and fill in your account:
 
 ```toml
 enabled = true
@@ -25,6 +26,13 @@ key. An explicitly configured token takes precedence over a password or remember
 Account and configuration changes take effect on restart. Omit the file or set
 `enabled = false` to disable the feature. TOML comments and literal strings are supported;
 for example, single quotes preserve backslashes in a password without escaping them.
+
+For home networking, configure `System/wifi.toml` from its bundled example and turn
+**Home Wi-Fi** **On** once in the main menu. The toggle is remembered across reboots.
+Wi-Fi connection, network time sync, RA login, and library preparation then run automatically.
+When the Wi-Fi worker reports a new connection, RA retries immediately instead of waiting
+for its normal network backoff. Releases and deployment copy only the example files;
+existing credentials and caches are preserved.
 
 Treat the config and cached login token as credentials. slot does not print them in logs.
 It uses verified HTTPS with bundled trusted roots; it needs neither curl nor a system CA

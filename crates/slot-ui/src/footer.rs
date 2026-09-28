@@ -119,3 +119,29 @@ pub(crate) fn draw_printed(x: f32, y: f32, p: Printed, out: &mut Vec<Draw>) {
 fn printed(x: f32, p: Printed, out: &mut Vec<Draw>) {
     draw_printed(x, FOOTER_Y, p, out);
 }
+
+/// Home connection mark beside the left battery cluster, never a gameplay overlay.
+pub fn draw_home_wifi(
+    battery: Option<Battery>,
+    percent: Printed,
+    icon: Option<TexId>,
+    out: &mut Vec<Draw>,
+) {
+    let Some(tex) = icon else {
+        return;
+    };
+    let x = FOOTER_MARGIN
+        + if battery.is_some() {
+            crate::battery::cluster_width(percent) + 12.0
+        } else {
+            0.0
+        };
+    out.push(Draw::Tex {
+        x,
+        y: FOOTER_Y + (HINT_H as f32 - 18.0) / 2.0,
+        w: 18.0,
+        h: 18.0,
+        tex,
+        alpha: 1.0,
+    });
+}

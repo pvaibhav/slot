@@ -246,6 +246,9 @@ impl Frontend {
         let bolt = icon_face(Icon::Charging, BOLT_PX, HUD_INK);
         let bolt_id = compositor.create_texture(bolt.w, bolt.h, &bolt.rgba);
         self.session.app_mut().set_bolt_face(bolt_id);
+        let wifi = icon_face(Icon::Wifi, 18.0, HUD_INK);
+        let wifi_id = compositor.create_texture(wifi.w, wifi.h, &wifi.rgba);
+        self.session.app_mut().set_wifi_face(wifi_id);
         self.upload_wallpaper(compositor);
     }
 

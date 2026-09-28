@@ -1,0 +1,16 @@
+[package]
+name = "slot-services"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+slot-store = { path = "../slot-store" }
+toml = "0.8"
+libc = "0.2"
+pbkdf2 = "0.12"
+sha1 = "0.10"
+
+[dev-dependencies]
+tempfile.workspace = true

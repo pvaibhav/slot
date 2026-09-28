@@ -1,0 +1,9 @@
+# Copy to System/retroachievements.toml, fill in your account, then restart slot.
+# Configure System/wifi.toml and turn Home Wi-Fi On once in the menu.
+enabled = true
+username = ""
+password = ""
+
+# After a successful login, slot remembers its token; you may remove password.
+# Or supply an emulator login token (not a Web API key):
+# token = ""

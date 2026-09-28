@@ -330,6 +330,12 @@ pub(crate) fn run(
             Err(mpsc::RecvTimeoutError::Disconnected) => return,
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
+        if status
+            .reconnect
+            .swap(false, std::sync::atomic::Ordering::AcqRel)
+        {
+            next_attempt = Instant::now();
+        }
         if Instant::now() < next_attempt {
             continue;
         }

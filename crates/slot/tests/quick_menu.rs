@@ -113,6 +113,7 @@ fn up_and_down_move_the_bar_and_wrap_at_the_ends() {
         QuickRow::FastForwardSound,
         QuickRow::ColourCorrection,
         QuickRow::Rumble,
+        QuickRow::HomeWifi,
         QuickRow::DateTime,
         QuickRow::About,
         QuickRow::FastForward,
@@ -519,4 +520,67 @@ fn only_the_clock_from_the_menu_offers_b_back() {
         !drawn(&out, 400),
         "the first boot clock offers a way back it does not have"
     );
+}
+
+#[test]
+fn home_wifi_toggle_persists_and_requests_only_home_work() {
+    use slot::link_radio::{RadioJob, RadioJobs};
+    use std::sync::{Arc, Mutex};
+    struct Radio(Arc<Mutex<Vec<RadioJob>>>);
+    impl RadioJobs for Radio {
+        fn ask(&mut self, job: RadioJob) {
+            self.0.lock().unwrap().push(job);
+        }
+        fn warmed(&self) -> bool {
+            false
+        }
+    }
+    let (d, mut app, _) = on_carousel();
+    let jobs = Arc::new(Mutex::new(Vec::new()));
+    app.set_radio_jobs(Box::new(Radio(jobs.clone())));
+    open_at(&mut app, QuickRow::HomeWifi);
+    assert_eq!(app.quick_value(QuickRow::HomeWifi), Some(QuickValue::Off));
+    press(&mut app, Btn::Right);
+    assert!(read_slot_state(d.path()).home_wifi_enabled);
+    press(&mut app, Btn::Left);
+    assert!(!read_slot_state(d.path()).home_wifi_enabled);
+    assert_eq!(
+        *jobs.lock().unwrap(),
+        vec![RadioJob::Home(true), RadioJob::Home(false)]
+    );
+}
+
+#[test]
+fn footer_wifi_requires_enabled_and_observed_home_connection() {
+    use slot::link_radio::{RadioJob, RadioJobs};
+    struct Radio(bool);
+    impl RadioJobs for Radio {
+        fn ask(&mut self, _: RadioJob) {}
+        fn warmed(&self) -> bool {
+            false
+        }
+        fn home_connected(&self) -> bool {
+            self.0
+        }
+    }
+    let texture = TexId::from_raw(9876);
+    for enabled in [false, true] {
+        for connected in [false, true] {
+            let (_d, mut app, _) = on_carousel_with(SlotState {
+                home_wifi_enabled: enabled,
+                ..Default::default()
+            });
+            app.set_radio_jobs(Box::new(Radio(connected)));
+            app.set_wifi_face(texture);
+            let mut draw = Vec::new();
+            app.draw(&mut draw);
+            let icon = draw
+                .iter()
+                .find(|d| matches!(d,Draw::Tex{tex,..} if *tex==texture));
+            assert_eq!(icon.is_some(), enabled && connected);
+            if let Some(Draw::Tex { x, y, .. }) = icon {
+                assert!(*x < 180.0 && *y > 400.0);
+            }
+        }
+    }
 }

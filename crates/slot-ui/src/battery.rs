@@ -102,3 +102,8 @@ pub fn draw_gauge(
         });
     }
 }
+
+/// Width reserved by the complete battery cluster, including charging and percent.
+pub(crate) fn cluster_width(percent: Printed) -> f32 {
+    BOLT_W + BOLT_GAP + GAUGE_W + NUB_W + GAP + percent.w as f32
+}

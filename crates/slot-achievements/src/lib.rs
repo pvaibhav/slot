@@ -37,6 +37,7 @@ pub enum SyncStatus {
 struct Status {
     network: AtomicU8,
     unsaved: AtomicBool,
+    reconnect: AtomicBool,
 }
 
 impl Status {
@@ -166,6 +167,11 @@ impl Service {
 
     pub fn sync_status(&self) -> SyncStatus {
         self.status.get()
+    }
+
+    /// The Wi-Fi worker observed a new connection. Wake retries without blocking the UI.
+    pub fn network_available(&self) {
+        self.status.reconnect.store(true, Ordering::Release);
     }
 
     /// Poll during power-off. The UI keeps rendering while the evaluator drains final

@@ -34,6 +34,11 @@ jobs:
           set -eu
           out="slot-${GITHUB_REF_NAME}"
           file "$out/System/slot" | grep -q aarch64
+          file "$out/System/slot-services" | grep -q aarch64
+          file "$out/System/slot-net/iw" | grep -q aarch64
+          sh -n "$out/System/ags-net"
+          test -f "$out/System/wifi.toml.example"
+          test -f "$out/System/wifi-readme.md"
           file "$out/System/mgba_libretro.so" | grep -q aarch64
           file "$out/System/gpsp_libretro.so" | grep -q aarch64
           test -x "$out/System/slot"

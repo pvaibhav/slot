@@ -10,16 +10,18 @@ pub enum QuickRow {
     FastForwardSound,
     ColourCorrection,
     Rumble,
+    HomeWifi,
     DateTime,
     About,
 }
 
 impl QuickRow {
-    pub const ALL: [QuickRow; 6] = [
+    pub const ALL: [QuickRow; 7] = [
         QuickRow::FastForward,
         QuickRow::FastForwardSound,
         QuickRow::ColourCorrection,
         QuickRow::Rumble,
+        QuickRow::HomeWifi,
         QuickRow::DateTime,
         QuickRow::About,
     ];
@@ -34,6 +36,7 @@ impl QuickRow {
             QuickRow::FastForwardSound => "Fast Forward Sound",
             QuickRow::ColourCorrection => "Colour Correction",
             QuickRow::Rumble => "Rumble",
+            QuickRow::HomeWifi => "Home Wi-Fi",
             QuickRow::DateTime => "Date & Time",
             QuickRow::About => "About",
         }
@@ -109,6 +112,7 @@ impl QuickValue {
 
 pub const QUICK_PITCH: f32 = 52.0;
 pub const QUICK_TOP: f32 = (OUT_H as f32 - QUICK_PITCH * QuickRow::ALL.len() as f32) / 2.0;
+const _: () = assert!(QUICK_TOP >= 40.0);
 pub const QUICK_EDGE: f32 = 32.0;
 const BAR_INSET: f32 = 4.0;
 const TYPE_DROP: f32 = 4.0;

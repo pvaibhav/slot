@@ -16,6 +16,7 @@ use crate::persist;
 
 pub struct Session {
     achievements: slot_achievements::Service,
+    home_connected: bool,
     root: PathBuf,
     app: App,
     emu: Option<EmuHandle>,
@@ -37,6 +38,7 @@ impl Session {
         }
         Session {
             achievements: slot_achievements::Service::start(root.clone()),
+            home_connected: false,
             app: App::boot(&root),
             root,
             emu: None,
@@ -227,6 +229,11 @@ impl Session {
 
     pub fn update(&mut self, dt: f32) {
         self.bridge_link(|app| app.update(dt));
+        let connected = self.app.home_connected();
+        if connected && !self.home_connected {
+            self.achievements.network_available();
+        }
+        self.home_connected = connected;
         if let Some(emu) = &self.emu {
             emu.set_volume(self.app.output_volume());
         }

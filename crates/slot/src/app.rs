@@ -316,6 +316,7 @@ pub struct App {
     name_pending: bool,
     slot_letter: Option<char>,
     shelf_named: Option<Millis>,
+    wifi: Option<TexId>,
     shelf_clock: slot_ui::Printed,
     achievement_sync: Option<slot_ui::SyncIndicator>,
     hud: Hud,
@@ -419,6 +420,7 @@ impl App {
             name_pending: false,
             slot_letter: None,
             shelf_named: None,
+            wifi: None,
             shelf_clock: slot_ui::Printed::default(),
             achievement_sync: None,
             hud: Hud::new(),
@@ -446,6 +448,7 @@ impl App {
         let mut app = App::new(scan(root).unwrap_or_default());
         app.root = Some(root.to_path_buf());
         app.state = read_slot_state(root);
+        app.radio.ask(RadioJob::Home(app.state.home_wifi_enabled));
         if app.state.clock_set {
             app.start();
         } else {
@@ -617,6 +620,7 @@ impl App {
             QuickRow::FastForwardSound => Some(QuickValue::flag(self.state.ff_sound)),
             QuickRow::ColourCorrection => Some(QuickValue::flag(self.state.colour_correction)),
             QuickRow::Rumble => Some(QuickValue::flag(self.state.rumble)),
+            QuickRow::HomeWifi => Some(QuickValue::flag(self.state.home_wifi_enabled)),
             QuickRow::DateTime | QuickRow::About => None,
         }
     }
@@ -652,6 +656,14 @@ impl App {
 
     pub fn set_wallpaper(&mut self, face: TexId) {
         self.wallpaper = Some(face);
+    }
+
+    pub fn set_wifi_face(&mut self, face: TexId) {
+        self.wifi = Some(face);
+    }
+
+    pub fn home_connected(&self) -> bool {
+        self.radio.home_connected()
     }
 
     pub fn set_bolt_face(&mut self, bolt: TexId) {
@@ -1176,7 +1188,8 @@ impl App {
             QuickRow::FastForward
             | QuickRow::FastForwardSound
             | QuickRow::ColourCorrection
-            | QuickRow::Rumble => {}
+            | QuickRow::Rumble
+            | QuickRow::HomeWifi => {}
         }
     }
 
@@ -1196,6 +1209,10 @@ impl App {
                 self.colour_pending = Some(s.colour_correction);
             }
             QuickRow::Rumble => s.rumble = !s.rumble,
+            QuickRow::HomeWifi => {
+                s.home_wifi_enabled = !s.home_wifi_enabled;
+                self.radio.ask(RadioJob::Home(s.home_wifi_enabled));
+            }
             QuickRow::DateTime | QuickRow::About => return,
         }
         self.persist();
@@ -1724,6 +1741,9 @@ impl App {
                 );
                 if let Some(icon) = self.achievement_sync {
                     slot_ui::draw_footer_sync(self.shelf_clock, icon, out);
+                }
+                if self.state.home_wifi_enabled && self.radio.home_connected() {
+                    slot_ui::draw_home_wifi(self.battery, self.battery_percent, self.wifi, out);
                 }
             }
             Phase::About => {
@@ -3052,11 +3072,37 @@ fn free_stamp(ring: &StateRing, now: i64) -> String {
         .list()
         .map(|l| l.into_iter().map(|e| e.stamp).collect())
         .unwrap_or_default();
-    let mut secs = now;
+    // NTP may move wall time backwards. Keep a new snapshot after the newest stored
+    // snapshot so eviction cannot immediately throw away the save just created.
+    let newest = taken
+        .iter()
+        .filter_map(|s| slot_store::parse_stamp(s))
+        .max();
+    let mut secs = newest.map_or(now, |latest| now.max(latest.saturating_add(1)));
     let mut stamp = format_stamp(secs);
     while taken.contains(&stamp) {
         secs += 1;
         stamp = format_stamp(secs);
     }
     stamp
+}
+
+#[cfg(test)]
+mod network_time_tests {
+    use super::*;
+    #[test]
+    fn backward_clock_correction_does_not_evict_the_new_snapshot() {
+        let d = tempfile::tempdir().unwrap();
+        let ring = StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Example");
+        let now = 1_800_000_000;
+        for n in 0..RING_MAX {
+            ring.push(&[n as u8], &[], &format_stamp(now + n as i64))
+                .unwrap();
+        }
+        let stamp = free_stamp(&ring, now - 3600);
+        ring.push(b"latest", &[], &stamp).unwrap();
+        assert_eq!(ring.list().unwrap()[0].stamp, stamp);
+        assert_eq!(ring.read(&stamp).unwrap().0, b"latest");
+        assert_eq!(ring.list().unwrap().len(), RING_MAX);
+    }
 }
