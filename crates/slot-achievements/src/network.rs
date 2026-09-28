@@ -287,6 +287,7 @@ pub(crate) fn run(
     let mut warned = false;
     let mut last_award = 0;
     let mut library = crate::library::pending(&root, &dir, now());
+    let mut library_total = library.len();
     let mut library_failed = false;
     let mut rescanned = Instant::now();
     let mut badges = crate::badges::Queue::new(&dir);
@@ -331,7 +332,7 @@ pub(crate) fn run(
             Err(mpsc::RecvTimeoutError::Disconnected) => return,
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
-        // The denominator is only known after ROM metadata discovery finishes.
+        // Metadata preparation and badge downloads each occupy half of a cache refresh.
         status.pending.store(
             !library.is_empty()
                 || library_failed
@@ -341,11 +342,13 @@ pub(crate) fn run(
             std::sync::atomic::Ordering::Release,
         );
         status.progress.store(
-            if library.is_empty() && badges.pending() {
-                badges.percent() + 1
-            } else {
-                0
-            },
+            cache_progress(
+                library_total,
+                library.len(),
+                badges.pending(),
+                badges.percent(),
+            )
+            .map_or(0, |percent| percent + 1),
             std::sync::atomic::Ordering::Release,
         );
         if status
@@ -359,6 +362,7 @@ pub(crate) fn run(
         }
         if rescanned.elapsed() >= Duration::from_secs(300) {
             library = crate::library::pending(&root, &dir, now());
+            library_total = library.len();
             library_failed = false;
             badges.scan();
             rescanned = Instant::now();
@@ -506,11 +510,13 @@ pub(crate) fn run(
             std::sync::atomic::Ordering::Release,
         );
         status.progress.store(
-            if library.is_empty() && badges.pending() {
-                badges.percent() + 1
-            } else {
-                0
-            },
+            cache_progress(
+                library_total,
+                library.len(),
+                badges.pending(),
+                badges.percent(),
+            )
+            .map_or(0, |percent| percent + 1),
             std::sync::atomic::Ordering::Release,
         );
         match result {
@@ -710,5 +716,40 @@ mod presence_tests {
             assert!(http.0.contains(&("m".into(), expected.into())));
             assert!(http.0.contains(&("x".into(), "rom-hash".into())));
         }
+    }
+}
+
+// A fixed phase split keeps newly discovered badges from moving progress backwards.
+fn cache_progress(
+    total: usize,
+    remaining: usize,
+    badges_pending: bool,
+    badge_percent: u8,
+) -> Option<u8> {
+    if remaining > 0 {
+        Some((total.saturating_sub(remaining) as u64 * 50 / total.max(1) as u64) as u8)
+    } else if badges_pending {
+        Some(if total > 0 {
+            50 + badge_percent / 2
+        } else {
+            badge_percent
+        })
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod cache_progress_tests {
+    use super::cache_progress;
+    #[test]
+    fn progress_covers_metadata_then_badges_and_hides_when_finished() {
+        assert_eq!(cache_progress(10, 10, false, 100), Some(0));
+        assert_eq!(cache_progress(10, 5, true, 20), Some(25));
+        assert_eq!(cache_progress(10, 1, true, 10), Some(45));
+        assert_eq!(cache_progress(10, 0, true, 20), Some(60));
+        assert_eq!(cache_progress(10, 0, false, 100), None);
+        assert_eq!(cache_progress(0, 0, true, 62), Some(62));
+        assert_eq!(cache_progress(0, 0, false, 100), None);
     }
 }

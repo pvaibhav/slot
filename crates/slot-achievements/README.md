@@ -51,11 +51,13 @@ opened. They remain available offline. Missing or damaged images are retried ind
 badge downloads take lower priority than unlock uploads and game setup. Older caches are
 refreshed once to add badge metadata.
 The shelf's bottom bar has a small sync icon just left of the clock. It rotates while
-preparing or syncing, shows badge-cache percentage once ROM discovery establishes the total,
+preparing or syncing, shows cache progress during metadata preparation and badge downloads,
 disappears when caught up, and shows an amber dot when queued work is waiting for
 internet or when account/data/storage needs attention. It is absent when disabled. Routine
 status never interrupts gameplay with a banner; only earned achievements show a banner.
-Background diagnostics go to slot's log.
+Background diagnostics go to slot's log. Cache refresh progress reserves the first half
+for game metadata and the second half for badge downloads; badge-only resumes use
+the full range. Brief login and presence requests have no percentage.
 
 Each ROM needs its initial download once. Leave slot running online long enough to prepare
 the library before taking a newly populated card offline. Unknown ROM hashes cannot earn
