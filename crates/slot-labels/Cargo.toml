@@ -1,0 +1,15 @@
+[package]
+name = "slot-labels"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+slot-store = { path = "../slot-store" }
+ureq = { version = "3", default-features = false, features = ["rustls"] }
+scraper = { version = "0.24", default-features = false }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+unicode-normalization = "0.1"
+tempfile.workspace = true
+

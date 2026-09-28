@@ -447,13 +447,17 @@
       <dl>
         <div class="qa">
           <dt>How do I add cart labels?</dt>
-          <dd>Drop a <code>.png</code> into the <code>Labels/</code> folder for that platform, named
-              after the ROM. For example, <code>Labels/GBA/Metroid Fusion.png</code> matches
-              <code>Games/GBA/Metroid Fusion.gba</code>.</dd>
+          <dd>When online, slot automatically fetches missing GBA cartridge labels and shows
+              them as they arrive. You can also drop your own <code>.png</code> into
+              <code>Labels/GBA</code>, named after the ROM. For example,
+              <code>Labels/GBA/Metroid Fusion.png</code> matches
+              <code>Games/GBA/Metroid Fusion.gba</code>. Existing labels are kept.</dd>
         </div>
         <div class="qa">
           <dt>Do I have to craft them by hand?</dt>
-          <dd>Nah! You can use the <a href="https://studio.slot-cfw.fyi">slot Cart Studio</a>.</dd>
+          <dd>No. slot prepares downloaded labels automatically. If artwork is unavailable,
+              it keeps a text label. Failed downloads have limited retries and can be tried
+              again on the next launch. You can also use the <a href="https://studio.slot-cfw.fyi">slot Cart Studio</a>.</dd>
         </div>
       </dl>
     </div>

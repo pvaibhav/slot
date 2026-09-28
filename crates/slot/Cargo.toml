@@ -11,6 +11,7 @@ host = ["dep:winit", "dep:cpal", "dep:gilrs", "slot-gfx/host"]
 device = ["slot-gfx/device"]
 
 [dependencies]
+slot-labels = { path = "../slot-labels" }
 slot-achievements = { path = "../slot-achievements" }
 slot-gfx = { path = "../slot-gfx", default-features = false }
 slot-input = { path = "../slot-input" }

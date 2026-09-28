@@ -27,6 +27,7 @@ const DOZE_TIMEOUT: Duration = Duration::from_secs(180);
 const ALERT_INK: [u8; 3] = [0xf0, 0xb4, 0x3c];
 
 pub struct Frontend {
+    labels: crate::labels::Labels,
     achievements: crate::achievement_ui::Notifications,
     session: Session,
     start: Instant,
@@ -83,11 +84,14 @@ struct Switcher {
 impl Frontend {
     pub fn boot(platform: Box<dyn Platform>) -> Self {
         let now = Instant::now();
-        let mut session = Session::boot(platform.root().to_path_buf());
+        let root = platform.root().to_path_buf();
+        let mut session = Session::boot(root.clone());
+        let labels = crate::labels::Labels::spawn(root, session.app().carts().cloned().collect());
         session
             .app_mut()
             .set_power(Power::new(platform, DOZE_TIMEOUT));
         Frontend {
+            labels,
             achievements: crate::achievement_ui::Notifications::new(),
             session,
             start: now,
@@ -110,6 +114,7 @@ impl Frontend {
         }
     }
 
+    /// Initial cart faces, the HUD glyphs and the key caps. All of it
     pub fn upload_faces(&mut self, compositor: &mut Compositor) {
         let faces = self
             .session
@@ -281,6 +286,7 @@ impl Frontend {
             compositor.upload_game(&frame);
             crate::latency::taken();
         }
+        self.sync_labels(compositor);
         sync_clock(self.session.app_mut(), compositor, &mut self.clocks);
         sync_about(self.session.app_mut(), compositor, &mut self.about);
         sync_quick_clock(self.session.app_mut(), compositor, &mut self.quick_clock);
@@ -346,6 +352,26 @@ impl Frontend {
 
     pub fn step_emulator(&self, present: Duration, timeout: Duration) -> bool {
         self.session.step_emulator(present, timeout)
+    }
+
+    /// At most one texture upload per frame. The worker already decoded and drew it.
+    fn sync_labels(&mut self, compositor: &mut Compositor) {
+        let Some(ready) = self.labels.take() else {
+            return;
+        };
+        let Some(path) = ready.cart.label else {
+            return;
+        };
+        let app = self.session.app_mut();
+        if let Some(tex) = app.attach_label(&ready.cart.rom, path) {
+            compositor.update_texture(tex, ready.face.w, ready.face.h, &ready.face.rgba);
+            if self.core_asked.as_deref() == Some(ready.cart.stem.as_str())
+                || self.core_built.as_deref() == Some(ready.cart.stem.as_str())
+            {
+                self.core_asked = None;
+                self.core_built = None;
+            }
+        }
     }
 
     pub fn advance(&mut self, input: &mut dyn InputSource) {
@@ -555,7 +581,10 @@ fn sync_core_picker(
     let Some(faces) = builder.take() else {
         return;
     };
-    if highlighted.as_deref() != Some(faces.stem.as_str()) || *built == highlighted {
+    if highlighted.as_deref() != Some(faces.stem.as_str())
+        || *built == highlighted
+        || !app.carts().any(|cart| faces.is_for(cart))
+    {
         return;
     }
     let board_id = upload_rgba(

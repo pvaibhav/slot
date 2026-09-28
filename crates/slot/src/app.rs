@@ -736,6 +736,21 @@ impl App {
         }
     }
 
+    /// Attach completed background artwork without moving the shelf or changing its texture
+    /// handles. A stale completion cannot replace an existing/custom label or another ROM.
+    pub fn attach_label(&mut self, rom: &Path, label: std::path::PathBuf) -> Option<TexId> {
+        let wanted = |cart: &Cart| cart.rom == rom && cart.label.is_none();
+        let shelf = self
+            .shelves
+            .iter_mut()
+            .map(|(_, shelf)| shelf)
+            .find(|shelf| shelf.carts.iter().any(wanted))?;
+        let cart = shelf.carts.iter_mut().find(|cart| wanted(cart))?;
+        cart.label = Some(label);
+        let stem = cart.stem.clone();
+        shelf.find(&stem).and_then(|(_, face)| face)
+    }
+
     pub fn set_snapshot(&mut self, snapshot: Box<dyn Snapshot>) {
         self.snapshot = Some(snapshot);
     }

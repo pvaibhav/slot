@@ -8,6 +8,21 @@ A full user guide can be found at [slot-cfw.fyi](https://slot-cfw.fyi).
 
 Release notes can be found in the [changelog](CHANGELOG.md).
 
+## Cartridge labels
+
+Slot fetches missing cartridge artwork from LaunchBox in the background, prepares
+196×86 PNGs in `Labels/GBA`, and updates the UI as each label arrives. Existing
+labels are preserved. Unavailable artwork keeps the generated text label.
+
+Downloads have a 15-second timeout per request and at most three attempts per
+ROM per launch, with 30-second and two-minute retry delays. Three consecutive
+network failures stop the worker until the next launch. Missing or ambiguous
+matches and unsupported images are skipped for that launch; they do not block
+other games. The worker never blocks the UI or shutdown.
+
+The [standalone GBA label downloader](tools/gba-labels/README.md) is also available
+for preparing labels on a computer, with previews and an optional copy step.
+
 ## RetroAchievements
 
 Optional [RetroAchievements](crates/slot-achievements/README.md) support uses TOML configuration,

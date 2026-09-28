@@ -35,6 +35,13 @@ fn a_request_comes_back_as_the_open_carts_faces() {
     let got = collect(&builder, 1);
     assert_eq!(got.len(), 1, "the worker never answered");
     assert_eq!(got[0].stem, "Metroid Fusion");
+    let mut updated = cart("Metroid Fusion");
+    assert!(got[0].is_for(&updated));
+    updated.label = Some("Labels/GBA/Metroid Fusion.png".into());
+    assert!(
+        !got[0].is_for(&updated),
+        "old faces must not replace newly attached artwork"
+    );
     assert_eq!((got[0].board.w, got[0].board.h), (372, 209));
     assert_eq!(
         (got[0].lid.w, got[0].lid.h),
