@@ -136,7 +136,8 @@ pub fn apply_core_options(
         core.set_option("mgba_sgb_borders", "OFF");
         core.set_option("mgba_gb_colors_preset", "1");
         core.set_option("mgba_gb_colors", "GBC Dark Green →A");
-        core.set_option("mgba_interframe_blending", "lcd_ghosting");
+        // Simple retains frame blending without the accurate filter's CPU cost on the H700.
+        core.set_option("mgba_interframe_blending", "mix");
         if let Some((key, value)) = colour_option(which, colour) {
             core.set_option(key, value);
         }
