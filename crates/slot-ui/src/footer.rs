@@ -31,11 +31,23 @@ pub struct SyncIndicator {
     pub turn: f32,
     pub alpha: f32,
     pub attention: bool,
+    pub progress: Option<TexId>,
 }
 
 /// Shares the clock's baseline and preserves a gap even at the widest clock label.
 pub fn draw_footer_sync(clock: Printed, icon: SyncIndicator, out: &mut Vec<Draw>) {
-    let x = OUT_W as f32 - FOOTER_MARGIN - clock.w as f32 - SYNC_GAP - SYNC_PX as f32;
+    let right = OUT_W as f32 - FOOTER_MARGIN - clock.w as f32 - SYNC_GAP;
+    let x = right - SYNC_PX as f32 - if icon.progress.is_some() { 42.0 } else { 0.0 };
+    if let Some(tex) = icon.progress {
+        out.push(Draw::Tex {
+            x: right - 36.0,
+            y: FOOTER_Y,
+            w: 36.0,
+            h: HINT_H as f32,
+            tex,
+            alpha: 0.75,
+        });
+    }
     let y = FOOTER_Y + (HINT_H as f32 - SYNC_PX as f32) / 2.0;
     out.push(Draw::Turned {
         x,

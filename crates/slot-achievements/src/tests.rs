@@ -594,3 +594,30 @@ fn unsaved_unlocks_retry_with_the_original_time_after_storage_recovers() {
     );
     assert!(received.try_iter().any(|n| n.kind == NoticeKind::Earned));
 }
+
+#[test]
+fn cache_percentage_counts_unique_badges_and_resumes_from_disk() {
+    let root = configured();
+    let store = Store::open(root.path(), "Player").unwrap();
+    let mut data = game();
+    let mut second = achievement("0xH000000=2");
+    second.id = 8;
+    second.badge = "00002".into();
+    data.achievements.push(second);
+    let (calls, _) = mpsc::channel();
+    let mut http = Server { calls };
+    let mut queue = badges::Queue::new(&store.dir);
+    queue.enqueue(&data);
+    queue.enqueue(&data);
+    assert_eq!(queue.percent(), 0);
+    queue.step(&mut http);
+    assert_eq!(queue.percent(), 50);
+    queue.step(&mut Offline);
+    assert_eq!(queue.percent(), 50); // Failures never count as completed downloads.
+    let mut restarted = badges::Queue::new(&store.dir);
+    restarted.enqueue(&data);
+    assert_eq!(restarted.percent(), 50);
+    restarted.step(&mut http);
+    assert_eq!(restarted.percent(), 100);
+    assert!(!restarted.pending());
+}

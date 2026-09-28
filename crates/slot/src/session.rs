@@ -103,6 +103,10 @@ impl Session {
         self.achievements.flush_ready()
     }
 
+    pub fn achievement_sync_progress(&self) -> Option<u8> {
+        self.achievements.sync_progress()
+    }
+
     pub fn achievement_sync_status(&self) -> slot_achievements::SyncStatus {
         self.achievements.sync_status()
     }

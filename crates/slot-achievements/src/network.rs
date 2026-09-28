@@ -330,6 +330,15 @@ pub(crate) fn run(
             Err(mpsc::RecvTimeoutError::Disconnected) => return,
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
+        // The denominator is only known after ROM metadata discovery finishes.
+        status.progress.store(
+            if library.is_empty() && badges.pending() {
+                badges.percent() + 1
+            } else {
+                0
+            },
+            std::sync::atomic::Ordering::Release,
+        );
         if status
             .reconnect
             .swap(false, std::sync::atomic::Ordering::AcqRel)
@@ -488,6 +497,14 @@ pub(crate) fn run(
             badges.step(&mut http);
             deferred_error.map_or(Ok(()), Err)
         })();
+        status.progress.store(
+            if library.is_empty() && badges.pending() {
+                badges.percent() + 1
+            } else {
+                0
+            },
+            std::sync::atomic::Ordering::Release,
+        );
         match result {
             Ok(()) => {
                 status.set(if library_failed || badges.waiting {

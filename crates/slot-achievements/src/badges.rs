@@ -72,6 +72,7 @@ fn decode(bytes: &[u8]) -> Option<BadgeImage> {
 pub(crate) struct Queue {
     dir: PathBuf,
     names: BTreeSet<String>,
+    known: BTreeSet<String>,
     pending: VecDeque<String>,
     retry: Instant,
     pub waiting: bool,
@@ -82,6 +83,7 @@ impl Queue {
         let mut queue = Self {
             dir: dir.into(),
             names: BTreeSet::new(),
+            known: BTreeSet::new(),
             pending: VecDeque::new(),
             retry: Instant::now(),
             waiting: false,
@@ -98,6 +100,7 @@ impl Queue {
             let Some(path) = path(&self.dir, &achievement.badge) else {
                 continue;
             };
+            self.known.insert(achievement.badge.clone());
             if !self.names.contains(&achievement.badge) && load_badge(&path).is_none() {
                 self.names.insert(achievement.badge.clone());
                 self.pending.push_back(achievement.badge.clone());
@@ -118,6 +121,14 @@ impl Queue {
                 }
             }
         }
+    }
+
+    pub fn percent(&self) -> u8 {
+        if self.known.is_empty() {
+            return 100;
+        }
+        ((self.known.len().saturating_sub(self.pending.len())) as u64 * 100
+            / self.known.len() as u64) as u8
     }
 
     pub fn pending(&self) -> bool {

@@ -15,7 +15,7 @@ const DURATION: Duration = Duration::from_millis(1800);
 const BADGE_PX: u32 = 32;
 
 pub(crate) struct Notifications {
-    requests: Sender<(Notice, u32)>,
+    requests: Sender<Request>,
     built: Receiver<Built>,
     waiting: bool,
     texture: Option<TexId>,
@@ -23,9 +23,18 @@ pub(crate) struct Notifications {
     shown: Option<Instant>,
     sync: Option<TexId>,
     started: Instant,
+    requested_progress: Option<u8>,
+    displayed_progress: Option<u8>,
+    progress: Option<TexId>,
+}
+
+enum Request {
+    Earned(Notice, u32),
+    Progress(u8),
 }
 
 enum Built {
+    Progress(u8, CartFace),
     Sync(CartFace),
     Banner(CartFace, CartFace, Vec<i16>),
 }
@@ -40,7 +49,19 @@ impl Notifications {
                 if outbox.send(Built::Sync(slot_ui::sync_icon_face())).is_err() {
                     return;
                 }
-                while let Ok((notice, rate)) = inbox.recv() {
+                while let Ok(request) = inbox.recv() {
+                    let (notice, rate) = match request {
+                        Request::Earned(notice, rate) => (notice, rate),
+                        Request::Progress(percent) => {
+                            if outbox
+                                .send(Built::Progress(percent, progress_face(percent)))
+                                .is_err()
+                            {
+                                return;
+                            }
+                            continue;
+                        }
+                    };
                     let sound = if rate == 0 {
                         Vec::new()
                     } else {
@@ -63,6 +84,9 @@ impl Notifications {
             shown: None,
             sync: None,
             started: Instant::now(),
+            requested_progress: None,
+            displayed_progress: None,
+            progress: None,
         }
     }
 
@@ -70,8 +94,28 @@ impl Notifications {
         if matches!(session.app().phase(), Phase::Doze { .. }) || session.app().shutting_down() {
             return;
         }
+        let percent = session.achievement_sync_progress();
+        if percent != self.requested_progress {
+            self.requested_progress = percent;
+            if let Some(percent) = percent {
+                let _ = self.requests.send(Request::Progress(percent));
+            }
+        }
         while let Ok(built) = self.built.try_recv() {
             match built {
+                Built::Progress(percent, face) => {
+                    if self.requested_progress != Some(percent) {
+                        continue;
+                    }
+                    match self.progress {
+                        Some(id) => compositor.update_texture(id, face.w, face.h, &face.rgba),
+                        None => {
+                            self.progress =
+                                Some(compositor.create_texture(face.w, face.h, &face.rgba))
+                        }
+                    }
+                    self.displayed_progress = Some(percent);
+                }
                 Built::Sync(face) => {
                     self.sync = Some(compositor.create_texture(face.w, face.h, &face.rgba));
                 }
@@ -111,6 +155,11 @@ impl Notifications {
                     _ => 0.35,
                 },
                 attention: matches!(status, SyncStatus::Offline | SyncStatus::Attention),
+                progress: if percent.is_some() && self.displayed_progress.is_some() {
+                    self.progress
+                } else {
+                    None
+                },
             })
         });
         session.app_mut().set_achievement_sync(icon);
@@ -128,7 +177,7 @@ impl Notifications {
                 if notice.kind == NoticeKind::Earned {
                     self.waiting = self
                         .requests
-                        .send((notice, session.audio_ring().sample_rate()))
+                        .send(Request::Earned(notice, session.audio_ring().sample_rate()))
                         .is_ok();
                     break;
                 }
@@ -137,6 +186,19 @@ impl Notifications {
         if let (Some(tex), Some(badge), Some(shown)) = (self.texture, self.badge, self.shown) {
             draw_banner(tex, badge, shown.elapsed().as_secs_f32(), draws);
         }
+    }
+}
+
+fn progress_face(percent: u8) -> CartFace {
+    let mut rgba = vec![0; (36 * slot_ui::HINT_H * 4) as usize];
+    if let Some(font) = text::label_font() {
+        let layout = text::fit(font, &format!("{percent}%"), 36.0, 1, 12.0, 12.0);
+        text::draw_centred(&mut rgba, 36, slot_ui::HINT_H, &layout, slot_ui::HUD_INK);
+    }
+    CartFace {
+        rgba,
+        w: 36,
+        h: slot_ui::HINT_H,
     }
 }
 
@@ -357,6 +419,12 @@ mod tests {
                 turn,
                 alpha,
                 attention,
+                progress: if name == "sync" {
+                    let f = progress_face(62);
+                    Some(compositor.create_texture(f.w, f.h, &f.rgba))
+                } else {
+                    None
+                },
             }));
             draws.clear();
             app.draw(&mut draws);

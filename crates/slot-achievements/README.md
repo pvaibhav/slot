@@ -51,7 +51,8 @@ opened. They remain available offline. Missing or damaged images are retried ind
 badge downloads take lower priority than unlock uploads and game setup. Older caches are
 refreshed once to add badge metadata.
 The shelf's bottom bar has a small sync icon just left of the clock. It rotates while
-preparing or syncing, rests dimly when caught up, and shows an amber dot when waiting for
+preparing or syncing, shows badge-cache percentage once ROM discovery establishes the total,
+rests dimly when caught up, and shows an amber dot when waiting for
 internet or when account/data/storage needs attention. It is absent when disabled. Routine
 status never interrupts gameplay with a banner; only earned achievements show a banner.
 Background diagnostics go to slot's log.

@@ -38,6 +38,8 @@ struct Status {
     network: AtomicU8,
     unsaved: AtomicBool,
     reconnect: AtomicBool,
+    // Zero means unknown; otherwise percent + 1, keeping Default valid.
+    progress: AtomicU8,
 }
 
 impl Status {
@@ -163,6 +165,10 @@ impl Service {
             flushed,
             status,
         }
+    }
+
+    pub fn sync_progress(&self) -> Option<u8> {
+        self.status.progress.load(Ordering::Acquire).checked_sub(1)
     }
 
     pub fn sync_status(&self) -> SyncStatus {
