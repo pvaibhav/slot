@@ -214,6 +214,9 @@ impl FbdevSurface {
             }
             (egl.swap_interval)(display, 1);
             let size = query_size(&egl, display, surface).unwrap_or(hint);
+            if let Err(e) = crate::displaycal::apply_rgsp() {
+                eprintln!("slot: RGSP display calibration: {e}");
+            }
             Ok(FbdevSurface {
                 egl,
                 gles,
