@@ -54,6 +54,7 @@ pub(crate) fn normalize(value: &str) -> String {
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
     text.strip_prefix("the ")
         .or_else(|| text.strip_prefix("disneys "))
+        .or_else(|| text.strip_prefix("lara croft "))
         .unwrap_or(&text)
         .to_owned()
 }
@@ -164,8 +165,14 @@ pub(crate) fn image_url(page: &str, cart: &Cart) -> Result<String, Error> {
     Err(unavailable("no matching regional cartridge artwork"))
 }
 
-pub(crate) fn resolve(http: &mut impl Transport, cart: &Cart) -> Result<String, Error> {
-    let title = title(&cart.stem);
+pub(crate) fn resolve(
+    http: &mut impl Transport,
+    cart: &Cart,
+    canonical_title: Option<&str>,
+) -> Result<String, Error> {
+    let title = canonical_title
+        .map(normalize)
+        .unwrap_or_else(|| title(&cart.stem));
     if title.is_empty() {
         return Err(unavailable("empty game title"));
     }

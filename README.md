@@ -13,6 +13,9 @@ Release notes can be found in the [changelog](CHANGELOG.md).
 Slot fetches missing cartridge artwork from LaunchBox in the background, prepares
 196×86 PNGs in `Labels/GBA`, and updates the UI as each label arrives. Existing
 labels are preserved. Unavailable artwork keeps the generated text label.
+When RetroAchievements has cached a game identity, the ROM’s content hash
+selects its canonical title for artwork lookup, even if the file was renamed.
+Otherwise slot falls back to normalized filename matching.
 
 Downloads have a 15-second timeout per request and at most three attempts per
 ROM per launch, with 30-second and two-minute retry delays. Three consecutive

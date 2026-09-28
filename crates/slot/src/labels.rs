@@ -28,7 +28,13 @@ impl Labels {
             .name("slot-labels".into())
             .spawn(move || {
                 let mut downloader = slot_labels::Downloader::default();
-                run(carts, stopped, out, |cart| downloader.prepare(&root, cart));
+                let mut identities = std::collections::HashMap::new();
+                run(carts, stopped, out, |cart| {
+                    let title = identities
+                        .entry(cart.rom.clone())
+                        .or_insert_with(|| slot_achievements::artwork_title(&root, &cart.rom));
+                    downloader.prepare_identified(&root, cart, title.as_deref())
+                });
             })
         {
             eprintln!("slot: labels: worker failed to start: {e}");

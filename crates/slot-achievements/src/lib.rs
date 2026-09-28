@@ -543,3 +543,23 @@ fn retry_unsaved(
         },
     );
 }
+
+/// Canonical title from the achievement cache identified by this ROM's content hash.
+/// Call on an I/O worker. This does not authenticate, send ROM data, or update the shared
+/// library index. A renamed ROM can reuse the same cached identity immediately.
+pub fn artwork_title(root: &std::path::Path, rom: &std::path::Path) -> Option<String> {
+    let config = storage::Config::read(&root.join("System/retroachievements.toml")).ok()?;
+    if !config.enabled || config.username.is_empty() {
+        return None;
+    }
+    let account = format!("{:x}", md5::compute(config.username.to_lowercase()));
+    let dir = root.join("Saves/RetroAchievements").join(account);
+    let hash = library::content_hash(rom).ok()?;
+    let (game, _): (storage::Game, std::collections::BTreeSet<u32>) =
+        storage::read(&dir.join(format!("{hash}.json"))).ok()?;
+    (game.console == 5
+        && game.id != 0
+        && !game.title.trim().is_empty()
+        && !game.title.starts_with("Unsupported Game Version"))
+    .then_some(game.title)
+}

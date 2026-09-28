@@ -144,7 +144,7 @@ fn end_to_end_writes_exact_filename_and_skips_existing_without_network() {
         image: image_bytes(600, 355),
     };
     let mut cache = HashMap::new();
-    let file = prepare(&mut http, &mut cache, dir.path(), &cart).unwrap();
+    let file = prepare(&mut http, &mut cache, dir.path(), &cart, None).unwrap();
     assert_eq!(
         file,
         dir.path().join("Labels/GBA/Advance Wars (USA) (Rev 1).png")
@@ -152,7 +152,7 @@ fn end_to_end_writes_exact_filename_and_skips_existing_without_network() {
     let bytes = std::fs::read(&file).unwrap();
     assert_eq!(image::load_from_memory(&bytes).unwrap().width(), 196);
     assert_eq!(http.calls.len(), 2);
-    prepare(&mut http, &mut cache, dir.path(), &cart).unwrap();
+    prepare(&mut http, &mut cache, dir.path(), &cart, None).unwrap();
     assert_eq!(http.calls.len(), 2);
     assert_eq!(std::fs::read(file).unwrap(), bytes);
 }
@@ -176,10 +176,10 @@ fn corrupt_download_is_not_published_and_can_be_retried() {
         image: b"truncated".to_vec(),
     };
     let mut cache = HashMap::new();
-    assert!(prepare(&mut http, &mut cache, dir.path(), &cart).is_err());
+    assert!(prepare(&mut http, &mut cache, dir.path(), &cart, None).is_err());
     assert!(!dir.path().join("Labels").exists());
     http.image = image_bytes(600, 355);
-    assert!(prepare(&mut http, &mut cache, dir.path(), &cart).is_ok());
+    assert!(prepare(&mut http, &mut cache, dir.path(), &cart, None).is_ok());
     assert_eq!(
         http.calls.len(),
         3,
@@ -192,9 +192,61 @@ fn corrupt_download_is_not_published_and_can_be_retried() {
 fn live_download() {
     let dir = tempfile::tempdir().unwrap();
     let mut downloader = Downloader::default();
-    for name in ["Advance Wars (USA)", "Mario Kart - Super Circuit (USA)"] {
+    for name in [
+        "Advance Wars (USA)",
+        "Mario Kart - Super Circuit (USA)",
+        "Lara Croft Tomb Raider - Legend (USA)",
+        "Lara Croft Tomb Raider - The Prophecy (USA)",
+        "Teenage Mutant Ninja Turtles (USA)",
+        "Tom and Jerry - The Magic Ring (USA)",
+    ] {
         let path = downloader.prepare(dir.path(), &cart(name)).unwrap();
         let image = image::open(path).unwrap();
         assert_eq!((image.width(), image.height()), (196, 86));
     }
+}
+
+#[test]
+fn legacy_card_publish_is_complete_and_keeps_existing_labels() {
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("label.png");
+    let make = |bytes: &[u8]| {
+        let mut tmp = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
+        tmp.write_all(bytes).unwrap();
+        tmp.as_file().sync_all().unwrap();
+        tmp
+    };
+    publish_legacy(make(b"first complete image"), &target).unwrap();
+    assert_eq!(std::fs::read(&target).unwrap(), b"first complete image");
+    publish_legacy(make(b"replacement"), &target).unwrap();
+    assert_eq!(std::fs::read(&target).unwrap(), b"first complete image");
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn verified_identity_selects_artwork_but_preserves_rom_filename() {
+    let dir = tempfile::tempdir().unwrap();
+    let cart = cart("Renamed by me (USA)");
+    let mut http = Fake {
+        calls: vec![],
+        image: image_bytes(600, 355),
+    };
+    let file = prepare(
+        &mut http,
+        &mut HashMap::new(),
+        dir.path(),
+        &cart,
+        Some("Advance Wars"),
+    )
+    .unwrap();
+    assert!(http.calls[0].ends_with("/games/images/2367"));
+    assert_eq!(file.file_name().unwrap(), "Renamed by me (USA).png");
+    assert_eq!(
+        source::title("Lara Croft Tomb Raider - Legend (USA)"),
+        "tomb raider legend"
+    );
+    assert_eq!(
+        source::title("Lara Croft Tomb Raider - The Prophecy (USA)"),
+        "tomb raider the prophecy"
+    );
 }

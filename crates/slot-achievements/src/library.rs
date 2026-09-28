@@ -41,20 +41,7 @@ pub(crate) fn hash(dir: &Path, path: &Path) -> Result<String, String> {
     {
         return Ok(entry.hash.clone());
     }
-    if size == 0 || size > 64 * 1024 * 1024 {
-        return Err("Unsupported GBA ROM size".into());
-    }
-    let mut file = std::fs::File::open(path).map_err(|_| "Cannot open ROM")?;
-    let mut buffer = [0; 64 * 1024];
-    let mut md5 = md5::Context::new();
-    loop {
-        let n = file.read(&mut buffer).map_err(|_| "Cannot read ROM")?;
-        if n == 0 {
-            break;
-        }
-        md5.consume(&buffer[..n]);
-    }
-    let hash = format!("{:x}", md5.compute());
+    let hash = content_hash(path)?;
     // Fingerprinting is a convenience cache; a failure here must not stop identification.
     index.insert(
         path.into(),
@@ -110,4 +97,25 @@ pub(crate) fn checked(dir: &Path, path: &Path, now: u64) {
         entry.badge_version = 2;
     }
     let _ = storage::write(&index_path, &index);
+}
+
+pub(crate) fn content_hash(path: &Path) -> Result<String, String> {
+    let size = path
+        .metadata()
+        .map_err(|_| "Cannot read ROM metadata")?
+        .len();
+    if size == 0 || size > 64 * 1024 * 1024 {
+        return Err("Unsupported GBA ROM size".into());
+    }
+    let mut file = std::fs::File::open(path).map_err(|_| "Cannot open ROM")?;
+    let mut buffer = [0; 64 * 1024];
+    let mut md5 = md5::Context::new();
+    loop {
+        let n = file.read(&mut buffer).map_err(|_| "Cannot read ROM")?;
+        if n == 0 {
+            break;
+        }
+        md5.consume(&buffer[..n]);
+    }
+    Ok(format!("{:x}", md5.compute()))
 }

@@ -676,3 +676,39 @@ fn loading_a_game_sends_presence_without_waiting_for_heartbeat() {
     core.load(&rom).unwrap();
     wait_for(|| requests.try_iter().any(|request| request == "ping"));
 }
+
+#[test]
+fn null_rich_presence_from_the_service_is_an_empty_script() {
+    let mut value = serde_json::to_value(game()).unwrap();
+    value["RichPresencePatch"] = Value::Null;
+    let parsed = serde_json::from_value::<Game>(value.clone()).unwrap();
+    assert!(parsed.presence.is_empty());
+    assert_eq!(parsed.achievements.len(), 1);
+    value["RichPresencePatch"] = json!(42);
+    assert!(serde_json::from_value::<Game>(value).is_err());
+}
+
+#[test]
+fn artwork_identity_follows_rom_bytes_instead_of_its_filename() {
+    let root = configured();
+    let rom = root.path().join("Games/GBA/Completely renamed.gba");
+    std::fs::write(&rom, b"same rom bytes").unwrap();
+    let hash = library::content_hash(&rom).unwrap();
+    let store = Store::open(root.path(), "Player").unwrap();
+    let mut data = game();
+    data.title = "Tomb Raider: Legend".into();
+    let ids = std::collections::BTreeSet::<u32>::new();
+    storage::write(&store.dir.join(format!("{hash}.json")), &(&data, ids)).unwrap();
+    assert_eq!(
+        artwork_title(root.path(), &rom).as_deref(),
+        Some("Tomb Raider: Legend")
+    );
+    let moved = rom.with_file_name("Yet another name.gba");
+    std::fs::rename(&rom, &moved).unwrap();
+    assert_eq!(
+        artwork_title(root.path(), &moved).as_deref(),
+        Some("Tomb Raider: Legend")
+    );
+    std::fs::write(&moved, b"different rom bytes").unwrap();
+    assert!(artwork_title(root.path(), &moved).is_none());
+}

@@ -44,9 +44,17 @@ pub(crate) struct Achievement {
     pub definition: String,
 }
 
+fn nullable_string<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
+    Ok(Option::<String>::deserialize(deserializer)?.unwrap_or_default())
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct Game {
-    #[serde(rename = "RichPresencePatch", default)]
+    #[serde(
+        rename = "RichPresencePatch",
+        default,
+        deserialize_with = "nullable_string"
+    )]
     pub presence: String,
     #[serde(rename = "ID")]
     pub id: u32,

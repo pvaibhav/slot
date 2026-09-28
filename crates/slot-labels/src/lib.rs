@@ -126,7 +126,22 @@ impl Default for Downloader {
 impl Downloader {
     /// Blocking; call only on a background worker. Existing files are never replaced.
     pub fn prepare(&mut self, root: &Path, cart: &Cart) -> Result<PathBuf, Error> {
-        prepare(&mut self.http, &mut self.sources, root, cart)
+        self.prepare_identified(root, cart, None)
+    }
+
+    pub fn prepare_identified(
+        &mut self,
+        root: &Path,
+        cart: &Cart,
+        canonical_title: Option<&str>,
+    ) -> Result<PathBuf, Error> {
+        prepare(
+            &mut self.http,
+            &mut self.sources,
+            root,
+            cart,
+            canonical_title,
+        )
     }
 }
 
@@ -135,6 +150,7 @@ fn prepare(
     sources: &mut HashMap<String, String>,
     root: &Path,
     cart: &Cart,
+    canonical_title: Option<&str>,
 ) -> Result<PathBuf, Error> {
     // Use the actual filename, retaining every tag and punctuation mark.
     let filename = cart
@@ -151,7 +167,7 @@ fn prepare(
     let url = match sources.get(&cart.stem) {
         Some(url) => url.clone(),
         None => {
-            let url = source::resolve(http, cart)?;
+            let url = source::resolve(http, cart, canonical_title)?;
             sources.insert(cart.stem.clone(), url.clone());
             url
         }
@@ -182,8 +198,28 @@ fn publish(target: &Path, bytes: &[u8]) -> Result<(), Error> {
             Ok(())
         }
         Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        // Older vendor exFAT drivers reject RENAME_NOREPLACE and hard links. Their
+        // ordinary rename is atomic; the single label worker checks again immediately
+        // before publishing so an already present custom label is preserved.
+        Err(e) if matches!(e.error.raw_os_error(), Some(1 | 22 | 38 | 95)) => {
+            publish_legacy(e.file, target)
+        }
         Err(e) => Err(Error::Storage(e.error)),
     }
+}
+
+fn publish_legacy(tmp: tempfile::NamedTempFile, target: &Path) -> Result<(), Error> {
+    if target.try_exists()? {
+        return Ok(());
+    }
+    tmp.persist(target).map_err(|e| Error::Storage(e.error))?;
+    if let Some(dir) = target
+        .parent()
+        .and_then(|dir| std::fs::File::open(dir).ok())
+    {
+        let _ = dir.sync_all();
+    }
+    Ok(())
 }
 
 #[cfg(test)]
