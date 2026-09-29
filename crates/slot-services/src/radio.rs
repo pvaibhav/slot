@@ -51,8 +51,12 @@ impl Interface {
             .collect()
     }
     pub fn observed_frequency(&self) -> Option<u32> {
-        let info = output("iw", &["dev", self.name, "info"]).ok()?;
-        observed_frequency(&info)
+        // Some drivers (the H700's 8821cs) never print a `channel` line in `iw dev info`, on a
+        // station or an AP alike, so ask the supplicant that is holding the channel.
+        output("iw", &["dev", self.name, "info"])
+            .ok()
+            .and_then(|info| observed_frequency(&info))
+            .or_else(|| supplicant_frequency(&self.status()))
     }
     pub fn pin(&self, frequency: Option<u32>) -> Result<(), &'static str> {
         if self.wpa.is_none() {
@@ -185,6 +189,24 @@ pub fn observed_frequency(info: &str) -> Option<u32> {
             .parse()
             .ok()
     })
+}
+
+/// The `freq=` line of `wpa_cli status`, which is only meaningful once the link is up.
+pub fn supplicant_frequency(status: &str) -> Option<u32> {
+    if !connected(status) {
+        return None;
+    }
+    field(status, "freq")?.parse().ok().filter(|f| *f > 0)
+}
+
+/// The exit code a refused `link host|join` reports. 4 means Home Wi-Fi is what is in the way
+/// and turning it off would let the link start; anything else is 1, and only the reason on
+/// stderr says more. 3 stays `join`'s "searched and found no host", so it is not used here.
+pub fn refusal_code(reason: &str) -> u8 {
+    match reason {
+        "HOME_CONNECTING" | "HOME_CHANNEL_NOT_ALLOWED" | "UNSUPPORTED_COMBINATION" => 4,
+        _ => 1,
+    }
 }
 
 pub fn connected(status: &str) -> bool {
@@ -410,6 +432,30 @@ mod tests {
         assert!(!subnet_conflict(
             "default via 192.168.1.1 dev wlan0\n192.168.1.0/24 dev wlan0\n10.42.0.0/24 dev wlan1"
         ));
+    }
+    #[test]
+    fn frequency_falls_back_to_the_supplicant_only_once_connected() {
+        assert_eq!(
+            supplicant_frequency("wpa_state=COMPLETED\nfreq=5745\nmode=AP"),
+            Some(5745)
+        );
+        assert_eq!(supplicant_frequency("wpa_state=SCANNING\nfreq=5745"), None);
+        assert_eq!(supplicant_frequency("wpa_state=COMPLETED\nfreq=0"), None);
+        assert_eq!(supplicant_frequency("wpa_state=COMPLETED"), None);
+        assert_eq!(supplicant_frequency(""), None);
+    }
+    #[test]
+    fn only_refusals_that_home_wifi_causes_get_their_own_code() {
+        for reason in [
+            "HOME_CONNECTING",
+            "HOME_CHANNEL_NOT_ALLOWED",
+            "UNSUPPORTED_COMBINATION",
+        ] {
+            assert_eq!(refusal_code(reason), 4, "{reason}");
+        }
+        for reason in ["CHANNEL_NOT_ALLOWED", "LINK_BUSY", "RADIO_UNAVAILABLE", ""] {
+            assert_eq!(refusal_code(reason), 1, "{reason}");
+        }
     }
     #[test]
     fn capabilities_fail_closed() {

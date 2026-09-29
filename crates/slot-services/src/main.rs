@@ -112,7 +112,7 @@ impl Link {
             Err(e) => return Err((reply, e)),
         };
         if home_freq.is_some_and(|f| !radio::permitted(&info, f)) {
-            return Err((reply, "CHANNEL_NOT_ALLOWED"));
+            return Err((reply, "HOME_CHANNEL_NOT_ALLOWED"));
         }
         if role == "join" && home_freq.is_some() && !radio::dual_station(&info) {
             return Err((reply, "UNSUPPORTED_COMBINATION"));
@@ -388,7 +388,7 @@ fn serve(root: &Path, run: &Path) -> std::io::Result<()> {
                             if !link.busy() {
                                 let _ = home.interface.pin(None);
                             }
-                            respond(&mut reply, 1, error);
+                            respond(&mut reply, radio::refusal_code(error), error);
                         } else {
                             was_link_busy = true;
                         }

@@ -192,6 +192,7 @@ fn each_failure_says_which_one_it_was() {
     }
     let lines: Vec<&str> = [
         LinkFail::Radio,
+        LinkFail::HomeWifi,
         LinkFail::NobodyCame,
         LinkFail::PeerVanished,
     ]

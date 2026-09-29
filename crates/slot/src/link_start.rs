@@ -41,6 +41,8 @@ pub enum LinkStep {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LinkFail {
     Radio,
+    /// Home Wi-Fi is in the way: on a channel the link cannot share, or still connecting.
+    HomeWifi,
     NobodyCame,
     PeerVanished,
     Cancelled,
@@ -69,8 +71,9 @@ impl LinkStep {
 }
 
 impl LinkFail {
-    pub const SHOWN: [LinkFail; 3] = [
+    pub const SHOWN: [LinkFail; 4] = [
         LinkFail::Radio,
+        LinkFail::HomeWifi,
         LinkFail::NobodyCame,
         LinkFail::PeerVanished,
     ];
@@ -82,6 +85,7 @@ impl LinkFail {
     pub fn line(self) -> &'static str {
         match self {
             LinkFail::Radio => "The radio did not come up",
+            LinkFail::HomeWifi => "Turn Home Wi-Fi off first",
             LinkFail::NobodyCame => "Nobody arrived",
             LinkFail::PeerVanished => "The other player vanished",
             LinkFail::Cancelled => "Cancelled",
@@ -143,6 +147,10 @@ impl LinkStarter {
                 let fail = match &e {
                     RadioFail::NoHost => LinkFail::NobodyCame,
                     RadioFail::Cancelled => LinkFail::Cancelled,
+                    RadioFail::HomeWifi => {
+                        eprintln!("slot: link: {role:?} refused: Home Wi-Fi holds the radio");
+                        LinkFail::HomeWifi
+                    }
                     RadioFail::Radio(why) => {
                         eprintln!("slot: link: {role:?} could not bring the radio up: {why}");
                         LinkFail::Radio

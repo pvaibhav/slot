@@ -41,6 +41,33 @@ fn drain_steps(starter: &mut LinkStarter) -> Vec<LinkStep> {
     }
 }
 
+/// Home Wi-Fi holding the radio is the one radio failure the player can undo, so it is told
+/// apart from a dead radio and still stops before any socket and still tears down.
+#[test]
+fn home_wifi_in_the_way_is_its_own_failure_and_stops_before_the_socket() {
+    let tried_socket = Arc::new(AtomicBool::new(false));
+    let seen = tried_socket.clone();
+    let downs = Arc::new(AtomicUsize::new(0));
+    let count = downs.clone();
+    let mut starter = LinkStarter::spawn_with(
+        Box::new(|_role, _| Err(RadioFail::HomeWifi)),
+        Box::new(move || {
+            count.fetch_add(1, Ordering::SeqCst);
+        }),
+        LinkRole::Host,
+        0,
+        Box::new(move |_, _| {
+            seen.store(true, Ordering::SeqCst);
+            Err(io::Error::other("must not be reached"))
+        }),
+    );
+    let outcome = drain(&mut starter);
+    assert!(matches!(outcome, LinkProgress::Failed(LinkFail::HomeWifi)));
+    assert!(!tried_socket.load(Ordering::SeqCst));
+    assert_eq!(downs.load(Ordering::SeqCst), 1);
+    assert_eq!(LinkFail::HomeWifi.line(), "Turn Home Wi-Fi off first");
+}
+
 #[test]
 fn a_radio_that_will_not_come_up_stops_before_the_socket() {
     let tried_socket = Arc::new(AtomicBool::new(false));

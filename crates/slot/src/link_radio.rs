@@ -25,6 +25,9 @@ impl LinkRole {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RadioFail {
     NoHost,
+    /// `ags-net link` exited 4: Home Wi-Fi is connected on a channel the link cannot share, or
+    /// is still associating. The radio is fine and the player can fix it by turning Home Wi-Fi off.
+    HomeWifi,
     Cancelled,
     Radio(String),
 }
@@ -158,6 +161,9 @@ pub fn up(role: LinkRole, cancel: &Cancel) -> Result<(), RadioFail> {
         match child.try_wait() {
             Ok(Some(status)) if status.success() => return Ok(()),
             Ok(Some(status)) if status.code() == Some(3) => return Err(RadioFail::NoHost),
+            // 4 is the service refusing because Home Wi-Fi holds the radio. Reported as itself
+            // because it is the one radio failure the player can undo from the menu.
+            Ok(Some(status)) if status.code() == Some(4) => return Err(RadioFail::HomeWifi),
             Ok(Some(status)) => {
                 return Err(RadioFail::Radio(format!(
                     "link {} failed: {status}",
