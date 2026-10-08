@@ -11,19 +11,32 @@ notes are in the [changelog](CHANGELOG.md).
 
 ## What this fork adds
 
-- Home Wi-Fi. Turn it on in the menu and slot connects to the networks listed in
-  `Config/wifi.toml`. It also sets the clock from the network.
-- Linking over home Wi-Fi. Two handhelds on the same network link through it. Without a
-  home network they link directly, as in upstream.
-- RetroAchievements. You can earn softcore GBA achievements, online or offline. Put your
-  account in `Config/retroachievements.toml`.
-- Cart labels. slot downloads missing GBA, GB and GBC labels in the background. It never
-  replaces a label you added. Delete a label to download it again.
-- Frame blending, and colour calibration for the RG SP and RG34XXSP panels.
-- Holding POWER shuts down without showing a menu.
+- **LCD ghosting / interframe blending** is enabled by default. It's subtle.
+- **Colour calibration** for the RG SP and RG34XXSP panels, based on an accurate 3x1D LUT
+  measured by me. Both white point and gamma curve are corrected. Currently no other firmware
+  has this!
+- Holding POWER **shuts down** directly, without showing a menu. I did not find value in a
+  restart option.
+- **Home Wi-Fi.** Slot can now connect to your home Wi-Fi. Just set up your Wi-Fi credentials
+  in `Config/wifi.toml` and then turn HOME WI-FI on from the menu. Everything happens
+  automatically from then onwards. Most of the features below depend on this.
+- **Hassle-free cart label scraping.** Just throw your ROMs on the SD card, and slot downloads
+  missing labels in the background. It will not replace a label you added yourself, though.
+  No config is needed for this feature.
+- **RetroAchievements.** You can earn softcore GBA achievements, online or offline. Put your
+  account in `Config/retroachievements.toml` for this to work. All your games' achievements
+  will be cached if Wi-Fi is on, so once the sync is done, you can go out and play without
+  losing your achievements. They'll sync automatically when you're back home. When you're
+  playing at home with Wi-Fi on, your achievements will sync in real time with rich presence.
+- **Linking over home Wi-Fi.** When at home and connected to Wi-Fi, two handhelds can link
+  using that instead of having to create ad hoc networks. Outside of home, you can continue
+  using slot's normal method. This works seamlessly, no config needed.
 
-A release includes an `.example` copy of each config file in `Config/`. Copy it, remove
-`.example` from the name, and fill it in.
+## How to configure
+
+The release includes an `.example` copy of each config file in `Config/`. Remove `.example`
+from the name, and fill in your details. You only need to configure your Wi-Fi and
+RetroAchievements credentials. Everything else is automatic.
 
 ## Versions
 
