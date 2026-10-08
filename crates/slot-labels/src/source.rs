@@ -1,5 +1,5 @@
 use scraper::{Html, Selector};
-use slot_store::Cart;
+use slot_store::{Cart, Platform};
 use unicode_normalization::UnicodeNormalization;
 
 use crate::{Error, Transport};
@@ -71,18 +71,39 @@ fn encode(query: &str) -> String {
     result
 }
 
-pub(crate) fn game_id(page: &str, wanted: &str) -> Result<u64, Error> {
+/// The source's names for a cart's platform, its own first. Game Boy and Game Boy Color share
+/// ROM extensions, so a cart may sit on either shelf.
+fn platforms(platform: Platform) -> &'static [&'static str] {
+    match platform {
+        Platform::Gba => &["Nintendo Game Boy Advance"],
+        Platform::Gb => &["Nintendo Game Boy", "Nintendo Game Boy Color"],
+        Platform::Gbc => &["Nintendo Game Boy Color", "Nintendo Game Boy"],
+    }
+}
+
+pub(crate) fn game_id(page: &str, wanted: &str, platform: Platform) -> Result<u64, Error> {
     let doc = Html::parse_document(page);
+    for name in platforms(platform) {
+        match ids(&doc, wanted, name).as_slice() {
+            [] => continue,
+            [id] => return Ok(*id),
+            _ => break,
+        }
+    }
+    Err(unavailable("no unique title match"))
+}
+
+fn ids(doc: &Html, wanted: &str, platform: &str) -> Vec<u64> {
     let mut found = Vec::new();
     for link in doc.select(&selector("a[href^='/games/details/']")) {
         let Some(heading) = link.select(&selector("h3")).next() else {
             continue;
         };
         let name = heading.text().collect::<String>();
-        let gba = link
+        let listed = link
             .select(&selector("p"))
-            .any(|p| p.text().collect::<String>().trim() == "Nintendo Game Boy Advance");
-        if !gba || normalize(&name) != wanted {
+            .any(|p| p.text().collect::<String>().trim() == platform);
+        if !listed || normalize(&name) != wanted {
             continue;
         }
         let href = link.value().attr("href").unwrap_or_default();
@@ -96,10 +117,7 @@ pub(crate) fn game_id(page: &str, wanted: &str) -> Result<u64, Error> {
             }
         }
     }
-    match found.as_slice() {
-        [id] => Ok(*id),
-        _ => Err(unavailable("no unique GBA title match")),
-    }
+    found
 }
 
 fn known(title: &str) -> Option<u64> {
@@ -176,11 +194,14 @@ pub(crate) fn resolve(
     if title.is_empty() {
         return Err(unavailable("empty game title"));
     }
-    let id = match known(&title) {
+    let id = match Some(&title)
+        .filter(|_| cart.platform == Platform::Gba)
+        .and_then(|t| known(t))
+    {
         Some(id) => id,
         None => {
             let page = http.get(&format!("{BASE}/games/results?id={}", encode(&title)))?;
-            game_id(&String::from_utf8_lossy(&page), &title)?
+            game_id(&String::from_utf8_lossy(&page), &title, cart.platform)?
         }
     };
     let page = http.get(&format!("{BASE}/games/images/{id}"))?;

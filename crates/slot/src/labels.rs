@@ -5,7 +5,7 @@ use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use slot_store::{Cart, Platform};
+use slot_store::Cart;
 use slot_ui::CartFace;
 
 pub(crate) struct Ready {
@@ -74,8 +74,7 @@ fn run_with_timing(
     let now = Instant::now();
     let mut jobs: VecDeque<_> = carts
         .into_iter()
-        // The artwork source only catalogues Game Boy Advance carts.
-        .filter(|c| c.label.is_none() && c.platform == Platform::Gba)
+        .filter(|c| c.label.is_none())
         .map(|c| (c, now, 0u8))
         .collect();
     let mut network_retry = now;
@@ -142,6 +141,21 @@ fn run_with_timing(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use slot_store::Platform;
+
+    #[test]
+    fn labels_are_prepared_at_the_size_of_the_well_they_are_drawn_in() {
+        assert_eq!(
+            slot_labels::label_size(Platform::Gba),
+            (slot_ui::LABEL_W, slot_ui::LABEL_H)
+        );
+        for platform in [Platform::Gb, Platform::Gbc] {
+            assert_eq!(
+                slot_labels::label_size(platform),
+                (slot_ui::GB_LABEL_W, slot_ui::GB_LABEL_H)
+            );
+        }
+    }
 
     #[test]
     fn offline_worker_exits_after_three_attempts_even_with_a_large_library() {

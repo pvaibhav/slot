@@ -66,19 +66,30 @@ fn title_resolution_requires_unique_exact_gba_match() {
         )
     );
     assert_eq!(
-        source::game_id(&page, "mario kart super circuit").unwrap(),
+        source::game_id(&page, "mario kart super circuit", Platform::Gba).unwrap(),
         1
     );
     assert!(source::game_id(
         &(correct.clone() + &item(4, "Mario Kart: Super Circuit", "Nintendo Game Boy Advance")),
-        "mario kart super circuit"
+        "mario kart super circuit",
+        Platform::Gba
     )
     .is_err());
     assert_eq!(
-        source::game_id(&(correct.clone() + &correct), "mario kart super circuit").unwrap(),
+        source::game_id(
+            &(correct.clone() + &correct),
+            "mario kart super circuit",
+            Platform::Gba
+        )
+        .unwrap(),
         1
     );
-    assert!(source::game_id("<html>changed layout</html>", "mario kart super circuit").is_err());
+    assert!(source::game_id(
+        "<html>changed layout</html>",
+        "mario kart super circuit",
+        Platform::Gba
+    )
+    .is_err());
 }
 
 #[test]
@@ -106,18 +117,50 @@ fn artwork_is_cartridge_front_for_the_requested_region() {
 }
 
 #[test]
+fn a_game_boy_cart_matches_its_own_platform_first_and_the_other_second() {
+    let item = |id, name, platform| {
+        format!("<a href='/games/details/{id}-game'><h3>{name}</h3><p>{platform}</p></a>")
+    };
+    let page = item(1, "Tetris", "Nintendo Game Boy")
+        + &item(2, "Tetris", "Nintendo Game Boy Color")
+        + &item(3, "Tetris", "Nintendo Game Boy Advance")
+        + &item(4, "Wario Land 3", "Nintendo Game Boy Color");
+    assert_eq!(source::game_id(&page, "tetris", Platform::Gb).unwrap(), 1);
+    assert_eq!(source::game_id(&page, "tetris", Platform::Gbc).unwrap(), 2);
+    assert_eq!(source::game_id(&page, "tetris", Platform::Gba).unwrap(), 3);
+    assert_eq!(
+        source::game_id(&page, "wario land 3", Platform::Gb).unwrap(),
+        4
+    );
+    assert!(source::game_id(&page, "wario land 3", Platform::Gba).is_err());
+}
+
+#[test]
 fn crop_produces_exact_rgb_png_and_rejects_bad_input() {
-    for (w, h) in [(1000, 574), (600, 355), (473, 283), (800, 465)] {
-        let png = artwork::prepare(&image_bytes(w, h)).unwrap();
-        assert_eq!(image::guess_format(&png).unwrap(), ImageFormat::Png);
-        let im = image::load_from_memory(&png).unwrap().to_rgb8();
-        assert_eq!(im.dimensions(), (196, 86));
-        assert_eq!(im.get_pixel(98, 0), &Rgb([255, 0, 0]));
-        assert_eq!(im.get_pixel(98, 85), &Rgb([0, 0, 255]));
+    for (platform, sizes) in [
+        (
+            Platform::Gba,
+            &[(1000, 574), (600, 355), (473, 283), (800, 465)][..],
+        ),
+        (Platform::Gb, &[(796, 906), (674, 759)][..]),
+        (Platform::Gbc, &[(800, 916)][..]),
+    ] {
+        let (lw, lh) = label_size(platform);
+        for (w, h) in sizes {
+            let png = artwork::prepare(&image_bytes(*w, *h), platform).unwrap();
+            assert_eq!(image::guess_format(&png).unwrap(), ImageFormat::Png);
+            let im = image::load_from_memory(&png).unwrap().to_rgb8();
+            assert_eq!(im.dimensions(), (lw, lh));
+            assert_eq!(im.get_pixel(lw / 2, 0), &Rgb([255, 0, 0]));
+            assert_eq!(im.get_pixel(lw / 2, lh - 1), &Rgb([0, 0, 255]));
+        }
     }
-    assert!(artwork::prepare(b"<html>Error</html>").is_err());
-    assert!(artwork::prepare(&image_bytes(100, 100)).is_err());
-    assert!(artwork::prepare(&image_bytes(5000, 2)).is_err());
+    assert!(artwork::prepare(b"<html>Error</html>", Platform::Gba).is_err());
+    assert!(artwork::prepare(&image_bytes(100, 100), Platform::Gba).is_err());
+    assert!(artwork::prepare(&image_bytes(5000, 2), Platform::Gba).is_err());
+    // A cart scan of the other shape is not this platform's cart.
+    assert!(artwork::prepare(&image_bytes(1000, 574), Platform::Gb).is_err());
+    assert!(artwork::prepare(&image_bytes(796, 906), Platform::Gba).is_err());
 }
 
 struct Fake {
@@ -150,7 +193,7 @@ fn end_to_end_writes_exact_filename_and_skips_existing_without_network() {
         dir.path().join("Labels/GBA/Advance Wars (USA) (Rev 1).png")
     );
     let bytes = std::fs::read(&file).unwrap();
-    assert_eq!(image::load_from_memory(&bytes).unwrap().width(), 196);
+    assert_eq!(image::load_from_memory(&bytes).unwrap().width(), 266);
     assert_eq!(http.calls.len(), 2);
     prepare(&mut http, &mut cache, dir.path(), &cart, None).unwrap();
     assert_eq!(http.calls.len(), 2);
@@ -202,7 +245,7 @@ fn live_download() {
     ] {
         let path = downloader.prepare(dir.path(), &cart(name)).unwrap();
         let image = image::open(path).unwrap();
-        assert_eq!((image.width(), image.height()), (196, 86));
+        assert_eq!((image.width(), image.height()), (266, 138));
     }
 }
 

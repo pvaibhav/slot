@@ -8,7 +8,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use slot_store::Cart;
+use slot_store::{Cart, Platform};
 
 #[derive(Debug)]
 pub enum Error {
@@ -31,6 +31,14 @@ impl std::error::Error for Error {}
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
         Self::Storage(e)
+    }
+}
+
+/// The size a label is prepared at: the label well slot draws on that platform's cart.
+pub fn label_size(platform: Platform) -> (u32, u32) {
+    match platform {
+        Platform::Gba => (266, 138),
+        Platform::Gb | Platform::Gbc => (220, 195),
     }
 }
 
@@ -164,16 +172,17 @@ fn prepare(
     if target.try_exists()? {
         return Ok(target);
     }
-    let url = match sources.get(&cart.stem) {
+    let key = format!("{}/{}", cart.platform.dir_name(), cart.stem);
+    let url = match sources.get(&key) {
         Some(url) => url.clone(),
         None => {
             let url = source::resolve(http, cart, canonical_title)?;
-            sources.insert(cart.stem.clone(), url.clone());
+            sources.insert(key, url.clone());
             url
         }
     };
     let bytes = http.get(&url)?;
-    let png = artwork::prepare(&bytes)?;
+    let png = artwork::prepare(&bytes, cart.platform)?;
     publish(&target, &png)?;
     Ok(target)
 }
