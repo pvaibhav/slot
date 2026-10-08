@@ -26,6 +26,11 @@ notes are in the [changelog](CHANGELOG.md).
 Both config files ship as `.example` files in `Config/`. Copy one, drop the `.example`, and
 fill it in.
 
+## Versions
+
+A release here carries upstream's version with a suffix: `v1.4.0-pvaibhav.1` is this fork's
+first release built on upstream's 1.4.0, `v1.4.0-pvaibhav.2` the next on the same base.
+
 ## AI Disclosure
 
 From upstream:
