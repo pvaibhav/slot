@@ -8,7 +8,6 @@ pub(crate) const MENU_H: u32 = 40;
 pub const MENU_PAD: u32 = 18;
 pub(crate) const MENU_INK: [u8; 3] = [0xf6, 0xf4, 0xef];
 
-/// that fits the words.
 pub fn menu_face(label: &str) -> UndoFace {
     let Some(font) = text::label_font() else {
         return UndoFace {

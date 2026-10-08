@@ -6,11 +6,6 @@ pub struct Frames {
     inner: Mutex<Inner>,
     size: usize,
     taken: AtomicU64,
-    /// Published frames overwritten before the renderer took them.
-    dropped: AtomicU64,
-    /// Calls to `latest` that found nothing new, so the renderer showed the previous picture
-    /// again.
-    repeated: AtomicU64,
 }
 
 struct Inner {
@@ -29,8 +24,6 @@ impl Frames {
             }),
             size,
             taken: AtomicU64::new(0),
-            dropped: AtomicU64::new(0),
-            repeated: AtomicU64::new(0),
         })
     }
 
@@ -49,15 +42,11 @@ impl Frames {
         let mut i = self.lock();
         if let Some(dropped) = i.ready.replace(buf) {
             i.spare.push(dropped);
-            self.dropped.fetch_add(1, Ordering::Relaxed);
         }
     }
 
     pub fn latest(self: &Arc<Self>) -> Option<FrameRef> {
-        let Some(buf) = self.lock().ready.take() else {
-            self.repeated.fetch_add(1, Ordering::Relaxed);
-            return None;
-        };
+        let buf = self.lock().ready.take()?;
         self.taken.fetch_add(1, Ordering::Relaxed);
         Some(FrameRef {
             frames: self.clone(),
@@ -71,14 +60,6 @@ impl Frames {
 
     pub fn taken(&self) -> u64 {
         self.taken.load(Ordering::Relaxed)
-    }
-
-    pub fn dropped(&self) -> u64 {
-        self.dropped.load(Ordering::Relaxed)
-    }
-
-    pub fn repeated(&self) -> u64 {
-        self.repeated.load(Ordering::Relaxed)
     }
 
     pub fn allocated(&self) -> usize {

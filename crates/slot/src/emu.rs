@@ -94,8 +94,6 @@ struct Shared {
     fast_steps: AtomicU32,
     ff_sound: AtomicBool,
     published: AtomicU64,
-    /// Core frames stepped, drawn or skipped, for the trace to set against what was published.
-    emulated: AtomicU64,
     resume_refused: AtomicBool,
     sav_refused: AtomicBool,
     link_lost: AtomicBool,
@@ -161,7 +159,6 @@ impl EmuHandle {
             fast_steps: AtomicU32::new(FAST_STEPS),
             ff_sound: AtomicBool::new(false),
             published: AtomicU64::new(0),
-            emulated: AtomicU64::new(0),
             resume_refused: AtomicBool::new(false),
             sav_refused: AtomicBool::new(false),
             link_lost: AtomicBool::new(false),
@@ -536,7 +533,6 @@ impl Worker {
                 self.apply(cmd, core.as_mut(), &mut transport, &mut cable, &link);
             }
 
-            // stepping frames: a local shutdown, or
             if let Some(t) = transport.as_mut() {
                 match cable.as_mut() {
                     Some(c) => {
@@ -688,9 +684,6 @@ impl Worker {
                         break;
                     }
                 }
-                self.shared
-                    .emulated
-                    .fetch_add(u64::from(ran), Ordering::Relaxed);
                 let core_time = began.elapsed();
                 cost.measured(skipped, drawn);
                 if cable.is_some() {
@@ -773,14 +766,6 @@ impl Worker {
                         let (dropped, starved) = (ring.overruns(), ring.underruns());
                         eprintln!(
                             "slot: audio: {queued}/{target} queued, {dropped} dropped, {starved} starved, locked {lock} at {scale:.5}"
-                        );
-                        eprintln!(
-                            "slot: video: {} emulated, {} published, {} shown, {} overwritten, {} repeated",
-                            self.shared.emulated.load(Ordering::Relaxed),
-                            self.shared.published.load(Ordering::Relaxed),
-                            self.frames.taken(),
-                            self.frames.dropped(),
-                            self.frames.repeated(),
                         );
                     }
                 }
