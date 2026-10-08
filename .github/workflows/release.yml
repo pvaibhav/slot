@@ -87,6 +87,8 @@ jobs:
         run: |
           set -eu
           cat > notes.md <<NOTES
+          Slot now sets the CPU governor to \`schedutil\` on startup, allowing lighter workloads to run at lower clock speeds to help improve battery life and reduce heat generation.
+
           Unzip and copy the contents of \`slot-${GITHUB_REF_NAME}/\` onto SD2.
 
           Emulation by mGBA (MPL-2.0) and gpSP (GPL-2.0). Their licences, patches and gpSP's source are in \`System/licenses/\`.
