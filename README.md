@@ -1,35 +1,34 @@
 # slot.
 
-A fork of [slot](https://github.com/BrandonKowalski/slot) by Brandon Kowalski: a bespoke,
-Game Boy-centric frontend for the Anbernic RG SP. slot itself, its design and its guide are
-his work; this fork follows upstream and adds a few things on top.
+A fork of [slot](https://github.com/BrandonKowalski/slot) by Brandon Kowalski. slot is a
+bespoke, Game Boy-centric frontend for the Anbernic RG SP. Brandon wrote slot and its guide.
+This fork follows upstream and adds the features listed below.
 
 Has support for GBA, GBC, and GB titles only.
 
-The full user guide is upstream's, at [slot-cfw.fyi](https://slot-cfw.fyi), and its release
+The user guide is upstream's, at [slot-cfw.fyi](https://slot-cfw.fyi). Upstream's release
 notes are in the [changelog](CHANGELOG.md).
 
 ## What this fork adds
 
-- **Home Wi-Fi.** List your networks in `Config/wifi.toml` and turn Home Wi-Fi on in the menu.
-  The clock sets itself from the network.
-- **Link over your home network.** Two handhelds on the same Wi-Fi link through it, and stay
-  connected to it while they play. Without a home network they link directly, as before.
-- **RetroAchievements.** Earn softcore GBA achievements, online or offline, with a short
-  notification when one unlocks. Fill in `Config/retroachievements.toml`.
-- **Automatic cart labels.** Missing GBA, GB and GBC labels are fetched in the background and
-  appear as they arrive. Your own labels are never replaced; delete one to have it fetched again.
-- **A closer picture.** Frame blending like the original screen, and colour calibrated for the
-  RG SP's panel.
-- **POWER means off.** Holding POWER shuts down straight away, with no menu to answer.
+- Home Wi-Fi. Turn it on in the menu and slot connects to the networks listed in
+  `Config/wifi.toml`. It also sets the clock from the network.
+- Linking over home Wi-Fi. Two handhelds on the same network link through it. Without a
+  home network they link directly, as in upstream.
+- RetroAchievements. You can earn softcore GBA achievements, online or offline. Put your
+  account in `Config/retroachievements.toml`.
+- Cart labels. slot downloads missing GBA, GB and GBC labels in the background. It never
+  replaces a label you added. Delete a label to download it again.
+- Frame blending, and colour calibration for the RG SP and RG34XXSP panels.
+- Holding POWER shuts down without showing a menu.
 
-Both config files ship as `.example` files in `Config/`. Copy one, drop the `.example`, and
-fill it in.
+A release includes an `.example` copy of each config file in `Config/`. Copy it, remove
+`.example` from the name, and fill it in.
 
 ## Versions
 
-A release here carries upstream's version with a suffix: `v1.4.0-pvaibhav.1` is this fork's
-first release built on upstream's 1.4.0, `v1.4.0-pvaibhav.2` the next on the same base.
+A release of this fork uses upstream's version with a suffix. `v1.4.0-pvaibhav.1` is the
+first release built on upstream 1.4.0, and `v1.4.0-pvaibhav.2` would be the second.
 
 ## AI Disclosure
 
