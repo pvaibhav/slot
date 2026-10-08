@@ -42,6 +42,8 @@ fn an_app_with_sprites_is_ready_to_draw_the_art() {
         clicks: s(13),
         arrow_left: s(14),
         arrow_right: s(15),
+        net_home: s(16),
+        net_direct: s(17),
     });
     assert!(app.link_sprites_ready());
 }

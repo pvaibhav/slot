@@ -1016,11 +1016,7 @@ impl App {
             Some(GameMenu::Working { since, .. }) => since,
             _ => self.now(),
         };
-        self.start_link_from(
-            LinkStarter::spawn(reload.role.role(), link_port()),
-            reload.role.client_id(),
-            since,
-        );
+        self.start_link_from(self.spawn_link(reload.role), reload.role.client_id(), since);
     }
 
     pub fn link_reload_failed(&mut self) {
@@ -2086,6 +2082,9 @@ impl App {
         });
         if let Some(sprites) = &self.link_sprites {
             crate::link_screen::draw_link_art(menu, self.link_hardware, self.now(), sprites, out);
+            // Which network a link started now would use, read the way the service will decide
+            // it: a device on the home network links over it.
+            crate::link_screen::draw_network_label(menu, self.radio.home_connected(), sprites, out);
         }
         let line = match menu {
             GameMenu::Pick(role) => self.link_menu_faces.get(role.index()).copied(),
@@ -2508,6 +2507,12 @@ impl App {
         })
     }
 
+    /// The real starter for this cart, which names its game to the other handheld by header code.
+    fn spawn_link(&self, role: LinkRow) -> LinkStarter {
+        let game = self.seated_cart().map_or("", |c| c.code.as_str());
+        LinkStarter::spawn(role.role(), link_port(), game)
+    }
+
     fn pick_link(&mut self, role: LinkRow) {
         let Some(stem) = self.seated().map(str::to_string) else {
             return;
@@ -2516,10 +2521,7 @@ impl App {
         if self.core == Core::Mgba {
             let player = role.client_id() as u8;
             if self.link_player == Some(player) {
-                return self.start_link(
-                    LinkStarter::spawn(role.role(), link_port()),
-                    role.client_id(),
-                );
+                return self.start_link(self.spawn_link(role), role.client_id());
             }
             if self.snapshot.as_ref().is_some_and(|s| !s.resume_trusted()) {
                 return self.refuse();
@@ -2543,10 +2545,7 @@ impl App {
         }
         let (_, serial) = self.link_mode(&stem);
         if serial == loaded {
-            return self.start_link(
-                LinkStarter::spawn(role.role(), link_port()),
-                role.client_id(),
-            );
+            return self.start_link(self.spawn_link(role), role.client_id());
         }
         if self.snapshot.as_ref().is_some_and(|s| !s.resume_trusted()) {
             return self.refuse();

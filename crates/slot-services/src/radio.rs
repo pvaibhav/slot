@@ -58,31 +58,6 @@ impl Interface {
             .and_then(|info| observed_frequency(&info))
             .or_else(|| supplicant_frequency(&self.status()))
     }
-    pub fn pin(&self, frequency: Option<u32>) -> Result<(), &'static str> {
-        if self.wpa.is_none() {
-            return Ok(());
-        }
-        let value = frequency.map(|f| f.to_string()).unwrap_or_default();
-        for field in ["scan_freq", "freq_list"] {
-            let result = output(
-                "wpa_cli",
-                &[
-                    "-p",
-                    self.ctrl().to_str().unwrap(),
-                    "-i",
-                    self.name,
-                    "set_network",
-                    "0",
-                    field,
-                    &value,
-                ],
-            )?;
-            if result.trim() != "OK" {
-                return Err("CHANNEL_PIN_FAILED");
-            }
-        }
-        Ok(())
-    }
     pub fn status(&self) -> String {
         if self.wpa.is_none() {
             return String::new();
@@ -144,6 +119,11 @@ impl Interface {
         output("ip", &["-4", "-o", "addr", "show", "dev", self.name])
             .is_ok_and(|s| s.contains(" inet "))
     }
+    /// The first IPv4 address on this interface, as a bare address.
+    pub fn ipv4(&self) -> Option<std::net::Ipv4Addr> {
+        let out = output("ip", &["-4", "-o", "addr", "show", "dev", self.name]).ok()?;
+        first_ipv4(&out)
+    }
     pub fn restore_address(&mut self, address: &'static str) {
         self.address = Some(address);
     }
@@ -199,14 +179,13 @@ pub fn supplicant_frequency(status: &str) -> Option<u32> {
     field(status, "freq")?.parse().ok().filter(|f| *f > 0)
 }
 
-/// The exit code a refused `link host|join` reports. 4 means Home Wi-Fi is what is in the way
-/// and turning it off would let the link start; anything else is 1, and only the reason on
-/// stderr says more. 3 stays `join`'s "searched and found no host", so it is not used here.
-pub fn refusal_code(reason: &str) -> u8 {
-    match reason {
-        "HOME_CONNECTING" | "HOME_CHANNEL_NOT_ALLOWED" | "UNSUPPORTED_COMBINATION" => 4,
-        _ => 1,
-    }
+/// The first `inet` address in `ip -4 -o addr show` output, without its prefix length.
+pub fn first_ipv4(text: &str) -> Option<std::net::Ipv4Addr> {
+    text.lines().find_map(|line| {
+        let mut words = line.split_whitespace();
+        words.find(|w| *w == "inet")?;
+        words.next()?.split('/').next()?.parse().ok()
+    })
 }
 
 pub fn connected(status: &str) -> bool {
@@ -224,22 +203,6 @@ pub fn permitted(info: &str, freq: u32) -> bool {
 }
 pub fn capabilities() -> Result<String, &'static str> {
     output("iw", &["list"])
-}
-
-// Conservative parser of nl80211's advertised combination, not just supported modes.
-pub fn dual_station(info: &str) -> bool {
-    let Some(combinations) = info.split("valid interface combinations:").nth(1) else {
-        return false;
-    };
-    combinations.split(" * ").any(|c| {
-        let Some((before, after)) = c.split_once("managed }") else {
-            return false;
-        };
-        before.trim_end().ends_with("#{")
-            && after.trim_start().starts_with("<= 2")
-            && c.contains("total <= 2")
-            && c.contains("#channels <= 1")
-    })
 }
 
 pub fn subnet_conflict(routes: &str) -> bool {
@@ -310,6 +273,14 @@ impl Home {
             self.connected = false;
         } else {
             self.reload(root);
+        }
+    }
+    /// Stop the supplicant without disabling Home: `tick` brings it back once nothing holds
+    /// the radio. For a link that needs the radio while Home has nothing associated.
+    pub fn pause(&mut self) {
+        if self.interface.wpa.is_some() {
+            self.interface.stop();
+            self.connected = false;
         }
     }
     pub fn reload(&mut self, root: &Path) {
@@ -445,26 +416,17 @@ mod tests {
         assert_eq!(supplicant_frequency(""), None);
     }
     #[test]
-    fn only_refusals_that_home_wifi_causes_get_their_own_code() {
-        for reason in [
-            "HOME_CONNECTING",
-            "HOME_CHANNEL_NOT_ALLOWED",
-            "UNSUPPORTED_COMBINATION",
-        ] {
-            assert_eq!(refusal_code(reason), 4, "{reason}");
-        }
-        for reason in ["CHANNEL_NOT_ALLOWED", "LINK_BUSY", "RADIO_UNAVAILABLE", ""] {
-            assert_eq!(refusal_code(reason), 1, "{reason}");
-        }
+    fn the_first_inet_address_is_read_without_its_prefix() {
+        assert_eq!(
+            first_ipv4("9: wlan0    inet 192.168.34.81/24 brd 192.168.34.255 scope global wlan0"),
+            Some(std::net::Ipv4Addr::new(192, 168, 34, 81))
+        );
+        assert_eq!(first_ipv4("9: wlan0    inet6 fe80::1/64 scope link"), None);
+        assert_eq!(first_ipv4("9: wlan0    inet garbage/24"), None);
+        assert_eq!(first_ipv4(""), None);
     }
     #[test]
     fn capabilities_fail_closed() {
-        assert!(!dual_station(
-            "Supported interface modes:\n * managed\n * AP"
-        ));
-        assert!(dual_station(
-            "valid interface combinations:\n * #{ managed } <= 2, total <= 2, #channels <= 1"
-        ));
         assert!(!permitted(
             "* 5580 MHz [116] (20.0 dBm) (radar detection)",
             5580

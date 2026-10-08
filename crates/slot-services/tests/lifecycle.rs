@@ -37,7 +37,8 @@ echo "$name $*" >> "$MOCK_ROOT/commands"
 case "$name" in
 rfkill) exit 0 ;;
 iw)
- if [ "$1" = dev ]; then echo "channel 1 (2412 MHz), width: 20 MHz"; exit 0; fi
+ # Like the 8821cs: no `channel` line, so the frequency has to come from the supplicant.
+ if [ "$1" = dev ]; then printf 'Interface %s\n\ttype managed\n' "$2"; exit 0; fi
  cat <<'CAP'
 valid interface combinations:
  * #{ managed } <= 2, total <= 2, #channels <= 1
@@ -51,7 +52,10 @@ wpa_cli)
  *' set_network '*) echo OK ;;
  *' wlan1 '* )
   if [ -f "$MOCK_ROOT/block-link" ]; then echo wpa_state=SCANNING
-  else printf 'wpa_state=COMPLETED\nfreq=2412\n'; fi ;;
+  else
+   f=$(sed -n 's/^frequency=//p' "$MOCK_ROOT/run/wlan1.conf" 2>/dev/null || true)
+   printf 'wpa_state=COMPLETED\nfreq=%s\n' "${f:-2412}"
+  fi ;;
  *) if grep -q 'ssid=416273656e74' "$MOCK_ROOT/run/wlan0.conf" 2>/dev/null; then echo wpa_state=SCANNING; else printf 'wpa_state=COMPLETED\nfreq=2412\n'; fi ;;
  esac ;;
 udhcpc)
@@ -156,6 +160,14 @@ exit 0
         );
         String::from_utf8(o.stdout).unwrap()
     }
+    /// Exit code and stderr of a call that is expected to be refused.
+    fn refused(&self, args: &[&str]) -> (i32, String) {
+        let o = self.command().args(args).output().unwrap();
+        (
+            o.status.code().unwrap(),
+            String::from_utf8_lossy(&o.stderr).into_owned(),
+        )
+    }
     fn wait_connected(&self) {
         let deadline = Instant::now() + Duration::from_secs(8);
         loop {
@@ -183,37 +195,61 @@ impl Drop for Rig {
 }
 
 #[test]
-fn home_link_off_and_crash_recovery_keep_independent_ownership() {
-    let mut r = Rig::new();
+fn link_over_the_home_network_needs_no_radio_and_never_replaces_home() {
+    let r = Rig::new();
     r.wait_connected();
     let home = r.record("wlan0.wpa.pid");
-    let dhcp = r.record("wlan0.dhcp.pid");
+    // Home is up: the answer is its address, and nothing is started for it.
+    assert_eq!(r.call(&["link", "lan"]).trim(), "0 192.168.1.24");
+    assert!(!r.dir.path().join("run/wlan1.wpa.pid").exists());
+    // An access point beside a live home connection is refused, not started over it.
+    let (code, why) = r.refused(&["link", "host"]);
+    assert_eq!(code, 1);
+    assert!(why.contains("HOME_CONNECTED"), "{why}");
+    let (code, why) = r.refused(&["link", "join"]);
+    assert_eq!(code, 1);
+    assert!(why.contains("HOME_CONNECTED"), "{why}");
+    assert!(!r.dir.path().join("run/wlan1.wpa.pid").exists());
+    assert_eq!(r.record("wlan0.wpa.pid"), home);
+    // Ending a link that never started is harmless and leaves home alone.
+    r.call(&["link", "down"]);
+    assert_eq!(r.record("wlan0.wpa.pid"), home);
+}
+
+#[test]
+fn link_lan_is_refused_while_home_has_no_address() {
+    let r = Rig::new();
+    r.wait_connected();
+    r.call(&["home", "off"]);
+    let (code, why) = r.refused(&["link", "lan"]);
+    assert_eq!(code, 1);
+    assert!(why.contains("NO_HOME_LAN"), "{why}");
+}
+
+#[test]
+fn direct_link_and_crash_recovery_keep_the_access_point() {
+    let mut r = Rig::new();
+    r.wait_connected();
+    r.call(&["home", "off"]);
     r.call(&["link", "host"]);
     let link = r.record("wlan1.wpa.pid");
-    assert_eq!(r.record("wlan0.wpa.pid"), home);
-    assert_eq!(r.record("wlan0.dhcp.pid"), dhcp);
-    // A service crash must adopt surviving children, not take down SSH or the AP.
+    // A service crash must adopt the surviving access point, not take it down.
     let mut child = r.daemon.take().unwrap();
     child.kill().unwrap();
     child.wait().unwrap();
     fs::remove_file(r.dir.path().join("run/control.sock")).unwrap();
     r.start();
-    r.wait_connected();
-    assert_eq!(r.record("wlan0.wpa.pid"), home);
-    assert_eq!(r.record("wlan1.wpa.pid"), link);
-    r.call(&["home", "off"]);
-    assert!(r
-        .call(&["service", "status"])
-        .contains("home_connected=false"));
     assert_eq!(r.record("wlan1.wpa.pid"), link);
     assert!(r.dir.path().join("System/wifi.toml").exists());
     assert!(r.dir.path().join("ntp-enabled").exists());
+    // Home is enabled again by the restored preference but holds off while a link runs.
+    std::thread::sleep(Duration::from_secs(1));
+    assert!(!r.dir.path().join("run/wlan0.wpa.pid").exists());
     r.call(&["link", "down"]);
-    // With home Off, joining must not demand dual-station or turn home back on.
+    assert!(!r.dir.path().join("run/wlan1.wpa.pid").exists());
+    r.wait_connected();
+    r.call(&["home", "off"]);
     r.call(&["link", "join"]);
-    assert!(r
-        .call(&["service", "status"])
-        .contains("home_connected=false"));
     r.call(&["link", "down"]);
     assert!(!r.dir.path().join("run/wlan1.wpa.pid").exists());
     assert!(!fs::read_to_string(r.dir.path().join("commands"))
@@ -222,7 +258,34 @@ fn home_link_off_and_crash_recovery_keep_independent_ownership() {
 }
 
 #[test]
-fn cancelling_setup_cleans_only_link_and_invalid_reload_keeps_home() {
+fn a_home_that_never_associates_is_paused_for_a_direct_link_and_comes_back() {
+    let r = Rig::new();
+    fs::write(
+        r.dir.path().join("System/wifi.toml"),
+        "[[networks]]\nssid='Absent'\npassword='password-one'\n",
+    )
+    .unwrap();
+    r.call(&["home", "reload"]);
+    let deadline = Instant::now() + Duration::from_secs(8);
+    while !r.dir.path().join("run/wlan0.wpa.pid").exists() {
+        assert!(Instant::now() < deadline, "home never started scanning");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    // Scanning is not a connection: no LAN, and the direct link must not be refused for it.
+    assert_eq!(r.refused(&["link", "lan"]).0, 1);
+    r.call(&["link", "host"]);
+    assert!(r.dir.path().join("run/wlan1.wpa.pid").exists());
+    assert!(!r.dir.path().join("run/wlan0.wpa.pid").exists());
+    r.call(&["link", "down"]);
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while !r.dir.path().join("run/wlan0.wpa.pid").exists() {
+        assert!(Instant::now() < deadline, "home did not resume");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+#[test]
+fn cancelling_setup_cleans_the_link_and_invalid_reload_keeps_home() {
     let r = Rig::new();
     r.wait_connected();
     let home = r.record("wlan0.wpa.pid");
@@ -239,6 +302,7 @@ fn cancelling_setup_cleans_only_link_and_invalid_reload_keeps_home() {
         .status
         .success());
     assert_eq!(r.record("wlan0.wpa.pid"), home);
+    r.call(&["home", "off"]);
     fs::write(r.dir.path().join("block-link"), "").unwrap();
     let mut client = r.command().args(["link", "host"]).spawn().unwrap();
     let deadline = Instant::now() + Duration::from_secs(5);
@@ -252,7 +316,6 @@ fn cancelling_setup_cleans_only_link_and_invalid_reload_keeps_home() {
         assert!(Instant::now() < deadline);
         std::thread::sleep(Duration::from_millis(50));
     }
-    assert_eq!(r.record("wlan0.wpa.pid"), home);
 }
 
 #[test]
@@ -274,13 +337,14 @@ fn an_unavailable_first_profile_falls_back_and_missing_config_stops_only_home() 
         );
         std::thread::sleep(Duration::from_millis(200));
     }
-    r.call(&["link", "host"]);
-    let link = r.record("wlan1.wpa.pid");
     fs::remove_file(r.dir.path().join("System/wifi.toml")).unwrap();
     r.call(&["home", "reload"]);
     assert!(r
         .call(&["service", "status"])
         .contains("home_connected=false"));
+    r.call(&["link", "host"]);
+    let link = r.record("wlan1.wpa.pid");
+    r.call(&["home", "reload"]);
     assert_eq!(r.record("wlan1.wpa.pid"), link);
 }
 

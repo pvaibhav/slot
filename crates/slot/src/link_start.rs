@@ -1,7 +1,10 @@
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
 
+use std::net::Ipv4Addr;
+
+use crate::link_lan::{self, Advertiser, HostInfo, Multicast};
 use crate::link_net::{Cancel, TcpLink, HOST_BOUND};
-use crate::link_radio::{self, LinkRole, RadioFail};
+use crate::link_radio::{self, LinkNet, LinkRole, RadioFail};
 
 #[cfg(feature = "device")]
 pub const HOST_ADDR: &str = "10.42.0.1";
@@ -38,14 +41,58 @@ pub enum LinkStep {
     Waiting,
 }
 
+/// Four sentences rather than one, deliberately: "the link failed" does not tell a player
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LinkFail {
     Radio,
-    /// Home Wi-Fi is in the way: on a channel the link cannot share, or still connecting.
-    HomeWifi,
     NobodyCame,
     PeerVanished,
     Cancelled,
+}
+
+/// The socket step on the home network: the host announces itself once it is listening, the
+/// joiner asks who is hosting this game and connects to whoever answers.
+///
+/// Announcing waits for the listener because a joiner that found the host any sooner would be
+/// refused, and stops when a peer is accepted because a host that goes on advertising after it
+/// has its friend is telling a third handheld to knock on a door that no longer opens.
+fn lan_socket(
+    role: LinkRole,
+    local: Ipv4Addr,
+    port: u16,
+    game: &str,
+    cancel: &Cancel,
+) -> std::io::Result<TcpLink> {
+    match role {
+        LinkRole::Host => {
+            // The socket is opened before anything waits, so a network that will not carry
+            // multicast is an error now and not a silent thirty seconds.
+            let wire = Multicast::open(local)?;
+            let info = HostInfo {
+                instance: link_lan::instance_name(),
+                addr: local,
+                port,
+                game: game.to_string(),
+            };
+            let mut advert = None;
+            let link = TcpLink::host_greeted_until(
+                &local.to_string(),
+                port,
+                HOST_BOUND,
+                cancel,
+                game,
+                || advert = Some(Advertiser::start_with(Box::new(wire), info)),
+            );
+            drop(advert);
+            link
+        }
+        LinkRole::Join => {
+            let mut wire = Multicast::open(local)?;
+            link_lan::find(&mut wire, game, cancel, HOST_BOUND, |host| {
+                TcpLink::join_greeted(host.into(), game)
+            })
+        }
+    }
 }
 
 impl LinkStep {
@@ -71,9 +118,8 @@ impl LinkStep {
 }
 
 impl LinkFail {
-    pub const SHOWN: [LinkFail; 4] = [
+    pub const SHOWN: [LinkFail; 3] = [
         LinkFail::Radio,
-        LinkFail::HomeWifi,
         LinkFail::NobodyCame,
         LinkFail::PeerVanished,
     ];
@@ -85,7 +131,6 @@ impl LinkFail {
     pub fn line(self) -> &'static str {
         match self {
             LinkFail::Radio => "The radio did not come up",
-            LinkFail::HomeWifi => "Turn Home Wi-Fi off first",
             LinkFail::NobodyCame => "Nobody arrived",
             LinkFail::PeerVanished => "The other player vanished",
             LinkFail::Cancelled => "Cancelled",
@@ -108,8 +153,12 @@ fn classify(e: &std::io::Error) -> LinkFail {
 }
 
 type RadioUp = Box<dyn FnMut(LinkRole, &Cancel) -> Result<(), RadioFail> + Send>;
+/// `RadioUp` that says which network it brought up, which the socket step needs to know.
+type NetUp = Box<dyn FnMut(LinkRole, &Cancel) -> Result<LinkNet, RadioFail> + Send>;
 type RadioDown = Box<dyn FnMut() + Send>;
 type Socket = Box<dyn FnMut(u16, &Cancel) -> std::io::Result<TcpLink> + Send>;
+/// `Socket` that is told which network it is on.
+type NetSocket = Box<dyn FnMut(LinkNet, u16, &Cancel) -> std::io::Result<TcpLink> + Send>;
 
 pub struct LinkStarter {
     rx: Receiver<LinkProgress>,
@@ -118,53 +167,78 @@ pub struct LinkStarter {
 }
 
 impl LinkStarter {
-    pub fn spawn(role: LinkRole, port: u16) -> LinkStarter {
-        LinkStarter::spawn_with(
+    /// The real thing: `link_radio` for the network, `TcpLink` for the socket. `game` is the
+    /// cart's header code, which on the home network is how two handhelds know they are
+    /// running the same game.
+    pub fn spawn(role: LinkRole, port: u16, game: &str) -> LinkStarter {
+        let game = game.to_string();
+        LinkStarter::spawn_net(
             Box::new(link_radio::up),
             Box::new(link_radio::down),
             role,
             port,
-            Box::new(move |port, cancel| match role {
-                LinkRole::Host => TcpLink::host_until(HOST_ADDR, port, HOST_BOUND, cancel),
-                LinkRole::Join => TcpLink::join_until(HOST_ADDR, port, HOST_BOUND, cancel),
+            Box::new(move |net, port, cancel| match net {
+                LinkNet::Direct => match role {
+                    LinkRole::Host => TcpLink::host_until(HOST_ADDR, port, HOST_BOUND, cancel),
+                    LinkRole::Join => TcpLink::join_until(HOST_ADDR, port, HOST_BOUND, cancel),
+                },
+                LinkNet::Lan { local } => lan_socket(role, local, port, &game, cancel),
             }),
         )
     }
 
     pub fn spawn_with(
         mut radio_up: RadioUp,
-        mut radio_down: RadioDown,
+        radio_down: RadioDown,
         role: LinkRole,
         port: u16,
         mut socket: Socket,
+    ) -> LinkStarter {
+        // Every injected radio is the private network's, which is what these were written for.
+        LinkStarter::spawn_net(
+            Box::new(move |role, cancel| radio_up(role, cancel).map(|()| LinkNet::Direct)),
+            radio_down,
+            role,
+            port,
+            Box::new(move |_, port, cancel| socket(port, cancel)),
+        )
+    }
+
+    /// `spawn_with` for a radio that says which network it brought up, and a socket step that
+    /// is told.
+    pub fn spawn_net(
+        mut radio_up: NetUp,
+        mut radio_down: RadioDown,
+        role: LinkRole,
+        port: u16,
+        mut socket: NetSocket,
     ) -> LinkStarter {
         let (tx, rx) = channel();
         let cancel = Cancel::new();
         let flag = cancel.clone();
         std::thread::spawn(move || {
             let _ = tx.send(LinkProgress::At(LinkStep::Radio));
-            if let Err(e) = radio_up(role, &flag) {
-                let fail = match &e {
-                    RadioFail::NoHost => LinkFail::NobodyCame,
-                    RadioFail::Cancelled => LinkFail::Cancelled,
-                    RadioFail::HomeWifi => {
-                        eprintln!("slot: link: {role:?} refused: Home Wi-Fi holds the radio");
-                        LinkFail::HomeWifi
-                    }
-                    RadioFail::Radio(why) => {
-                        eprintln!("slot: link: {role:?} could not bring the radio up: {why}");
-                        LinkFail::Radio
-                    }
-                };
-                radio_down();
-                let _ = tx.send(LinkProgress::Failed(fail));
-                return;
-            }
+            let net = match radio_up(role, &flag) {
+                Ok(net) => net,
+                Err(e) => {
+                    let fail = match &e {
+                        RadioFail::NoHost => LinkFail::NobodyCame,
+                        RadioFail::Cancelled => LinkFail::Cancelled,
+                        RadioFail::Radio(why) => {
+                            eprintln!("slot: link: {role:?} could not bring the radio up: {why}");
+                            LinkFail::Radio
+                        }
+                    };
+                    radio_down();
+                    let _ = tx.send(LinkProgress::Failed(fail));
+                    return;
+                }
+            };
             let _ = tx.send(LinkProgress::At(LinkStep::Waiting));
-            eprintln!("slot: link: {role:?} using {HOST_ADDR}:{port}");
-            match socket(port, &flag) {
+            eprintln!("slot: link: {role:?} using {net:?}, port {port}");
+            match socket(net, port, &flag) {
                 Ok(link) => {
-                    eprintln!("slot: link: {role:?} connected on {HOST_ADDR}:{port}");
+                    eprintln!("slot: link: {role:?} connected over {net:?}");
                     if tx.send(LinkProgress::Ready(link)).is_err() {
                         eprintln!("slot: link: nobody left to hand it to, radio back down");
                         radio_down();
@@ -172,7 +246,7 @@ impl LinkStarter {
                 }
                 Err(e) => {
                     eprintln!(
-                        "slot: link: {role:?} failed on {HOST_ADDR}:{port}: {e} (kind {:?})",
+                        "slot: link: {role:?} failed over {net:?}, port {port}: {e} (kind {:?})",
                         e.kind()
                     );
                     radio_down();

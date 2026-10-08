@@ -1,6 +1,6 @@
 use slot_ui::{
     ease, Draw, Millis, TexId, ADAPTER_BASE_X, ADAPTER_BASE_Y, ARCS, ARROW_LEFT_X, ARROW_RIGHT_X,
-    ARROW_Y, CLICKS_X, CLICKS_Y, OUT_W, PLUG_H, PLUG_TIP_X, PORT_Y,
+    ARROW_Y, CLICKS_X, CLICKS_Y, NET_X, NET_Y, OUT_W, PLUG_H, PLUG_TIP_X, PORT_Y,
 };
 
 use crate::app::{GameMenu, LinkRow};
@@ -24,6 +24,9 @@ pub struct LinkSprites {
     pub clicks: Sprite,
     pub arrow_left: Sprite,
     pub arrow_right: Sprite,
+    /// The printed plate for a link over the home network, and for the private one.
+    pub net_home: Sprite,
+    pub net_direct: Sprite,
 }
 
 const PICK_TIP: f32 = 330.0;
@@ -39,6 +42,8 @@ const PICK_BASE: f32 = 336.0;
 const ARC_MS: f32 = 1200.0;
 const ARC_STAGGER_MS: f32 = 300.0;
 const ARROW_ALPHA: f32 = 0.7;
+/// Printed, not lit: a little under the arrows' own weight, since it tells rather than asks.
+const NET_ALPHA: f32 = 0.85;
 
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     if t >= 1.0 {
@@ -235,4 +240,21 @@ pub fn draw_link_art(
         tex(out, s.arrow_left, ARROW_LEFT_X, ARROW_Y, ARROW_ALPHA);
         tex(out, s.arrow_right, ARROW_RIGHT_X, ARROW_Y, ARROW_ALPHA);
     }
+}
+
+/// The plate on the console that says which network a link started now would use. Only on the
+/// role picker, where the choice of who hosts is made and a player about to press A is about to
+/// find out whether they and the other player are on the same one. Drawn over the console strip
+/// after the art, and quiet: no motion, since nothing about the network moves.
+pub fn draw_network_label(menu: GameMenu, home: bool, s: &LinkSprites, out: &mut Vec<Draw>) {
+    if !matches!(menu, GameMenu::Pick(_)) {
+        return;
+    }
+    tex(
+        out,
+        if home { s.net_home } else { s.net_direct },
+        NET_X,
+        NET_Y,
+        NET_ALPHA,
+    );
 }

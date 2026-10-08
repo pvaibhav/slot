@@ -985,3 +985,119 @@ fn a_host_on_another_bios_ends_the_session_and_says_so() {
     assert!(!app.link_active());
     assert_eq!(app.toast(), Some(Toast::BiosMismatch));
 }
+
+/// On a shared network anything can knock, so a host only takes the peer that opens with its
+/// game's greeting. Same game: connected, and both directions carry packets.
+#[test]
+fn a_greeted_peer_for_the_same_game_becomes_the_session() {
+    let port = common::free_port();
+    let server = std::thread::spawn(move || {
+        TcpLink::host_greeted_until(
+            "127.0.0.1",
+            port,
+            Duration::from_secs(10),
+            &Cancel::new(),
+            "AMAE",
+            || {},
+        )
+    });
+    std::thread::sleep(Duration::from_millis(150));
+    let addr = std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, port));
+    let mut client = TcpLink::join_greeted(addr, "AMAE").expect("join");
+    let mut host = server.join().unwrap().expect("host");
+    host.send(NETPACKET_RELIABLE, b"ping");
+    client.send(NETPACKET_RELIABLE, b"pong");
+    assert_eq!(wait_for(&mut client).as_deref(), Some(&b"ping"[..]));
+    assert_eq!(wait_for(&mut host).as_deref(), Some(&b"pong"[..]));
+}
+
+/// The wrong game, a scanner that says nothing, and noise all get dropped, and the host is still
+/// waiting for the right one afterwards.
+#[test]
+fn a_host_turns_away_strangers_and_keeps_waiting_for_its_own_game() {
+    let port = common::free_port();
+    let server = std::thread::spawn(move || {
+        TcpLink::host_greeted_until(
+            "127.0.0.1",
+            port,
+            Duration::from_secs(15),
+            &Cancel::new(),
+            "AMAE",
+            || {},
+        )
+    });
+    std::thread::sleep(Duration::from_millis(150));
+    let addr = std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, port));
+    // Another game: refused, and told so by a closed socket rather than an ack.
+    assert!(TcpLink::join_greeted(addr, "ZZZZ").is_err());
+    // Noise of the right length.
+    let mut noise = TcpStream::connect(addr).unwrap();
+    noise.write_all(&[0xff; 9]).unwrap();
+    let mut buf = [0u8; 1];
+    assert!(matches!(noise.read(&mut buf), Ok(0) | Err(_)));
+    // Then the right game gets through.
+    let mut client = TcpLink::join_greeted(addr, "AMAE").expect("join");
+    let mut host = server.join().unwrap().expect("host");
+    host.send(NETPACKET_RELIABLE, b"ok");
+    assert_eq!(wait_for(&mut client).as_deref(), Some(&b"ok"[..]));
+}
+
+/// One silent connection must not hold up a host for longer than the greeting wait.
+#[test]
+fn a_connection_that_says_nothing_does_not_stall_the_host_for_long() {
+    let port = common::free_port();
+    let server = std::thread::spawn(move || {
+        TcpLink::host_greeted_until(
+            "127.0.0.1",
+            port,
+            Duration::from_secs(15),
+            &Cancel::new(),
+            "AMAE",
+            || {},
+        )
+    });
+    std::thread::sleep(Duration::from_millis(150));
+    let addr = std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, port));
+    let _silent = TcpStream::connect(addr).unwrap();
+    let started = Instant::now();
+    let _client = TcpLink::join_greeted(addr, "AMAE");
+    let _ = server.join().unwrap().expect("host");
+    assert!(
+        started.elapsed() < Duration::from_secs(6),
+        "{:?}",
+        started.elapsed()
+    );
+}
+
+/// The announcement goes out only once the port is bound, never before: a joiner that found the
+/// host any sooner would be refused.
+#[test]
+fn the_host_announces_only_once_it_is_listening() {
+    let port = common::free_port();
+    let listening = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let flag = listening.clone();
+    let cancel = Cancel::new();
+    let stop = cancel.clone();
+    let server = std::thread::spawn(move || {
+        TcpLink::host_greeted_until(
+            "127.0.0.1",
+            port,
+            Duration::from_secs(10),
+            &stop,
+            "AMAE",
+            move || {
+                // Bound by now: a connect must succeed.
+                assert!(TcpStream::connect(("127.0.0.1", port)).is_ok());
+                flag.store(true, std::sync::atomic::Ordering::SeqCst);
+            },
+        )
+    });
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !listening.load(std::sync::atomic::Ordering::SeqCst) {
+        assert!(Instant::now() < deadline, "never announced");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    cancel.cancel();
+    let err = server.join().unwrap().err().expect("cancelled");
+    assert_eq!(err.kind(), std::io::ErrorKind::Interrupted);
+}

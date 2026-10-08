@@ -192,7 +192,6 @@ fn each_failure_says_which_one_it_was() {
     }
     let lines: Vec<&str> = [
         LinkFail::Radio,
-        LinkFail::HomeWifi,
         LinkFail::NobodyCame,
         LinkFail::PeerVanished,
     ]
@@ -750,6 +749,8 @@ fn fake_link_sprites() -> slot::link_screen::LinkSprites {
         clicks: s(13),
         arrow_left: s(14),
         arrow_right: s(15),
+        net_home: s(16),
+        net_direct: s(17),
     }
 }
 

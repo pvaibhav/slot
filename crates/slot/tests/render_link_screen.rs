@@ -9,7 +9,7 @@ use slot::app::{GameMenu, LinkLegend, LinkRow};
 use slot::link_kind::LinkKind;
 use slot::link_net::Cancel;
 use slot::link_radio::{LinkRole, RadioJob, RadioJobs};
-use slot::link_screen::{draw_link_art, LinkSprites, Sprite};
+use slot::link_screen::{draw_link_art, draw_network_label, LinkSprites, Sprite};
 use slot::link_start::{LinkFail, LinkStarter, LinkStep};
 use slot_input::Action;
 use slot_store::Core;
@@ -71,6 +71,8 @@ fn sprites_and_faces() -> (LinkSprites, Vec<(TexId, Face)>) {
         clicks: put(art.clicks),
         arrow_left: put(art.arrow_left),
         arrow_right: put(art.arrow_right),
+        net_home: put(art.net_home),
+        net_direct: put(art.net_direct),
     };
     (sprites, faces)
 }
@@ -153,6 +155,18 @@ fn render(menu: GameMenu, kind: LinkKind, now: u64, name: &str) -> Vec<u8> {
     let (sprites, faces) = sprites_and_faces();
     let mut out = Vec::new();
     draw_link_art(menu, kind, now, &sprites, &mut out);
+    let px = composite(&out, &faces);
+    dump(&px, name);
+    px
+}
+
+/// The picker as a player sees it: the art, then the plate that names the network.
+fn render_picker(kind: LinkKind, home: bool, name: &str) -> Vec<u8> {
+    let (sprites, faces) = sprites_and_faces();
+    let mut out = Vec::new();
+    let menu = GameMenu::Pick(LinkRow::Host);
+    draw_link_art(menu, kind, 0, &sprites, &mut out);
+    draw_network_label(menu, home, &sprites, &mut out);
     let px = composite(&out, &faces);
     dump(&px, name);
     px
@@ -670,4 +684,39 @@ fn a_warm_radio_goes_straight_to_looking_for_the_other_player() {
         last < OUT_H as usize / 2,
         "the line is not up where the link screen's sentence goes: rows {first}..{last}"
     );
+}
+
+/// The plate is lettering on the console strip: light ink somewhere inside its box, and the
+/// two networks are two different plates rather than one plate with a word swapped.
+#[test]
+fn the_picker_prints_which_network_the_link_will_use() {
+    let (x0, y0) = (slot_ui::NET_X as usize, slot_ui::NET_Y as usize);
+    let ink = |px: &[u8]| {
+        let mut n = 0;
+        for y in y0..y0 + slot_ui::NET_H as usize {
+            for x in x0..x0 + slot_ui::NET_W as usize {
+                if at(px, x, y).iter().all(|c| *c > 0xc0) {
+                    n += 1;
+                }
+            }
+        }
+        n
+    };
+    for kind in [LinkKind::Cable, LinkKind::Wireless] {
+        let home = render_picker(kind, true, &format!("net-home-{kind:?}").to_lowercase());
+        let direct = render_picker(kind, false, &format!("net-direct-{kind:?}").to_lowercase());
+        assert!(
+            ink(&home) > 60,
+            "no lettering on the home plate: {}",
+            ink(&home)
+        );
+        assert!(
+            ink(&direct) > 60,
+            "no lettering on the direct plate: {}",
+            ink(&direct)
+        );
+        assert_ne!(home, direct);
+        // The plate sits on the strip, clear of the port notch the plug lands in.
+        assert!(at(&home, 360, 406).iter().all(|c| *c < 0x14));
+    }
 }

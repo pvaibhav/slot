@@ -22,6 +22,7 @@ slot-ui = { path = "../slot-ui" }
 winit = { workspace = true, optional = true }
 cpal = { workspace = true, optional = true }
 gilrs = { workspace = true, optional = true }
+libc = "0.2"
 libloading = { workspace = true }
 lz4_flex = { workspace = true }
 png = { workspace = true }

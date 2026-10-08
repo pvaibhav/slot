@@ -16,6 +16,8 @@ mod labels;
 pub mod latency;
 pub mod link_art_builder;
 pub mod link_kind;
+pub mod link_lan;
+pub mod link_mdns;
 pub mod link_net;
 pub mod link_radio;
 pub mod link_screen;

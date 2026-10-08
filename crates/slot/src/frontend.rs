@@ -324,6 +324,8 @@ impl Frontend {
                     clicks: up(&art.clicks),
                     arrow_left: up(&art.arrow_left),
                     arrow_right: up(&art.arrow_right),
+                    net_home: up(&art.net_home),
+                    net_direct: up(&art.net_direct),
                 };
                 self.session.app_mut().set_link_sprites(sprites);
                 self.link_art_done = true;

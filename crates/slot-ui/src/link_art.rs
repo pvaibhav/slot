@@ -31,6 +31,11 @@ pub const ARROW_H: u32 = 22;
 pub const ARROW_LEFT_X: f32 = 268.0;
 pub const ARROW_RIGHT_X: f32 = 436.0;
 pub const ARROW_Y: f32 = 52.0;
+/// The network plate, printed on the console strip beside the port, above the key legend.
+pub const NET_W: u32 = 172;
+pub const NET_H: u32 = 24;
+pub const NET_X: f32 = 424.0;
+pub const NET_Y: f32 = 396.0;
 
 const ADAPTER_SCALE: f32 = 1.75;
 const LABEL_INK: [u8; 3] = [0xec, 0xee, 0xef];
@@ -47,6 +52,9 @@ pub struct LinkArt {
     pub clicks: CartFace,
     pub arrow_left: CartFace,
     pub arrow_right: CartFace,
+    /// The plate for a link over the home network, and for the private one.
+    pub net_home: CartFace,
+    pub net_direct: CartFace,
 }
 
 pub fn link_art() -> LinkArt {
@@ -72,7 +80,34 @@ pub fn link_art() -> LinkArt {
         ),
         arrow_left: svg_face(&arrow_svg("M14 2 L2 11 L14 20 Z"), ARROW_W, ARROW_H),
         arrow_right: svg_face(&arrow_svg("M2 2 L14 11 L2 20 Z"), ARROW_W, ARROW_H),
+        net_home: net_plate(true),
+        net_direct: net_plate(false),
     }
+}
+
+/// A small die-cut plate, printed like the adapter's label: a glyph and two words, on the
+/// console's own slate so it reads as something on the device and not as a control. The home
+/// network is a Wi-Fi mark; the private one is two nodes joined, which is what it is.
+fn net_plate(home: bool) -> CartFace {
+    let glyph = if home {
+        format!(
+            r#"<g fill="none" stroke="{ARC_INK}" stroke-width="1.7" stroke-linecap="round"><path d="M9.5 11.6 Q16 6.4 22.5 11.6"/><path d="M12.4 15 Q16 12.2 19.6 15"/></g><circle cx="16" cy="18.6" r="1.7" fill="{ARC_INK}"/>"#
+        )
+    } else {
+        format!(
+            r#"<path d="M11 12.5 H21" stroke="{ARC_INK}" stroke-width="1.7" stroke-linecap="round"/><circle cx="9" cy="12.5" r="2.6" fill="{ARC_INK}"/><circle cx="23" cy="12.5" r="2.6" fill="{ARC_INK}"/>"#
+        )
+    };
+    let svg = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {NET_W} {NET_H}"><rect x=".5" y=".5" width="{}" height="{}" rx="5" fill="#22222b" stroke="#3a3a47"/><path d="M6 1.5 H{}" stroke="#4b4b5b" stroke-width="1" stroke-linecap="round"/>{glyph}</svg>"##,
+        NET_W - 1,
+        NET_H - 1,
+        NET_W - 6
+    );
+    let mut face = svg_face(&svg, NET_W, NET_H);
+    let label = if home { "HOME WI-FI" } else { "DIRECT LINK" };
+    stamp(&mut face, 34.0, 16.5, label, 9.4, LABEL_INK, Align::Left);
+    face
 }
 
 fn svg_face(svg: &str, w: u32, h: u32) -> CartFace {

@@ -79,12 +79,14 @@ impl Link {
     fn busy(&self) -> bool {
         !self.owner.is_empty()
     }
+    /// The private soft-AP flow. Only reached when Home Wi-Fi is not connected: a connected
+    /// Home is served by `link lan` instead, so none of the shared-channel rules apply here.
     fn start(
         &mut self,
         role: &str,
         owner: &str,
         reply: UnixStream,
-        home: &Home,
+        home: &mut Home,
     ) -> Result<(), (UnixStream, &'static str)> {
         if self.busy() {
             return Err((reply, "LINK_BUSY"));
@@ -94,29 +96,16 @@ impl Link {
         if system::external_radio_owner(&ours) {
             return Err((reply, "EXTERNAL_OWNER"));
         }
-        // A home attempt is also a channel owner: don't change the shared radio mid-association.
-        let home_status = home.interface.status();
-        if home.interface.wpa.is_some() && !connected(&home_status) {
-            return Err((reply, "HOME_CONNECTING"));
-        }
-        let home_freq = if connected(&home_status) {
-            home.interface.observed_frequency()
-        } else {
-            None
-        };
-        if connected(&home_status) && home_freq.is_none() {
-            return Err((reply, "CHANNEL_UNKNOWN"));
+        // Home Wi-Fi that is up is what `link lan` is for. Starting an access point beside it
+        // would fight it for the one channel and could take the player's network down, so
+        // the caller is told rather than obliged.
+        if home.enabled && connected(&home.interface.status()) {
+            return Err((reply, "HOME_CONNECTED"));
         }
         let info = match radio::capabilities() {
             Ok(i) => i,
             Err(e) => return Err((reply, e)),
         };
-        if home_freq.is_some_and(|f| !radio::permitted(&info, f)) {
-            return Err((reply, "HOME_CHANNEL_NOT_ALLOWED"));
-        }
-        if role == "join" && home_freq.is_some() && !radio::dual_station(&info) {
-            return Err((reply, "UNSUPPORTED_COMBINATION"));
-        }
         let routes = match output("ip", &["-4", "route", "show", "table", "all"]) {
             Ok(r) => r,
             Err(e) => return Err((reply, e)),
@@ -125,24 +114,23 @@ impl Link {
             return Err((reply, "ADDRESS_CONFLICT"));
         }
         let freq = if role == "host" {
-            let f = home_freq.or_else(|| {
-                [5745, 2412, 2437, 2462]
-                    .into_iter()
-                    .find(|f| radio::permitted(&info, *f))
-            });
-            let Some(f) = f.filter(|f| radio::permitted(&info, *f)) else {
+            let Some(f) = [5745, 2412, 2437, 2462]
+                .into_iter()
+                .find(|f| radio::permitted(&info, *f))
+            else {
                 return Err((reply, "CHANNEL_NOT_ALLOWED"));
             };
             Some(f)
         } else {
-            home_freq
+            None
         };
         if !radio::net_exists("wlan1") {
             return Err((reply, "RADIO_UNAVAILABLE"));
         }
-        if let Err(e) = home.interface.pin(home_freq) {
-            return Err((reply, e));
-        }
+        // A home supplicant that has not associated (out of range, still scanning) is only
+        // in the way: it would keep hopping channels under the access point. Stop it for the
+        // session; `Home::tick` starts it again once the link is gone.
+        home.pause();
         let _ = output("rfkill", &["unblock", "wifi"]);
         let network = config::Network {
             ssid: "slotlink".into(),
@@ -224,6 +212,13 @@ impl Link {
         }
     }
 }
+/// Home Wi-Fi's address, only while it is associated and has a lease.
+fn home_lan_address(home: &Home) -> Option<std::net::Ipv4Addr> {
+    if !home.enabled || !connected(&home.interface.status()) {
+        return None;
+    }
+    home.interface.ipv4()
+}
 fn respond(stream: &mut UnixStream, code: u8, reason: &str) {
     let _ = stream.set_write_timeout(Some(Duration::from_millis(200)));
     let _ = writeln!(stream, "{code} {reason}");
@@ -276,7 +271,6 @@ fn serve(root: &Path, run: &Path) -> std::io::Result<()> {
     home.enable(slot_store::read_slot_state(root).home_wifi_enabled, root);
     // The frontend may update the restored preference over this socket.
     let mut warm: Option<(String, Instant)> = None;
-    let mut was_link_busy = false;
     let mut ntp_at = Instant::now();
     let mut tick_at = Instant::now();
     let mut powered_down = false;
@@ -383,14 +377,17 @@ fn serve(root: &Path, run: &Path) -> std::io::Result<()> {
                             respond(&mut stream, 0, "DOWN");
                         }
                     }
+                    // Link over the home network needs no radio of its own, so this verb takes
+                    // no lease: it only says whether Home Wi-Fi is up and on which address.
+                    ("link", "lan") => match home_lan_address(&home) {
+                        Some(ip) => respond(&mut stream, 0, &ip.to_string()),
+                        None => respond(&mut stream, 1, "NO_HOME_LAN"),
+                    },
                     ("link", "host" | "join") => {
-                        if let Err((mut reply, error)) = link.start(action, owner, stream, &home) {
-                            if !link.busy() {
-                                let _ = home.interface.pin(None);
-                            }
-                            respond(&mut reply, radio::refusal_code(error), error);
-                        } else {
-                            was_link_busy = true;
+                        if let Err((mut reply, error)) =
+                            link.start(action, owner, stream, &mut home)
+                        {
+                            respond(&mut reply, 1, error);
                         }
                         powered_down = false;
                     }
@@ -407,10 +404,6 @@ fn serve(root: &Path, run: &Path) -> std::io::Result<()> {
         }
         if now >= tick_at {
             link.tick();
-            if !link.busy() && was_link_busy {
-                let _ = home.interface.pin(None);
-            }
-            was_link_busy = link.busy();
             let mut ours = home.interface.pids();
             ours.extend(link.interface.pids());
             home.tick(root, link.busy(), link.freq, &ours);
@@ -544,7 +537,7 @@ fn main() {
             .next()
             .and_then(|s| s.parse().ok())
             .unwrap_or(1);
-        if args[1] == "status" {
+        if args[1] == "status" || (args[1] == "lan" && code == 0) {
             println!("{}", response.trim());
         } else if code != 0 {
             eprintln!("slot-services: {}", response.trim());

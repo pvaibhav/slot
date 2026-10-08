@@ -22,12 +22,21 @@ impl LinkRole {
     }
 }
 
+/// Which network the link runs over, decided by the service when the link starts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkNet {
+    /// The private network: a soft-AP the host brings up and the joiner associates to, at fixed
+    /// addresses. What a device with no Wi-Fi connection gets.
+    Direct,
+    /// The home network the device is already on, at `local`. No radio to bring up: the other
+    /// handheld is found by name rather than by address.
+    Lan { local: std::net::Ipv4Addr },
+}
+
+/// Three, not one, because the screen says a different sentence for each and only two of them
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RadioFail {
     NoHost,
-    /// `ags-net link` exited 4: Home Wi-Fi is connected on a channel the link cannot share, or
-    /// is still associating. The radio is fine and the player can fix it by turning Home Wi-Fi off.
-    HomeWifi,
     Cancelled,
     Radio(String),
 }
@@ -147,8 +156,39 @@ fn run(sub: &str) -> bool {
         .is_ok_and(|status| status.success())
 }
 
+/// The home network's address, if the service says the device is on one. `ags-net link lan`
+/// answers at once and starts nothing, so this is the whole cost of asking.
 #[cfg(feature = "device")]
-pub fn up(role: LinkRole, cancel: &Cancel) -> Result<(), RadioFail> {
+fn home_address() -> Option<std::net::Ipv4Addr> {
+    let out = helper()
+        .arg("link")
+        .arg("lan")
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    parse_lan_reply(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// `0 192.168.1.24`, the service's answer to `link lan`.
+pub fn parse_lan_reply(reply: &str) -> Option<std::net::Ipv4Addr> {
+    let mut words = reply.split_whitespace();
+    (words.next()? == "0").then_some(())?;
+    words.next()?.parse().ok()
+}
+
+///
+/// A device that is already on the home network links over it and this returns at once: there
+/// is no radio to bring up, and nothing to share a channel with. Only a device with no
+/// connection gets the private network, and only that path takes any time.
+#[cfg(feature = "device")]
+pub fn up(role: LinkRole, cancel: &Cancel) -> Result<LinkNet, RadioFail> {
+    if let Some(local) = home_address() {
+        return Ok(LinkNet::Lan { local });
+    }
     let mut child = helper().arg("link").arg(role.arg()).spawn().map_err(|e| {
         RadioFail::Radio(format!("ags-net link {} would not start: {e}", role.arg()))
     })?;
@@ -159,11 +199,8 @@ pub fn up(role: LinkRole, cancel: &Cancel) -> Result<(), RadioFail> {
             return Err(RadioFail::Cancelled);
         }
         match child.try_wait() {
-            Ok(Some(status)) if status.success() => return Ok(()),
+            Ok(Some(status)) if status.success() => return Ok(LinkNet::Direct),
             Ok(Some(status)) if status.code() == Some(3) => return Err(RadioFail::NoHost),
-            // 4 is the service refusing because Home Wi-Fi holds the radio. Reported as itself
-            // because it is the one radio failure the player can undo from the menu.
-            Ok(Some(status)) if status.code() == Some(4) => return Err(RadioFail::HomeWifi),
             Ok(Some(status)) => {
                 return Err(RadioFail::Radio(format!(
                     "link {} failed: {status}",
@@ -182,8 +219,8 @@ pub fn down() {
 }
 
 #[cfg(not(feature = "device"))]
-pub fn up(_role: LinkRole, _cancel: &Cancel) -> Result<(), RadioFail> {
-    Ok(())
+pub fn up(_role: LinkRole, _cancel: &Cancel) -> Result<LinkNet, RadioFail> {
+    Ok(LinkNet::Direct)
 }
 
 #[cfg(not(feature = "device"))]
