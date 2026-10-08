@@ -8,7 +8,7 @@ pub struct Network {
 
 // Never format TOML errors: they include the source line, potentially a password.
 pub fn read(root: &Path) -> Result<Vec<Network>, &'static str> {
-    let path = root.join("System/wifi.toml");
+    let path = root.join("Config/wifi.toml");
     use std::io::Read;
     let file = match std::fs::File::open(path) {
         Ok(f) => f,

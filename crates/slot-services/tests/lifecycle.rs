@@ -23,7 +23,7 @@ impl Rig {
     fn with_radio(ready: bool) -> Self {
         let radio = RADIO.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::tempdir().unwrap();
-        for p in ["System", "bin", "net/wlan0", "net/wlan1", "run"] {
+        for p in ["System", "Config", "bin", "net/wlan0", "net/wlan1", "run"] {
             fs::create_dir_all(dir.path().join(p)).unwrap();
         }
         if !ready {
@@ -98,7 +98,7 @@ exit 0
         )
         .unwrap();
         fs::write(
-            dir.path().join("System/wifi.toml"),
+            dir.path().join("Config/wifi.toml"),
             "[[networks]]\nssid='Home'\npassword='private-password'\n[[networks]]\nssid='Absent'\npassword='password-two'\n",
         )
         .unwrap();
@@ -240,7 +240,7 @@ fn direct_link_and_crash_recovery_keep_the_access_point() {
     fs::remove_file(r.dir.path().join("run/control.sock")).unwrap();
     r.start();
     assert_eq!(r.record("wlan1.wpa.pid"), link);
-    assert!(r.dir.path().join("System/wifi.toml").exists());
+    assert!(r.dir.path().join("Config/wifi.toml").exists());
     assert!(r.dir.path().join("ntp-enabled").exists());
     // Home is enabled again by the restored preference but holds off while a link runs.
     std::thread::sleep(Duration::from_secs(1));
@@ -261,7 +261,7 @@ fn direct_link_and_crash_recovery_keep_the_access_point() {
 fn a_home_that_never_associates_is_paused_for_a_direct_link_and_comes_back() {
     let r = Rig::new();
     fs::write(
-        r.dir.path().join("System/wifi.toml"),
+        r.dir.path().join("Config/wifi.toml"),
         "[[networks]]\nssid='Absent'\npassword='password-one'\n",
     )
     .unwrap();
@@ -290,7 +290,7 @@ fn cancelling_setup_cleans_the_link_and_invalid_reload_keeps_home() {
     r.wait_connected();
     let home = r.record("wlan0.wpa.pid");
     fs::write(
-        r.dir.path().join("System/wifi.toml"),
+        r.dir.path().join("Config/wifi.toml"),
         "password='never-log-this",
     )
     .unwrap();
@@ -322,7 +322,7 @@ fn cancelling_setup_cleans_the_link_and_invalid_reload_keeps_home() {
 fn an_unavailable_first_profile_falls_back_and_missing_config_stops_only_home() {
     let r = Rig::new();
     r.wait_connected();
-    fs::write(r.dir.path().join("System/wifi.toml"),"[[networks]]\nssid='Absent'\npassword='password-one'\n[[networks]]\nssid='Home'\npassword='password-two'\n").unwrap();
+    fs::write(r.dir.path().join("Config/wifi.toml"),"[[networks]]\nssid='Absent'\npassword='password-one'\n[[networks]]\nssid='Home'\npassword='password-two'\n").unwrap();
     r.call(&["home", "reload"]);
     let deadline = Instant::now() + Duration::from_secs(40);
     loop {
@@ -337,7 +337,7 @@ fn an_unavailable_first_profile_falls_back_and_missing_config_stops_only_home() 
         );
         std::thread::sleep(Duration::from_millis(200));
     }
-    fs::remove_file(r.dir.path().join("System/wifi.toml")).unwrap();
+    fs::remove_file(r.dir.path().join("Config/wifi.toml")).unwrap();
     r.call(&["home", "reload"]);
     assert!(r
         .call(&["service", "status"])

@@ -135,12 +135,19 @@ fn queue() -> &'static Sender<RadioJob> {
     })
 }
 
-/// Always resolve the helper from this card, never PATH's OS helper.
+/// The card's own `slot-services`, through the loader: exFAT carries no exec bit.
 #[cfg(feature = "device")]
 fn helper() -> std::process::Command {
     let root = std::env::var_os("SLOT_ROOT").unwrap_or_else(|| "/mnt/sdcard".into());
-    let mut c = std::process::Command::new("/bin/sh");
-    c.arg(std::path::Path::new(&root).join("System/ags-net"));
+    let service = std::path::Path::new(&root).join("System/slot-services");
+    let loader = std::path::Path::new("/lib/ld-linux-aarch64.so.1");
+    let mut c = if loader.exists() {
+        let mut c = std::process::Command::new(loader);
+        c.arg(service);
+        c
+    } else {
+        std::process::Command::new(service)
+    };
     c.env("SLOT_ROOT", root)
         .env("SLOT_OWNER_PID", std::process::id().to_string());
     c
@@ -156,7 +163,7 @@ fn run(sub: &str) -> bool {
         .is_ok_and(|status| status.success())
 }
 
-/// The home network's address, if the service says the device is on one. `ags-net link lan`
+/// The home network's address, if the service says the device is on one. `link lan`
 /// answers at once and starts nothing, so this is the whole cost of asking.
 #[cfg(feature = "device")]
 fn home_address() -> Option<std::net::Ipv4Addr> {
@@ -189,9 +196,11 @@ pub fn up(role: LinkRole, cancel: &Cancel) -> Result<LinkNet, RadioFail> {
     if let Some(local) = home_address() {
         return Ok(LinkNet::Lan { local });
     }
-    let mut child = helper().arg("link").arg(role.arg()).spawn().map_err(|e| {
-        RadioFail::Radio(format!("ags-net link {} would not start: {e}", role.arg()))
-    })?;
+    let mut child = helper()
+        .arg("link")
+        .arg(role.arg())
+        .spawn()
+        .map_err(|e| RadioFail::Radio(format!("link {} would not start: {e}", role.arg())))?;
     loop {
         if cancel.is_cancelled() {
             let _ = child.kill();

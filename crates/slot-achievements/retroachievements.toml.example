@@ -1,5 +1,5 @@
-# Copy to System/retroachievements.toml, fill in your account, then restart slot.
-# Configure System/wifi.toml and turn Home Wi-Fi On once in the menu.
+# Copy to Config/retroachievements.toml, fill in your account, then restart slot.
+# Needs Home Wi-Fi: see Config/wifi.toml.example.
 enabled = true
 username = ""
 password = ""

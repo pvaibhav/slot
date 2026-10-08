@@ -1,4 +1,4 @@
-# Copy to System/wifi.toml, enter your networks, then turn Home Wi-Fi On.
+# Copy to Config/wifi.toml, enter your networks, then turn Home Wi-Fi On in the menu.
 # Networks are tried in order. A working connection is retained.
 [[networks]]
 ssid = "Home"
@@ -8,5 +8,4 @@ password = "replace-with-your-password"
 ssid = "Phone hotspot"
 password = "replace-with-your-password"
 
-# For an open network, explicitly use security = "open" and omit password.
-# Network time sync is automatic; timezone remains utc_offset_min in slot.state.
+# For an open network, use security = "open" and omit password.

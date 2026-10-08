@@ -1,6 +1,6 @@
 # Home Wi-Fi on Slot
 
-Copy `System/wifi.toml.example` to `System/wifi.toml` on the SD card and enter your network names and passwords. Add one `[[networks]]` block per network, in preferred order. WPA2 personal networks are supported; for an open network use `security = "open"` and omit `password`. Enterprise setup and captive portals are not supported.
+Copy `Config/wifi.toml.example` to `Config/wifi.toml` on the SD card and enter your network names and passwords. Add one `[[networks]]` block per network, in preferred order. WPA2 personal networks are supported; for an open network use `security = "open"` and omit `password`. Enterprise setup and captive portals are not supported.
 
 In the main menu, change **Home Wi-Fi** to **On**. It defaults to Off and remembers your choice. Slot tries the configured networks in order and keeps a working connection. Association/DHCP run in the background; the shelf never waits for them. A small Wi-Fi symbol beside the battery appears only after the home connection has an IPv4 address. It indicates LAN connectivity, not internet reachability or signal strength.
 
@@ -15,11 +15,11 @@ Slot uses BaseOS's existing SSH/SFTP service and authentication. It does not ena
 With `SLOT_ROOT` set to the card mount, run:
 
 ```sh
-/bin/sh "$SLOT_ROOT/System/ags-net" service status
-/bin/sh "$SLOT_ROOT/System/ags-net" home reload
+/lib/ld-linux-aarch64.so.1 "$SLOT_ROOT/System/slot-services" service status
+/lib/ld-linux-aarch64.so.1 "$SLOT_ROOT/System/slot-services" home reload
 ```
 
-`service stop` tears down Slot-owned network resources before handing the interfaces to another frontend. Slot's running frontend reconnects its service automatically; stop the frontend before handing control to another frontend. Logs are under `/run/slot-services/service.log`. The bundled helper never falls back to the OS's old `ags-net`.
+`service stop` tears down Slot-owned network resources before handing the interfaces to another frontend. Slot's running frontend reconnects its service automatically; stop the frontend before handing control to another frontend. Logs are under `/run/slot-services/service.log`.
 
 ## Multiplayer
 
@@ -30,10 +30,10 @@ A link uses whichever network the device is already on:
 
 Both players need to be in the same mode: one handheld on the home network and the other with Wi-Fi off cannot see each other, and the plates show which each is using. The home network must let devices talk to each other: an access point with client isolation, or a guest network, blocks the LAN mode and the joiner ends on "Nobody arrived". Turn Home Wi-Fi Off on both to use the direct link instead.
 
-`ags-net link lan` asks the service whether the home network is up and prints its address (`0 192.168.1.24`), or exits 1 with `NO_HOME_LAN`; it takes no lease. `ags-net link host|join` refuse with `HOME_CONNECTED` while Home Wi-Fi is connected, since an access point beside a live home connection would fight it for the one channel.
+`slot-services link lan` asks the service whether the home network is up and prints its address (`0 192.168.1.24`), or exits 1 with `NO_HOME_LAN`; it takes no lease. `slot-services link host|join` refuse with `HOME_CONNECTED` while Home Wi-Fi is connected, since an access point beside a live home connection would fight it for the one channel.
 
 `iw` and its libnl libraries ship in `System/slot-net`, invoked through the system loader even on cards without executable bits. wpa_supplicant, wpa_cli, ip, rfkill and udhcpc must be present. The 8821cs driver prints no `channel` line in `iw dev <if> info`, so the channel is taken from `wpa_cli status`.
 
 The automated suite uses fake networking tools to validate ownership and lifecycle. Router channel changes, latency during SFTP, power use, mDNS behaviour under Wi-Fi power save, and game RTC behavior during clock correction still require two-device qualification.
 
-Release packaging includes `slot-services`, `ags-net`, `slot-net` (iw, libraries, licenses and corresponding Debian sources), and this sample. Copy release files over an existing card without deleting `wifi.toml` or `slot.state`. The deployment task never overwrites those user files.
+Release packaging includes `slot-services`, `slot-net` (iw and its libraries, with their licenses and Debian sources in `System/licenses`), and `Config/wifi.toml.example`. Copy release files over an existing card without deleting `wifi.toml` or `slot.state`. The deployment task never overwrites those user files.

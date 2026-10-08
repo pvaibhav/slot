@@ -9,7 +9,7 @@ The notification slides and fades in, gives the badge a small pop, then fades aw
 The total duration includes both transitions. A small trophy is used only when a badge is
 missing or invalid; showing an unlock never waits for a download.
 
-Copy the bundled `System/retroachievements.toml.example` to `System/retroachievements.toml`
+Copy the bundled `Config/retroachievements.toml.example` to `Config/retroachievements.toml`
 on the card and fill in your account:
 
 ```toml
@@ -27,7 +27,7 @@ Account and configuration changes take effect on restart. Omit the file or set
 `enabled = false` to disable the feature. TOML comments and literal strings are supported;
 for example, single quotes preserve backslashes in a password without escaping them.
 
-For home networking, configure `System/wifi.toml` from its bundled example and turn
+For home networking, configure `Config/wifi.toml` from its bundled example and turn
 **Home Wi-Fi** **On** once in the main menu. The toggle is remembered across reboots.
 Wi-Fi connection, network time sync, RA login, and library preparation then run automatically.
 When the Wi-Fi worker reports a new connection, RA retries immediately instead of waiting

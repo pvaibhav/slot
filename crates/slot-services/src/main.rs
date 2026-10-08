@@ -503,7 +503,7 @@ fn main() {
         return;
     }
     if args.len() != 2 {
-        eprintln!("usage: ags-net home on|off|reload | link warm|cool|host|join|down | service status|stop");
+        eprintln!("usage: slot-services home on|off|reload | link warm|cool|host|join|down | service status|stop");
         std::process::exit(2);
     }
     let pid = std::env::var("SLOT_OWNER_PID")

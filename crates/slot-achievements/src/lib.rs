@@ -237,7 +237,7 @@ fn run(
     status: Arc<Status>,
     transport: impl network::Transport + Send + 'static,
 ) {
-    let config_path = root.join("System/retroachievements.toml");
+    let config_path = root.join("Config/retroachievements.toml");
     if !config_path.exists() {
         return;
     }
@@ -548,7 +548,7 @@ fn retry_unsaved(
 /// Call on an I/O worker. This does not authenticate, send ROM data, or update the shared
 /// library index. A renamed ROM can reuse the same cached identity immediately.
 pub fn artwork_title(root: &std::path::Path, rom: &std::path::Path) -> Option<String> {
-    let config = storage::Config::read(&root.join("System/retroachievements.toml")).ok()?;
+    let config = storage::Config::read(&root.join("Config/retroachievements.toml")).ok()?;
     if !config.enabled || config.username.is_empty() {
         return None;
     }

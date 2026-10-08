@@ -1,11 +1,13 @@
 use slot_store::{move_config, read_slot_state};
 
-const FILES: [&str; 5] = [
+const FILES: [&str; 7] = [
     "slot.state",
     "selected_core.ini",
     "video_mode.ini",
     "cart_shell.ini",
     "theme.txt",
+    "wifi.toml",
+    "retroachievements.toml",
 ];
 
 #[test]

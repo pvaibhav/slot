@@ -296,17 +296,18 @@ tasks:
         vars:
           CMD: ./target-device/device/slot --init-root {{.OUT}}
       - cp target-device/device/slot {{.OUT}}/System/slot
-      - cp target-device/device/slot-services network/ags-net network/wifi.toml.example {{.OUT}}/System/
-      - cp network/README.md {{.OUT}}/System/wifi-readme.md
-      - cp crates/slot-achievements/retroachievements.toml.example {{.OUT}}/System/
-      - cp crates/slot-achievements/README.md {{.OUT}}/System/retroachievements-readme.md
-      - cp -r vendor/slot-net {{.OUT}}/System/
+      - cp target-device/device/slot-services {{.OUT}}/System/
+      - cp network/wifi.toml.example crates/slot-achievements/retroachievements.toml.example {{.OUT}}/Config/
+      - mkdir {{.OUT}}/System/slot-net
+      - cp vendor/slot-net/iw vendor/slot-net/*.so.* {{.OUT}}/System/slot-net/
       - cp card/System/* {{.OUT}}/System/
       - file vendor/mgba_libretro.so | grep -q aarch64
       - file vendor/gpsp_libretro.so | grep -q aarch64
       - cp vendor/mgba_libretro.so {{.OUT}}/System/
       - cp vendor/gpsp_libretro.so {{.OUT}}/System/
       - cp -r licenses {{.OUT}}/System/licenses
+      - cp -r vendor/slot-net/licenses/. {{.OUT}}/System/licenses/
+      - cp vendor/slot-net/versions.txt {{.OUT}}/System/licenses/slot-net.meta
       - |
         set -euo pipefail
         sha="$(cat vendor/gpsp-src.sha)"
@@ -336,14 +337,13 @@ tasks:
       - adb push target-device/device/slot '{{.SD}}/System/slot'
       - for f in card/System/*; do adb push "$f" '{{.SD}}/System/'; done
       - adb push target-device/device/slot-services '{{.SD}}/System/slot-services'
-      - adb push network/ags-net network/wifi.toml.example '{{.SD}}/System/'
-      - adb push network/README.md '{{.SD}}/System/wifi-readme.md'
-      - adb push crates/slot-achievements/retroachievements.toml.example '{{.SD}}/System/'
-      - adb push crates/slot-achievements/README.md '{{.SD}}/System/retroachievements-readme.md'
-      - adb push vendor/slot-net '{{.SD}}/System/'
+      - adb push network/wifi.toml.example crates/slot-achievements/retroachievements.toml.example '{{.SD}}/Config/'
+      - adb shell mkdir -p '{{.SD}}/System/slot-net'
+      - adb push vendor/slot-net/iw vendor/slot-net/*.so.* '{{.SD}}/System/slot-net/'
       - adb push vendor/mgba_libretro.so '{{.SD}}/System/mgba_libretro.so'
       - adb push vendor/gpsp_libretro.so '{{.SD}}/System/gpsp_libretro.so'
       - adb push licenses '{{.SD}}/System/'
+      - adb push vendor/slot-net/licenses/. '{{.SD}}/System/licenses/'
       - |
         set -euo pipefail
         sha="$(cat vendor/gpsp-src.sha)"

@@ -3,12 +3,14 @@ use std::path::Path;
 
 pub const CONFIG_DIR: &str = "Config";
 
-const MOVED: [&str; 5] = [
+const MOVED: [&str; 7] = [
     "slot.state",
     "selected_core.ini",
     "video_mode.ini",
     "cart_shell.ini",
     "theme.txt",
+    "wifi.toml",
+    "retroachievements.toml",
 ];
 
 pub fn move_config(root: &Path) -> io::Result<()> {

@@ -28,10 +28,10 @@ fn game() -> Game {
 
 fn configured() -> tempfile::TempDir {
     let root = tempfile::tempdir().unwrap();
-    std::fs::create_dir_all(root.path().join("System")).unwrap();
+    std::fs::create_dir_all(root.path().join("Config")).unwrap();
     std::fs::create_dir_all(root.path().join("Games/GBA")).unwrap();
     std::fs::write(
-        root.path().join("System/retroachievements.toml"),
+        root.path().join("Config/retroachievements.toml"),
         "enabled = true\nusername = 'Player'\ntoken = 'fixture-token'\n",
     )
     .unwrap();
@@ -49,7 +49,7 @@ fn wait_for(mut condition: impl FnMut() -> bool) {
 #[test]
 fn toml_config_accepts_comments_and_literal_credentials_without_leaking_errors() {
     let root = configured();
-    let path = root.path().join("System/retroachievements.toml");
+    let path = root.path().join("Config/retroachievements.toml");
     std::fs::write(
         &path,
         "# Account\nenabled = true\nusername = 'Player'\npassword = 'secret\\with#characters'\n",
