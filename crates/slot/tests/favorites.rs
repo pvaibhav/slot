@@ -57,7 +57,7 @@ fn names(a: &mut App) -> Vec<&'static str> {
 }
 
 #[test]
-fn y_on_the_shelf_stars_the_cart_and_saves_it_without_a_banner() {
+fn y_on_the_shelf_hearts_the_cart_and_saves_it_without_a_banner() {
     let d = card();
     let mut a = boot_with(d.path(), SlotState::default());
     assert!(matches!(a.phase(), Phase::Shelf), "{:?}", a.phase());
@@ -71,12 +71,12 @@ fn y_on_the_shelf_stars_the_cart_and_saves_it_without_a_banner() {
     assert_eq!(
         a.selected_stem(),
         Some(stem.as_str()),
-        "starring moved the shelf"
+        "hearting moved the shelf"
     );
 }
 
 #[test]
-fn the_favorites_shelf_only_shows_once_something_is_starred() {
+fn the_favorites_shelf_only_shows_once_something_is_hearted() {
     let d = card();
     let mut a = boot_with(d.path(), SlotState::default());
     assert!(!names(&mut a).contains(&"Favorites"));
@@ -114,7 +114,7 @@ fn favorites_from_every_system_share_one_shelf_in_name_order() {
 }
 
 #[test]
-fn unstarring_on_the_favorites_shelf_takes_the_cart_off_it() {
+fn unhearting_on_the_favorites_shelf_takes_the_cart_off_it() {
     let d = card();
     let mut a = boot_with(
         d.path(),
@@ -139,7 +139,7 @@ fn unstarring_on_the_favorites_shelf_takes_the_cart_off_it() {
 }
 
 #[test]
-fn unstarring_the_last_favorite_leaves_the_empty_shelf() {
+fn unhearting_the_last_favorite_leaves_the_empty_shelf() {
     let d = card();
     let mut a = boot_with(
         d.path(),

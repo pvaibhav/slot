@@ -69,7 +69,7 @@ pub use hud::{
     badge_at, ff_badge, footer_ink, FfState, Hud, HudKind, LinkBadge, Millis, ALARM_BAND_H,
     HUD_ICON_PX, HUD_INK, HUD_MS, LINK_HOST_INK, LINK_JOIN_INK, PLATE_H,
 };
-pub use icon::{badge_face, icon_box, icon_face, star_face, warm_fonts, Badge, Icon};
+pub use icon::{badge_face, heart_face, icon_box, icon_face, warm_fonts, Badge, Icon};
 pub use link_art::{
     link_art, LinkArt, ADAPTER_BASE_X, ADAPTER_BASE_Y, ADAPTER_H, ADAPTER_W, ARCS, ARROW_H,
     ARROW_LEFT_X, ARROW_RIGHT_X, ARROW_W, ARROW_Y, CLICKS_H, CLICKS_W, CLICKS_X, CLICKS_Y, PLUG_H,
@@ -96,7 +96,7 @@ pub use quick_menu::{
 };
 pub use rebuild::{headline_face, rebuild_count_face, rebuild_title_face, RebuildScreen};
 pub use refusal::Refusal;
-pub use shelf::{foot_y, repeat_gap, rest_y, Shelf, REPEAT_DELAY_MS, STAR_INK, STAR_SCALE};
+pub use shelf::{foot_y, repeat_gap, rest_y, Shelf, HEART_INK, HEART_SCALE, REPEAT_DELAY_MS};
 pub use shell::{
     gb_plastics, gb_table_shells, gba_plastics, gba_shell_for,
     lookup_order_is_exact_then_family_then_default, shell_for, shell_presets, table_keys, Finish,

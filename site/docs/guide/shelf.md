@@ -18,7 +18,7 @@
 There's one shelf per system, along with two special shelves, in this order:
 
 1. Recents, if enabled in settings
-2. Favorites, once you've starred something
+2. Favorites, once you've hearted something
 3. Game Boy Advance
 4. Game Boy Advance Video
 5. Game Boy Color
@@ -34,7 +34,7 @@ slot remembers which shelf and cart you were on when it gets powered off and wil
 
 ## Favorites
 
-Press <kbd>Y</kbd> to star a cart. It shows up on the Favorites shelf alongside any other favorites across all three platforms. Press <kbd>Y</kbd> again to take the star off.
+Press <kbd>Y</kbd> to heart a cart. It shows up on the Favorites shelf alongside any other favorites across all three platforms. Press <kbd>Y</kbd> again to take the star off.
 
 ## Recents
 

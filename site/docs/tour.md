@@ -13,7 +13,7 @@ hide:
 
 ### Favorites { #favorites data-still="carousel.webp" }
 
-Press <kbd>Y</kbd> to star the cart you're on.<br>Press <kbd>Y</kbd> again to remove.
+Press <kbd>Y</kbd> to heart the cart you're on.<br>Press <kbd>Y</kbd> again to remove.
 
 ### Pick an Emulator { #core-picker data-clip="core-picker.mp4" }
 

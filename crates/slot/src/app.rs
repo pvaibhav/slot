@@ -1786,16 +1786,16 @@ impl App {
         self.clock_title = Some(title);
     }
 
-    pub fn set_star_face(&mut self, face: TexId, w: u32, h: u32) {
+    pub fn set_heart_face(&mut self, face: TexId, w: u32, h: u32) {
         for (_, shelf) in &mut self.shelves {
-            shelf.set_star(face, w, h);
+            shelf.set_heart(face, w, h);
         }
     }
 
-    fn mark_stars(&mut self) {
+    fn mark_hearts(&mut self) {
         let state = &self.state;
         for (_, shelf) in &mut self.shelves {
-            shelf.mark_starred(|c| state.is_favorite(c.platform, &c.stem));
+            shelf.mark_hearted(|c| state.is_favorite(c.platform, &c.stem));
         }
     }
 
@@ -4355,7 +4355,7 @@ impl App {
             false => Vec::new(),
         };
         self.restock(RECENTS_AT, carts);
-        self.mark_stars();
+        self.mark_hearts();
     }
 
     fn restock_favorites(&mut self) {
@@ -4374,7 +4374,7 @@ impl App {
         if self.shelf_at == FAVORITES_AT && !shelf.carts.is_empty() {
             shelf.select(index.min(shelf.carts.len() - 1));
         }
-        self.mark_stars();
+        self.mark_hearts();
     }
 
     fn restock(&mut self, at: usize, carts: Vec<Cart>) {
