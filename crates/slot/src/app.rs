@@ -503,6 +503,7 @@ pub struct App {
     blur: Option<TexId>,
     wallpaper: Option<TexId>,
     random_wallpaper: Option<Option<String>>,
+    shelf_wallpaper: Option<String>,
     battery_percent: slot_ui::Printed,
     bolt: Option<TexId>,
     hud_bolt: Option<TexId>,
@@ -748,6 +749,7 @@ impl App {
             blur: None,
             wallpaper: None,
             random_wallpaper: None,
+            shelf_wallpaper: None,
             battery_percent: slot_ui::Printed::default(),
             bolt: None,
             hud_bolt: None,
@@ -1595,8 +1597,28 @@ impl App {
         match self.resolved_wallpaper() {
             WallpaperPick::File(name) => Some(name),
             WallpaperPick::Random => self.random_wallpaper(),
+            WallpaperPick::Shelf => {
+                self.shelf_wallpaper = self.wallpaper_for_shelf();
+                self.shelf_wallpaper.clone()
+            }
             _ => None,
         }
+    }
+
+    fn wallpaper_for_shelf(&self) -> Option<String> {
+        let rack = self.shelves[self.shelf_at].0;
+        let files = self.wallpaper_files();
+        std::iter::once(rack)
+            .chain(rack.platform().map(|p| Rack::Of(p.hardware())))
+            .find_map(|rack| {
+                files
+                    .iter()
+                    .find(|file| {
+                        file.rsplit_once('.')
+                            .is_some_and(|(stem, _)| stem.eq_ignore_ascii_case(&rack.key()))
+                    })
+                    .cloned()
+            })
     }
 
     fn random_wallpaper(&mut self) -> Option<String> {
@@ -1615,12 +1637,13 @@ impl App {
         let mut choices = vec![
             WallpaperPick::None,
             WallpaperPick::Random,
+            WallpaperPick::Shelf,
             WallpaperPick::Default,
             WallpaperPick::Blur,
         ];
         choices.extend(self.wallpaper_files().into_iter().map(WallpaperPick::File));
         let key = self.resolved_wallpaper().key();
-        let at = choices.iter().position(|c| c.key() == key).unwrap_or(2);
+        let at = choices.iter().position(|c| c.key() == key).unwrap_or(3);
         let n = choices.len();
         let next = if right {
             (at + 1) % n
@@ -1646,7 +1669,8 @@ impl App {
             WallpaperPick::None => None,
             WallpaperPick::Default | WallpaperPick::Blur => blur,
             WallpaperPick::Random if !self.random_drawn() => blur,
-            WallpaperPick::File(_) | WallpaperPick::Random => own,
+            WallpaperPick::Shelf if self.shelf_wallpaper.is_none() => blur,
+            WallpaperPick::File(_) | WallpaperPick::Random | WallpaperPick::Shelf => own,
         }
     }
 
@@ -1656,8 +1680,9 @@ impl App {
             WallpaperPick::None => None,
             WallpaperPick::Default => ground,
             WallpaperPick::Random if !self.random_drawn() => ground,
+            WallpaperPick::Shelf if self.shelf_wallpaper.is_none() => ground,
             WallpaperPick::Blur => blur,
-            WallpaperPick::File(_) | WallpaperPick::Random => own,
+            WallpaperPick::File(_) | WallpaperPick::Random | WallpaperPick::Shelf => own,
         };
         draw_ground(self.canvas(), face, out);
         let alpha = tint_alpha(self.state.wallpaper_tint);
@@ -1676,6 +1701,7 @@ impl App {
         match self.state.wallpaper {
             WallpaperPick::File(_) => self.wallpaper.is_some(),
             WallpaperPick::Random => self.random_drawn() && self.wallpaper.is_some(),
+            WallpaperPick::Shelf => self.shelf_wallpaper.is_some() && self.wallpaper.is_some(),
             _ => false,
         }
     }
@@ -1683,7 +1709,7 @@ impl App {
     pub fn hidden_rows(&self) -> Vec<QuickRow> {
         let own = matches!(
             self.state.wallpaper,
-            WallpaperPick::File(_) | WallpaperPick::Random
+            WallpaperPick::File(_) | WallpaperPick::Random | WallpaperPick::Shelf
         );
         let mut hidden = Vec::new();
         if !own {

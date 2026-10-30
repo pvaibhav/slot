@@ -115,7 +115,7 @@ fn the_quick_menu_is_only_on_the_carousel() {
 }
 
 #[test]
-fn wallpaper_cycles_none_random_default_blur_then_the_folder_and_saves() {
+fn wallpaper_cycles_none_random_shelf_default_blur_then_the_folder_and_saves() {
     let (d, mut a, _) = on_carousel();
     let dir = d.path().join("Wallpapers");
     std::fs::create_dir_all(&dir).unwrap();
@@ -144,7 +144,13 @@ fn wallpaper_cycles_none_random_default_blur_then_the_folder_and_saves() {
     assert_eq!(a.resolved_wallpaper().label(), "Random");
     assert_eq!(read_slot_state(d.path()).wallpaper, WallpaperPick::Random);
     press(&mut a, Btn::Right);
+    assert_eq!(a.resolved_wallpaper(), WallpaperPick::Shelf);
+    assert_eq!(a.resolved_wallpaper().label(), "Shelf");
+    assert_eq!(read_slot_state(d.path()).wallpaper, WallpaperPick::Shelf);
+    press(&mut a, Btn::Right);
     assert_eq!(a.resolved_wallpaper(), WallpaperPick::Default);
+    press(&mut a, Btn::Left);
+    assert_eq!(a.resolved_wallpaper(), WallpaperPick::Shelf);
     press(&mut a, Btn::Left);
     assert_eq!(a.resolved_wallpaper(), WallpaperPick::Random);
     press(&mut a, Btn::Left);
@@ -1274,6 +1280,7 @@ fn wallpaper_tint_hides_until_a_wallpaper_of_your_own_is_picked() {
         (WallpaperPick::File("a.png".into()), true),
         (WallpaperPick::None, false),
         (WallpaperPick::Random, true),
+        (WallpaperPick::Shelf, true),
         (WallpaperPick::Default, false),
     ] {
         press(&mut a, Btn::Right);

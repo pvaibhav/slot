@@ -115,6 +115,7 @@ impl WallpaperTint {
 pub enum WallpaperPick {
     None,
     Random,
+    Shelf,
     #[default]
     Default,
     Blur,
@@ -126,6 +127,7 @@ impl WallpaperPick {
         match self {
             WallpaperPick::None => "none".to_string(),
             WallpaperPick::Random => "random".to_string(),
+            WallpaperPick::Shelf => "shelf".to_string(),
             WallpaperPick::Default => "default".to_string(),
             WallpaperPick::Blur => "default_blur".to_string(),
             WallpaperPick::File(name) => name.clone(),
@@ -136,6 +138,7 @@ impl WallpaperPick {
         match self {
             WallpaperPick::None => "None".to_string(),
             WallpaperPick::Random => "Random".to_string(),
+            WallpaperPick::Shelf => "Shelf".to_string(),
             WallpaperPick::Default => "Default".to_string(),
             WallpaperPick::Blur => "DEFAULT BLUR".to_string(),
             WallpaperPick::File(name) => name
@@ -150,6 +153,7 @@ impl WallpaperPick {
         match value {
             "none" => WallpaperPick::None,
             "random" => WallpaperPick::Random,
+            "shelf" => WallpaperPick::Shelf,
             "" | "default" => WallpaperPick::Default,
             "default_blur" => WallpaperPick::Blur,
             other => WallpaperPick::File(other.to_string()),
