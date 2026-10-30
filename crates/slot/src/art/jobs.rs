@@ -13,7 +13,7 @@ use super::rom;
 use crate::update::{self, UpdateFail};
 
 pub const ART_BASE: &str = "https://art.slot-cfw.fyi/";
-const CACHE: &str = "System/Cache/art";
+const CACHE: &str = "Cache/art";
 const FETCH_THREADS: usize = 3;
 
 #[derive(Clone, Debug, PartialEq)]

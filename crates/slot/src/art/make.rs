@@ -8,7 +8,7 @@ use slot_ui::hue::{fallback_hue, logo_luma};
 
 use super::index::Look;
 
-pub const STUDIO_CACHE: &str = "System/Cache/art/studio";
+pub const STUDIO_CACHE: &str = "Cache/art/studio";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Kind {

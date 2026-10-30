@@ -207,9 +207,26 @@ fn losing_the_network_ends_the_run() {
 }
 
 #[test]
+fn the_cached_index_survives_a_boot() {
+    let d = tempfile::tempdir().unwrap();
+    let mut get = |_: Option<&str>| {
+        Ok(IndexFetch::Fresh { body: b"{}".to_vec(), etag: Some("\"v1\"".into()) })
+    };
+    load_index(d.path(), &mut get).unwrap();
+    slot::root::ensure(d.path());
+    let mut asked = None;
+    let mut again = |etag: Option<&str>| {
+        asked = etag.map(str::to_string);
+        Ok(IndexFetch::NotModified)
+    };
+    load_index(d.path(), &mut again).unwrap();
+    assert_eq!(asked.as_deref(), Some("\"v1\""));
+}
+
+#[test]
 fn a_broken_cache_sends_no_etag() {
     let d = tempfile::tempdir().unwrap();
-    let dir = d.path().join("System/Cache/art");
+    let dir = d.path().join("Cache/art");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("index.json"), b"").unwrap();
     std::fs::write(dir.join("index.etag"), b"\"v1\"").unwrap();
