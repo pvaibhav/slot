@@ -1,5 +1,5 @@
 mod art;
-pub use art::cover;
+pub use art::{cover, cover_bytes};
 mod bitmaps;
 pub use bitmaps::{
     link_port, link_port_light, slot_back, slot_back_light, slot_front, slot_front_light,
@@ -30,6 +30,11 @@ mod silhouette;
 mod slot_chrome;
 mod sticker;
 pub mod text;
+pub mod house_label;
+pub mod hue;
+pub mod liner;
+pub mod palette;
+pub mod sticker_curl;
 mod toast;
 
 pub use art::decode as decode_png;
@@ -49,9 +54,9 @@ pub use board::{
     SOCKET_W, TURN_PAD,
 };
 pub use cart::{
-    cart_backing, cart_box, cart_face, cart_face_with, cart_interior, cart_shadow, clean_label,
+    bare_face, cart_backing, cart_box, cart_face, cart_face_with, cart_interior, cart_shadow, clean_label,
     gb_cart_shadow, gb_label_panel, gb_shell_of, is_clear, label_colour, label_panel, label_size,
-    label_tags, label_text, neutral_shell, seated_box, shows_interior, CartFace, CART_H, CART_W,
+    label_tags, label_text, neutral_shell, seated_box, shows_interior, text_label, CartFace, CART_H, CART_W,
     GBC_LABEL_H, GBC_LABEL_W, GBC_LABEL_X, GBC_LABEL_Y, GB_CART_H, GB_CART_W, GB_LABEL_H,
     GB_LABEL_W, GB_LABEL_X, GB_LABEL_Y, LABEL_H, LABEL_W, LABEL_WELL, LABEL_X, LABEL_Y,
 };
@@ -60,7 +65,7 @@ pub use clock::{
     ClockScreen, Part,
 };
 pub use draw::{Canvas, Draw, TexId, OUT_H, OUT_W};
-pub use footer::{draw_corners, draw_footer, Printed, FOOTER_Y};
+pub use footer::{draw_corners, draw_footer, draw_wifi_icon, Printed, FOOTER_Y};
 pub use guide::{
     cell, fitting_zoom, guide_help_face, mono_font, page_box, Guide, GuideGlyphs, GuideView,
     GUIDE_COLUMNS, GUIDE_HELP_TITLE, GUIDE_HINTS, GUIDE_ZOOMS, PAN_COLS,
@@ -85,10 +90,11 @@ pub use plate::{
 pub use polaroids::{
     draw_album_chrome, photo_face, AlbumChrome, PhotoFace, Polaroids, DOT, LEGEND, PHOTO_H, PHOTO_W,
 };
-pub use power_menu::{menu_detail_face, menu_face, PowerChoice, MENU_PAD};
+pub use power_menu::{heading_face, menu_detail_face, menu_face, PowerChoice, MENU_PAD};
 pub use quick_menu::{
     clock_legend_faces, core_button_legends, delete_legends, draw_menu_ground, link_button_legends,
-    prompt_legends, quick_description_face, quick_label_face, quick_legend_faces,
+    fetch_choice_legends, fetch_legends, fetch_skip_legend, prompt_legends, studio_legend,
+    StudioGlyph, quick_description_face, quick_label_face, quick_legend_faces,
     quick_pointer_face, quick_row_top, quick_row_top_at, quick_scroll, quick_value_face,
     quick_warning_value_face, quick_window, repair_legends, update_legends, QuickMenu,
     QuickMenuFaces, QuickRow, QuickScroll, QuickValue, QUICK_EDGE, QUICK_LABEL_X, QUICK_PITCH,

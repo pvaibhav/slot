@@ -28,6 +28,8 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 zip = { workspace = true }
 ureq = { workspace = true }
+crc32fast = { workspace = true }
+jpeg-decoder = { workspace = true }
 
 [dev-dependencies]
 slot-gfx = { path = "../slot-gfx", default-features = false, features = ["test-support"] }

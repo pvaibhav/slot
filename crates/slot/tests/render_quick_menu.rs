@@ -618,6 +618,9 @@ impl slot::update::UpdateJobs for Answers {
     fn take(&mut self) -> Option<slot::update::UpdateEvent> {
         self.0.lock().unwrap().pop_front()
     }
+    fn cancel(&mut self) -> bool {
+        true
+    }
 }
 
 fn wait(f: &mut Frontend, input: &mut Script, ms: u64) {
@@ -757,4 +760,59 @@ fn the_update_scene_renders_each_moment() {
     wait(&mut f, &mut input, 150);
     assert!(!f.app().relaunching(), "relaunched before the logo held");
     composed(&mut f, &mut c, "update-logo");
+}
+
+#[test]
+fn a_cancelled_download_puts_the_carts_back_without_dropping_them() {
+    let Ok(surface) = HeadlessSurface::new() else {
+        return;
+    };
+    let Ok(mut c) = Compositor::new(&surface) else {
+        return;
+    };
+    let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
+    clocked(d.path());
+    std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
+    let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+    let answers = Answers::default();
+    f.set_update_jobs(Box::new(answers.clone()));
+    let say = |e| answers.0.lock().unwrap().push_back(e);
+    f.upload_faces(&mut c);
+    let mut input = Script(VecDeque::new());
+    tap(&mut f, &mut input, Btn::Menu);
+    for _ in 0..QuickRow::About.position(&[]) {
+        tap(&mut f, &mut input, Btn::Down);
+    }
+    tap(&mut f, &mut input, Btn::A);
+    tap(&mut f, &mut input, Btn::X);
+    say(slot::update::UpdateEvent::Available(vec![
+        slot_release(),
+        baseos_release(),
+    ]));
+    wait(&mut f, &mut input, 800);
+    tap(&mut f, &mut input, Btn::Right);
+    tap(&mut f, &mut input, Btn::A);
+    wait(&mut f, &mut input, 1200);
+    tap(&mut f, &mut input, Btn::B);
+    say(slot::update::UpdateEvent::Cancelled);
+    let mut lowest = f32::MAX;
+    for _ in 0..30 {
+        wait(&mut f, &mut input, 50);
+        f.compose(&mut c);
+        if f.app().update_headline() {
+            let mut out = Vec::new();
+            f.app().draw(&mut out);
+            for d in &out {
+                if let slot_gfx::Draw::Turned { y, .. } = d {
+                    lowest = lowest.min(*y);
+                }
+            }
+        }
+    }
+    composed(&mut f, &mut c, "update-cancelled");
+    assert!(f.app().update_headline(), "the carts never came back");
+    assert!(
+        lowest < f32::MAX && lowest > 100.0,
+        "a cart rose to y {lowest} over the header"
+    );
 }

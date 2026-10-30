@@ -1,9 +1,9 @@
-use std::io::{Cursor, Write};
+use std::io::{Cursor, Read, Write};
 
 use slot::update::{
     check_with, clean_baseos, clock_is_wrong, install_baseos_with, install_with, newer,
     parse_baseos, parse_release, read_counted, stage, verify, wifi_conf, will_apply, Kind, Release,
-    Running, UpdateEvent, UpdateFail,
+    Running, Stoppable, Ticket, UpdateEvent, UpdateFail,
 };
 
 const DIGEST: &str = "e78b2771abbc41a07774fe870e08d3d870c1a06c6db42a1d799626190156aba5";
@@ -629,4 +629,45 @@ fn a_short_range_fails_the_download() {
     let (result, _, asked, _) = ranged(&body, 4, Some(4));
     assert_eq!(result, Err(UpdateFail::Download));
     assert_eq!(asked, [(0, 3), (4, 7)]);
+}
+
+#[test]
+fn a_ticket_cancels_until_it_commits() {
+    let t = Ticket::default();
+    assert!(t.cancel());
+    assert!(!t.commit());
+    assert!(t.cancelled());
+}
+
+#[test]
+fn a_committed_ticket_cannot_be_cancelled() {
+    let t = Ticket::default();
+    assert!(t.commit());
+    assert!(!t.cancel());
+    assert!(!t.cancelled());
+}
+
+#[test]
+fn a_cancelled_ticket_stops_the_download_reader() {
+    let t = Ticket::default();
+    let mut r = Stoppable::new(Cursor::new(vec![7u8; 10]), t.clone());
+    let mut buf = [0u8; 4];
+    assert_eq!(r.read(&mut buf).unwrap(), 4);
+    t.cancel();
+    assert!(r.read(&mut buf).is_err());
+}
+
+#[test]
+fn a_cancelled_install_reports_cancelled_not_its_failure() {
+    let t = Ticket::default();
+    t.cancel();
+    assert_eq!(
+        t.settle(UpdateEvent::Failed(UpdateFail::Download)),
+        UpdateEvent::Cancelled
+    );
+    let t = Ticket::default();
+    assert_eq!(
+        t.settle(UpdateEvent::Failed(UpdateFail::Download)),
+        UpdateEvent::Failed(UpdateFail::Download)
+    );
 }

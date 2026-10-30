@@ -18,6 +18,7 @@ const BOLT_W: f32 = 14.0;
 const BOLT_H: f32 = 14.0;
 const BOLT_GAP: f32 = 5.0;
 const _: () = assert!(BOLT_GAP > 0.0);
+pub const GAUGE_ROW_W: f32 = BOLT_W + BOLT_GAP + GAUGE_W + NUB_W + GAP;
 
 pub fn draw_gauge(
     x: f32,

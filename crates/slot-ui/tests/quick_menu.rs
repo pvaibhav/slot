@@ -93,7 +93,8 @@ fn the_rows_run_in_the_order_the_user_chose() {
             "Recents",
             "Game Titles",
             "Lid Power Off",
-            "Date & Time"
+            "Date & Time",
+            "Fetch Missing Art"
         ]
     );
     assert_eq!(
@@ -180,6 +181,7 @@ fn the_rows_run_in_the_order_the_user_chose() {
             QuickRow::General,
             QuickRow::PlayControls,
             QuickRow::Shortcuts,
+            QuickRow::FetchArt,
             QuickRow::Controls,
             QuickRow::ControlsShelf,
             QuickRow::ControlsInGame,
@@ -210,7 +212,7 @@ fn the_rows_run_in_the_order_the_user_chose() {
 
 #[test]
 fn a_hidden_row_is_stepped_over_and_takes_no_place() {
-    let hidden = [QuickRow::WallpaperTint];
+    let hidden = [QuickRow::WallpaperTint, QuickRow::FetchArt];
     assert_eq!(QuickRow::Wallpaper.down(&hidden), QuickRow::Recents);
     assert_eq!(QuickRow::Recents.up(&hidden), QuickRow::Wallpaper);
     assert_eq!(QuickRow::Theme.up(&hidden), QuickRow::DateTime);
@@ -569,4 +571,30 @@ fn show_titles_sits_under_recents_on_the_general_page() {
         at(QuickRow::Recents).map(|i| i + 1)
     );
     assert_eq!(QuickRow::ShowTitles.parent(), Some(QuickRow::General));
+}
+
+#[test]
+fn fetch_legends_are_built_like_the_other_prompts() {
+    let ink = [240, 240, 232];
+    let [cancel, pick] = slot_ui::fetch_choice_legends(ink);
+    let [want_cancel, _] = slot_ui::prompt_legends(ink, "Cancel", "Start");
+    assert_eq!((cancel.w, cancel.h), (want_cancel.w, want_cancel.h));
+    assert_eq!(cancel.rgba, want_cancel.rgba);
+    assert_eq!(pick.h, cancel.h);
+    let [want_stop, _] = slot_ui::prompt_legends(ink, "Stop", "Start");
+    assert_eq!(slot_ui::fetch_legends(ink).rgba, want_stop.rgba);
+}
+
+#[test]
+fn fetch_art_sits_last_in_general() {
+    assert_eq!(slot_ui::QuickRow::GENERAL.last(), Some(&slot_ui::QuickRow::FetchArt));
+    assert_eq!(slot_ui::QuickRow::FetchArt.label(), "Fetch Missing Art");
+    assert!(slot_ui::QuickRow::FetchArt.opens());
+}
+
+#[test]
+fn skip_keeps_its_button_on_the_outer_edge() {
+    let ink = [240, 240, 232];
+    let [_, want] = slot_ui::prompt_legends(ink, "No", "Skip");
+    assert_eq!(slot_ui::fetch_skip_legend(ink).w, want.w);
 }

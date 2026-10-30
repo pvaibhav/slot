@@ -65,10 +65,10 @@ link_clear() {
 	supplicant_stop "$RUN/wpa_ap" wlan1
 	$IP addr flush dev wlan1 2>/dev/null || true
 	/bin/rm -f "$RUN/slotlink-ap.conf"
-	if [ -f "$RUN/slotlink-sta.conf" ]; then
+	if [ -f "$RUN/slotlink-sta.conf" ] || [ -f "$UPDATE_CONF" ]; then
 		supplicant_stop "$CTRL_DIR" wlan0
 		$IP addr flush dev wlan0 2>/dev/null || true
-		/bin/rm -f "$RUN/slotlink-sta.conf"
+		/bin/rm -f "$RUN/slotlink-sta.conf" "$UPDATE_CONF"
 	fi
 }
 
@@ -219,6 +219,7 @@ update_up() {
 }
 
 update_down() {
+	[ -f "$UPDATE_CONF" ] || return 0
 	trace "update: down"
 	supplicant_stop "$CTRL_DIR" wlan0
 	$IP addr flush dev wlan0 2>/dev/null || true

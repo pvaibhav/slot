@@ -1,6 +1,8 @@
 use std::io::{Cursor, Read, Write};
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use sha2::{Digest, Sha256};
@@ -215,7 +217,62 @@ pub enum UpdateEvent {
     UpToDate,
     Progress(u64),
     Staged,
+    Cancelled,
     Failed(UpdateFail),
+}
+
+const RUNNING: u8 = 0;
+const CANCELLED: u8 = 1;
+const COMMITTED: u8 = 2;
+
+#[derive(Debug, Clone, Default)]
+pub struct Ticket(Arc<AtomicU8>);
+
+impl Ticket {
+    pub fn cancel(&self) -> bool {
+        self.swap(CANCELLED)
+    }
+
+    pub fn commit(&self) -> bool {
+        self.swap(COMMITTED)
+    }
+
+    pub fn cancelled(&self) -> bool {
+        self.0.load(Ordering::SeqCst) == CANCELLED
+    }
+
+    pub fn settle(&self, event: UpdateEvent) -> UpdateEvent {
+        match self.cancelled() {
+            true => UpdateEvent::Cancelled,
+            false => event,
+        }
+    }
+
+    fn swap(&self, to: u8) -> bool {
+        self.0
+            .compare_exchange(RUNNING, to, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+    }
+}
+
+pub struct Stoppable<R> {
+    inner: R,
+    ticket: Ticket,
+}
+
+impl<R> Stoppable<R> {
+    pub fn new(inner: R, ticket: Ticket) -> Self {
+        Self { inner, ticket }
+    }
+}
+
+impl<R: Read> Read for Stoppable<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.ticket.cancelled() {
+            return Err(std::io::Error::other("cancelled"));
+        }
+        self.inner.read(buf)
+    }
 }
 
 pub const WIFI_CONF: &str = "Config/wifi.conf";
@@ -229,8 +286,42 @@ pub struct Running<'a> {
     pub baseos: Option<(&'a str, &'a str)>,
 }
 
+pub fn parse_rssi(text: &str) -> Option<i32> {
+    text.lines()
+        .find_map(|line| line.strip_prefix("rssi:"))
+        .and_then(|value| value.trim().parse().ok())
+}
+
+pub fn signal_bars(rssi: i32) -> u8 {
+    match rssi {
+        r if r >= -60 => 3,
+        r if r >= -72 => 2,
+        _ => 1,
+    }
+}
+
+#[cfg(feature = "device")]
+pub fn wifi_rssi() -> Option<i32> {
+    parse_rssi(&std::fs::read_to_string("/proc/net/rtl8821cs/wlan0/rx_signal").ok()?)
+}
+
+#[cfg(not(feature = "device"))]
+pub fn wifi_rssi() -> Option<i32> {
+    None
+}
+
 pub fn wifi_conf(root: &Path) -> bool {
-    root.join(WIFI_CONF).is_file()
+    root.join(WIFI_CONF).is_file() || host_wifi()
+}
+
+#[cfg(feature = "device")]
+fn host_wifi() -> bool {
+    false
+}
+
+#[cfg(not(feature = "device"))]
+fn host_wifi() -> bool {
+    std::env::var_os("SLOT_WIFI").is_some()
 }
 
 pub fn check_with(
@@ -466,6 +557,10 @@ pub trait UpdateJobs: Send {
     fn ask(&mut self, job: UpdateJob);
 
     fn take(&mut self) -> Option<UpdateEvent>;
+
+    fn cancel(&mut self) -> bool {
+        false
+    }
 }
 
 struct NoUpdates;
@@ -483,45 +578,57 @@ pub fn no_update_jobs() -> Box<dyn UpdateJobs> {
 }
 
 struct UpdateQueue {
-    jobs: Sender<UpdateJob>,
+    jobs: Sender<(UpdateJob, Ticket)>,
     events: Receiver<UpdateEvent>,
+    ticket: Ticket,
 }
 
 impl UpdateJobs for UpdateQueue {
     fn ask(&mut self, job: UpdateJob) {
-        let _ = self.jobs.send(job);
+        self.ticket = Ticket::default();
+        let _ = self.jobs.send((job, self.ticket.clone()));
     }
 
     fn take(&mut self) -> Option<UpdateEvent> {
         self.events.try_recv().ok()
     }
+
+    fn cancel(&mut self) -> bool {
+        self.ticket.cancel()
+    }
 }
 
 pub fn update_jobs(root: PathBuf) -> Box<dyn UpdateJobs> {
-    let (jobs, rx) = channel::<UpdateJob>();
+    let (jobs, rx) = channel::<(UpdateJob, Ticket)>();
     let (tx, events) = channel::<UpdateEvent>();
     std::thread::spawn(move || {
-        for job in rx {
-            if tx.send(run(&root, &job, &tx)).is_err() {
+        for (job, ticket) in rx {
+            if tx
+                .send(ticket.settle(run(&root, &job, &ticket, &tx)))
+                .is_err()
+            {
                 return;
             }
         }
     });
-    Box::new(UpdateQueue { jobs, events })
+    Box::new(UpdateQueue {
+        jobs,
+        events,
+        ticket: Ticket::default(),
+    })
 }
 
-fn now_unix() -> u64 {
+pub(crate) fn now_unix() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs())
 }
 
-fn run(root: &Path, job: &UpdateJob, tx: &Sender<UpdateEvent>) -> UpdateEvent {
+fn run(root: &Path, job: &UpdateJob, ticket: &Ticket, tx: &Sender<UpdateEvent>) -> UpdateEvent {
     if clock_is_wrong(now_unix()) {
         return UpdateEvent::Failed(UpdateFail::Clock);
     }
-    if let Err(e) = radio_up(root) {
-        radio_down(root);
+    if let Err(e) = crate::art::jobs::hold_radio(root) {
         return UpdateEvent::Failed(e);
     }
     let event = match job {
@@ -544,7 +651,10 @@ fn run(root: &Path, job: &UpdateJob, tx: &Sender<UpdateEvent>) -> UpdateEvent {
             match release.kind {
                 Kind::Slot => install_with(
                     root,
-                    &mut |url| fetch(url, DOWNLOAD_TIMEOUT, &mut report),
+                    &mut |url| {
+                        fetch_until(url, DOWNLOAD_TIMEOUT, ticket, &mut report)
+                            .and_then(|bytes| committed(ticket, bytes))
+                    },
                     release,
                 ),
                 Kind::BaseOs => install_baseos_with(
@@ -553,13 +663,16 @@ fn run(root: &Path, job: &UpdateJob, tx: &Sender<UpdateEvent>) -> UpdateEvent {
                     &mut |url, out| {
                         fetch_ranged(
                             &mut |from, to| {
-                                open_range(url, from, to).map(|r| Box::new(r) as Box<dyn Read>)
+                                open_range(url, from, to).map(|r| {
+                                    Box::new(Stoppable::new(r, ticket.clone())) as Box<dyn Read>
+                                })
                             },
                             release.size,
                             RANGE_BYTES,
                             out,
                             &mut report,
                         )
+                        .and_then(|digest| committed(ticket, digest))
                     },
                     &mut baseos_status,
                     release,
@@ -567,7 +680,6 @@ fn run(root: &Path, job: &UpdateJob, tx: &Sender<UpdateEvent>) -> UpdateEvent {
             }
         }
     };
-    radio_down(root);
     event
 }
 
@@ -582,7 +694,7 @@ fn radio(root: &Path, args: &[&std::ffi::OsStr]) -> Option<i32> {
 }
 
 #[cfg(feature = "device")]
-fn radio_up(root: &Path) -> Result<(), UpdateFail> {
+pub(crate) fn radio_up(root: &Path) -> Result<(), UpdateFail> {
     let conf = root.join(WIFI_CONF);
     match radio(root, &["update".as_ref(), "up".as_ref(), conf.as_os_str()]) {
         Some(0) => Ok(()),
@@ -592,7 +704,7 @@ fn radio_up(root: &Path) -> Result<(), UpdateFail> {
 }
 
 #[cfg(feature = "device")]
-fn radio_down(root: &Path) {
+pub(crate) fn radio_down(root: &Path) {
     let _ = radio(root, &["update".as_ref(), "down".as_ref()]);
 }
 
@@ -623,21 +735,42 @@ fn free_space(root: &Path) -> u64 {
 }
 
 #[cfg(not(feature = "device"))]
-fn radio_up(_root: &Path) -> Result<(), UpdateFail> {
+pub(crate) fn radio_up(_root: &Path) -> Result<(), UpdateFail> {
     Ok(())
 }
 
 #[cfg(not(feature = "device"))]
-fn radio_down(_root: &Path) {}
+pub(crate) fn radio_down(_root: &Path) {}
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
-const API_TIMEOUT: Duration = Duration::from_secs(15);
-const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(120);
-const DOWNLOAD_LIMIT: u64 = 64 * 1024 * 1024;
+pub(crate) const API_TIMEOUT: Duration = Duration::from_secs(15);
+pub(crate) const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(120);
+pub(crate) const DOWNLOAD_LIMIT: u64 = 64 * 1024 * 1024;
 const RANGE_TIMEOUT: Duration = Duration::from_secs(90);
 const RANGE_BYTES: u64 = 4 * 1024 * 1024;
 
-fn fetch(url: &str, timeout: Duration, report: &mut dyn FnMut(u64)) -> Result<Vec<u8>, UpdateFail> {
+fn committed<T>(ticket: &Ticket, value: T) -> Result<T, UpdateFail> {
+    match ticket.commit() {
+        true => Ok(value),
+        false => Err(UpdateFail::Download),
+    }
+}
+
+fn fetch_until(
+    url: &str,
+    timeout: Duration,
+    ticket: &Ticket,
+    report: &mut dyn FnMut(u64),
+) -> Result<Vec<u8>, UpdateFail> {
+    let body = open(url, timeout, DOWNLOAD_LIMIT)?;
+    read_counted(
+        &mut Stoppable::new(body, ticket.clone()),
+        DOWNLOAD_LIMIT,
+        report,
+    )
+}
+
+pub(crate) fn fetch(url: &str, timeout: Duration, report: &mut dyn FnMut(u64)) -> Result<Vec<u8>, UpdateFail> {
     let mut body = open(url, timeout, DOWNLOAD_LIMIT)?;
     read_counted(&mut body, DOWNLOAD_LIMIT, report)
 }
@@ -670,7 +803,7 @@ fn open(url: &str, timeout: Duration, limit: u64) -> Result<impl Read, UpdateFai
         .reader())
 }
 
-fn agent(timeout: Duration) -> ureq::Agent {
+pub(crate) fn agent(timeout: Duration) -> ureq::Agent {
     ureq::Agent::config_builder()
         .timeout_connect(Some(CONNECT_TIMEOUT))
         .timeout_global(Some(timeout))
@@ -682,7 +815,7 @@ fn agent(timeout: Duration) -> ureq::Agent {
         .into()
 }
 
-fn request_fail(e: &ureq::Error) -> UpdateFail {
+pub(crate) fn request_fail(e: &ureq::Error) -> UpdateFail {
     let text = format!("{e:?}");
     match text.contains("Expired") || text.contains("NotValidYet") {
         true => UpdateFail::Clock,

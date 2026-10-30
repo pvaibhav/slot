@@ -8,6 +8,8 @@ rust-version = "1.96"
 license = "GPL-3.0-or-later"
 
 [workspace.dependencies]
+crc32fast = "1"
+jpeg-decoder = { version = "0.3", default-features = false }
 lz4_flex = { version = "0.11", default-features = false, features = ["std"] }
 png = "0.17"
 fontdue = "0.9"

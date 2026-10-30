@@ -5,6 +5,7 @@ fn fields() -> StickerFields<'static> {
         battery: Some(87),
         serial: "04738857",
         version: "0.1.0",
+        baseos: None,
         model: "RG SP",
     }
 }
@@ -100,6 +101,16 @@ fn the_version_rides_above_the_readme_line() {
     let lines = sticker_lines(&fields());
     let home = lines.iter().position(|l| l == "SEE README.").unwrap();
     assert_eq!(lines[home - 1], "VERSION 0.1.0");
+}
+
+#[test]
+fn the_baseos_version_sits_under_slots() {
+    let lines = sticker_lines(&StickerFields {
+        baseos: Some("1.5.2"),
+        ..fields()
+    });
+    let home = lines.iter().position(|l| l == "SEE README.").unwrap();
+    assert_eq!(lines[home - 2..home], ["VERSION 0.1.0", "BASEOS 1.5.2"]);
 }
 
 fn wordmark_left_edge(model: &str) -> u32 {

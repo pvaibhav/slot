@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex};
@@ -26,10 +26,43 @@ struct Queue {
 
 type Shared = Arc<(Mutex<Queue>, Condvar)>;
 
+#[derive(Default)]
+struct Building {
+    carts: HashMap<Key, Cart>,
+    outdated: HashSet<Key>,
+}
+
+impl Building {
+    fn start(&mut self, key: Key, cart: &Cart) -> bool {
+        match self.carts.get(&key) {
+            None => {
+                self.carts.insert(key, cart.clone());
+                true
+            }
+            Some(building) => {
+                if building != cart {
+                    self.outdated.insert(key);
+                }
+                false
+            }
+        }
+    }
+
+    fn unqueue(&mut self, key: Key) {
+        self.carts.remove(&key);
+        self.outdated.remove(&key);
+    }
+
+    fn finish(&mut self, key: Key) -> bool {
+        self.carts.remove(&key);
+        !self.outdated.remove(&key)
+    }
+}
+
 pub struct CartFaces {
     queue: Shared,
     built: Receiver<Built>,
-    pending: HashSet<Key>,
+    building: Building,
     asked: Vec<FaceWant>,
     free: Vec<TexId>,
 }
@@ -50,7 +83,7 @@ impl CartFaces {
         CartFaces {
             queue,
             built,
-            pending: HashSet::new(),
+            building: Building::default(),
             asked: Vec::new(),
             free: Vec::new(),
         }
@@ -85,16 +118,14 @@ impl CartFaces {
         let (lock, wake) = &*self.queue;
         let mut queue = lock.lock().unwrap_or_else(|e| e.into_inner());
         for (key, _) in queue.jobs.drain(..) {
-            self.pending.remove(&key);
+            self.building.unqueue(key);
         }
         for w in wants {
             let key = (w.shelf, w.index);
-            if self.pending.contains(&key) {
-                continue;
-            }
             if let Some(cart) = app.face_cart(w.shelf, w.index) {
-                queue.jobs.push_back((key, cart.clone()));
-                self.pending.insert(key);
+                if self.building.start(key, cart) {
+                    queue.jobs.push_back((key, cart.clone()));
+                }
             }
         }
         wake.notify_all();
@@ -118,8 +149,10 @@ impl CartFaces {
         face: CartFace,
         interior: Option<CartFace>,
     ) {
-        self.pending.remove(&key);
         self.asked.retain(|w| (w.shelf, w.index) != key);
+        if !self.building.finish(key) {
+            return;
+        }
         let tex = self.texture(compositor, &face);
         self.free.extend(app.set_cart_face(key.0, key.1, tex));
         if let Some(interior) = interior {
@@ -157,5 +190,44 @@ fn work(queue: &Shared, outbox: &Sender<Built>, root: &Path) {
         if outbox.send((key, face, interior)).is_err() {
             return;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use slot_store::Platform;
+
+    fn cart(stem: &str) -> Cart {
+        Cart {
+            platform: Platform::Gba,
+            stem: stem.into(),
+            rom: "a.gba".into(),
+            label: None,
+            title: stem.into(),
+            code: String::new(),
+            shell: None,
+        }
+    }
+
+    #[test]
+    fn a_face_built_from_an_old_cart_is_thrown_away() {
+        let mut b = Building::default();
+        let old = cart("A");
+        let mut new = old.clone();
+        new.label = Some("new.png".into());
+        assert!(b.start((0, 0), &old));
+        assert!(!b.start((0, 0), &new));
+        assert!(!b.finish((0, 0)));
+        assert!(b.start((0, 0), &new));
+        assert!(b.finish((0, 0)));
+    }
+
+    #[test]
+    fn the_same_cart_asked_twice_builds_once_and_lands() {
+        let mut b = Building::default();
+        assert!(b.start((0, 0), &cart("A")));
+        assert!(!b.start((0, 0), &cart("A")));
+        assert!(b.finish((0, 0)));
     }
 }

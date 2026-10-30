@@ -86,6 +86,7 @@ pub enum QuickRow {
     ScSunlightDown,
     ScReset,
     LidOff,
+    FetchArt,
     Controls,
     ControlsShelf,
     ControlsInGame,
@@ -118,7 +119,7 @@ pub enum QuickRow {
 }
 
 impl QuickRow {
-    pub const ALL: [QuickRow; 106] = [
+    pub const ALL: [QuickRow; 107] = [
         QuickRow::FastForward,
         QuickRow::FastForwardSound,
         QuickRow::Screen,
@@ -196,6 +197,7 @@ impl QuickRow {
         QuickRow::ScSunlightDown,
         QuickRow::ScReset,
         QuickRow::LidOff,
+        QuickRow::FetchArt,
         QuickRow::Controls,
         QuickRow::ControlsShelf,
         QuickRow::ControlsInGame,
@@ -235,7 +237,7 @@ impl QuickRow {
         QuickRow::About,
     ];
 
-    pub const GENERAL: [QuickRow; 7] = [
+    pub const GENERAL: [QuickRow; 8] = [
         QuickRow::Theme,
         QuickRow::Wallpaper,
         QuickRow::WallpaperTint,
@@ -243,6 +245,7 @@ impl QuickRow {
         QuickRow::ShowTitles,
         QuickRow::LidOff,
         QuickRow::DateTime,
+        QuickRow::FetchArt,
     ];
 
     pub const CONTROL_PAGES: [QuickRow; 3] = [
@@ -428,7 +431,8 @@ impl QuickRow {
             | QuickRow::Theme
             | QuickRow::Recents
             | QuickRow::ShowTitles
-            | QuickRow::LidOff => &QuickRow::GENERAL,
+            | QuickRow::LidOff
+            | QuickRow::FetchArt => &QuickRow::GENERAL,
             QuickRow::ControlsShelf | QuickRow::Shortcuts | QuickRow::ControlsInGame => {
                 &QuickRow::CONTROL_PAGES
             }
@@ -574,6 +578,7 @@ impl QuickRow {
             QuickRow::ExitGame => "Exit Game",
             QuickRow::General => "General",
             QuickRow::LidOff => "Lid Power Off",
+            QuickRow::FetchArt => "Fetch Missing Art",
             QuickRow::Controls => "Controls",
             QuickRow::ControlsShelf => "Shelf",
             QuickRow::ControlsInGame => "In-Game",
@@ -640,6 +645,7 @@ impl QuickRow {
         matches!(
             self,
             QuickRow::DateTime
+                | QuickRow::FetchArt
                 | QuickRow::About
                 | QuickRow::Screen
                 | QuickRow::Game
@@ -1193,6 +1199,49 @@ pub fn delete_legends(ink: [u8; 3]) -> [UndoFace; 2] {
         with_hint(button_face(ButtonLegend::B), "Keep", hint, true),
         with_hint(button_face(ButtonLegend::X), "Delete", hint, false),
     ]
+}
+
+pub fn fetch_choice_legends(ink: [u8; 3]) -> [UndoFace; 2] {
+    let hint = Some(ink);
+    [
+        with_hint(button_face(ButtonLegend::B), "Cancel", hint, true),
+        with_hint(
+            button_pair(ButtonLegend::Left, ButtonLegend::Right),
+            "Pick",
+            hint,
+            false,
+        ),
+    ]
+}
+
+pub fn fetch_legends(ink: [u8; 3]) -> UndoFace {
+    with_hint(button_face(ButtonLegend::B), "Stop", Some(ink), true)
+}
+
+pub fn fetch_skip_legend(ink: [u8; 3]) -> UndoFace {
+    with_hint(button_face(ButtonLegend::X), "Skip", Some(ink), false)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StudioGlyph {
+    A,
+    B,
+    X,
+    Y,
+    LeftRight,
+    UpDown,
+}
+
+pub fn studio_legend(glyph: StudioGlyph, word: &str, ink: [u8; 3], hint_on_right: bool) -> UndoFace {
+    let button = match glyph {
+        StudioGlyph::A => button_face(ButtonLegend::A),
+        StudioGlyph::B => button_face(ButtonLegend::B),
+        StudioGlyph::X => button_face(ButtonLegend::X),
+        StudioGlyph::Y => button_face(ButtonLegend::Y),
+        StudioGlyph::LeftRight => button_pair(ButtonLegend::Left, ButtonLegend::Right),
+        StudioGlyph::UpDown => up_down_pair(),
+    };
+    with_hint(button, word, Some(ink), hint_on_right)
 }
 
 pub fn prompt_legends(ink: [u8; 3], no: &str, yes: &str) -> [UndoFace; 2] {

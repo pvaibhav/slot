@@ -17,6 +17,8 @@ use tempfile::TempDir;
 struct Log {
     asked: Vec<UpdateJob>,
     events: VecDeque<UpdateEvent>,
+    cancels: usize,
+    committed: bool,
 }
 
 #[derive(Clone, Default)]
@@ -30,11 +32,25 @@ impl UpdateJobs for FakeJobs {
     fn take(&mut self) -> Option<UpdateEvent> {
         self.0.lock().unwrap().events.pop_front()
     }
+
+    fn cancel(&mut self) -> bool {
+        let mut log = self.0.lock().unwrap();
+        log.cancels += 1;
+        !log.committed
+    }
 }
 
 impl FakeJobs {
     fn asked(&self) -> Vec<UpdateJob> {
         self.0.lock().unwrap().asked.clone()
+    }
+
+    fn cancels(&self) -> usize {
+        self.0.lock().unwrap().cancels
+    }
+
+    fn commit(&self) {
+        self.0.lock().unwrap().committed = true;
     }
 
     fn send(&self, a: &mut App, event: UpdateEvent) {
@@ -595,4 +611,62 @@ fn a_refused_baseos_update_shows_its_reason() {
             "geometry does not fit".to_string()
         ))
     );
+}
+
+#[test]
+fn b_while_downloading_cancels_and_goes_back_to_the_carts() {
+    let (_d, mut a, jobs) = offered_both();
+    press(&mut a, Btn::Right);
+    press(&mut a, Btn::A);
+    jobs.send(&mut a, UpdateEvent::Progress(4_000));
+    advance(&mut a, OPEN_MS + 100);
+    press(&mut a, Btn::B);
+    assert_eq!(jobs.cancels(), 1);
+    assert!(a.update_shown());
+    advance(&mut a, CLOSE_MS + 100);
+    assert_eq!(text(&a).unwrap().0, "Updates are available");
+    assert_eq!(a.update_chosen(), Some(Kind::BaseOs));
+    assert_eq!(
+        jobs.asked(),
+        [UpdateJob::Check, UpdateJob::Install(baseos())]
+    );
+}
+
+#[test]
+fn a_cancelled_download_never_shows_a_failure() {
+    let (_d, mut a, jobs) = offered_both();
+    press(&mut a, Btn::A);
+    advance(&mut a, OPEN_MS + 100);
+    press(&mut a, Btn::B);
+    jobs.send(&mut a, UpdateEvent::Cancelled);
+    advance(&mut a, CLOSE_MS + 100);
+    assert_eq!(text(&a).unwrap().0, "Updates are available");
+    assert_eq!(a.update_chosen(), Some(Kind::Slot));
+}
+
+#[test]
+fn b_after_the_download_is_committed_keeps_installing() {
+    let (_d, mut a, jobs) = offered_both();
+    press(&mut a, Btn::A);
+    advance(&mut a, OPEN_MS + 100);
+    jobs.commit();
+    press(&mut a, Btn::B);
+    assert_eq!(jobs.cancels(), 1);
+    advance(&mut a, CLOSE_MS + 100);
+    assert!(a.update_progress().is_some());
+    jobs.send(&mut a, UpdateEvent::Staged);
+    assert_eq!(a.update_progress(), Some(1.0));
+}
+
+#[test]
+fn a_second_install_after_a_cancel_starts_a_fresh_download() {
+    let (_d, mut a, jobs) = offered_both();
+    press(&mut a, Btn::A);
+    advance(&mut a, OPEN_MS + 100);
+    press(&mut a, Btn::B);
+    advance(&mut a, CLOSE_MS + 100);
+    press(&mut a, Btn::A);
+    assert_eq!(a.update_progress(), Some(0.0));
+    jobs.send(&mut a, UpdateEvent::Cancelled);
+    assert_eq!(a.update_progress(), Some(0.0));
 }

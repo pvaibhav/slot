@@ -60,6 +60,8 @@ pub struct Frontend {
     clocks: Clocks,
     about: AboutFace,
     update_text: UpdateText,
+    fetch_sync: FetchSync,
+    studio_sync: StudioSync,
     quick_clock: QuickClock,
     quick_palette: QuickPalette,
     wallpaper: WallpaperSync,
@@ -111,6 +113,276 @@ struct WallpaperSync {
     shelf_faces: std::collections::HashMap<(String, (u32, u32)), TexId>,
     shelf_asked: std::collections::HashSet<(String, (u32, u32))>,
     shelf_primed: Option<(u32, u32)>,
+}
+
+struct StudioSync {
+    worker: crate::studio_faces::StudioWorker,
+    setup: bool,
+    session: u64,
+    chips_for: Option<[u8; 3]>,
+    gen: u64,
+    last: Option<crate::studio_faces::PreviewJob>,
+    face_slots: [Option<TexId>; 4],
+    bare: Option<TexId>,
+    under: [Option<TexId>; 2],
+    chips: Option<TexId>,
+}
+
+impl StudioSync {
+    fn new() -> StudioSync {
+        StudioSync {
+            worker: crate::studio_faces::StudioWorker::spawn(),
+            setup: false,
+            session: 0,
+            chips_for: None,
+            gen: 0,
+            last: None,
+            face_slots: [None; 4],
+            bare: None,
+            under: [None; 2],
+            chips: None,
+        }
+    }
+}
+
+fn sync_studio(app: &mut App, compositor: &mut Compositor, st: &mut StudioSync) {
+    use crate::studio::{LabelKind, Legend};
+    use crate::studio_faces::StudioDone;
+    use crate::studio_view::Style;
+    use slot_ui::StudioGlyph as G;
+    if !st.setup {
+        st.setup = true;
+        for (legend, glyph, word) in [
+            (Legend::Back, G::B, "Back"),
+            (Legend::Open, G::A, "Open"),
+            (Legend::Apply, G::A, "Apply"),
+            (Legend::Change, G::LeftRight, "Change"),
+            (Legend::ChangeVertical, G::UpDown, "Change"),
+            (Legend::Move, G::LeftRight, "Move"),
+            (Legend::Reset, G::X, "Reset"),
+            (Legend::Hex, G::Y, "Hex"),
+        ] {
+            for (left, light) in [(true, false), (false, false), (true, true), (false, true)] {
+                let face = slot_ui::studio_legend(glyph, word, footer_ink(light), left);
+                let tex = compositor.create_texture(face.w, face.h, &face.rgba);
+                app.set_studio_legend((legend, left, light), (tex, face.w));
+            }
+        }
+        let liner = slot_ui::liner::liner_face(136, 121);
+        let liner = compositor.create_texture(liner.w, liner.h, &liner.rgba);
+        let mut disc = vec![255u8; 64 * 64 * 4];
+        for y in 0..64 {
+            for x in 0..64 {
+                let (dx, dy) = (x as f32 - 31.5, y as f32 - 31.5);
+                disc[(y * 64 + x) * 4 + 3] =
+                    ((32.0 - (dx * dx + dy * dy).sqrt()).clamp(0.0, 1.0) * 255.0) as u8;
+            }
+        }
+        let disc = compositor.create_texture(64, 64, &disc);
+        app.set_studio_paper(liner, disc);
+    }
+    if app.studio().is_none() {
+        st.last = None;
+        return;
+    }
+    let chips_for = app.studio().and_then(|s| s.opened_ground);
+    if st.session != app.studio_session() || st.chips_for != chips_for {
+        st.session = app.studio_session();
+        st.chips_for = chips_for;
+        if let Some(studio) = app.studio() {
+            st.worker.ask_chips(studio.cart.clone(), chips_for);
+        }
+    }
+    if let Some(job) = app.studio_preview() {
+        if st.last.as_ref() != Some(&job) {
+            st.last = Some(job.clone());
+            st.gen += 1;
+            st.worker.ask(crate::studio_faces::PreviewJob { gen: st.gen, ..job });
+        }
+    }
+    for (text, style) in app.studio_wanted_text() {
+        let mut face = match style {
+            Style::Heading => slot_ui::heading_face(&text),
+            Style::Digit | Style::DigitOn => menu_face(&text),
+            Style::Detail => menu_detail_face(&text),
+        };
+        if style == Style::DigitOn {
+            for px in face.rgba.chunks_exact_mut(4) {
+                px[..3].copy_from_slice(&[0x1c, 0x1a, 0x18]);
+            }
+        }
+        let tex = compositor.create_texture(face.w, face.h, &face.rgba);
+        app.set_studio_text((text, style), (tex, face.w, face.h));
+    }
+    while let Some(done) = st.worker.take() {
+        match done {
+            StudioDone::Chips(atlas) => {
+                let tex = upload_rgba(compositor, &mut st.chips, atlas.w, atlas.h, &atlas.rgba);
+                app.set_studio_chips((tex, atlas.w, atlas.h));
+            }
+            StudioDone::Preview(faces) => {
+                if faces.session != st.session {
+                    continue;
+                }
+                let slot_of = |k: LabelKind| match k {
+                    LabelKind::Existing => 0,
+                    LabelKind::Real => 1,
+                    LabelKind::Logo => 2,
+                    LabelKind::Title => 3,
+                };
+                let (w, h) = (faces.bare.w, faces.bare.h);
+                let mut texes = Vec::new();
+                for (kind, face) in &faces.faces {
+                    let slot = &mut st.face_slots[slot_of(*kind)];
+                    texes.push((*kind, upload_rgba(compositor, slot, face.w, face.h, &face.rgba)));
+                }
+                let bare = upload_rgba(compositor, &mut st.bare, w, h, &faces.bare.rgba);
+                let under = faces.under.as_ref().map(|[a, b]| {
+                    let [ua, ub] = &mut st.under;
+                    [
+                        upload_rgba(compositor, ua, a.w, a.h, &a.rgba),
+                        upload_rgba(compositor, ub, b.w, b.h, &b.rgba),
+                    ]
+                });
+                app.set_studio_tex(crate::app::StudioTex { faces: texes, bare, under, w, h });
+            }
+        }
+    }
+}
+
+struct FetchSync {
+    faces: crate::fetch_faces::FetchFaces,
+    setup: bool,
+    examples_asked: bool,
+    lines: Vec<String>,
+    text: Vec<Option<TexId>>,
+    example_slots: [Option<TexId>; 2],
+    sets: [Option<(slot_store::Platform, String)>; 2],
+    set_slots: [[Option<TexId>; 5]; 2],
+    asked: Vec<(slot_store::Platform, String)>,
+}
+
+impl FetchSync {
+    fn new() -> FetchSync {
+        FetchSync {
+            faces: crate::fetch_faces::FetchFaces::spawn(),
+            setup: false,
+            examples_asked: false,
+            lines: Vec::new(),
+            text: Vec::new(),
+            example_slots: [None, None],
+            sets: [None, None],
+            set_slots: [[None; 5]; 2],
+            asked: Vec::new(),
+        }
+    }
+}
+
+fn sync_fetch_art(app: &mut App, compositor: &mut Compositor, st: &mut FetchSync) {
+    use crate::fetch_art::FetchTex;
+    use crate::fetch_faces::{FaceDone, FaceJob};
+    if !st.setup {
+        st.setup = true;
+        let mut up = |f: slot_ui::UndoFace| (compositor.create_texture(f.w, f.h, &f.rgba), f.w);
+        let mut set = |ink: [u8; 3]| {
+            let [cancel, pick] = slot_ui::fetch_choice_legends(ink);
+            let stop = slot_ui::fetch_legends(ink);
+            let [done, _] = prompt_legends(ink, "Done", "");
+            let skip = slot_ui::fetch_skip_legend(ink);
+            [up(cancel), up(pick), up(stop), up(done), up(skip)]
+        };
+        let legends = [set(footer_ink(false)), set(footer_ink(true))];
+        app.set_fetch_legends(legends);
+        let paper = compositor.create_texture(1, 1, &[0xf6, 0xf4, 0xef, 255]);
+        app.set_fetch_paper(paper);
+    }
+    if !st.examples_asked && app.wifi_configured() {
+        st.examples_asked = true;
+        st.faces.ask(FaceJob::Examples);
+    }
+    let open = app.fetch_art().is_some();
+    if !open {
+        st.asked.clear();
+        st.sets = [None, None];
+        st.lines.clear();
+    }
+    let lines = app.fetch_art_lines();
+    if open && lines != st.lines {
+        st.text.resize(lines.len().max(st.text.len()), None);
+        let mut texes = Vec::new();
+        for (i, line) in lines.iter().enumerate() {
+            let face = match i {
+                0 => menu_face(line),
+                _ => menu_detail_face(line),
+            };
+            let tex = upload_rgba(compositor, &mut st.text[i], face.w, face.h, &face.rgba);
+            texes.push((tex, face.w, face.h));
+        }
+        app.set_fetch_text(texes);
+        st.lines = lines;
+    }
+    let wanted = app.fetch_wanted();
+    let is_wanted = |p: slot_store::Platform, s: &str| {
+        wanted.iter().any(|l| l.platform == p && l.stem == s)
+    };
+    for set in st.sets.iter_mut() {
+        if set.as_ref().is_some_and(|(p, s)| !is_wanted(*p, s)) {
+            *set = None;
+        }
+    }
+    st.asked.retain(|(p, s)| is_wanted(*p, s));
+    for l in &wanted {
+        let key = (l.platform, l.stem.clone());
+        if st.asked.contains(&key) {
+            continue;
+        }
+        if let Some(mut cart) = app.fetch_cart(l.platform, &l.stem) {
+            cart.label = Some(l.path.clone());
+            st.faces.ask(FaceJob::Cart(cart));
+            st.asked.push(key);
+        }
+    }
+    while let Some(done) = st.faces.take() {
+        match done {
+            FaceDone::Examples([a, b]) => {
+                let ta = upload_rgba(compositor, &mut st.example_slots[0], a.w, a.h, &a.rgba);
+                let tb = upload_rgba(compositor, &mut st.example_slots[1], b.w, b.h, &b.rgba);
+                app.set_fetch_example_tex([(ta, a.w, a.h), (tb, b.w, b.h)]);
+            }
+            FaceDone::Cart(platform, stem, set) => {
+                if !is_wanted(platform, &stem) {
+                    continue;
+                }
+                let Some(i) = st.sets.iter().position(Option::is_none) else {
+                    continue;
+                };
+                st.sets[i] = Some((platform, stem.clone()));
+                let slots = &mut st.set_slots[i];
+                let title = upload_rgba(compositor, &mut slots[0], set.title.w, set.title.h, &set.title.rgba);
+                let bare = upload_rgba(compositor, &mut slots[1], set.bare.w, set.bare.h, &set.bare.rgba);
+                let finished = upload_rgba(compositor, &mut slots[2], set.done.w, set.done.h, &set.done.rgba);
+                let under = set.under.as_ref().map(|[interior, backing]| {
+                    let (a, b) = slots[3..5].split_at_mut(1);
+                    [
+                        upload_rgba(compositor, &mut a[0], interior.w, interior.h, &interior.rgba),
+                        upload_rgba(compositor, &mut b[0], backing.w, backing.h, &backing.rgba),
+                    ]
+                });
+                app.set_fetch_tex(
+                    platform,
+                    &stem,
+                    FetchTex {
+                        title,
+                        bare,
+                        done: finished,
+                        under,
+                        w: set.done.w,
+                        h: set.done.h,
+                    },
+                );
+            }
+        }
+    }
 }
 
 #[derive(Default)]
@@ -186,6 +458,11 @@ impl Frontend {
         session
             .app_mut()
             .set_update_jobs(crate::update::update_jobs(platform.root().to_path_buf()));
+        session
+            .app_mut()
+            .set_art_jobs(crate::art::jobs::art_jobs(platform.root().to_path_buf()));
+        session.app_mut().connect_wifi();
+        session.app_mut().require_fetch_faces();
         if let (Some(target), Some(version)) = (
             crate::baseos::var("BASEOS_TARGET"),
             crate::baseos::var("BASEOS_VERSION"),
@@ -222,6 +499,8 @@ impl Frontend {
             clocks: Clocks::default(),
             about: AboutFace::default(),
             update_text: UpdateText::default(),
+            fetch_sync: FetchSync::new(),
+            studio_sync: StudioSync::new(),
             quick_clock: QuickClock::default(),
             quick_palette: QuickPalette::default(),
             wallpaper: WallpaperSync::default(),
@@ -430,6 +709,9 @@ impl Frontend {
         }
         self.session.app_mut().set_slot_faces(slot[0], slot[1]);
         self.session.app_mut().set_plugged_face(plugged);
+        if let Some(tex) = self.look.as_ref().map(|look| look.plugged[1]) {
+            self.session.app_mut().set_printer_face(tex);
+        }
         self.session.app_mut().set_bolt_face(bolt);
         self.session.app_mut().set_hud_bolt_face(hud_bolt);
         if let Some(tex) = port {
@@ -640,6 +922,8 @@ impl Frontend {
         sync_binding_faces(self.session.app_mut(), compositor);
         sync_about(self.session.app_mut(), compositor, &mut self.about);
         sync_update(self.session.app_mut(), compositor, &mut self.update_text);
+        sync_fetch_art(self.session.app_mut(), compositor, &mut self.fetch_sync);
+        sync_studio(self.session.app_mut(), compositor, &mut self.studio_sync);
         sync_quick_clock(self.session.app_mut(), compositor, &mut self.quick_clock);
         sync_quick_palette(self.session.app_mut(), compositor, &mut self.quick_palette);
         sync_wallpaper(self.session.app_mut(), compositor, &mut self.wallpaper);
@@ -826,8 +1110,16 @@ impl Frontend {
         self.session.app()
     }
 
+    pub fn app_mut(&mut self) -> &mut crate::app::App {
+        self.session.app_mut()
+    }
+
     pub fn set_update_jobs(&mut self, jobs: Box<dyn crate::update::UpdateJobs>) {
         self.session.app_mut().set_update_jobs(jobs);
+    }
+
+    pub fn set_art_jobs(&mut self, jobs: Box<dyn crate::art::jobs::ArtJobs>) {
+        self.session.app_mut().set_art_jobs(jobs);
     }
 
     pub fn set_left_stick(&mut self, present: bool) {
@@ -1669,6 +1961,7 @@ fn sync_about(app: &mut App, compositor: &mut Compositor, state: &mut AboutFace)
         battery,
         serial: &build.serial(),
         version: build.version,
+        baseos: crate::baseos::var("BASEOS_VERSION").as_deref(),
         model: &crate::baseos::var("BASEOS_MODEL").unwrap_or_default(),
     });
     let id = upload(compositor, &mut state.tex, face);
@@ -1691,6 +1984,10 @@ fn sync_core_picker(
     tex: &mut CoreTextures,
     built: &mut Option<String>,
 ) {
+    if app.take_core_stale() {
+        *asked = None;
+        *built = None;
+    }
     let highlighted = app.selected_stem().map(str::to_string);
     if highlighted.is_some() && *asked != highlighted {
         if let Some(cart) = app

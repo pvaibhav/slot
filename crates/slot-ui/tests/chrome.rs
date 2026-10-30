@@ -62,7 +62,7 @@ fn quad(d: &Draw) -> Quad {
         | Draw::Tex { x, y, w, h, .. }
         | Draw::Part { x, y, w, h, .. }
         | Draw::Turned { x, y, w, h, .. } => Quad { x, y, w, h },
-        Draw::Game | Draw::Shot { .. } | Draw::Capture => Quad {
+        Draw::Game | Draw::Shot { .. } | Draw::Capture | Draw::Quad { .. } => Quad {
             x: 0.0,
             y: 0.0,
             w: OUT_W as f32,
@@ -111,8 +111,11 @@ fn as_lip(d: &Draw) -> Option<Quad> {
 fn alpha(d: &Draw) -> f32 {
     match *d {
         Draw::Rect { colour, .. } => colour[3],
-        Draw::Tex { alpha, .. } | Draw::Part { alpha, .. } | Draw::Turned { alpha, .. } => alpha,
-        Draw::Game | Draw::Shot { .. } | Draw::Capture => 1.0,
+        Draw::Tex { alpha, .. }
+        | Draw::Part { alpha, .. }
+        | Draw::Turned { alpha, .. }
+        | Draw::Quad { alpha, .. } => alpha,
+        Draw::Game | Draw::Shot { .. } | Draw::Capture | Draw::Quad { .. } => 1.0,
     }
 }
 

@@ -147,6 +147,19 @@ grep -q 'addr flush dev wlan0' "$TMP/ip.log" || fail "update down kept wlan0's a
 [ ! -e "$TMP/run/slotupdate.conf" ] || fail "update down left its conf"
 
 reset yes
+run absent update up "$TMP/wifi.conf" >/dev/null
+: > "$TMP/cli.log"
+run absent link host >/dev/null || true
+grep -q terminate "$TMP/cli.log" || fail "a link left the update supplicant on wlan0"
+[ ! -e "$TMP/run/slotupdate.conf" ] || fail "a link left the update conf"
+
+reset yes
+: > "$TMP/cli.log"
+run absent update down && rc=0 || rc=$?
+[ "$rc" = 0 ] || fail "update down with nothing up exited $rc"
+grep -q terminate "$TMP/cli.log" && fail "update down with nothing up touched wlan0"
+
+reset yes
 run absent link sideways 2>/dev/null && rc=0 || rc=$?
 [ "$rc" = 2 ] || fail "bad verb exited $rc, want 2"
 

@@ -253,12 +253,26 @@ pub fn label_size(cart: &Cart) -> (u32, u32) {
     (lw, lh)
 }
 
+pub fn bare_face(cart: &Cart) -> CartFace {
+    let s = spec(shape_of(cart));
+    let mut face = shell_face_of(&s, &shell_for(cart), true);
+    clip_to_silhouette(&s, &mut face);
+    face
+}
+
+pub fn text_label(cart: &Cart, colour: [u8; 3]) -> Vec<u8> {
+    generated_label(&spec(shape_of(cart)), &label_text(cart), colour)
+}
+
 pub fn cart_face_with(cart: &Cart, art: Option<Vec<u8>>) -> CartFace {
     let s = spec(shape_of(cart));
     let mut face = shell_face(&s, &shell_for(cart));
     let label = match art {
         Some(rgba) => rgba,
-        None => generated_label(&s, &label_text(cart)),
+        None => {
+            let title = label_text(cart);
+            generated_label(&s, &title, label_colour(&title))
+        }
     };
     paste_label(&s, &mut face, &label);
     clip_to_silhouette(&s, &mut face);
@@ -519,6 +533,10 @@ fn overlay(base: u8, colour: u8) -> u8 {
 }
 
 fn shell_face(s: &Spec, shell: &Shell) -> CartFace {
+    shell_face_of(s, shell, false)
+}
+
+fn shell_face_of(s: &Spec, shell: &Shell, bare: bool) -> CartFace {
     let clear = shell.finish != Finish::Solid;
     let src = bitmaps::shell_asset(s.mould, clear);
     assert_eq!(
@@ -532,11 +550,10 @@ fn shell_face(s: &Spec, shell: &Shell) -> CartFace {
     // The neutral asset is blended with the game's colour everywhere but the label box, which
     // stays the grey of the asset. A clear shell is its own asset with real transparency: what the
     // compositor drew underneath (the board) shows through and stays put while the shell moves.
-    // The label box stays opaque.
     let (lx, ly, lw, lh) = s.label;
     for y in 0..s.h {
         for x in 0..s.w {
-            let on_label = (lx..lx + lw).contains(&x) && (ly..ly + lh).contains(&y);
+            let on_label = !bare && (lx..lx + lw).contains(&x) && (ly..ly + lh).contains(&y);
             let i = ((y * s.w + x) * 4) as usize;
             if !on_label {
                 for c in 0..3 {
@@ -594,9 +611,8 @@ fn lerp(a: [u8; 3], b: [u8; 3], num: u32, den: u32) -> [u8; 3] {
     out
 }
 
-fn generated_label(s: &Spec, title: &str) -> Vec<u8> {
+fn generated_label(s: &Spec, title: &str, bg: [u8; 3]) -> Vec<u8> {
     let (_, _, lw, lh) = s.label;
-    let bg = label_colour(title);
     let mut rgba = Vec::with_capacity((lw * lh * 4) as usize);
     for _ in 0..lw * lh {
         rgba.extend_from_slice(&[bg[0], bg[1], bg[2], 255]);
