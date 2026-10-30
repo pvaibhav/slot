@@ -380,7 +380,14 @@ tasks:
         if [ "$(uname -s)-$(uname -m)" = "Linux-aarch64" ]; then
           sh -c '{{.CMD}}'
         else
-          docker run --rm --platform linux/arm64 -v "$PWD":/src -w /src rust:1-bullseye sh -c '{{.CMD}}'
+          set --
+          if [ -f .git ]; then
+            # Worktrees point outside /src; preserve those paths inside the container.
+            common_dir="$(git rev-parse --path-format=absolute --git-common-dir)"
+            git_dir="$(git rev-parse --absolute-git-dir)"
+            set -- -v "$common_dir:$common_dir:ro" -v "$git_dir:$git_dir:ro"
+          fi
+          docker run --rm --platform linux/arm64 "$@" -v "$PWD":/src -w /src rust:1-bullseye sh -c '{{.CMD}}'
         fi
 
   network:tools:
