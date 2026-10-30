@@ -335,6 +335,10 @@ fn the_shelf_wallpaper_changes_with_the_shelf_and_a_missing_file_shows_no_other_
     let_the_name_in(&mut f, &mut c, &mut input);
 
     let mut fields = Vec::new();
+    for _ in 0..60 {
+        f.compose(&mut c);
+        std::thread::sleep(std::time::Duration::from_millis(16));
+    }
     for name in ["gba-wall", "gbc-wall", "gb-wall"] {
         fields.push(field(&composed(&mut f, &mut c, name)));
         tap(&mut f, &mut input, Btn::R1);

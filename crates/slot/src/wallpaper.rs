@@ -1,4 +1,64 @@
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::thread;
+
+pub struct LoadedWallpaper {
+    pub name: String,
+    pub size: (u32, u32),
+    pub rgba: Vec<u8>,
+}
+
+struct LoadRequest {
+    path: PathBuf,
+    name: String,
+    size: (u32, u32),
+}
+
+pub struct WallpaperLoader {
+    requests: Sender<LoadRequest>,
+    loaded: Receiver<LoadedWallpaper>,
+}
+
+impl WallpaperLoader {
+    pub fn spawn() -> Self {
+        let (requests, inbox) = mpsc::channel::<LoadRequest>();
+        let (outbox, loaded) = mpsc::channel();
+        let spawned = thread::Builder::new()
+            .name("slot-wallpaper".into())
+            .spawn(move || {
+                while let Ok(req) = inbox.recv() {
+                    let (w, h) = req.size;
+                    let Some(rgba) = slot_ui::wallpaper_face(&req.path, w, h) else {
+                        continue;
+                    };
+                    let done = LoadedWallpaper {
+                        name: req.name,
+                        size: req.size,
+                        rgba,
+                    };
+                    if outbox.send(done).is_err() {
+                        return;
+                    }
+                }
+            });
+        if let Err(e) = spawned {
+            eprintln!("slot: wallpaper: worker thread failed to start: {e}");
+        }
+        WallpaperLoader { requests, loaded }
+    }
+
+    pub fn request(&self, root: &Path, name: &str, size: (u32, u32)) {
+        let _ = self.requests.send(LoadRequest {
+            path: root.join("Wallpapers").join(name),
+            name: name.to_owned(),
+            size,
+        });
+    }
+
+    pub fn take(&self) -> Option<LoadedWallpaper> {
+        self.loaded.try_recv().ok()
+    }
+}
 
 pub fn list(root: &Path) -> Vec<String> {
     let mut files = pngs(&root.join("Wallpapers"));

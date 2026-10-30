@@ -601,6 +601,20 @@ fn shelves_of(carts: Vec<Cart>) -> Vec<(Rack, Shelf)> {
         .collect()
 }
 
+fn wallpaper_of_rack(rack: Rack, files: &[String]) -> Option<String> {
+    std::iter::once(rack)
+        .chain(rack.platform().map(|p| Rack::Of(p.hardware())))
+        .find_map(|rack| {
+            files
+                .iter()
+                .find(|file| {
+                    file.rsplit_once('.')
+                        .is_some_and(|(stem, _)| stem.eq_ignore_ascii_case(&rack.key()))
+                })
+                .cloned()
+        })
+}
+
 fn shift_down(draws: &mut [Draw], dy: f32) {
     if dy == 0.0 {
         return;
@@ -1606,19 +1620,19 @@ impl App {
     }
 
     fn wallpaper_for_shelf(&self) -> Option<String> {
-        let rack = self.shelves[self.shelf_at].0;
+        wallpaper_of_rack(self.shelves[self.shelf_at].0, &self.wallpaper_files())
+    }
+
+    pub fn shelf_wallpapers(&self) -> Vec<String> {
         let files = self.wallpaper_files();
-        std::iter::once(rack)
-            .chain(rack.platform().map(|p| Rack::Of(p.hardware())))
-            .find_map(|rack| {
-                files
-                    .iter()
-                    .find(|file| {
-                        file.rsplit_once('.')
-                            .is_some_and(|(stem, _)| stem.eq_ignore_ascii_case(&rack.key()))
-                    })
-                    .cloned()
-            })
+        let mut names: Vec<String> = self
+            .shelves
+            .iter()
+            .filter_map(|(rack, _)| wallpaper_of_rack(*rack, &files))
+            .collect();
+        names.sort();
+        names.dedup();
+        names
     }
 
     fn random_wallpaper(&mut self) -> Option<String> {

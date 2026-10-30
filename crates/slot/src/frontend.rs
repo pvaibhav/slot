@@ -107,6 +107,10 @@ struct WallpaperSync {
     label: String,
     dim: Option<TexId>,
     lit: Option<TexId>,
+    loader: Option<crate::wallpaper::WallpaperLoader>,
+    shelf_faces: std::collections::HashMap<(String, (u32, u32)), TexId>,
+    shelf_asked: std::collections::HashSet<(String, (u32, u32))>,
+    shelf_primed: Option<(u32, u32)>,
 }
 
 #[derive(Default)]
@@ -1431,10 +1435,59 @@ fn sync_game_bezel(app: &mut App, compositor: &mut Compositor, state: &mut Bezel
     }
 }
 
+fn sync_shelf_wallpaper(app: &mut App, compositor: &mut Compositor, state: &mut WallpaperSync) {
+    let size = app.wallpaper_size();
+    let shown = app.shown_wallpaper();
+    state.image = None;
+    let Some(root) = app.root().map(|root| root.to_path_buf()) else {
+        return;
+    };
+    let loader = state
+        .loader
+        .get_or_insert_with(crate::wallpaper::WallpaperLoader::spawn);
+    let priming = state.shelf_primed != Some(size);
+    if priming {
+        state.shelf_primed = Some(size);
+        if let Some(name) = &shown {
+            if state.shelf_asked.insert((name.clone(), size)) {
+                let path = root.join("Wallpapers").join(name);
+                if let Some(rgba) = wallpaper_face(&path, size.0, size.1) {
+                    let id = compositor.create_texture(size.0, size.1, &rgba);
+                    state.shelf_faces.insert((name.clone(), size), id);
+                }
+            }
+        }
+    }
+    let rest = if priming {
+        app.shelf_wallpapers()
+    } else {
+        Vec::new()
+    };
+    for name in shown.iter().chain(&rest) {
+        if state.shelf_asked.insert((name.clone(), size)) {
+            loader.request(&root, name, size);
+        }
+    }
+    if let Some(done) = loader.take() {
+        let id = compositor.create_texture(done.size.0, done.size.1, &done.rgba);
+        state.shelf_faces.insert((done.name, done.size), id);
+    }
+    if let Some(id) = shown.and_then(|name| state.shelf_faces.get(&(name, size))) {
+        app.set_wallpaper(*id);
+    }
+}
+
 fn sync_wallpaper(app: &mut App, compositor: &mut Compositor, state: &mut WallpaperSync) {
     let (w, h) = app.wallpaper_size();
-    let shown = app.shown_wallpaper().map(|name| (name, (w, h)));
-    if state.image != shown {
+    let on_shelf = app.wallpaper() == slot_store::WallpaperPick::Shelf;
+    if on_shelf {
+        sync_shelf_wallpaper(app, compositor, state);
+    }
+    let shown = match on_shelf {
+        true => None,
+        false => app.shown_wallpaper().map(|name| (name, (w, h))),
+    };
+    if !on_shelf && state.image != shown {
         state.image = shown.clone();
         if let Some((name, _)) = &shown {
             if let Some(rgba) = app

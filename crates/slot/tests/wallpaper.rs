@@ -1,7 +1,7 @@
 mod common;
 
 use slot::app::App;
-use slot::wallpaper::pick;
+use slot::wallpaper::{pick, WallpaperLoader};
 use slot_store::{write_slot_state, Platform, Recent, SlotState, WallpaperPick};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -115,6 +115,35 @@ fn shelf_wallpaper_changes_when_the_shelf_does() {
     let next = a.shown_wallpaper();
     assert!(next.is_some());
     assert_ne!(first, next);
+}
+
+#[test]
+fn every_shelf_wallpaper_is_listed_once_for_decoding() {
+    let d = all_shelves_card(&["GB.png", "GBA.png", "Recents.png", "other.png"]);
+    assert_eq!(
+        on_shelf(&d, "gba").shelf_wallpapers(),
+        ["GB.png", "GBA.png", "Recents.png"]
+    );
+}
+
+#[test]
+fn the_loader_decodes_a_wallpaper_on_its_own_thread() {
+    let (d, _) = papers(&["GBA.png", "broken.png"]);
+    std::fs::write(d.path().join("Wallpapers/broken.png"), b"not a png").unwrap();
+    let loader = WallpaperLoader::spawn();
+    loader.request(d.path(), "broken.png", (4, 4));
+    loader.request(d.path(), "GBA.png", (4, 4));
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let done = loop {
+        if let Some(done) = loader.take() {
+            break done;
+        }
+        assert!(std::time::Instant::now() < until, "nothing came back");
+        std::thread::yield_now();
+    };
+    assert_eq!(done.name, "GBA.png");
+    assert_eq!(done.size, (4, 4));
+    assert_eq!(done.rgba.len(), 4 * 4 * 4);
 }
 
 #[test]
