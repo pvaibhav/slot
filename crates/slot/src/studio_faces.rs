@@ -82,9 +82,9 @@ pub fn build(job: PreviewJob, cache: &mut Cache) -> StudioFaces {
         (LabelKind::Real, &job.real),
     ] {
         let Some(path) = path else { continue };
-        if !cache.covers.contains_key(&(kind, size)) {
+        if let std::collections::hash_map::Entry::Vacant(slot) = cache.covers.entry((kind, size)) {
             if let Some(art) = cover(path, size.0, size.1) {
-                cache.covers.insert((kind, size), art);
+                slot.insert(art);
             }
         }
         if let Some(art) = cache.covers.get(&(kind, size)) {

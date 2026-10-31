@@ -482,10 +482,12 @@ pub fn will_apply(status: &str, name: &str) -> Result<(), String> {
     Err("BaseOS did not see the update".to_string())
 }
 
+pub type FetchInto<'a> = dyn FnMut(&str, &mut dyn Write) -> Result<[u8; 32], UpdateFail> + 'a;
+
 pub fn install_baseos_with(
     root: &Path,
     free: u64,
-    fetch_into: &mut dyn FnMut(&str, &mut dyn Write) -> Result<[u8; 32], UpdateFail>,
+    fetch_into: &mut FetchInto<'_>,
     status: &mut dyn FnMut() -> Option<String>,
     release: &Release,
 ) -> UpdateEvent {
@@ -513,7 +515,7 @@ pub fn install_baseos_with(
 
 fn download_bosupd(
     part: &Path,
-    fetch_into: &mut dyn FnMut(&str, &mut dyn Write) -> Result<[u8; 32], UpdateFail>,
+    fetch_into: &mut FetchInto<'_>,
     release: &Release,
 ) -> Result<(), UpdateFail> {
     let mut file = std::fs::File::create(part).map_err(|_| UpdateFail::Download)?;

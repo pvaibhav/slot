@@ -6499,6 +6499,7 @@ impl App {
         [l.cart_x, l.cart_y, l.cart_w, l.cart_h]
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn studio_put_text(
         &self,
         text: &str,
@@ -6666,6 +6667,7 @@ impl App {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn studio_sticker(
         &self,
         face: TexId,
@@ -7112,15 +7114,13 @@ impl App {
         match effect {
             Some(crate::studio::Effect::Close) => self.studio_closing = Some(now),
             Some(crate::studio::Effect::Fetch) if !self.studio_fetched => self.fetch_studio_art(),
-            Some(crate::studio::Effect::Apply(kind)) => {
-                if self.studio_apply(kind) {
-                    self.studio_scene = Some(crate::studio::ApplyScene {
-                        chosen: kind,
-                        was,
-                        used_y,
-                        started: now as f64,
-                    });
-                }
+            Some(crate::studio::Effect::Apply(kind)) if self.studio_apply(kind) => {
+                self.studio_scene = Some(crate::studio::ApplyScene {
+                    chosen: kind,
+                    was,
+                    used_y,
+                    started: now as f64,
+                });
             }
             _ => {}
         }

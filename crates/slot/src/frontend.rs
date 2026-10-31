@@ -96,10 +96,12 @@ struct QuickPalette {
     shown: &'static str,
 }
 
+type BezelImage = (Console, BezelPick, Option<BezelArt>, (u32, u32));
+
 #[derive(Default)]
 struct BezelSync {
     tex: Option<TexId>,
-    image: Option<(Console, BezelPick, Option<BezelArt>, (u32, u32))>,
+    image: Option<BezelImage>,
     labels: [String; 3],
     faces: [(Option<TexId>, Option<TexId>); 3],
 }

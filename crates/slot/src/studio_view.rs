@@ -128,12 +128,12 @@ fn text(text: impl Into<String>, style: Style, align: Align, x: f32, y: f32, alp
 
 fn preset_name(color: [u8; 3], finish: ShellFinish) -> Option<&'static str> {
     shell_presets().into_iter().find_map(|(name, s)| {
-        let same = match (s.finish, finish) {
+        let same = matches!(
+            (s.finish, finish),
             (slot_ui::Finish::Solid, ShellFinish::Solid)
-            | (slot_ui::Finish::Translucent, ShellFinish::Clear)
-            | (slot_ui::Finish::Glitter, ShellFinish::Glitter) => true,
-            _ => false,
-        };
+                | (slot_ui::Finish::Translucent, ShellFinish::Clear)
+                | (slot_ui::Finish::Glitter, ShellFinish::Glitter)
+        );
         (same && s.colour == color).then_some(name)
     })
 }

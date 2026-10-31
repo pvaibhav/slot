@@ -711,7 +711,7 @@ pub enum Light {
 pub fn printer_light(printing: bool, waiting: bool, now: f64) -> Light {
     match (printing, waiting) {
         (true, _) => Light::Printing,
-        (false, true) if (now / 400.0) as u64 % 2 == 0 => Light::Waiting,
+        (false, true) if ((now / 400.0) as u64).is_multiple_of(2) => Light::Waiting,
         _ => Light::Off,
     }
 }
