@@ -101,6 +101,7 @@ fn the_rows_run_in_the_order_the_user_chose() {
         [
             "Wi-Fi",
             "Networks",
+            "Gamebit",
             "Check for Updates",
             "Fetch Missing Art"
         ]
@@ -199,7 +200,8 @@ fn the_rows_run_in_the_order_the_user_chose() {
             QuickRow::Guide,
             QuickRow::Network,
             QuickRow::Networks,
-            QuickRow::CheckUpdates
+            QuickRow::CheckUpdates,
+            QuickRow::Server
         ]
     );
     for page in [
@@ -612,4 +614,18 @@ fn skip_keeps_its_button_on_the_outer_edge() {
     let ink = [240, 240, 232];
     let [_, want] = slot_ui::prompt_legends(ink, "No", "Skip");
     assert_eq!(slot_ui::fetch_skip_legend(ink).w, want.w);
+}
+
+#[test]
+fn server_sits_last_on_the_network_page() {
+    assert_eq!(QuickRow::NETWORK[2], QuickRow::Server);
+    assert!(!QuickRow::MAIN.contains(&QuickRow::Server));
+    assert_eq!(QuickRow::Server.parent(), Some(QuickRow::Network));
+    assert_eq!(QuickRow::MAIN.len(), 6);
+    assert_eq!(QuickRow::NETWORK.len(), 5);
+    assert_eq!(QuickRow::Server.label(), "Gamebit");
+    assert!(QuickRow::Server.opens());
+    assert!(QuickRow::Server.page() == QuickRow::NETWORK);
+    assert!(QuickRow::ALL.contains(&QuickRow::Server));
+    assert_eq!(QuickRow::ALL[QuickRow::Server.index()], QuickRow::Server);
 }

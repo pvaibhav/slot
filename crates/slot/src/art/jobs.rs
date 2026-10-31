@@ -515,6 +515,24 @@ fn run(root: &Path, kind: Kind, cancel: &AtomicBool, tx: &Sender<ArtEvent>) {
     }
 }
 
+pub fn fetch_label(root: &Path, cart: &Cart) -> Result<bool, UpdateFail> {
+    if update::clock_is_wrong(update::now_unix()) {
+        return Err(UpdateFail::Clock);
+    }
+    let agent = update::agent(update::DOWNLOAD_TIMEOUT);
+    let index = load_index(root, &mut get_index)?;
+    let made = label_for(cart, Kind::Real, &index, &mut |url| fetch_art(&agent, url))?;
+    let Some(png) = made else {
+        return Ok(false);
+    };
+    let path = make::label_path(root, cart);
+    make::write_replacing(&path, &png).map_err(|_| UpdateFail::Bad)?;
+    let mut labeled = cart.clone();
+    labeled.label = Some(path);
+    let _ = crate::label_cache::label_art(root, &labeled);
+    Ok(true)
+}
+
 fn fetch_art(agent: &ureq::Agent, url: &str) -> Result<Vec<u8>, UpdateFail> {
     let response = match agent.get(url).call() {
         Ok(r) => r,

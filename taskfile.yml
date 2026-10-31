@@ -174,49 +174,72 @@ tasks:
       Run slot. against SLOT_ROOT, defaults to ./sdcard. SLOT_LINK_PORT moves the link
       session off 7211, which is what lets two copies on one machine link to each other -
       off-device both are on loopback, so the port is all that separates them
-    deps: [ core ]
+    deps: [ core, web ]
     env:
       SLOT_ROOT: '{{.SLOT_ROOT | default "./sdcard"}}'
       SLOT_SILENT: '0'
       SLOT_WIFI: '1'
     cmds:
+      - mkdir -p "$SLOT_ROOT/System/web"
+      - cp -R web/dist/. "$SLOT_ROOT/System/web/"
       - cargo run --release -p slot
 
   run:bare:
     desc: Run with no title bar or border, for screenshots and screen capture
-    deps: [ core ]
+    deps: [ core, web ]
     env:
       SLOT_ROOT: '{{.SLOT_ROOT | default "./sdcard"}}'
       SLOT_SILENT: '0'
       SLOT_WIFI: '1'
       SLOT_BARE: '1'
     cmds:
+      - mkdir -p "$SLOT_ROOT/System/web"
+      - cp -R web/dist/. "$SLOT_ROOT/System/web/"
       - cargo run --release -p slot
 
   run:4x3:
     desc: Run in a 4:3 window, as on the RG35XXSP, with the bezel around the screen
-    deps: [ core ]
+    deps: [ core, web ]
     env:
       SLOT_ROOT: '{{.SLOT_ROOT | default "./sdcard"}}'
       SLOT_SILENT: '0'
       SLOT_WIFI: '1'
       SLOT_WINDOW: '1280x960'
     cmds:
+      - mkdir -p "$SLOT_ROOT/System/web"
+      - cp -R web/dist/. "$SLOT_ROOT/System/web/"
       - cargo run --release -p slot
 
   run:debug:
     desc: Run an unoptimised build, for a debugger. Will not hold 60 fps.
-    deps: [ core ]
+    deps: [ core, web ]
     env:
       SLOT_ROOT: '{{.SLOT_ROOT | default "./sdcard"}}'
       SLOT_SILENT: '0'
       SLOT_WIFI: '1'
     cmds:
+      - mkdir -p "$SLOT_ROOT/System/web"
+      - cp -R web/dist/. "$SLOT_ROOT/System/web/"
       - cargo run -p slot
+
+  web:
+    desc: Build the Server web page into web/dist
+    dir: web
+    sources:
+      - src/**/*
+      - public/**/*
+      - index.html
+      - package.json
+      - vite.config.ts
+    generates:
+      - dist/index.html
+    cmds:
+      - bun install --frozen-lockfile
+      - bun run build
 
   dist:
     desc: Build the copy-to-SD2 tree, OUT defaults to ./dist
-    deps: [ core, release ]
+    deps: [ core, release, web ]
     vars:
       OUT: '{{.OUT | default "dist"}}'
     cmds:
@@ -224,6 +247,7 @@ tasks:
       - ./target/release/slot --init-root {{.OUT}}
       - cp target/release/slot {{.OUT}}/System/slot
       - cp {{.CORE}} {{.GPSP_HOST}} {{.OUT}}/System/
+      - cp -R web/dist {{.OUT}}/System/web
       - 'echo "dist ready at {{.OUT}}, copy its contents to SD2"'
 
   core:device:
@@ -345,7 +369,7 @@ tasks:
 
   dist:device:
     desc: Build the SD2 tree for an H700 device, OUT defaults to ./dist-device
-    deps: [ core:device, core:gpsp, fsck:exfat, build:device ]
+    deps: [ core:device, core:gpsp, fsck:exfat, build:device, web ]
     vars:
       OUT: '{{.OUT | default "dist-device"}}'
     cmds:
@@ -355,6 +379,7 @@ tasks:
           CMD: ./target-device/device/slot --init-root {{.OUT}}
       - cp target-device/device/slot {{.OUT}}/System/slot
       - cp -R card/System/* {{.OUT}}/System/
+      - cp -R web/dist {{.OUT}}/System/web
       - for d in Bezels Labels Wallpapers; do cp card/$d/README.txt {{.OUT}}/$d/; done
       - file vendor/mgba_libretro.so | grep -q aarch64
       - file vendor/gpsp_libretro.so | grep -q aarch64

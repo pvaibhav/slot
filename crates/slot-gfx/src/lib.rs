@@ -25,7 +25,7 @@ mod shaders;
 mod surface;
 
 pub use bezel::{bezel_column, framed, game_rect, hole_on_top, lifted_rect, screen_rect};
-pub use draw::{Draw, TexId};
+pub use draw::{paper_bounds, paper_flap_shows, Draw, TexId};
 pub use fbdev::{egl_error, panel_mode, panel_size, FbdevSurface};
 pub use fbo::{canvas_size, Compositor, BACKDROP};
 pub use grade::{

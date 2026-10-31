@@ -24,6 +24,7 @@ mod polaroids;
 mod power_menu;
 mod quick_menu;
 mod rebuild;
+mod receipt;
 mod refusal;
 mod shelf;
 mod shell;
@@ -89,6 +90,7 @@ pub use link_art::{
     ARROW_LEFT_X, ARROW_RIGHT_X, ARROW_W, ARROW_Y, CLICKS_H, CLICKS_W, CLICKS_X, CLICKS_Y, PLUG_H,
     PLUG_TIP_X, PLUG_W, PORT_H, PORT_W, PORT_Y,
 };
+pub use receipt::{receipt_blank, receipt_face, ReceiptText};
 pub use plate::{
     arrows_hint_coloured, arrows_hint_face, arrows_hint_width, cap_width,
     hint_coloured, hint_face, hint_quad, hint_row, hint_width, pad_hint_face, pad_hint_width,
@@ -102,7 +104,8 @@ pub use polaroids::{
 pub use power_menu::{heading_face, menu_detail_face, menu_face, PowerChoice, MENU_PAD};
 pub use quick_menu::{
     clock_legend_faces, core_button_legends, delete_legends, draw_menu_ground, link_button_legends,
-    fetch_choice_legends, fetch_legends, fetch_skip_legend, prompt_legends, studio_legend,
+    fetch_choice_legends, fetch_legends, fetch_skip_legend, print_stop_legend, prompt_legends,
+    studio_legend,
     StudioGlyph, quick_description_face, quick_label_face, quick_legend_faces,
     quick_pointer_face, quick_row_top, quick_row_top_at, quick_scroll, quick_value_face,
     quick_warning_value_face, quick_window, repair_legends, update_legends, QuickMenu,

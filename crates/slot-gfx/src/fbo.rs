@@ -171,6 +171,10 @@ impl Compositor {
         self.sprites.create_texture_nearest(w, h, rgba)
     }
 
+    pub fn prepare_paper(&mut self) -> Result<(), GfxError> {
+        self.sprites.prepare_paper()
+    }
+
     pub fn update_texture(&mut self, id: TexId, w: u32, h: u32, rgba: &[u8]) {
         self.sprites.update_texture(id, w, h, rgba);
     }

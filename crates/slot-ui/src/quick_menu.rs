@@ -120,10 +120,11 @@ pub enum QuickRow {
     WifiPower,
     Networks,
     CheckUpdates,
+    Server,
 }
 
 impl QuickRow {
-    pub const ALL: [QuickRow; 111] = [
+    pub const ALL: [QuickRow; 112] = [
         QuickRow::FastForward,
         QuickRow::FastForwardSound,
         QuickRow::Screen,
@@ -235,6 +236,7 @@ impl QuickRow {
         QuickRow::WifiPower,
         QuickRow::Networks,
         QuickRow::CheckUpdates,
+        QuickRow::Server,
     ];
 
     pub const MAIN: [QuickRow; 6] = [
@@ -256,9 +258,10 @@ impl QuickRow {
         QuickRow::DateTime,
     ];
 
-    pub const NETWORK: [QuickRow; 4] = [
+    pub const NETWORK: [QuickRow; 5] = [
         QuickRow::WifiPower,
         QuickRow::Networks,
+        QuickRow::Server,
         QuickRow::CheckUpdates,
         QuickRow::FetchArt,
     ];
@@ -450,7 +453,8 @@ impl QuickRow {
             QuickRow::WifiPower
             | QuickRow::Networks
             | QuickRow::CheckUpdates
-            | QuickRow::FetchArt => &QuickRow::NETWORK,
+            | QuickRow::FetchArt
+            | QuickRow::Server => &QuickRow::NETWORK,
             QuickRow::ControlsShelf | QuickRow::Shortcuts | QuickRow::ControlsInGame => {
                 &QuickRow::CONTROL_PAGES
             }
@@ -603,6 +607,7 @@ impl QuickRow {
             QuickRow::WifiPower => "Wi-Fi",
             QuickRow::Networks => "Networks",
             QuickRow::CheckUpdates => "Check for Updates",
+            QuickRow::Server => "Gamebit",
             QuickRow::Controls => "Controls",
             QuickRow::ControlsShelf => "Shelf",
             QuickRow::ControlsInGame => "In-Game",
@@ -697,6 +702,7 @@ impl QuickRow {
                 | QuickRow::Network
                 | QuickRow::Networks
                 | QuickRow::CheckUpdates
+                | QuickRow::Server
         )
     }
 
@@ -1243,9 +1249,19 @@ pub fn fetch_legends(ink: [u8; 3]) -> UndoFace {
     with_hint(button_face(ButtonLegend::B), "Stop", Some(ink), true)
 }
 
+pub fn print_stop_legend(ink: [u8; 3]) -> UndoFace {
+    let (src, w, h) = button_legend(ButtonLegend::B);
+    let side = PRINT_STOP_BUTTON;
+    let rgba = crate::art::cover_rgba(src, w, h, side, side).unwrap_or_default();
+    let button = UndoFace { rgba, w: side, h: side };
+    with_hint(button, "Stop", Some(ink), true)
+}
+
 pub fn fetch_skip_legend(ink: [u8; 3]) -> UndoFace {
     with_hint(button_face(ButtonLegend::X), "Skip", Some(ink), false)
 }
+
+const PRINT_STOP_BUTTON: u32 = 24;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StudioGlyph {

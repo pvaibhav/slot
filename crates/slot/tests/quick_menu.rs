@@ -623,6 +623,7 @@ fn fetch_missing_art_moved_to_network() {
         [
             QuickRow::WifiPower,
             QuickRow::Networks,
+            QuickRow::Server,
             QuickRow::CheckUpdates,
             QuickRow::FetchArt,
         ]
@@ -632,6 +633,7 @@ fn fetch_missing_art_moved_to_network() {
         [
             "Wi-Fi",
             "Networks",
+            "Gamebit",
             "Check for Updates",
             "Fetch Missing Art"
         ]

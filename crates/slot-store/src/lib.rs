@@ -41,8 +41,8 @@ pub use guides::{
     GUIDE_SPOTS_FILE,
 };
 pub use platform::Platform;
-pub use ring::{StateEntry, StateRing, RING_MAX};
-pub use scan::{initial, is_hidden, listing, scan, sort_key, Cart, StoreError};
+pub use ring::{is_stamp, StateEntry, StateRing, RING_MAX};
+pub use scan::{initial, is_hidden, listing, scan, scan_platform, sort_key, Cart, StoreError};
 pub use shots::{shot_stamp, ShotDir, ShotEntry, SCREENSHOTS_DIR};
 pub use slot_state::{
     bezel_for_scale, bezel_scale, read_slot_state, write_slot_state, Appearance, BezelPick,

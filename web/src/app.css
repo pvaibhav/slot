@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "Slot Label";
+  src: url("/fonts/label.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@theme {
+  --color-background: #1b1b21;
+  --color-foreground: #f4f5f9;
+  --color-card: #242429;
+  --color-card-foreground: #f4f5f9;
+  --color-primary: #f4f5f9;
+  --color-primary-foreground: #1b1b21;
+  --color-muted: #2c2c33;
+  --color-muted-foreground: #bcbdc9;
+  --color-surface-sunken: #1a1a1d;
+  --color-border: #3a3a46;
+  --color-input: #3a3a46;
+  --color-ring: #f4f5f9;
+  --color-destructive: #e05872;
+  --color-accent: #f4f5f9;
+  --color-accent-foreground: #1b1b21;
+  --color-accent-light: #ffffff;
+  --color-warn: #e8b83a;
+  --radius-sm: 0.1875rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.375rem;
+  --radius-xl: 0.5rem;
+}
+
+html {
+  font-size: 18px;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+}
+
+.slot-label {
+  font-family: "Slot Label", Inter, system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+img {
+  -webkit-user-drag: none;
+  user-drag: none;
+}

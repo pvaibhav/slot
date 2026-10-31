@@ -62,6 +62,7 @@ pub struct Frontend {
     update_text: UpdateText,
     fetch_sync: FetchSync,
     studio_sync: StudioSync,
+    print_tex: Option<crate::print_scene::PrintTextures>,
     quick_clock: QuickClock,
     quick_network: QuickClock,
     networks: crate::network_faces::NetworkSync,
@@ -278,6 +279,37 @@ impl FetchSync {
             sets: [None, None],
             set_slots: [[None; 5]; 2],
             asked: Vec::new(),
+        }
+    }
+}
+
+fn sync_server(
+    app: &mut App,
+    compositor: &mut Compositor,
+    tex: &mut Option<crate::print_scene::PrintTextures>,
+) {
+    use crate::print_scene::{PrintArtState, PrintTextures};
+    match app.take_server_art() {
+        PrintArtState::Pending => {}
+        PrintArtState::Failed => app.server_art_failed(),
+        PrintArtState::Ready(art) => {
+            let up = match *tex {
+                Some(have) => {
+                    have.set_paper(compositor, &art);
+                    Ok(have)
+                }
+                None => PrintTextures::upload(compositor, &art),
+            };
+            match up {
+                Ok(have) => {
+                    *tex = Some(have);
+                    app.set_server_tex(have);
+                }
+                Err(e) => {
+                    eprintln!("slot: server: {e}");
+                    app.server_art_failed();
+                }
+            }
         }
     }
 }
@@ -510,6 +542,7 @@ impl Frontend {
             update_text: UpdateText::default(),
             fetch_sync: FetchSync::new(),
             studio_sync: StudioSync::new(),
+            print_tex: None,
             quick_clock: QuickClock::default(),
             quick_network: QuickClock::default(),
             networks: Default::default(),
@@ -935,6 +968,20 @@ impl Frontend {
         sync_update(self.session.app_mut(), compositor, &mut self.update_text);
         sync_fetch_art(self.session.app_mut(), compositor, &mut self.fetch_sync);
         sync_studio(self.session.app_mut(), compositor, &mut self.studio_sync);
+        sync_server(self.session.app_mut(), compositor, &mut self.print_tex);
+        let stale = self.session.app_mut().take_stale_labels();
+        if !stale.is_empty() {
+            if let Some(root) = self.session.app().root().map(|r| r.to_path_buf()) {
+                self.rebuild = Some(Rebuild::start(&root, stale));
+            }
+        }
+        if self.session.app_mut().take_rescanned() {
+            self.wallpaper.image = None;
+            self.wallpaper.label.clear();
+            self.wallpaper.shelf_asked.clear();
+            self.game_bezel.image = None;
+            self.game_bezel.labels = Default::default();
+        }
         sync_quick_clock(self.session.app_mut(), compositor, &mut self.quick_clock);
         sync_quick_network(self.session.app_mut(), compositor, &mut self.quick_network);
         self.networks.sync(self.session.app_mut(), compositor);
@@ -1189,6 +1236,7 @@ impl Frontend {
     }
 
     pub fn stop(&mut self) {
+        self.session.app_mut().end_server();
         self.session.app_mut().flush_resume();
         self.session.app_mut().settle_saves();
         self.session.app_mut().clear_loading_mark();
@@ -1784,8 +1832,14 @@ fn sync_shelf_wallpaper(app: &mut App, compositor: &mut Compositor, state: &mut 
         }
     }
     if let Some(done) = loader.take() {
-        let id = compositor.create_texture(done.size.0, done.size.1, &done.rgba);
-        state.shelf_faces.insert((done.name, done.size), id);
+        let key = (done.name, done.size);
+        match state.shelf_faces.get(&key) {
+            Some(id) => compositor.update_texture(*id, key.1 .0, key.1 .1, &done.rgba),
+            None => {
+                let id = compositor.create_texture(key.1 .0, key.1 .1, &done.rgba);
+                state.shelf_faces.insert(key, id);
+            }
+        }
     }
     if let Some(id) = shown.and_then(|name| state.shelf_faces.get(&(name, size))) {
         app.set_wallpaper(*id);

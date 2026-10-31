@@ -24,6 +24,7 @@ libloading = { workspace = true }
 libc = { workspace = true }
 lz4_flex = { workspace = true }
 png = { workspace = true }
+qrcode = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 zip = { workspace = true }
@@ -36,3 +37,4 @@ image-webp = { workspace = true }
 [dev-dependencies]
 slot-gfx = { path = "../slot-gfx", default-features = false, features = ["test-support"] }
 tempfile = { workspace = true }
+rqrr = "0.11"

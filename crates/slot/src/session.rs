@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use slot_input::{Action, Btn, Chord, Contexts, Entry, Gestures, Millis, Mod, RawEvent};
 use slot_retro::Rumble;
@@ -18,6 +18,7 @@ use crate::frames::FrameRef;
 use crate::input::Pad;
 use crate::persist;
 use crate::prefetch::Prefetch;
+use crate::print_scene::Cue;
 
 pub struct Session {
     root: PathBuf,
@@ -38,6 +39,7 @@ pub struct Session {
     reloading: bool,
     driven: bool,
     sunlight_sent: Option<u8>,
+    buzz_ends: Option<Instant>,
 }
 
 impl Session {
@@ -65,6 +67,7 @@ impl Session {
             reloading: false,
             driven: false,
             sunlight_sent: None,
+            buzz_ends: None,
         };
         // A game left running comes straight back. Its core loads on its own thread, so start it
         // now and let the card read overlap the rest of the boot. Waiting for the first update
@@ -84,6 +87,22 @@ impl Session {
         let mut samples = sfx.render(rate);
         crate::audio::volume::apply(&mut samples, self.app.output_volume());
         ring.mix(&samples);
+    }
+
+    fn play_print_cue(&mut self, cue: Cue) {
+        match cue {
+            Cue::Buzz => {
+                self.play_sfx(Sfx::PrintBuzz);
+                let left = Duration::from_secs_f32(Sfx::PrintBuzz.tail());
+                self.buzz_ends = Some(Instant::now() + left);
+            }
+            Cue::Tear => self.play_sfx(Sfx::Tear),
+            Cue::BuzzOff => {
+                if self.buzz_ends.take().is_some_and(|end| Instant::now() < end) {
+                    self.sink.ring().hush();
+                }
+            }
+        }
     }
 
     pub fn audio_queued(&self) -> usize {
@@ -363,6 +382,9 @@ impl Session {
         }
         if let Some(sfx) = self.app.take_sfx() {
             self.play_sfx(sfx);
+        }
+        for cue in self.app.take_print_cues() {
+            self.play_print_cue(cue);
         }
         self.sync_core();
         self.sync_reload();

@@ -30,6 +30,8 @@ use crate::link_screen::LinkSprites;
 use crate::link_start::{link_port, LinkFail, LinkProgress, LinkStarter, LinkStep};
 use crate::loading_mark::LoadingMark;
 use crate::persist::{self, Snapshot};
+use crate::print_scene::{print_draws, Cue, PrintArtState, PrintFrame, PrintTextures};
+use crate::server::{ServerNet, ServerPaper, ServerSession};
 use crate::art::jobs::{no_art_jobs, ArtEvent, ArtJob, ArtJobs};
 use crate::art::make::Kind as ArtKind;
 use crate::fetch_art::{stage_at, FetchArt, FetchTex, Landed as ArtLanded, Run as ArtRun, Scene as ArtScene, Stage};
@@ -392,6 +394,7 @@ enum UpdateState {
 enum NetNotice {
     NoNetwork,
     Password,
+    ServerFailed,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -641,6 +644,11 @@ pub struct App {
     studio_repeat: (Option<Btn>, Millis, u32),
     studio_applied: bool,
     studio: Option<crate::studio::Studio>,
+    server: Option<ServerSession>,
+    server_net: ServerNet,
+    print_cues: Vec<Cue>,
+    rescanned: bool,
+    stale_labels: Vec<Cart>,
     fetch_landed: Vec<ArtLanded>,
     fetch_relabeled: usize,
     art_pending: usize,
@@ -722,6 +730,19 @@ fn wallpaper_of_rack(rack: Rack, files: &[String]) -> Option<String> {
         })
 }
 
+fn fade_draws(draws: &mut [Draw], by: f32) {
+    for draw in draws {
+        match draw {
+            Draw::Rect { colour, .. } => colour[3] *= by,
+            Draw::Tex { alpha, .. }
+            | Draw::Part { alpha, .. }
+            | Draw::Turned { alpha, .. }
+            | Draw::Quad { alpha, .. } => *alpha *= by,
+            Draw::Paper { .. } | Draw::Game | Draw::Shot { .. } | Draw::Capture => {}
+        }
+    }
+}
+
 fn shift_down(draws: &mut [Draw], dy: f32) {
     if dy == 0.0 {
         return;
@@ -737,6 +758,7 @@ fn shift_down(draws: &mut [Draw], dy: f32) {
                     c[1] += dy;
                 }
             }
+            Draw::Paper { pivot, .. } => pivot[1] += dy,
             Draw::Game | Draw::Shot { .. } | Draw::Capture => {}
         }
     }
@@ -799,6 +821,11 @@ impl App {
             studio_repeat: (None, 0, 0),
             studio_applied: false,
             studio: None,
+            server: None,
+            server_net: ServerNet::default(),
+            print_cues: Vec::new(),
+            rescanned: false,
+            stale_labels: Vec::new(),
             fetch_landed: Vec::new(),
             fetch_relabeled: 0,
             art_pending: 0,
@@ -1544,6 +1571,7 @@ impl App {
             | QuickRow::Network
             | QuickRow::Networks
             | QuickRow::CheckUpdates
+            | QuickRow::Server
             | QuickRow::About
             | QuickRow::Screen
             | QuickRow::Game
@@ -1935,6 +1963,9 @@ impl App {
         }
         if !self.state.turbo {
             hidden.extend([QuickRow::GameTurboA, QuickRow::GameTurboB]);
+        }
+        if !self.server_allowed() {
+            hidden.push(QuickRow::Server);
         }
         if self.wifi_probe.is_some() {
             hidden.push(QuickRow::Network);
@@ -2992,7 +3023,7 @@ impl App {
     }
 
     pub fn ready_to_power_off(&self) -> bool {
-        self.powering_off && self.now() >= self.act_at
+        self.powering_off && self.server.is_none() && self.now() >= self.act_at
     }
 
     pub fn ready_to_repair(&self) -> bool {
@@ -3242,7 +3273,18 @@ impl App {
             }
             return;
         }
-        if (self.fetch_art.is_some() || self.studio.is_some()) && self.adjust(action) {
+        let server_adjusts = matches!(
+            action,
+            Action::VolumeUp
+                | Action::VolumeDown
+                | Action::MuteToggle
+                | Action::BrightnessUp
+                | Action::BrightnessDown
+        );
+        let adjusts = self.fetch_art.is_some()
+            || self.studio.is_some()
+            || (self.server.is_some() && server_adjusts);
+        if adjusts && self.adjust(action) {
             return;
         }
         if self.fetch_art.is_some() {
@@ -3250,6 +3292,9 @@ impl App {
         }
         if self.studio.is_some() {
             return self.studio_input(action);
+        }
+        if self.server.is_some() {
+            return self.server_input(action);
         }
         if self.update.is_some() {
             return self.update_input(action);
@@ -3523,6 +3568,7 @@ impl App {
             QuickRow::About => self.phase = Phase::About,
             QuickRow::FetchArt => self.open_fetch_missing_art(),
             QuickRow::CheckUpdates => self.open_check_for_updates(),
+            QuickRow::Server => self.open_server(),
             QuickRow::WifiPower => self.set_wifi_off(!self.state.wifi_off),
             QuickRow::Networks => self.open_networks(),
             QuickRow::Screen
@@ -3908,7 +3954,8 @@ impl App {
             | QuickRow::Network
             | QuickRow::WifiPower
             | QuickRow::Networks
-            | QuickRow::CheckUpdates => return,
+            | QuickRow::CheckUpdates
+            | QuickRow::Server => return,
         }
         self.persist();
     }
@@ -4462,6 +4509,7 @@ impl App {
     }
 
     fn timers(&mut self) {
+        self.step_server();
         self.take_art_events();
         self.take_update_events();
         self.play_hold();
@@ -4677,7 +4725,7 @@ impl App {
     }
 
     fn persist(&self) {
-        let Some(root) = &self.root else {
+        let Some(root) = self.root.as_ref().filter(|_| self.server.is_none()) else {
             return;
         };
         self.state_writer.flush();
@@ -4689,7 +4737,7 @@ impl App {
     }
 
     fn persist_soon(&self) {
-        if let Some(root) = &self.root {
+        if let Some(root) = self.root.as_ref().filter(|_| self.server.is_none()) {
             self.state_writer.save(root, &self.state);
         }
     }
@@ -4777,6 +4825,13 @@ impl App {
     }
 
     pub fn draw(&self, out: &mut Vec<Draw>) {
+        match self.server_frame() {
+            Some((frame, tex)) => self.draw_server(&frame, &tex, out),
+            None => self.draw_app(out),
+        }
+    }
+
+    fn draw_app(&self, out: &mut Vec<Draw>) {
         if self.shutting_down() {
             out.push(Draw::Rect {
                 x: 0.0,
@@ -5878,6 +5933,7 @@ impl App {
 
     fn doze(&mut self) {
         self.cancel_fetch_art();
+        self.abandon_server();
         if !self.updating() {
             self.release_radio();
         }
@@ -7785,6 +7841,193 @@ impl App {
         }
     }
 
+    fn server_allowed(&self) -> bool {
+        self.root.is_some() && self.seated_cart().is_none() && !self.link_active()
+    }
+
+    fn open_server(&mut self) {
+        let Some(root) = self.root.clone().filter(|_| self.server_allowed()) else {
+            return;
+        };
+        self.persist();
+        self.server = Some(ServerSession::open(root, self.server_net.clone()));
+    }
+
+    fn server_input(&mut self, action: Action) {
+        let now = self.now();
+        if let (Action::GbaDown(Btn::B), Some(server)) = (action, &mut self.server) {
+            server.stop(now);
+        }
+    }
+
+    fn step_server(&mut self) {
+        let now = self.now();
+        let Some(server) = &mut self.server else {
+            return;
+        };
+        server.poll(now);
+        self.print_cues.extend(server.cues(now));
+        if !server.finished(now) {
+            return;
+        }
+        let failed = server.failed();
+        let hurried = server.hurried();
+        let rescan = server.take_rescan();
+        self.server = None;
+        self.reload_server_edits();
+        match rescan {
+            Some(rescan) => {
+                self.adopt_rescan(rescan.carts);
+                if !hurried {
+                    self.stale_labels = rescan.stale;
+                }
+            }
+            None => {
+                self.restock_recents();
+                self.restock_favorites();
+            }
+        }
+        if self.powering_off {
+            self.remember_shelf();
+        }
+        self.persist();
+        if failed {
+            self.set_update(Some(UpdateState::Notice(NetNotice::ServerFailed)));
+        }
+    }
+
+    fn abandon_server(&mut self) {
+        let now = self.now();
+        if let Some(server) = &mut self.server {
+            server.abandon(now);
+        }
+    }
+
+    pub fn end_server(&mut self) {
+        self.abandon_server();
+        while self.server.is_some() {
+            self.step_server();
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    }
+
+    fn reload_server_edits(&mut self) {
+        let Some(root) = &self.root else {
+            return;
+        };
+        let disk = read_slot_state(root);
+        self.state.recents = disk.recents;
+        self.state.favorites = disk.favorites;
+        self.state.cart = disk.cart;
+        self.state.cart_platform = disk.cart_platform;
+        self.state.shelf_cart = disk.shelf_cart;
+    }
+
+    fn adopt_rescan(&mut self, carts: Vec<Cart>) {
+        let seats: Vec<(usize, Option<(Platform, String)>)> = self
+            .shelves
+            .iter()
+            .map(|(_, shelf)| {
+                let cart = shelf.carts.get(shelf.index);
+                (shelf.index, cart.map(|c| (c.platform, c.stem.clone())))
+            })
+            .collect();
+        for (at, (_, fresh)) in shelves_of(carts).into_iter().enumerate() {
+            let old = self.shelves[at].1.restock(fresh.carts);
+            self.orphaned.extend(old);
+        }
+        self.restock_recents();
+        self.restock_favorites();
+        for ((_, shelf), (index, seat)) in self.shelves.iter_mut().zip(seats) {
+            let found = shelf
+                .carts
+                .iter()
+                .position(|c| seat.as_ref().is_some_and(|(p, s)| c.platform == *p && c.stem == *s));
+            if !shelf.carts.is_empty() {
+                shelf.select(found.unwrap_or(index.min(shelf.carts.len() - 1)));
+            }
+        }
+        if self.shelf().carts.is_empty() {
+            self.shelf_at = self.next_shelf(1).unwrap_or(0);
+        }
+        self.shelf_platform = slot_ui::Printed::default();
+        self.slot_letter = None;
+        self.shelf_named = None;
+        self.name_pending = true;
+        self.core_stale = true;
+        self.rescanned = true;
+    }
+
+    fn server_frame(&self) -> Option<(PrintFrame, PrintTextures)> {
+        match self.shutting_down() {
+            true => None,
+            false => self.server.as_ref()?.frame(self.now()),
+        }
+    }
+
+    fn draw_server(&self, frame: &PrintFrame, tex: &PrintTextures, out: &mut Vec<Draw>) {
+        print_draws(frame, tex, self.canvas(), out);
+        if frame.menu_alpha > 0.0 {
+            let from = out.len();
+            self.draw_app(out);
+            fade_draws(&mut out[from..], frame.menu_alpha);
+        } else {
+            self.hud.draw(self.canvas(), self.now(), out);
+        }
+    }
+
+    pub fn server_open(&self) -> bool {
+        self.server.is_some()
+    }
+
+    pub fn server_scene_running(&self) -> bool {
+        self.server.as_ref().is_some_and(ServerSession::scene_running)
+    }
+
+    pub fn server_paper(&self) -> Option<&ServerPaper> {
+        self.server.as_ref()?.paper()
+    }
+
+    pub fn set_server_net(&mut self, net: ServerNet) {
+        self.server_net = net;
+    }
+
+    pub fn take_server_art(&mut self) -> PrintArtState {
+        match &mut self.server {
+            Some(server) => server.take_art(),
+            None => PrintArtState::Pending,
+        }
+    }
+
+    pub fn set_server_tex(&mut self, tex: PrintTextures) {
+        if let Some(server) = &mut self.server {
+            server.set_tex(tex);
+        }
+    }
+
+    pub fn server_art_failed(&mut self) {
+        let now = self.now();
+        if let Some(server) = &mut self.server {
+            server.fail(now);
+        }
+    }
+
+    pub fn take_print_cues(&mut self) -> Vec<Cue> {
+        std::mem::take(&mut self.print_cues)
+    }
+
+    pub fn take_rescanned(&mut self) -> bool {
+        std::mem::take(&mut self.rescanned)
+    }
+
+    pub fn take_stale_labels(&mut self) -> Vec<Cart> {
+        std::mem::take(&mut self.stale_labels)
+    }
+
+    pub fn is_favorite(&self, platform: Platform, stem: &str) -> bool {
+        self.state.is_favorite(platform, stem)
+    }
+
     fn open_check_for_updates(&mut self) {
         match self.net_notice() {
             Some(notice) => self.set_update(Some(UpdateState::Notice(notice))),
@@ -8178,6 +8421,9 @@ impl App {
                 "Passwords are 8 to 63 characters".into(),
                 "Nothing was saved.".into(),
             ),
+            UpdateState::Notice(NetNotice::ServerFailed) => {
+                ("Gamebit failed".into(), "Gamebit has stopped.".into())
+            }
             UpdateState::Downloading(..)
             | UpdateState::Cancelling(..)
             | UpdateState::Closing(_) => return None,
@@ -8942,6 +9188,7 @@ impl App {
     }
 
     fn begin_power_off(&mut self) {
+        self.abandon_server();
         self.close_studio();
         self.release_radio();
         if self.powering_off {

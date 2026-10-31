@@ -9,9 +9,7 @@ use slot::frontend::Frontend;
 use slot_gfx::{Compositor, HeadlessSurface, OUT_H, OUT_W};
 use slot_input::{Btn, InputSource, Millis, RawEvent};
 use slot_power::SimPlatform;
-use slot_ui::{
-    quick_row_top, quick_row_top_at, quick_scroll, QuickRow, MOUTH_H, QUICK_PITCH, QUICK_VISIBLE,
-};
+use slot_ui::{quick_row_top, quick_row_top_at, quick_scroll, QuickRow, MOUTH_H, QUICK_VISIBLE};
 
 struct Script(VecDeque<Vec<RawEvent>>);
 
@@ -704,7 +702,7 @@ fn the_network_page_renders() {
     assert!(!inked(&off, 40..360, wifi).is_empty(), "the Wi-Fi row is gone");
     for row in [QuickRow::Networks, QuickRow::CheckUpdates, QuickRow::FetchArt] {
         let top = quick_row_top(row, &[]) as usize;
-        if top.abs_diff(wifi) < QUICK_PITCH as usize {
+        if top.abs_diff(wifi) < 20 {
             continue;
         }
         assert!(

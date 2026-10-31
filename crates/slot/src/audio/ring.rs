@@ -119,15 +119,37 @@ impl Ring {
     pub fn mix(&self, samples: &[i16]) {
         self.priming.store(false, Ordering::Relaxed);
         let mut i = self.lock();
-        i.pending.clear();
-        i.placed = 0;
         if i.buf.is_empty() {
+            i.pending.clear();
+            i.placed = 0;
             return;
         }
+        let mut merged = samples.to_vec();
+        if let Some(gap) = i.pending_at.checked_sub(i.drained).map(|g| g as usize) {
+            let rest = &i.pending[i.placed.min(i.pending.len())..];
+            if merged.len() < gap + rest.len() && !rest.is_empty() {
+                merged.resize(gap + rest.len(), 0);
+            }
+            for (k, s) in rest.iter().enumerate() {
+                merged[gap + k] = merged[gap + k].saturating_add(*s);
+            }
+        }
+        i.pending = merged;
+        i.placed = 0;
         i.pending_at = i.drained;
-        i.pending.extend_from_slice(samples);
         lay_pending(&mut i);
         self.queued.store(i.len, Ordering::Relaxed);
+    }
+
+    pub fn hush(&self) {
+        let mut i = self.lock();
+        i.pending = Vec::new();
+        i.placed = 0;
+        let cap = i.buf.len();
+        for k in 0..i.len {
+            let at = (i.head + k) % cap;
+            i.buf[at] = 0;
+        }
     }
 
     pub fn fill(&self, out: &mut [i16]) {
