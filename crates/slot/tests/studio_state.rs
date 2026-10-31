@@ -603,3 +603,90 @@ fn reset_puts_an_automatic_label_color_back() {
     s.press(Btn::X);
     assert_eq!(s.ground, None);
 }
+
+fn chip_at(chip: slot_ui::palette::Chip) -> usize {
+    slot_ui::palette::chip_grid(0.0, 0.0)
+        .iter()
+        .position(|p| p.chip == chip)
+        .unwrap()
+}
+
+fn worn(index: usize) -> Studio {
+    let preset = slot_ui::shell_presets()[index].1;
+    let mut c = cart(Platform::Gba, true);
+    c.shell = Some(ShellChoice {
+        outline: Outline::Auto,
+        colour: preset.colour,
+        finish: ShellFinish::Solid,
+    });
+    Studio::new(c, true)
+}
+
+#[test]
+fn the_shell_picker_starts_on_the_preset_the_cart_wears() {
+    use slot_ui::palette::Chip;
+    let mut s = worn(7);
+    let before = s.shell;
+    to_row(&mut s, Row::Color);
+    s.press(Btn::A);
+    assert_eq!(
+        s.screen,
+        Screen::Chips { target: Target::Shell, at: chip_at(Chip::Preset(7)) }
+    );
+    assert_eq!(s.shell, before);
+}
+
+#[test]
+fn the_shell_picker_starts_on_current_for_a_cart_on_auto_or_a_custom_color() {
+    let mut s = gba();
+    to_row(&mut s, Row::Color);
+    s.press(Btn::A);
+    assert_eq!(s.screen, Screen::Chips { target: Target::Shell, at: 0 });
+
+    let mut c = cart(Platform::Gba, true);
+    c.shell = Some(ShellChoice {
+        outline: Outline::Auto,
+        colour: [1, 2, 3],
+        finish: ShellFinish::Solid,
+    });
+    let mut s = Studio::new(c, true);
+    to_row(&mut s, Row::Color);
+    s.press(Btn::A);
+    assert_eq!(s.screen, Screen::Chips { target: Target::Shell, at: 0 });
+}
+
+#[test]
+fn the_shell_picker_reopens_on_what_was_just_picked() {
+    use slot_ui::palette::Chip;
+    let mut s = worn(7);
+    to_row(&mut s, Row::Color);
+    s.press(Btn::A);
+    s.chips_jump(chip_at(Chip::Preset(3)));
+    s.press(Btn::B);
+    s.press(Btn::A);
+    assert_eq!(
+        s.screen,
+        Screen::Chips { target: Target::Shell, at: chip_at(Chip::Preset(3)) }
+    );
+    s.chips_jump(chip_at(Chip::Auto));
+    s.press(Btn::B);
+    s.press(Btn::A);
+    assert_eq!(
+        s.screen,
+        Screen::Chips { target: Target::Shell, at: chip_at(Chip::Auto) }
+    );
+}
+
+#[test]
+fn the_label_picker_starts_on_the_preset_in_use() {
+    use slot_ui::palette::Chip;
+    let mut s = Studio::new(cart(Platform::Gba, false), true);
+    s.screen = Screen::Chips { target: Target::Label, at: 0 };
+    s.chips_jump(chip_at(Chip::Preset(3)));
+    s.press(Btn::B);
+    s.press(Btn::A);
+    assert_eq!(
+        s.screen,
+        Screen::Chips { target: Target::Label, at: chip_at(Chip::Preset(3)) }
+    );
+}

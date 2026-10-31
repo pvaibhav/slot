@@ -271,6 +271,28 @@ impl Studio {
         chip_grid(0.0, 0.0)
     }
 
+    fn chip_in_use(&self, target: Target) -> usize {
+        let (now, opened) = match target {
+            Target::Shell => (
+                self.shell.map(|c| c.colour),
+                self.cart.shell.map(|c| c.colour),
+            ),
+            Target::Label => (self.ground, self.opened_ground),
+        };
+        let presets = shell_presets();
+        let chip = match now {
+            None if opened.is_some() => Some(Chip::Auto),
+            None => None,
+            Some(rgb) => presets
+                .iter()
+                .position(|(_, shell)| shell.colour == rgb)
+                .map(Chip::Preset),
+        };
+        let grid = Self::grid();
+        chip.and_then(|c| grid.iter().position(|p| p.chip == c))
+            .unwrap_or(0)
+    }
+
     pub fn chips_jump(&mut self, at: usize) {
         let Screen::Chips { target, .. } = self.screen else {
             return;
@@ -380,13 +402,13 @@ impl Studio {
             (Btn::A, Row::Color) => {
                 self.screen = Screen::Chips {
                     target: Target::Shell,
-                    at: 0,
+                    at: self.chip_in_use(Target::Shell),
                 }
             }
             (Btn::A, Row::LabelColor) => {
                 self.screen = Screen::Chips {
                     target: Target::Label,
-                    at: 0,
+                    at: self.chip_in_use(Target::Label),
                 }
             }
             (Btn::Left | Btn::Right, Row::Finish) => self.step_finish(btn == Btn::Right),
