@@ -133,7 +133,7 @@ fn the_legend_is_back_and_help_only() {
     let keys: Vec<(&str, String)> = g.hints().into_iter().map(|h| (h.key, h.label)).collect();
     assert_eq!(
         keys,
-        [("Y", "Back".to_string()), ("MENU", "Help".to_string())]
+        [("Y", "Close".to_string()), ("MENU", "Help".to_string())]
     );
 }
 

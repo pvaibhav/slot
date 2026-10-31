@@ -20,7 +20,7 @@ const MONO_TTF: &[u8] = include_bytes!("../assets/DejaVuSansMono.ttf");
 
 pub const GUIDE_HELP_TITLE: &str = "Guide Help";
 
-pub const GUIDE_HINTS: [(&str, &str); 2] = [("Y", "Back"), ("MENU", "Help")];
+pub const GUIDE_HINTS: [(&str, &str); 2] = [("Y", "Close"), ("MENU", "Help")];
 pub const GUIDE_HELP_HINT: (&str, &str) = ("B", "Back");
 
 pub const GUIDE_ZOOMS: [f32; 8] = [10.0, 12.0, 14.0, 16.0, 18.0, 21.0, 24.0, 28.0];
