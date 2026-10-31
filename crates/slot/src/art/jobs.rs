@@ -8,7 +8,7 @@ use slot_store::{Cart, Platform};
 
 use super::index::{ArtIndex, Entry, Look};
 use super::make::{self, Kind};
-use slot_ui::house_label::{logo_tag, untagged};
+use slot_ui::house_label::{glance, logo_tag, looks_same};
 use super::rom;
 use crate::update::{self, UpdateFail};
 
@@ -367,10 +367,9 @@ pub fn studio_art_with(
     let dir = root.join(make::STUDIO_CACHE);
     let label = make::label_path(root, cart);
     let worn = std::fs::read(&label).ok();
-    let plain = |png: &[u8]| crc32fast::hash(&untagged(png));
-    let worn_crc = worn.as_deref().map(plain);
+    let worn_glance = worn.as_deref().and_then(glance);
     let worn_tagged = worn.as_deref().is_some_and(|png| logo_tag(png).is_some());
-    let mut seen: Vec<u32> = worn_crc.into_iter().collect();
+    let mut seen: Vec<Vec<u8>> = worn_glance.iter().cloned().collect();
     for kind in [Kind::Real, Kind::Logo] {
         let mut bytes = None;
         if let Some(path) = entry.and_then(|e| path_of(e, kind)) {
@@ -399,16 +398,19 @@ pub fn studio_art_with(
                 art.wheel = Some(wheel);
             }
         }
-        let crc = plain(&png);
-        if kind == Kind::Logo && Some(crc) == worn_crc && !worn_tagged {
+        let Some(look) = glance(&png) else {
+            continue;
+        };
+        let worn_it = worn_glance.as_ref().is_some_and(|w| looks_same(w, &look));
+        if kind == Kind::Logo && worn_it && !worn_tagged {
             let _ = make::relabel(root, cart, &png);
             art.logo_worn = logo_tag(&png);
         }
-        if seen.contains(&crc) {
+        if seen.iter().any(|s| looks_same(s, &look)) {
             art.duplicates = true;
             continue;
         }
-        seen.push(crc);
+        seen.push(look);
         let out = dir.join(name);
         if make::write_replacing(&out, &png).is_err() {
             continue;

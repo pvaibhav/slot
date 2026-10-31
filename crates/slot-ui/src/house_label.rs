@@ -3,6 +3,9 @@ use slot_store::Platform;
 
 use crate::{art, hue};
 
+const GLANCE_W: usize = 32;
+const GLANCE_H: usize = 16;
+const GLANCE_TOLERANCE: u8 = 16;
 const TAG_KEY: &str = "slot-label";
 
 pub const W: u32 = 1280;
@@ -303,6 +306,33 @@ pub fn text_png(rgba: &[u8], w: u32, h: u32, colour: [u8; 3]) -> Vec<u8> {
             .expect("PNG data writes into a Vec");
     }
     out
+}
+
+pub fn glance(png: &[u8]) -> Option<Vec<u8>> {
+    let (rgba, w, h) = art::decode_png_bytes(png)?;
+    let (w, h) = (w as usize, h as usize);
+    let mut out = Vec::with_capacity(GLANCE_W * GLANCE_H * 3);
+    for row in 0..GLANCE_H {
+        let (top, bottom) = (row * h / GLANCE_H, ((row + 1) * h / GLANCE_H).max(row * h / GLANCE_H + 1));
+        for col in 0..GLANCE_W {
+            let (left, right) = (col * w / GLANCE_W, ((col + 1) * w / GLANCE_W).max(col * w / GLANCE_W + 1));
+            let mut sum = [0u32; 3];
+            for y in top..bottom {
+                for p in rgba[(y * w + left) * 4..(y * w + right) * 4].chunks_exact(4) {
+                    for (s, c) in sum.iter_mut().zip(p) {
+                        *s += u32::from(*c);
+                    }
+                }
+            }
+            let cells = ((bottom - top) * (right - left)) as u32;
+            out.extend(sum.map(|s| (s / cells) as u8));
+        }
+    }
+    Some(out)
+}
+
+pub fn looks_same(a: &[u8], b: &[u8]) -> bool {
+    a.iter().zip(b).all(|(x, y)| x.abs_diff(*y) <= GLANCE_TOLERANCE)
 }
 
 pub fn untagged(png: &[u8]) -> Vec<u8> {

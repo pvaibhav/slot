@@ -377,6 +377,50 @@ mod one_cart {
         assert!(art.duplicates);
     }
 
+    fn grained(rgb: [u8; 3], w: u32, h: u32) -> Vec<u8> {
+        let rgba: Vec<u8> = (0..w * h)
+            .flat_map(|i| {
+                let n = (i % 7) as u8;
+                [rgb[0] + n, rgb[1] + n, rgb[2] + n, 255]
+            })
+            .collect();
+        encode(w, h, &rgba)
+    }
+
+    #[test]
+    fn a_reencoded_copy_of_the_worn_label_is_not_offered() {
+        let (d, cart, a) = setup();
+        let index = index_for(&[(crc32fast::hash(&a), r#""support-texture":"r.png""#)]);
+        let first = HashMap::from([(format!("{ART}r.png"), encode(600, 310, &[90, 60, 200, 255].repeat(600 * 310)))]);
+        let got = studio_art_with(d.path(), &cart, &index, &mut |u: &str| {
+            first.get(u).cloned().ok_or(UpdateFail::Download)
+        });
+        apply_label(d.path(), &cart, got.real.as_deref()).unwrap();
+        let again = HashMap::from([(format!("{ART}r.webp"), grained([87, 57, 197], 600, 310))]);
+        let art = studio_art_with(d.path(), &cart, &index, &mut |u: &str| {
+            again.get(u).cloned().ok_or(UpdateFail::Download)
+        });
+        assert!(art.real.is_none());
+        assert!(art.duplicates);
+    }
+
+    #[test]
+    fn a_different_label_is_still_offered() {
+        let (d, cart, a) = setup();
+        let index = index_for(&[(crc32fast::hash(&a), r#""support-texture":"r.png""#)]);
+        let first = HashMap::from([(format!("{ART}r.png"), grained([90, 60, 200], 600, 310))]);
+        let got = studio_art_with(d.path(), &cart, &index, &mut |u: &str| {
+            first.get(u).cloned().ok_or(UpdateFail::Download)
+        });
+        apply_label(d.path(), &cart, got.real.as_deref()).unwrap();
+        let again = HashMap::from([(format!("{ART}r.png"), grained([120, 60, 200], 600, 310))]);
+        let art = studio_art_with(d.path(), &cart, &index, &mut |u: &str| {
+            again.get(u).cloned().ok_or(UpdateFail::Download)
+        });
+        assert!(art.real.is_some());
+        assert!(!art.duplicates);
+    }
+
     #[test]
     fn an_old_logo_label_is_recognized_and_tagged() {
         use slot_ui::house_label::{logo_tag, untagged};
