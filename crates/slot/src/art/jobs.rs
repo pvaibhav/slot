@@ -203,6 +203,18 @@ fn got(
     }
 }
 
+fn image(
+    fetch: &mut dyn FnMut(&str) -> Result<Vec<u8>, UpdateFail>,
+    path: &str,
+) -> Result<Option<Vec<u8>>, UpdateFail> {
+    if let Some(stem) = path.strip_suffix(".png") {
+        if let Some(bytes) = got(fetch, &format!("{ART_BASE}{stem}.webp"))? {
+            return Ok(Some(bytes));
+        }
+    }
+    got(fetch, &format!("{ART_BASE}{path}"))
+}
+
 fn label_for(
     cart: &Cart,
     kind: Kind,
@@ -219,7 +231,7 @@ fn label_for(
         let Some(path) = path_of(entry, k) else {
             continue;
         };
-        let Some(bytes) = got(fetch, &format!("{ART_BASE}{path}"))? else {
+        let Some(bytes) = image(fetch, path)? else {
             continue;
         };
         if let Some(png) = make_one(k, &bytes, entry.look.as_ref(), cart) {
@@ -362,7 +374,7 @@ pub fn studio_art_with(
     for kind in [Kind::Real, Kind::Logo] {
         let mut bytes = None;
         if let Some(path) = entry.and_then(|e| path_of(e, kind)) {
-            match got(fetch, &format!("{ART_BASE}{path}")) {
+            match image(fetch, path) {
                 Ok(b) => bytes = b,
                 Err(e) => {
                     art.failed = Some(e);
@@ -382,7 +394,8 @@ pub fn studio_art_with(
         };
         if kind == Kind::Logo {
             let wheel = dir.join("wheel.png");
-            if make::write_replacing(&wheel, &bytes).is_ok() {
+            let written = make::as_png(&bytes).map(|png| make::write_replacing(&wheel, &png));
+            if matches!(written, Some(Ok(()))) {
                 art.wheel = Some(wheel);
             }
         }
@@ -559,7 +572,8 @@ fn studio_run(root: &Path, cart: &Cart) -> StudioArt {
         Ok(index) => index,
         Err(e) => return failed(e),
     };
-    studio_art_with(root, cart, &index, &mut fetch_art)
+    let agent = update::agent(update::DOWNLOAD_TIMEOUT);
+    studio_art_with(root, cart, &index, &mut |url| fetch_art(&agent, url))
 }
 
 fn run(root: &Path, kind: Kind, cancel: &AtomicBool, tx: &Sender<ArtEvent>) {
@@ -571,12 +585,13 @@ fn run(root: &Path, kind: Kind, cancel: &AtomicBool, tx: &Sender<ArtEvent>) {
         let _ = tx.send(ArtEvent::Failed(e));
         return;
     }
+    let agent = update::agent(update::DOWNLOAD_TIMEOUT);
     match load_index(root, &mut get_index) {
         Ok(index) => fetch_missing_with(
             root,
             kind,
             &index,
-            &fetch_art,
+            &|url| fetch_art(&agent, url),
             &|| cancel.load(Ordering::SeqCst),
             &mut |e| {
                 let _ = tx.send(e);
@@ -588,8 +603,8 @@ fn run(root: &Path, kind: Kind, cancel: &AtomicBool, tx: &Sender<ArtEvent>) {
     }
 }
 
-fn fetch_art(url: &str) -> Result<Vec<u8>, UpdateFail> {
-    let response = match update::agent(update::DOWNLOAD_TIMEOUT).get(url).call() {
+fn fetch_art(agent: &ureq::Agent, url: &str) -> Result<Vec<u8>, UpdateFail> {
+    let response = match agent.get(url).call() {
         Ok(r) => r,
         Err(ureq::Error::StatusCode(_)) => return Err(UpdateFail::Download),
         Err(e) => return Err(update::request_fail(&e)),

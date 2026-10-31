@@ -353,6 +353,17 @@ mod one_cart {
     }
 
     #[test]
+    fn a_webp_wheel_is_kept_as_a_png() {
+        let (d, cart, a) = setup();
+        let index = index_for(&[(crc32fast::hash(&a), r#""wheel":"w.png""#)]);
+        let served = HashMap::from([(format!("{ART}w.webp"), webp_wheel())]);
+        let art = studio_art_with(d.path(), &cart, &index, &mut |u: &str| {
+            served.get(u).cloned().ok_or(UpdateFail::Download)
+        });
+        assert_eq!(size_of(art.wheel.as_ref().unwrap()), (400, 200));
+    }
+
+    #[test]
     fn a_label_the_cart_wears_is_not_offered() {
         let (d, cart, a) = setup();
         let index = index_for(&[(crc32fast::hash(&a), r#""support-texture":"r.png","wheel":"w.png""#)]);
@@ -510,4 +521,63 @@ fn a_fetch_cancelled_before_it_starts_still_ends() {
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
     panic!("the fetch never reported an end");
+}
+
+fn webp_of(w: u32, h: u32, rgba: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    image_webp::WebPEncoder::new(&mut out)
+        .encode(rgba, w, h, image_webp::ColorType::Rgba8)
+        .unwrap();
+    out
+}
+
+fn webp_wheel() -> Vec<u8> {
+    let mut rgba = vec![0u8; 400 * 200 * 4];
+    for px in rgba.chunks_exact_mut(4).skip(400 * 80).take(400 * 40) {
+        px.copy_from_slice(&[240, 240, 240, 255]);
+    }
+    webp_of(400, 200, &rgba)
+}
+
+#[test]
+fn the_webp_is_asked_for_first_and_the_png_is_left_alone() {
+    let a = rom(1);
+    let d = card(&[("A.gba", &a)]);
+    let index = index_for(&[(crc32fast::hash(&a), r#""support-texture":"GBA/support-texture/a.png""#)]);
+    let webp = webp_of(600, 310, &[90, 60, 200, 255].repeat(600 * 310));
+    let asked = std::sync::Mutex::new(Vec::new());
+    let fetch = |url: &str| {
+        asked.lock().unwrap().push(url.to_string());
+        match url.ends_with(".webp") {
+            true => Ok(webp.clone()),
+            false => Err(UpdateFail::Download),
+        }
+    };
+    fetch_missing_with(d.path(), Kind::Real, &index, &fetch, &|| false, &mut |_| {});
+    assert_eq!(size_of(&d.path().join("Labels/GBA/A.png")), (1280, 661));
+    assert_eq!(asked.into_inner().unwrap(), vec![format!("{ART}GBA/support-texture/a.webp")]);
+}
+
+#[test]
+fn a_logo_label_lands_from_a_webp_wheel() {
+    let a = rom(1);
+    let d = card(&[("A.gba", &a)]);
+    let index = index_for(&[(crc32fast::hash(&a), r#""wheel":"GBA/wheel/a.png""#)]);
+    let served = HashMap::from([(format!("{ART}GBA/wheel/a.webp"), webp_wheel())]);
+    run(d.path(), Kind::Logo, &index, served, None);
+    assert!(d.path().join("Labels/GBA/A.png").exists());
+}
+
+#[test]
+fn a_lost_connection_on_the_webp_does_not_try_the_png() {
+    let a = rom(1);
+    let d = card(&[("A.gba", &a)]);
+    let index = index_for(&[(crc32fast::hash(&a), r#""support-texture":"GBA/support-texture/a.png""#)]);
+    let asked = AtomicUsize::new(0);
+    let fetch = |_: &str| {
+        asked.fetch_add(1, Ordering::SeqCst);
+        Err(UpdateFail::Offline)
+    };
+    fetch_missing_with(d.path(), Kind::Real, &index, &fetch, &|| false, &mut |_| {});
+    assert_eq!(asked.into_inner(), 1);
 }

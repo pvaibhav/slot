@@ -16,7 +16,33 @@ pub enum Kind {
     Logo,
 }
 
+fn encoded(width: u32, height: u32, color: png::ColorType, pixels: &[u8]) -> Option<Vec<u8>> {
+    let mut out = Vec::new();
+    {
+        let mut enc = png::Encoder::new(&mut out, width, height);
+        enc.set_color(color);
+        enc.set_depth(png::BitDepth::Eight);
+        enc.write_header().ok()?.write_image_data(pixels).ok()?;
+    }
+    Some(out)
+}
+
+fn webp_as_png(bytes: &[u8]) -> Option<Vec<u8>> {
+    let mut decoder = image_webp::WebPDecoder::new(std::io::Cursor::new(bytes)).ok()?;
+    let (width, height) = decoder.dimensions();
+    let color = match decoder.has_alpha() {
+        true => png::ColorType::Rgba,
+        false => png::ColorType::Rgb,
+    };
+    let mut pixels = vec![0; decoder.output_buffer_size()?];
+    decoder.read_image(&mut pixels).ok()?;
+    encoded(width, height, color, &pixels)
+}
+
 pub fn as_png(bytes: &[u8]) -> Option<Cow<'_, [u8]>> {
+    if bytes.starts_with(b"RIFF") {
+        return webp_as_png(bytes).map(Cow::Owned);
+    }
     if !bytes.starts_with(&[0xFF, 0xD8]) {
         return Some(Cow::Borrowed(bytes));
     }
@@ -28,14 +54,7 @@ pub fn as_png(bytes: &[u8]) -> Option<Cow<'_, [u8]>> {
         jpeg_decoder::PixelFormat::L8 => png::ColorType::Grayscale,
         _ => return None,
     };
-    let mut out = Vec::new();
-    {
-        let mut enc = png::Encoder::new(&mut out, u32::from(info.width), u32::from(info.height));
-        enc.set_color(color);
-        enc.set_depth(png::BitDepth::Eight);
-        enc.write_header().ok()?.write_image_data(&pixels).ok()?;
-    }
-    Some(Cow::Owned(out))
+    encoded(u32::from(info.width), u32::from(info.height), color, &pixels).map(Cow::Owned)
 }
 
 pub fn real_label(scan: &[u8], platform: Platform) -> Option<Vec<u8>> {
