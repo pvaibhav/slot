@@ -5,16 +5,18 @@ use std::os::fd::FromRawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const GROUP: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
 const MDNS_PORT: u16 = 5353;
-const NAME: [&str; 2] = ["slot", "local"];
+const NAME: &str = "gamebit";
+const DOMAIN: &str = "local";
 const MAX_JUMPS: usize = 8;
 const MAX_QUESTIONS: usize = 16;
 const TTL: u32 = 120;
 const LEGACY_TTL: u32 = 10;
 const POLL: Duration = Duration::from_millis(100);
+const PROBE_WAIT: Duration = Duration::from_millis(250);
 
 pub fn wifi_ip() -> Option<Ipv4Addr> {
     let mut head: *mut libc::ifaddrs = std::ptr::null_mut();
@@ -104,7 +106,11 @@ enum Kind {
     Nsec,
 }
 
-fn classify(query: &[u8]) -> Option<(Kind, u16, u16)> {
+fn named(labels: &[String], name: &str) -> bool {
+    matches!(labels, [host, domain] if host == name && domain == DOMAIN)
+}
+
+fn classify(query: &[u8], name: &str) -> Option<(Kind, u16, u16)> {
     let flags = u16_at(query, 2)?;
     if flags & 0x8000 != 0 || (flags >> 11) & 0xf != 0 {
         return None;
@@ -120,8 +126,7 @@ fn classify(query: &[u8]) -> Option<(Kind, u16, u16)> {
         let qtype = u16_at(query, next)?;
         let qclass = u16_at(query, next + 2)?;
         pos = next + 4;
-        let name_ok = labels.len() == NAME.len() && labels.iter().zip(NAME).all(|(a, b)| a == b);
-        if !name_ok || qclass & 0x7fff != 1 {
+        if !named(&labels, name) || qclass & 0x7fff != 1 {
             continue;
         }
         match qtype {
@@ -137,16 +142,16 @@ fn classify(query: &[u8]) -> Option<(Kind, u16, u16)> {
     found
 }
 
-fn name_bytes(out: &mut Vec<u8>) {
-    for l in NAME {
+fn name_bytes(out: &mut Vec<u8>, name: &str) {
+    for l in [name, DOMAIN] {
         out.push(l.len() as u8);
         out.extend_from_slice(l.as_bytes());
     }
     out.push(0);
 }
 
-fn build(query: &[u8], ip: Ipv4Addr, legacy: bool) -> Option<Vec<u8>> {
-    let (kind, qtype, qclass) = classify(query)?;
+fn build(query: &[u8], ip: Ipv4Addr, name: &str, legacy: bool) -> Option<Vec<u8>> {
+    let (kind, qtype, qclass) = classify(query, name)?;
     let (class, ttl): (u16, u32) = if legacy { (1, LEGACY_TTL) } else { (0x8001, TTL) };
     let mut out = Vec::with_capacity(64);
     if legacy {
@@ -156,11 +161,11 @@ fn build(query: &[u8], ip: Ipv4Addr, legacy: bool) -> Option<Vec<u8>> {
     }
     out.extend_from_slice(&[0x84, 0, 0, if legacy { 1 } else { 0 }, 0, 1, 0, 0, 0, 0]);
     if legacy {
-        name_bytes(&mut out);
+        name_bytes(&mut out, name);
         out.extend_from_slice(&qtype.to_be_bytes());
         out.extend_from_slice(&(qclass & 0x7fff).to_be_bytes());
     }
-    name_bytes(&mut out);
+    name_bytes(&mut out, name);
     match kind {
         Kind::A => {
             out.extend_from_slice(&1u16.to_be_bytes());
@@ -174,23 +179,77 @@ fn build(query: &[u8], ip: Ipv4Addr, legacy: bool) -> Option<Vec<u8>> {
             out.extend_from_slice(&class.to_be_bytes());
             out.extend_from_slice(&ttl.to_be_bytes());
             out.extend_from_slice(&[0, 15]);
-            name_bytes(&mut out);
+            name_bytes(&mut out, name);
             out.extend_from_slice(&[0, 1, 0x40]);
         }
     }
     Some(out)
 }
 
-pub fn answer(query: &[u8], ip: Ipv4Addr) -> Option<Vec<u8>> {
-    build(query, ip, false)
+pub fn answer(query: &[u8], ip: Ipv4Addr, name: &str) -> Option<Vec<u8>> {
+    build(query, ip, name, false)
 }
 
-pub fn respond(query: &[u8], ip: Ipv4Addr, src: SocketAddrV4) -> Option<(Vec<u8>, SocketAddrV4)> {
+pub fn respond(query: &[u8], ip: Ipv4Addr, name: &str, src: SocketAddrV4) -> Option<(Vec<u8>, SocketAddrV4)> {
     if src.port() == MDNS_PORT {
-        build(query, ip, false).map(|r| (r, SocketAddrV4::new(GROUP, MDNS_PORT)))
+        build(query, ip, name, false).map(|r| (r, SocketAddrV4::new(GROUP, MDNS_PORT)))
     } else {
-        build(query, ip, true).map(|r| (r, src))
+        build(query, ip, name, true).map(|r| (r, src))
     }
+}
+
+pub fn model_name(model: &str) -> Option<String> {
+    let first = model.split('/').next()?;
+    let name: String = first.split_whitespace().collect::<String>().to_ascii_lowercase();
+    (!name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric())).then_some(name)
+}
+
+pub fn probe(name: &str) -> Vec<u8> {
+    let mut out = vec![0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0];
+    name_bytes(&mut out, name);
+    out.extend_from_slice(&[0, 255, 0, 1]);
+    out
+}
+
+pub fn claims(reply: &[u8], name: &str) -> Option<bool> {
+    if u16_at(reply, 2)? & 0x8000 == 0 {
+        return Some(false);
+    }
+    let mut pos = 12;
+    for _ in 0..u16_at(reply, 4)? {
+        pos = read_name(reply, pos)?.1 + 4;
+    }
+    for _ in 0..u16_at(reply, 6)? {
+        let (labels, next) = read_name(reply, pos)?;
+        if named(&labels, name) {
+            return Some(true);
+        }
+        pos = next + 10 + u16_at(reply, next + 8)? as usize;
+    }
+    Some(false)
+}
+
+pub fn rival(reply: &[u8], from: SocketAddr, ip: Ipv4Addr, name: &str) -> bool {
+    from.ip() != ip && claims(reply, name) == Some(true)
+}
+
+fn taken(sock: &UdpSocket, ip: Ipv4Addr, name: &str) -> bool {
+    let mut buf = [0u8; 1500];
+    let _ = sock.send_to(&probe(name), SocketAddrV4::new(GROUP, MDNS_PORT));
+    let until = Instant::now() + PROBE_WAIT;
+    while Instant::now() < until {
+        if let Ok((n, from)) = sock.recv_from(&mut buf) {
+            if rival(&buf[..n], from, ip, name) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn free_name(sock: &UdpSocket, ip: Ipv4Addr) -> Option<String> {
+    let model = crate::baseos::var("BASEOS_MODEL").and_then(|m| model_name(&m));
+    std::iter::once(NAME.to_string()).chain(model).find(|name| !taken(sock, ip, name))
 }
 
 fn setsockopt<T>(fd: i32, level: i32, name: i32, value: &T) -> io::Result<()> {
@@ -237,6 +296,7 @@ fn open(ip: Ipv4Addr) -> io::Result<UdpSocket> {
 }
 
 pub struct Responder {
+    name: String,
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
 }
@@ -244,10 +304,15 @@ pub struct Responder {
 impl Responder {
     pub fn start(ip: Ipv4Addr) -> Option<Responder> {
         let sock = open(ip).ok()?;
+        let name = free_name(&sock, ip)?;
         let stop = Arc::new(AtomicBool::new(false));
-        let flag = stop.clone();
-        let thread = thread::Builder::new().name("slot-mdns".into()).spawn(move || serve(sock, ip, flag)).ok()?;
-        Some(Responder { stop, thread: Some(thread) })
+        let (flag, served) = (stop.clone(), name.clone());
+        let thread = thread::Builder::new().name("slot-mdns".into()).spawn(move || serve(sock, ip, &served, flag)).ok()?;
+        Some(Responder { name, stop, thread: Some(thread) })
+    }
+
+    pub fn host(&self) -> String {
+        format!("{}.{DOMAIN}", self.name).to_uppercase()
     }
 
     pub fn stop(mut self) {
@@ -268,12 +333,12 @@ impl Drop for Responder {
     }
 }
 
-fn serve(sock: UdpSocket, ip: Ipv4Addr, stop: Arc<AtomicBool>) {
+fn serve(sock: UdpSocket, ip: Ipv4Addr, name: &str, stop: Arc<AtomicBool>) {
     let mut buf = [0u8; 1500];
     while !stop.load(Ordering::SeqCst) {
         match sock.recv_from(&mut buf) {
             Ok((n, SocketAddr::V4(src))) => {
-                if let Some((reply, to)) = respond(&buf[..n], ip, src) {
+                if let Some((reply, to)) = respond(&buf[..n], ip, name, src) {
                     let _ = sock.send_to(&reply, to);
                 }
             }

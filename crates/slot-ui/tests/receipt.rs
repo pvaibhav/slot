@@ -45,7 +45,7 @@ fn face_is_paper_sized() {
 #[test]
 fn same_input_gives_same_pixels() {
     let m = modules(URL);
-    let t = text(Some("SLOT.LOCAL"), "192.168.1.42");
+    let t = text(Some("GAMEBIT.LOCAL"), "192.168.1.42");
     assert_eq!(receipt_face(&m, &t).rgba, receipt_face(&m, &t).rgba);
 }
 
@@ -59,7 +59,7 @@ fn qr_starts_forty_down() {
 fn longest_address_stays_inside_the_margins() {
     let f = receipt_face(
         &modules(URL),
-        &text(Some("SLOT.LOCAL"), "192.168.100.200:2003"),
+        &text(Some("GAMEBIT.LOCAL:2003"), "192.168.100.200:2003"),
     );
     for y in 0..f.h {
         for x in (0..10).chain(216..226) {
@@ -71,7 +71,7 @@ fn longest_address_stays_inside_the_margins() {
 #[test]
 fn no_host_omits_the_line() {
     let m = modules(URL);
-    let with = receipt_face(&m, &text(Some("SLOT.LOCAL"), "192.168.1.42"));
+    let with = receipt_face(&m, &text(Some("GAMEBIT.LOCAL"), "192.168.1.42"));
     let without = receipt_face(&m, &text(None, "192.168.1.42"));
     let last = |f: &UndoFace| *ink_rows(f).last().unwrap();
     assert!(last(&without) < last(&with));
@@ -79,7 +79,7 @@ fn no_host_omits_the_line() {
 
 #[test]
 fn padding_below_pin_is_blank() {
-    let f = receipt_face(&modules(URL), &text(Some("SLOT.LOCAL"), "192.168.1.42"));
+    let f = receipt_face(&modules(URL), &text(Some("GAMEBIT.LOCAL"), "192.168.1.42"));
     let last = *ink_rows(&f).last().unwrap();
     assert!(last < 407 - 20);
     for y in last + 1..407 {
@@ -98,7 +98,7 @@ fn blank_face_is_paper_sized_with_text() {
 
 #[test]
 fn qr_decodes_from_the_face() {
-    let f = receipt_face(&modules(URL), &text(Some("SLOT.LOCAL"), "192.168.1.42"));
+    let f = receipt_face(&modules(URL), &text(Some("GAMEBIT.LOCAL"), "192.168.1.42"));
     let mut img = rqrr::PreparedImage::prepare_from_greyscale(f.w as usize, f.h as usize, |x, y| {
         let i = (y * f.w as usize + x) * 4;
         let a = f.rgba[i + 3] as u32;

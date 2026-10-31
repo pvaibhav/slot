@@ -327,7 +327,7 @@ fn a_started_responder_prints_the_host() {
     let ServerPaper::Code { host, .. } = paper(&mut a) else {
         panic!("plain paper");
     };
-    assert_eq!(host, Some(format!("SLOT.LOCAL:{port}")));
+    assert!(host.is_some_and(|h| h.ends_with(&format!(".LOCAL:{port}"))));
 }
 
 #[test]

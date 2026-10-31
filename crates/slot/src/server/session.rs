@@ -15,7 +15,6 @@ use crate::print_scene::{Cue, PaperJob, PrintArtState, PrintArtWorker, PrintFram
 
 pub const NO_WIFI: &str = "NO WIFI";
 pub const SERVER_FAILED: &str = "GAMEBIT FAILED";
-const HOST: &str = "SLOT.LOCAL";
 
 #[derive(Clone)]
 pub struct ServerNet {
@@ -83,7 +82,7 @@ fn bring_up(root: PathBuf, net: ServerNet) -> Up {
         return plain(SERVER_FAILED);
     };
     let responder = (net.responder)(ip);
-    let host = responder.as_ref().map(|_| shown_address(HOST, port));
+    let host = responder.as_ref().map(|r| shown_address(&r.host(), port));
     let shown = shown_address(&ip.to_string(), port);
     Up {
         serving: Some(Serving { server, responder }),
