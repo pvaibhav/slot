@@ -29,6 +29,7 @@ sha2 = { workspace = true }
 zip = { workspace = true }
 ureq = { workspace = true }
 crc32fast = { workspace = true }
+flate2 = { workspace = true }
 jpeg-decoder = { workspace = true }
 image-webp = { workspace = true }
 

@@ -2075,6 +2075,7 @@ version = "0.1.0"
 dependencies = [
  "cpal",
  "crc32fast",
+ "flate2",
  "gilrs",
  "image-webp",
  "jpeg-decoder",
