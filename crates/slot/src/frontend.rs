@@ -622,6 +622,7 @@ impl Frontend {
         self.session.app_mut().set_shot_hint_faces(shot_hints);
         let guide_hints = slot_ui::GUIDE_HINTS
             .iter()
+            .chain([&slot_ui::GUIDE_HELP_HINT])
             .map(|&(key, label)| {
                 let f = match key == slot_ui::PAN_KEY {
                     true => slot_ui::pad_hint_face(label),
@@ -1453,9 +1454,7 @@ fn sync_switcher(app: &mut App, compositor: &mut Compositor, texes: Faces, state
 #[derive(Default)]
 struct GuidePage {
     tex: Option<TexId>,
-    title: Option<TexId>,
     shown: Option<slot_ui::GuideView>,
-    titled: bool,
     glyphs: slot_ui::GuideGlyphs,
 }
 
@@ -1463,7 +1462,6 @@ fn sync_guide(app: &mut App, compositor: &mut Compositor, state: &mut GuidePage)
     let canvas = app.canvas();
     let Some(guide) = app.guide() else {
         state.shown = None;
-        state.titled = false;
         return;
     };
     let view = guide.view(canvas);
@@ -1472,12 +1470,6 @@ fn sync_guide(app: &mut App, compositor: &mut Compositor, state: &mut GuidePage)
         let tex = upload(compositor, &mut state.tex, face);
         state.shown = Some(view);
         app.set_guide_page_face(tex, view);
-    }
-    if !state.titled {
-        let title = title_face(app.guide_title().unwrap_or_default());
-        let tex = upload(compositor, &mut state.title, title);
-        state.titled = true;
-        app.set_guide_title_face(tex);
     }
 }
 

@@ -62,6 +62,7 @@ fn each_guide_keeps_its_own_spot() {
         line: 1200,
         col: 4,
         zoom: 2,
+        wrap: false,
     };
     write_guide_spot(d.path(), &a, spot).unwrap();
     write_guide_spot(d.path(), &b, GuideSpot::default()).unwrap();
@@ -86,5 +87,28 @@ fn a_garbled_spot_starts_at_the_top() {
     assert_eq!(
         read_guide_spot(d.path(), &d.path().join("Guides/GBA/x.txt")),
         None
+    );
+}
+
+#[test]
+fn a_spot_keeps_wrap_and_an_older_line_reads_as_unwrapped() {
+    let d = tempdir().unwrap();
+    let guide = d.path().join("Guides/GBA/Golden Sun.txt");
+    let spot = GuideSpot {
+        line: 9,
+        col: 240,
+        zoom: 5,
+        wrap: true,
+    };
+    write_guide_spot(d.path(), &guide, spot).unwrap();
+    assert_eq!(read_guide_spot(d.path(), &guide), Some(spot));
+    std::fs::write(
+        d.path().join("Config/guides.txt"),
+        "GBA/Golden Sun.txt=9 0 5\n",
+    )
+    .unwrap();
+    assert_eq!(
+        read_guide_spot(d.path(), &guide).map(|s| s.wrap),
+        Some(false)
     );
 }

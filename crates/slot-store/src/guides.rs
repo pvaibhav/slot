@@ -14,6 +14,7 @@ pub struct GuideSpot {
     pub line: u32,
     pub col: u32,
     pub zoom: u8,
+    pub wrap: bool,
 }
 
 pub fn find_guide(root: &Path, platform: Platform, stem: &str) -> Option<PathBuf> {
@@ -79,6 +80,7 @@ pub fn read_guide_spot(root: &Path, guide: &Path) -> Option<GuideSpot> {
         line,
         col,
         zoom: u8::try_from(zoom).ok()?,
+        wrap: matches!(parts.next(), Some(Ok(1))),
     })
 }
 
@@ -86,6 +88,12 @@ pub fn write_guide_spot(root: &Path, guide: &Path, spot: GuideSpot) -> std::io::
     let Some(key) = spot_key(guide) else {
         return Ok(());
     };
-    let value = format!("{} {} {}", spot.line, spot.col, spot.zoom);
+    let value = format!(
+        "{} {} {} {}",
+        spot.line,
+        spot.col,
+        spot.zoom,
+        u32::from(spot.wrap)
+    );
     crate::ini::write(root, &spots_file(), &key, &value)
 }

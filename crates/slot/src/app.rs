@@ -9511,27 +9511,17 @@ impl App {
             Btn::A => {
                 g.zoom_by(1, canvas);
             }
-            Btn::Y => {
+            Btn::B => {
                 g.zoom_by(-1, canvas);
             }
-            Btn::B => self.close_polaroids(),
+            Btn::X => g.toggle_wrap(canvas),
+            Btn::Y => self.close_polaroids(),
             _ => {}
         }
     }
 
     pub fn guide(&self) -> Option<&Guide> {
         self.guide.as_ref().map(|(g, _)| g)
-    }
-
-    pub fn guide_title(&self) -> Option<&str> {
-        self.guide.as_ref()?;
-        self.seated_cart().map(|c| c.title.as_str())
-    }
-
-    pub fn set_guide_title_face(&mut self, face: TexId) {
-        if let Some((g, _)) = &mut self.guide {
-            g.set_title_face(Some(face));
-        }
     }
 
     pub fn set_guide_page_face(&mut self, tex: TexId, view: slot_ui::GuideView) {
