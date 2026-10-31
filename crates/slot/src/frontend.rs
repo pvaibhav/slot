@@ -669,6 +669,12 @@ impl Frontend {
         sync_wallpaper(self.session.app_mut(), compositor, &mut self.wallpaper);
         sync_game_bezel(self.session.app_mut(), compositor, &mut self.game_bezel);
         compositor.set_game_bezel(self.session.app().shown_game_bezel());
+        // Authentic's own bezels carry the glass, so the shader leaves it out.
+        let bezel_glass = self.session.app().shown_game_bezel().is_some()
+            && self.game_bezel.image.as_ref().is_some_and(|image| {
+                image.1 == BezelPick::Default && image.2.is_some_and(BezelArt::authentic)
+            });
+        compositor.set_authentic_glass(!bezel_glass);
         compositor.set_sp_frame(self.session.app().picture_on_top());
         sync_core_picker(
             self.session.app_mut(),
@@ -1465,8 +1471,10 @@ fn sync_game_bezel(app: &mut App, compositor: &mut Compositor, state: &mut Bezel
                 .map(|rgba| slot_gfx::bezel_column(rgba, (w, h)))
                 .unwrap_or_default(),
         );
+        // Authentic's own bezels carry the window's shadow already.
+        let own_shadow = shown.1 == BezelPick::Default && shown.2.is_some_and(BezelArt::authentic);
         let rgba = rgba.map(|mut rgba| {
-            if shown.4 {
+            if shown.4 && !own_shadow {
                 cast_screen_shadow(&mut rgba, w, h);
             }
             rgba

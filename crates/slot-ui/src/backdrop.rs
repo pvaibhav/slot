@@ -15,6 +15,18 @@ const BEZEL_GBC_INTEGER_4X3_PNG: &[u8] =
     include_bytes!("../../../assets/bezel_gbc_integer_4x3.png");
 const BEZEL_GB_FIT_4X3_PNG: &[u8] = include_bytes!("../../../assets/bezel_gb_fit_4x3.png");
 const BEZEL_GBC_FIT_4X3_PNG: &[u8] = include_bytes!("../../../assets/bezel_gbc_fit_4x3.png");
+// Harlequin's dmg-3x and gb-pocket-3x border art (GPL-3.0), cut to Authentic's window: its
+// lens, the window's lip and shadow, the glass and the power light.
+const BEZEL_AUTHENTIC_DMG_3X2_PNG: &[u8] =
+    include_bytes!("../../../assets/bezel_authentic_dmg_3x2.png");
+const BEZEL_AUTHENTIC_DMG_4X3_PNG: &[u8] =
+    include_bytes!("../../../assets/bezel_authentic_dmg_4x3.png");
+const BEZEL_AUTHENTIC_POCKET_3X2_PNG: &[u8] =
+    include_bytes!("../../../assets/bezel_authentic_pocket_3x2.png");
+const BEZEL_AUTHENTIC_POCKET_4X3_PNG: &[u8] =
+    include_bytes!("../../../assets/bezel_authentic_pocket_4x3.png");
+const BEZEL_AUTHENTIC_GBA_4X3_PNG: &[u8] =
+    include_bytes!("../../../assets/bezel_authentic_gba_4x3.png");
 const BLUR_PNG: &[u8] = include_bytes!("../../../assets/background_default_blur.png");
 
 const SCRIM: f32 = 0.62;
@@ -38,6 +50,21 @@ pub enum BezelArt {
     Fit3x2,
     Integer4x3,
     Fit4x3,
+    /// Authentic's own bezel around a whole-scale Game Boy or GBC picture: the Game Boy's grey
+    /// lens, or the Pocket's black one. It carries the glass and the window's shadow.
+    AuthenticGb {
+        pocket: bool,
+    },
+    /// Authentic's own bezel around a whole-scale GBA picture on a 4:3 panel, with the lit
+    /// panel in its window.
+    AuthenticGba,
+}
+
+impl BezelArt {
+    /// Whether the art carries Authentic's glass and window shadow itself.
+    pub fn authentic(self) -> bool {
+        matches!(self, BezelArt::AuthenticGb { .. } | BezelArt::AuthenticGba)
+    }
 }
 
 pub fn default_game_bezel_face(colour: bool, kind: BezelArt, w: u32, h: u32) -> Option<Vec<u8>> {
@@ -50,6 +77,13 @@ pub fn default_game_bezel_face(colour: bool, kind: BezelArt, w: u32, h: u32) -> 
         (BezelArt::Integer4x3, true) => BEZEL_GBC_INTEGER_4X3_PNG,
         (BezelArt::Fit4x3, false) => BEZEL_GB_FIT_4X3_PNG,
         (BezelArt::Fit4x3, true) => BEZEL_GBC_FIT_4X3_PNG,
+        (BezelArt::AuthenticGb { pocket }, _) => match (pocket, w * 3 == h * 4) {
+            (false, false) => BEZEL_AUTHENTIC_DMG_3X2_PNG,
+            (false, true) => BEZEL_AUTHENTIC_DMG_4X3_PNG,
+            (true, false) => BEZEL_AUTHENTIC_POCKET_3X2_PNG,
+            (true, true) => BEZEL_AUTHENTIC_POCKET_4X3_PNG,
+        },
+        (BezelArt::AuthenticGba, _) => BEZEL_AUTHENTIC_GBA_4X3_PNG,
     };
     let (src, sw, sh) = art::decode_png_bytes(png)?;
     match kind {

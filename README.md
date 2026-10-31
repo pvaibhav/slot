@@ -34,7 +34,9 @@ notes are in the [changelog](CHANGELOG.md).
   Running GBA games on mGBA use `performance` to keep frames on time.
 - **Authentic LCD shaders** recreate the reflective screens' colours, pixel grid, ghosting,
   and glass, with shadows from the dots and bezel. Game Boy offers Game Boy, Pocket, and
-  Light models. Pick **Authentic** under **Settings > Screen > your system > Shader**.
+  Light models. The default bezel is cut from Harlequin's dmg-3x art, with its glass and
+  power light. Pick **Authentic** under **Settings > Screen > your system > Shader**.
+  The shaders are also [available for NextUI](https://github.com/pvaibhav/authentic-shaders).
 - ~~**LCD ghosting / interframe blending.**~~ Included upstream since **v1.10.0**
   as **Frame Blending** under Settings > Screen.
 - **Colour calibration** for the RG SP and RG34XXSP panels, based on an accurate 3x1D LUT
@@ -97,16 +99,16 @@ I release new features as I build and test them. They are carried forward in eve
 
 # What does it look like?
 
-Authentic on Game Boy and Game Boy Color, rendered from captured game frames at 720×480
-with this release's shaders and bezels. The GBC look keeps the original screen's darker,
-reflective colours.
+Authentic on Game Boy, Game Boy Color and Game Boy Advance, rendered from captured game
+frames at 720×480 with this release's shaders and bezels.
 
 <p align="center">
-<img src=".github/resources/screenshots/authentic-gb.png" width="48%" alt="Metroid II with the Authentic Game Boy model, green panel, blue-green dots, and bezel shadows">
-<img src=".github/resources/screenshots/authentic-gbc.png" width="48%" alt="Super Mario Bros. Deluxe with the Authentic Game Boy Color shader, reflective colours, and pixel grid">
+<img src=".github/resources/screenshots/authentic-gb.png" width="32%" alt="Metroid II on the Authentic Game Boy screen, green panel and blue-green dots, in the grey dmg-3x bezel with its battery light">
+<img src=".github/resources/screenshots/authentic-gbc.png" width="32%" alt="Super Mario Bros. Deluxe on the Authentic Game Boy Color screen, dark reflective colours and pixel grid, in the black Pocket bezel">
+<img src=".github/resources/screenshots/authentic-gba.png" width="32%" alt="Advance Wars on the Authentic Game Boy Advance screen, cool reflective colours and pixel grid">
 </p>
 
-<p align="center">Game Boy · Game Boy Color</p>
+<p align="center">Game Boy · Game Boy Color · Game Boy Advance</p>
 
 
 <p align="center">

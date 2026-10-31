@@ -36,6 +36,10 @@ pub struct GamePass {
     u_lcd: gl::types::GLint,
     u_ink: gl::types::GLint,
     u_glass: gl::types::GLint,
+    u_sheen: gl::types::GLint,
+    /// How much of the glass's sheen and shade the shader lays over Authentic: none when the
+    /// bezel carries the glass itself.
+    sheen: f32,
     ramp: gl::types::GLuint,
     screen: Screen,
     ghost: Ghost,
@@ -72,6 +76,7 @@ impl GamePass {
         );
         let (u_rect, u_bright, u_uv, u_mode, u_paper_size, u_pic, u_fbo, u_origin);
         let (u_light, u_dark, u_response, u_gamma, u_least, u_grain, u_lcd, u_ink, u_glass);
+        let u_sheen;
         unsafe {
             gl::UseProgram(prog);
             gl::Uniform1i(crate::gl::uniform_location(prog, "u_game"), 0);
@@ -104,6 +109,7 @@ impl GamePass {
             u_lcd = crate::gl::uniform_location(prog, "u_lcd");
             u_ink = crate::gl::uniform_location(prog, "u_ink");
             u_glass = crate::gl::uniform_location(prog, "u_glass");
+            u_sheen = crate::gl::uniform_location(prog, "u_sheen");
         }
         Ok(GamePass {
             prog,
@@ -128,6 +134,8 @@ impl GamePass {
             u_lcd,
             u_ink,
             u_glass,
+            u_sheen,
+            sheen: 1.0,
             ramp,
             screen: Screen::Gba,
             ghost: Ghost::new()?,
@@ -183,6 +191,10 @@ impl GamePass {
             self.ghost.reset();
         }
         self.effect = effect;
+    }
+
+    pub fn set_glass(&mut self, on: bool) {
+        self.sheen = if on { 1.0 } else { 0.0 };
     }
 
     pub fn set_screen(&mut self, screen: Screen) {
@@ -309,6 +321,7 @@ impl GamePass {
                 gl::Uniform4f(self.u_ink, x, y, z, w);
                 let [x, y, z] = look.glass;
                 gl::Uniform3f(self.u_glass, x, y, z);
+                gl::Uniform1f(self.u_sheen, self.sheen);
                 gl::ActiveTexture(gl::TEXTURE2);
                 gl::BindTexture(gl::TEXTURE_2D, self.ramp);
             }

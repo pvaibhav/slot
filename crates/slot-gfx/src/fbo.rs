@@ -195,6 +195,12 @@ impl Compositor {
         self.game.set_screen(screen);
     }
 
+    /// Whether Authentic's shader lays the glass's sheen and shade over the screen; off when
+    /// the bezel carries the glass.
+    pub fn set_authentic_glass(&mut self, on: bool) {
+        self.game.set_glass(on);
+    }
+
     pub fn set_picture(&mut self, rect: [f32; 4]) {
         self.game.set_picture(rect);
     }

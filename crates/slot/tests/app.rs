@@ -2412,13 +2412,10 @@ fn authentic_trades_the_game_boys_colour_ghosting_and_palette_rows_for_a_model()
     );
     // A GBA game's settings are untouched.
     assert!(!settings.contains(&QuickRow::GbaColourCorrection));
-    // The bezel leaves the lit panel around the picture in sight.
-    assert!(
-        matches!(
-            app.bezel_art(),
-            Some(slot_ui::BezelArt::Fit3x2 | slot_ui::BezelArt::Fit4x3)
-        ),
-        "{:?}",
-        app.bezel_art()
+    // Authentic's own bezel, the default Pocket's black lens, frames the lit panel around
+    // the picture.
+    assert_eq!(
+        app.bezel_art(),
+        Some(slot_ui::BezelArt::AuthenticGb { pocket: true })
     );
 }
