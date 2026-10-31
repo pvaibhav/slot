@@ -457,6 +457,7 @@ impl Shader {
         Shader::Dot,
         Shader::Shimmerless,
     ];
+    pub const GBA_3_2: [Shader; 4] = [Shader::Off, Shader::Lcd3x, Shader::Grid, Shader::Dot];
     pub const GB: [Shader; 5] = [
         Shader::Off,
         Shader::Lcd3x,

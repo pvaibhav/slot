@@ -1455,7 +1455,7 @@ impl App {
             QuickRow::GbcColourCorrection => {
                 Some(QuickValue::flag(self.state.colour_correction_gbc))
             }
-            QuickRow::GbaShader => Some(shader_value(self.state.shader_gba)),
+            QuickRow::GbaShader => Some(shader_value(self.gba_shader())),
             QuickRow::GbShader => Some(shader_value(self.state.shader_gb)),
             QuickRow::GbcShader => Some(shader_value(self.state.shader_gbc)),
             QuickRow::Rumble => Some(QuickValue::flag(self.state.rumble)),
@@ -2860,9 +2860,25 @@ impl App {
         self.state.ff_sound
     }
 
+    fn gba_shaders(&self) -> &'static [Shader] {
+        let (w, h) = self.panel;
+        if w > 0 && w * 2 == h * 3 {
+            &Shader::GBA_3_2
+        } else {
+            &Shader::GBA
+        }
+    }
+
+    fn gba_shader(&self) -> Shader {
+        match self.gba_shaders().contains(&self.state.shader_gba) {
+            true => self.state.shader_gba,
+            false => Shader::Off,
+        }
+    }
+
     pub fn screen_shader(&self) -> Shader {
         match self.playing_platform() {
-            Platform::Gba | Platform::Gbav => self.state.shader_gba,
+            Platform::Gba | Platform::Gbav => self.gba_shader(),
             Platform::Gb => self.state.shader_gb,
             Platform::Gbc => self.state.shader_gbc,
         }
@@ -3659,6 +3675,7 @@ impl App {
             self.persist();
             return;
         }
+        let gba_shaders = self.gba_shaders();
         let s = &mut self.state;
         match row {
             QuickRow::FastForward => {
@@ -3682,7 +3699,7 @@ impl App {
                 self.colour_pending = Some(self.colour_correction());
             }
             QuickRow::GbaShader => {
-                let to = s.shader_gba.step(&Shader::GBA, right);
+                let to = s.shader_gba.step(gba_shaders, right);
                 if to == s.shader_gba {
                     return;
                 }
@@ -3823,8 +3840,9 @@ impl App {
         if !matches!(self.phase, Phase::Inserting { .. } | Phase::Playing { .. }) {
             return;
         }
+        let gba_shaders = self.gba_shaders();
         let (shader, choices) = match self.playing_platform() {
-            Platform::Gba | Platform::Gbav => (&mut self.state.shader_gba, &Shader::GBA[..]),
+            Platform::Gba | Platform::Gbav => (&mut self.state.shader_gba, gba_shaders),
             Platform::Gb => (&mut self.state.shader_gb, &Shader::GB[..]),
             Platform::Gbc => (&mut self.state.shader_gbc, &Shader::GB[..]),
         };
