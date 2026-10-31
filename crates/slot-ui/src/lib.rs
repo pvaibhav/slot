@@ -16,7 +16,9 @@ mod footer;
 mod guide;
 mod hud;
 mod icon;
+mod keyboard;
 mod link_art;
+mod network_menu;
 mod plate;
 mod polaroids;
 mod power_menu;
@@ -69,6 +71,13 @@ pub use footer::{draw_corners, draw_footer, draw_wifi_icon, Printed, FOOTER_Y};
 pub use guide::{
     cell, fitting_zoom, guide_help_face, mono_font, page_box, Guide, GuideGlyphs, GuideView,
     GUIDE_COLUMNS, GUIDE_HELP_TITLE, GUIDE_HINTS, GUIDE_ZOOMS, PAN_COLS,
+};
+pub use keyboard::{
+    draw_keyboard, draw_keyboard_legends, key_rect, keyboard_cap_faces, keyboard_faces,
+    keyboard_text_face, Cap, KeyTex, Keyboard, KeyboardFaces, KeyboardTex, Layout, Special, Typed,
+};
+pub use network_menu::{
+    bars_rect, lock_rect, net_row_top, net_window, NetFace, NetLine, NetworkList,
 };
 pub use hud::{
     badge_at, ff_badge, footer_ink, FfState, Hud, HudKind, LinkBadge, Millis, ALARM_BAND_H,

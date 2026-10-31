@@ -2,7 +2,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::Arc;
 
 use slot_store::{Cart, Platform};
 
@@ -26,8 +26,6 @@ pub enum ArtJob {
         ground: Option<[u8; 3]>,
         look: Option<Look>,
     },
-    RadioHold,
-    RadioRelease,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -40,74 +38,6 @@ pub struct StudioArt {
     pub logo_worn: Option<[u8; 3]>,
     pub look: Option<Look>,
     pub failed: Option<UpdateFail>,
-}
-
-pub trait Radio {
-    fn up(&mut self) -> Result<(), UpdateFail>;
-
-    fn down(&mut self);
-}
-
-pub struct HeldRadio<R: Radio> {
-    radio: R,
-    held: bool,
-}
-
-impl<R: Radio> HeldRadio<R> {
-    pub fn new(radio: R) -> Self {
-        HeldRadio { radio, held: false }
-    }
-
-    pub fn hold(&mut self) -> Result<(), UpdateFail> {
-        if self.held {
-            return Ok(());
-        }
-        match self.radio.up() {
-            Ok(()) => {
-                self.held = true;
-                Ok(())
-            }
-            Err(e) => {
-                self.radio.down();
-                Err(e)
-            }
-        }
-    }
-
-    pub fn release(&mut self) {
-        if std::mem::take(&mut self.held) {
-            self.radio.down();
-        }
-    }
-
-}
-
-static SHARED: Mutex<Option<HeldRadio<DeviceRadio>>> = Mutex::new(None);
-
-pub fn hold_radio(root: &Path) -> Result<(), UpdateFail> {
-    let mut shared = SHARED.lock().unwrap_or_else(PoisonError::into_inner);
-    shared
-        .get_or_insert_with(|| HeldRadio::new(DeviceRadio(root.to_path_buf())))
-        .hold()
-}
-
-pub fn release_radio(root: &Path) {
-    let mut shared = SHARED.lock().unwrap_or_else(PoisonError::into_inner);
-    shared
-        .get_or_insert_with(|| HeldRadio::new(DeviceRadio(root.to_path_buf())))
-        .release();
-}
-
-struct DeviceRadio(PathBuf);
-
-impl Radio for DeviceRadio {
-    fn up(&mut self) -> Result<(), UpdateFail> {
-        update::radio_up(&self.0)
-    }
-
-    fn down(&mut self) {
-        update::radio_down(&self.0);
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -128,8 +58,6 @@ pub enum ArtEvent {
     Failed(UpdateFail),
     StudioArt(StudioArt),
     StudioSaved(String),
-    Radio(bool),
-    RadioFailed,
 }
 
 pub enum IndexFetch {
@@ -466,8 +394,6 @@ enum Work {
     Fetch(Kind, Arc<AtomicBool>),
     Studio(Cart),
     Close(Cart, Option<[u8; 3]>, Option<Look>),
-    Hold,
-    Release,
 }
 
 struct ArtQueue {
@@ -487,12 +413,6 @@ impl ArtJobs for ArtQueue {
             }
             ArtJob::StudioClose { cart, ground, look } => {
                 let _ = self.jobs.send(Work::Close(cart, ground, look));
-            }
-            ArtJob::RadioHold => {
-                let _ = self.jobs.send(Work::Hold);
-            }
-            ArtJob::RadioRelease => {
-                let _ = self.jobs.send(Work::Release);
             }
             ArtJob::Cancel => self.runs.cancel(),
         }
@@ -522,16 +442,6 @@ pub fn art_jobs(root: PathBuf) -> Box<dyn ArtJobs> {
                 Work::Close(cart, ground, look) => {
                     studio_save(&root, &cart, ground, look.as_ref());
                     let _ = tx.send(ArtEvent::StudioSaved(cart.stem));
-                }
-                Work::Hold => {
-                    let _ = tx.send(match hold_radio(&root) {
-                        Ok(()) => ArtEvent::Radio(true),
-                        Err(_) => ArtEvent::RadioFailed,
-                    });
-                }
-                Work::Release => {
-                    release_radio(&root);
-                    let _ = tx.send(ArtEvent::Radio(false));
                 }
             }
         }
@@ -567,7 +477,7 @@ fn studio_run(root: &Path, cart: &Cart) -> StudioArt {
         return failed(UpdateFail::Clock);
     }
     let _ = std::fs::remove_dir_all(root.join(make::STUDIO_CACHE));
-    if let Err(e) = hold_radio(root) {
+    if let Err(e) = update::wait_online() {
         return failed(e);
     }
     let index = match load_index(root, &mut get_index) {
@@ -583,7 +493,7 @@ fn run(root: &Path, kind: Kind, cancel: &AtomicBool, tx: &Sender<ArtEvent>) {
         let _ = tx.send(ArtEvent::Failed(UpdateFail::Clock));
         return;
     }
-    if let Err(e) = hold_radio(root) {
+    if let Err(e) = update::wait_online() {
         let _ = tx.send(ArtEvent::Failed(e));
         return;
     }

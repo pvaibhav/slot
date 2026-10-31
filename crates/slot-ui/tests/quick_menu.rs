@@ -82,7 +82,7 @@ fn the_fast_forward_row_offers_off_a_slow_speed_and_the_four_ceilings() {
 fn the_rows_run_in_the_order_the_user_chose() {
     assert_eq!(
         QuickRow::MAIN.map(QuickRow::label),
-        ["General", "Screen", "Gameplay", "Controls", "About"]
+        ["General", "Screen", "Gameplay", "Controls", "Network", "About"]
     );
     assert_eq!(
         QuickRow::GENERAL.map(QuickRow::label),
@@ -93,7 +93,15 @@ fn the_rows_run_in_the_order_the_user_chose() {
             "Recents",
             "Game Titles",
             "Lid Power Off",
-            "Date & Time",
+            "Date & Time"
+        ]
+    );
+    assert_eq!(
+        QuickRow::NETWORK.map(QuickRow::label),
+        [
+            "Wi-Fi",
+            "Networks",
+            "Check for Updates",
             "Fetch Missing Art"
         ]
     );
@@ -188,7 +196,10 @@ fn the_rows_run_in_the_order_the_user_chose() {
             QuickRow::ScreenGeneral,
             QuickRow::UndoSave,
             QuickRow::UndoLoad,
-            QuickRow::Guide
+            QuickRow::Guide,
+            QuickRow::Network,
+            QuickRow::Networks,
+            QuickRow::CheckUpdates
         ]
     );
     for page in [
@@ -197,6 +208,7 @@ fn the_rows_run_in_the_order_the_user_chose() {
         &QuickRow::SCREEN_GENERAL[..],
         &QuickRow::GAME[..],
         &QuickRow::GENERAL[..],
+        &QuickRow::NETWORK[..],
         &QuickRow::PLAY[..],
         &QuickRow::SETTINGS[..],
         &QuickRow::PLAY_SCREEN[..],
@@ -212,10 +224,10 @@ fn the_rows_run_in_the_order_the_user_chose() {
 
 #[test]
 fn a_hidden_row_is_stepped_over_and_takes_no_place() {
-    let hidden = [QuickRow::WallpaperTint, QuickRow::FetchArt];
+    let hidden = [QuickRow::WallpaperTint, QuickRow::DateTime];
     assert_eq!(QuickRow::Wallpaper.down(&hidden), QuickRow::Recents);
     assert_eq!(QuickRow::Recents.up(&hidden), QuickRow::Wallpaper);
-    assert_eq!(QuickRow::Theme.up(&hidden), QuickRow::DateTime);
+    assert_eq!(QuickRow::Theme.up(&hidden), QuickRow::LidOff);
     assert_eq!(QuickRow::Recents.position(&hidden), 2);
     assert_eq!(QuickRow::Wallpaper.down(&[]), QuickRow::WallpaperTint);
     assert_eq!(QuickRow::Recents.position(&[]), 3);
@@ -586,8 +598,11 @@ fn fetch_legends_are_built_like_the_other_prompts() {
 }
 
 #[test]
-fn fetch_art_sits_last_in_general() {
-    assert_eq!(slot_ui::QuickRow::GENERAL.last(), Some(&slot_ui::QuickRow::FetchArt));
+fn fetch_art_sits_last_on_the_network_page() {
+    assert_eq!(
+        slot_ui::QuickRow::NETWORK.last(),
+        Some(&slot_ui::QuickRow::FetchArt)
+    );
     assert_eq!(slot_ui::QuickRow::FetchArt.label(), "Fetch Missing Art");
     assert!(slot_ui::QuickRow::FetchArt.opens());
 }

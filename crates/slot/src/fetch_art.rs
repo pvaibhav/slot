@@ -122,7 +122,7 @@ impl Run {
             }
             ArtEvent::Missed { stem } => self.missed.push(stem),
             ArtEvent::Done { .. } => self.finished = true,
-            ArtEvent::StudioArt(_) | ArtEvent::StudioSaved(_) | ArtEvent::Radio(_) | ArtEvent::RadioFailed => {}
+            ArtEvent::StudioArt(_) | ArtEvent::StudioSaved(_) => {}
             ArtEvent::Failed(f) => {
                 self.failed = Some(f);
                 self.finished = true;

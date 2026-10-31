@@ -116,10 +116,14 @@ pub enum QuickRow {
     Blending,
     Guide,
     ScGuide,
+    Network,
+    WifiPower,
+    Networks,
+    CheckUpdates,
 }
 
 impl QuickRow {
-    pub const ALL: [QuickRow; 107] = [
+    pub const ALL: [QuickRow; 111] = [
         QuickRow::FastForward,
         QuickRow::FastForwardSound,
         QuickRow::Screen,
@@ -227,17 +231,22 @@ impl QuickRow {
         QuickRow::Blending,
         QuickRow::Guide,
         QuickRow::ScGuide,
+        QuickRow::Network,
+        QuickRow::WifiPower,
+        QuickRow::Networks,
+        QuickRow::CheckUpdates,
     ];
 
-    pub const MAIN: [QuickRow; 5] = [
+    pub const MAIN: [QuickRow; 6] = [
         QuickRow::General,
         QuickRow::Screen,
         QuickRow::Game,
         QuickRow::Controls,
+        QuickRow::Network,
         QuickRow::About,
     ];
 
-    pub const GENERAL: [QuickRow; 8] = [
+    pub const GENERAL: [QuickRow; 7] = [
         QuickRow::Theme,
         QuickRow::Wallpaper,
         QuickRow::WallpaperTint,
@@ -245,6 +254,12 @@ impl QuickRow {
         QuickRow::ShowTitles,
         QuickRow::LidOff,
         QuickRow::DateTime,
+    ];
+
+    pub const NETWORK: [QuickRow; 4] = [
+        QuickRow::WifiPower,
+        QuickRow::Networks,
+        QuickRow::CheckUpdates,
         QuickRow::FetchArt,
     ];
 
@@ -431,8 +446,11 @@ impl QuickRow {
             | QuickRow::Theme
             | QuickRow::Recents
             | QuickRow::ShowTitles
-            | QuickRow::LidOff
-            | QuickRow::FetchArt => &QuickRow::GENERAL,
+            | QuickRow::LidOff => &QuickRow::GENERAL,
+            QuickRow::WifiPower
+            | QuickRow::Networks
+            | QuickRow::CheckUpdates
+            | QuickRow::FetchArt => &QuickRow::NETWORK,
             QuickRow::ControlsShelf | QuickRow::Shortcuts | QuickRow::ControlsInGame => {
                 &QuickRow::CONTROL_PAGES
             }
@@ -475,6 +493,7 @@ impl QuickRow {
             QuickRow::GameUp => Some(QuickRow::ControlsInGame),
             QuickRow::ScSave => Some(QuickRow::Shortcuts),
             QuickRow::Theme => Some(QuickRow::General),
+            QuickRow::WifiPower => Some(QuickRow::Network),
             QuickRow::ControlsShelf => Some(QuickRow::Controls),
             QuickRow::ShelfPrev => Some(QuickRow::ControlsShelf),
             _ => None,
@@ -510,6 +529,7 @@ impl QuickRow {
             QuickRow::PlayControls => Some(QuickRow::CONTROLS[0]),
             QuickRow::Shortcuts => Some(QuickRow::SHORTCUTS[0]),
             QuickRow::General => Some(QuickRow::GENERAL[0]),
+            QuickRow::Network => Some(QuickRow::NETWORK[0]),
             QuickRow::Controls => Some(QuickRow::CONTROL_PAGES[0]),
             QuickRow::ControlsShelf => Some(QuickRow::SHELF_KEYS[0]),
             QuickRow::ControlsInGame => Some(QuickRow::CONTROLS[0]),
@@ -579,6 +599,10 @@ impl QuickRow {
             QuickRow::General => "General",
             QuickRow::LidOff => "Lid Power Off",
             QuickRow::FetchArt => "Fetch Missing Art",
+            QuickRow::Network => "Network",
+            QuickRow::WifiPower => "Wi-Fi",
+            QuickRow::Networks => "Networks",
+            QuickRow::CheckUpdates => "Check for Updates",
             QuickRow::Controls => "Controls",
             QuickRow::ControlsShelf => "Shelf",
             QuickRow::ControlsInGame => "In-Game",
@@ -670,6 +694,9 @@ impl QuickRow {
                 | QuickRow::ScreenGbc
                 | QuickRow::ScreenGb
                 | QuickRow::ScreenGeneral
+                | QuickRow::Network
+                | QuickRow::Networks
+                | QuickRow::CheckUpdates
         )
     }
 
@@ -948,7 +975,7 @@ pub const QUICK_PITCH: f32 = 52.0;
 pub const QUICK_EDGE: f32 = 32.0;
 pub const QUICK_LABEL_X: f32 = 53.0;
 pub const QUICK_VALUE_GAP: f32 = 24.0;
-const VALUE_MIN_SCALE: f32 = 0.6;
+pub(crate) const VALUE_MIN_SCALE: f32 = 0.6;
 pub(crate) const POINTER_GAP: f32 = 17.0;
 const POINTER_SCALE: usize = 3;
 const POINTER: [&str; 11] = [
@@ -1182,11 +1209,9 @@ pub fn repair_legends(ink: [u8; 3]) -> [UndoFace; 2] {
     prompt_legends(ink, "Not now", "Repair")
 }
 
-pub fn update_legends(ink: [u8; 3], light_ink: [u8; 3]) -> [UndoFace; 5] {
+pub fn update_legends(ink: [u8; 3]) -> [UndoFace; 3] {
     let [cancel, install] = prompt_legends(ink, "Cancel", "Install");
     [
-        with_hint(button_face(ButtonLegend::X), "OTA", Some(ink), false),
-        with_hint(button_face(ButtonLegend::X), "OTA", Some(light_ink), false),
         cancel,
         install,
         with_hint(button_face(ButtonLegend::B), "Back", Some(ink), true),
@@ -1391,6 +1416,7 @@ pub struct QuickMenu<'a> {
     pub values: [Option<QuickValue>; QuickRow::ALL.len()],
     pub clock: Option<[(TexId, u32, u32); 2]>,
     pub wallpaper: Option<[(TexId, u32, u32); 2]>,
+    pub networks: Option<[(TexId, u32, u32); 2]>,
     pub faces: Option<&'a QuickMenuFaces>,
     pub ground: Option<(TexId, u32)>,
     pub palette: Option<[(TexId, u32, u32); 2]>,
@@ -1459,6 +1485,7 @@ impl QuickMenu<'_> {
             let value = match row {
                 QuickRow::DateTime => self.clock.map(|c| c[lit as usize]),
                 QuickRow::Wallpaper => self.wallpaper.map(|c| c[lit as usize]),
+                QuickRow::Networks => self.networks.map(|c| c[lit as usize]),
                 QuickRow::Palette | QuickRow::GbPalette => self.palette.map(|c| c[lit as usize]),
                 QuickRow::GbaBezel => self.gba_bezel.map(|c| c[lit as usize]),
                 QuickRow::GbBezel => self.gb_bezel.map(|c| c[lit as usize]),
@@ -1548,9 +1575,9 @@ pub const QUICK_VISIBLE: usize = 6;
 
 const PANEL_VISIBLE: usize = 3;
 
-const SCROLL_INSET: f32 = 12.0;
+pub(crate) const SCROLL_INSET: f32 = 12.0;
 
-const SCROLL_W: f32 = 4.0;
+pub(crate) const SCROLL_W: f32 = 4.0;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct QuickScroll {

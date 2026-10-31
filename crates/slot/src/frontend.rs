@@ -63,6 +63,8 @@ pub struct Frontend {
     fetch_sync: FetchSync,
     studio_sync: StudioSync,
     quick_clock: QuickClock,
+    quick_network: QuickClock,
+    networks: crate::network_faces::NetworkSync,
     quick_palette: QuickPalette,
     wallpaper: WallpaperSync,
     game_bezel: BezelSync,
@@ -461,6 +463,11 @@ impl Frontend {
         session
             .app_mut()
             .set_art_jobs(crate::art::jobs::art_jobs(platform.root().to_path_buf()));
+        session.app_mut().set_wifi(wifi_worker(platform.root()));
+        #[cfg(feature = "device")]
+        session
+            .app_mut()
+            .set_wifi_probe(std::path::PathBuf::from("/sys/class/net/wlan0"));
         session.app_mut().connect_wifi();
         session.app_mut().require_fetch_faces();
         if let (Some(target), Some(version)) = (
@@ -502,6 +509,8 @@ impl Frontend {
             fetch_sync: FetchSync::new(),
             studio_sync: StudioSync::new(),
             quick_clock: QuickClock::default(),
+            quick_network: QuickClock::default(),
+            networks: Default::default(),
             quick_palette: QuickPalette::default(),
             wallpaper: WallpaperSync::default(),
             game_bezel: BezelSync::default(),
@@ -800,7 +809,7 @@ impl Frontend {
         app.set_link_badge_faces(link_badges);
         app.set_shutdown_faces(lines);
         app.set_repair_faces(repair);
-        if let Ok(update) = <[(TexId, u32); 5]>::try_from(update) {
+        if let Ok(update) = <[(TexId, u32); 3]>::try_from(update) {
             app.set_update_legends(update);
         }
         app.set_reset_faces(reset);
@@ -925,6 +934,8 @@ impl Frontend {
         sync_fetch_art(self.session.app_mut(), compositor, &mut self.fetch_sync);
         sync_studio(self.session.app_mut(), compositor, &mut self.studio_sync);
         sync_quick_clock(self.session.app_mut(), compositor, &mut self.quick_clock);
+        sync_quick_network(self.session.app_mut(), compositor, &mut self.quick_network);
+        self.networks.sync(self.session.app_mut(), compositor);
         sync_quick_palette(self.session.app_mut(), compositor, &mut self.quick_palette);
         sync_wallpaper(self.session.app_mut(), compositor, &mut self.wallpaper);
         sync_game_bezel(self.session.app_mut(), compositor, &mut self.game_bezel);
@@ -1182,6 +1193,16 @@ impl Frontend {
     }
 }
 
+#[cfg(feature = "device")]
+fn wifi_worker(root: &std::path::Path) -> crate::wifi::Wifi {
+    crate::wifi::sp::device_wifi(root)
+}
+
+#[cfg(not(feature = "device"))]
+fn wifi_worker(_root: &std::path::Path) -> crate::wifi::Wifi {
+    crate::wifi::Wifi::spawn(Box::new(crate::wifi::Fake::demo()))
+}
+
 fn link_legend_faces(ink: [u8; 3]) -> Vec<UndoFace> {
     link_button_legends(ink)
 }
@@ -1222,7 +1243,7 @@ struct UiFaces {
     reset: Vec<UndoFace>,
     delete: Vec<UndoFace>,
     delete_shot: Vec<UndoFace>,
-    update_legends: [UndoFace; 5],
+    update_legends: [UndoFace; 3],
 }
 
 impl UiFaces {
@@ -1285,7 +1306,7 @@ impl UiFaces {
                 .map(|f| menu_face(f.line()))
                 .collect(),
             toasts: Toast::all().into_iter().map(toast_face).collect(),
-            update_legends: update_legends(footer_ink(false), footer_ink(true)),
+            update_legends: update_legends(footer_ink(false)),
             repair: {
                 let [not_now, repair] = repair_legends(footer_ink(false));
                 vec![
@@ -1836,6 +1857,25 @@ fn sync_quick_clock(app: &mut App, compositor: &mut Compositor, state: &mut Quic
     let dim = upload(compositor, &mut state.dim, dim);
     let lit = upload(compositor, &mut state.lit, lit);
     app.set_quick_clock_faces((dim, dim_size.0, dim_size.1), (lit, lit_size.0, lit_size.1));
+    state.shown = text;
+}
+
+fn sync_quick_network(app: &mut App, compositor: &mut Compositor, state: &mut QuickClock) {
+    if app.quick_menu().is_none() {
+        return;
+    }
+    let text = app.networks_value();
+    if text == state.shown {
+        return;
+    }
+    let (dim, lit) = (
+        quick_value_face(&text, false),
+        quick_value_face(&text, true),
+    );
+    let (dim_size, lit_size) = ((dim.w, dim.h), (lit.w, lit.h));
+    let dim = upload(compositor, &mut state.dim, dim);
+    let lit = upload(compositor, &mut state.lit, lit);
+    app.set_quick_network_faces((dim, dim_size.0, dim_size.1), (lit, lit_size.0, lit_size.1));
     state.shown = text;
 }
 

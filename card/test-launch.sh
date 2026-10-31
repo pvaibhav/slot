@@ -159,9 +159,9 @@ setup
 rm -f "$TMP/link.log"
 printf 'echo "$*" >> "%s"\n' "$TMP/link.log" > "$TMP/card/System/slotlink.sh"
 launch
-[ ! -e "$TMP/link.log" ] || fail "tore down an update no earlier run left up"
-: > "$TMP/run/slotupdate.conf"
+[ ! -e "$TMP/link.log" ] || fail "tore down WiFi no earlier run left up"
+: > "$TMP/run/slotwifi.on"
 launch
-grep -qx "update down" "$TMP/link.log" 2>/dev/null || fail "WiFi left up by a crashed update was not torn down"
+grep -qx "wifi stop" "$TMP/link.log" 2>/dev/null || fail "WiFi left up by a crashed run was not torn down"
 
 echo "launch: all passed"

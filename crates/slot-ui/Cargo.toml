@@ -11,6 +11,7 @@ png = { workspace = true }
 resvg = { workspace = true }
 usvg = { workspace = true }
 slot-gfx = { path = "../slot-gfx", default-features = false }
+slot-input = { path = "../slot-input" }
 slot-power = { path = "../slot-power" }
 slot-store = { path = "../slot-store" }
 

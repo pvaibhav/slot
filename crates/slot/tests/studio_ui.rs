@@ -141,102 +141,11 @@ mod radio {
         }
     }
 
-    fn asked(art: &FakeArt, job: ArtJob) -> usize {
-        art.0.lock().unwrap().asked.iter().filter(|j| **j == job).count()
-    }
-
     fn with_art() -> (TempDir, App, FakeArt) {
         let (d, mut a) = on_shelf();
         let art = FakeArt::default();
         a.set_art_jobs(Box::new(art.clone()));
         (d, a, art)
-    }
-
-    fn settle(a: &mut App) {
-        for _ in 0..4 {
-            let t = a.now();
-            a.tick_ms(t + 1_000);
-        }
-    }
-
-    #[test]
-    fn connects_after_startup_not_during_it() {
-        let (_d, mut a, art) = with_art();
-        a.tick_ms(a.now() + 1);
-        assert_eq!(asked(&art, ArtJob::RadioHold), 0);
-        settle(&mut a);
-        assert_eq!(asked(&art, ArtJob::RadioHold), 1);
-    }
-
-    #[test]
-    fn connecting_at_init_asks_once() {
-        let (_d, mut a, art) = with_art();
-        a.connect_wifi();
-        assert_eq!(asked(&art, ArtJob::RadioHold), 1);
-        settle(&mut a);
-        assert_eq!(asked(&art, ArtJob::RadioHold), 1);
-    }
-
-    #[test]
-    fn connecting_at_init_needs_a_wifi_conf() {
-        let (d, mut a, art) = with_art();
-        std::fs::remove_file(d.path().join("Config/wifi.conf")).unwrap();
-        a.connect_wifi();
-        assert_eq!(asked(&art, ArtJob::RadioHold), 0);
-    }
-
-    #[test]
-    fn no_wifi_conf_never_connects() {
-        let (d, mut a, art) = with_art();
-        std::fs::remove_file(d.path().join("Config/wifi.conf")).unwrap();
-        settle(&mut a);
-        assert_eq!(asked(&art, ArtJob::RadioHold), 0);
-    }
-
-    #[test]
-    fn a_game_drops_wifi_and_the_shelf_brings_it_back() {
-        let (_d, mut a, art) = with_art();
-        settle(&mut a);
-        a.apply(Action::Insert);
-        a.tick_ms(a.now() + 1);
-        assert_eq!(asked(&art, ArtJob::RadioRelease), 1);
-    }
-
-    #[test]
-    fn sleep_drops_wifi_at_once() {
-        let (_d, mut a, art) = with_art();
-        settle(&mut a);
-        a.apply(Action::LidClose);
-        a.tick_ms(a.now() + 1);
-        assert_eq!(asked(&art, ArtJob::RadioRelease), 1);
-        a.apply(Action::LidOpen);
-        settle(&mut a);
-        assert_eq!(asked(&art, ArtJob::RadioHold), 2);
-    }
-
-    #[test]
-    fn a_game_drops_wifi_a_studio_fetch_brought_up() {
-        let (_d, mut a, art) = with_art();
-        a.apply(Action::SelectTap);
-        a.close_studio();
-        a.apply(Action::Insert);
-        a.tick_ms(a.now() + 1);
-        assert_eq!(asked(&art, ArtJob::RadioRelease), 1);
-    }
-
-    #[test]
-    fn a_failed_connection_tries_again_after_a_minute() {
-        let (_d, mut a, art) = with_art();
-        settle(&mut a);
-        assert_eq!(asked(&art, ArtJob::RadioHold), 1);
-        art.0.lock().unwrap().events.push_back(ArtEvent::RadioFailed);
-        settle(&mut a);
-        assert_eq!(asked(&art, ArtJob::RadioHold), 1);
-        for _ in 0..7 {
-            let t = a.now();
-            a.tick_ms(t + 10_000);
-        }
-        assert_eq!(asked(&art, ArtJob::RadioHold), 2);
     }
 
     #[test]
@@ -294,15 +203,6 @@ mod radio {
     }
 
     #[test]
-    fn menus_keep_wifi() {
-        let (_d, mut a, art) = with_art();
-        settle(&mut a);
-        a.apply(Action::QuickMenu);
-        settle(&mut a);
-        assert_eq!(asked(&art, ArtJob::RadioRelease), 0);
-    }
-
-    #[test]
     fn the_studio_preloads_on_open() {
         let (_d, mut a, art) = with_art();
         a.apply(Action::SelectTap);
@@ -311,38 +211,6 @@ mod radio {
         press(&mut a, Btn::A);
         let n = art.0.lock().unwrap().asked.iter().filter(|j| matches!(j, ArtJob::StudioFetch(_))).count();
         assert_eq!(n, 1);
-    }
-}
-
-mod icon {
-    use super::*;
-    use slot::art::jobs::{ArtEvent, ArtJob, ArtJobs};
-
-    struct Up(bool);
-
-    impl ArtJobs for Up {
-        fn ask(&mut self, _job: ArtJob) {}
-
-        fn take(&mut self) -> Option<ArtEvent> {
-            std::mem::take(&mut self.0).then_some(ArtEvent::Radio(true))
-        }
-    }
-
-    fn rects(a: &App) -> usize {
-        let mut out = Vec::new();
-        a.draw(&mut out);
-        out.iter().filter(|d| matches!(d, slot_ui::Draw::Rect { .. })).count()
-    }
-
-    #[test]
-    fn the_shelf_footer_shows_wifi_only_when_connected() {
-        let (_d, mut a) = on_shelf();
-        let before = rects(&a);
-        assert!(!a.wifi_up());
-        a.set_art_jobs(Box::new(Up(true)));
-        a.tick_ms(a.now() + 1);
-        assert!(a.wifi_up());
-        assert!(rects(&a) > before);
     }
 }
 

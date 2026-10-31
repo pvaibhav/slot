@@ -2148,6 +2148,7 @@ dependencies = [
  "png 0.17.16",
  "resvg",
  "slot-gfx",
+ "slot-input",
  "slot-power",
  "slot-store",
  "tempfile",

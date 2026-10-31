@@ -16,6 +16,7 @@ pub enum Toast {
     NeedsGpsp,
     NeedsMgba,
     NoLink,
+    NoWifi,
     LinkEnded,
     PeerEnded,
     BiosMismatch,
@@ -37,7 +38,7 @@ pub enum Toast {
 }
 
 impl Toast {
-    const FIXED: [Toast; 24] = [
+    const FIXED: [Toast; 25] = [
         Toast::StateSaved,
         Toast::StateLoaded,
         Toast::GameReset,
@@ -46,6 +47,7 @@ impl Toast {
         Toast::NeedsGpsp,
         Toast::NeedsMgba,
         Toast::NoLink,
+        Toast::NoWifi,
         Toast::LinkEnded,
         Toast::PeerEnded,
         Toast::BiosMismatch,
@@ -136,6 +138,7 @@ impl Toast {
             Toast::NeedsGpsp => "Please switch to gpSP",
             Toast::NeedsMgba => "Please switch to mGBA",
             Toast::NoLink => "No link support",
+            Toast::NoWifi => "This device has no Wi-Fi",
             Toast::LinkEnded => "Link ended",
             Toast::PeerEnded => "Link was ended",
             Toast::BiosMismatch => "BIOS does not match",

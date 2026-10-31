@@ -243,6 +243,7 @@ fn up_and_down_move_the_bar_and_wrap_at_the_ends() {
         QuickRow::Screen,
         QuickRow::Game,
         QuickRow::Controls,
+        QuickRow::Network,
         QuickRow::About,
         QuickRow::General,
     ] {
@@ -562,20 +563,30 @@ fn a_on_about_opens_the_label_and_b_comes_back_to_the_menu() {
 }
 
 #[test]
-fn restart_on_about_is_select_start_not_x() {
+fn x_on_about_restarts() {
     let (_d, mut a, _) = on_carousel();
     open_at(&mut a, QuickRow::About);
     press(&mut a, Btn::A);
     assert!(!a.restarting(), "opening About restarted");
     press(&mut a, Btn::X);
-    assert!(!a.restarting(), "X on About restarted");
+    assert!(
+        a.restarting() && !a.powering_off(),
+        "X on About did not restart"
+    );
+}
+
+#[test]
+fn select_start_on_about_still_restarts() {
+    let (_d, mut a, _) = on_carousel();
+    open_at(&mut a, QuickRow::About);
+    press(&mut a, Btn::A);
     assert!(a.restart_chord());
     a.apply(Action::Restart);
     assert!(a.restarting() && !a.powering_off());
 }
 
 #[test]
-fn the_about_footer_shows_back_and_hides_restart() {
+fn the_about_footer_shows_back_and_x_restart() {
     let (_d, mut a, _) = on_carousel();
     fake_faces(&mut a);
     open_at(&mut a, QuickRow::About);
@@ -583,7 +594,141 @@ fn the_about_footer_shows_back_and_hides_restart() {
     let out = frame(&a);
     let (lx, _, _) = legend_box(&out, 400);
     assert!(lx.abs() < 1.0, "Back is not on the left: {lx}");
-    assert!(!drawn(&out, 404), "Restart has a legend on About");
+    let (rx, _, rw) = legend_box(&out, 404);
+    let right = rx + rw - HINT_EDGE as f32;
+    assert!(
+        (right - OUT_W as f32).abs() < 1.0,
+        "Restart is not on the right: {right}"
+    );
+}
+
+#[test]
+fn network_sits_between_controls_and_about() {
+    let at = |row| QuickRow::MAIN.iter().position(|r| *r == row);
+    assert_eq!(at(QuickRow::Network), at(QuickRow::Controls).map(|i| i + 1));
+    assert_eq!(at(QuickRow::About), at(QuickRow::Network).map(|i| i + 1));
+    assert_eq!(QuickRow::Network.label(), "Network");
+    let (_d, mut a, _) = on_carousel();
+    open_at(&mut a, QuickRow::Network);
+    press(&mut a, Btn::A);
+    assert_eq!(a.quick_menu(), Some(QuickRow::WifiPower));
+    press(&mut a, Btn::B);
+    assert_eq!(a.quick_menu(), Some(QuickRow::Network));
+}
+
+#[test]
+fn fetch_missing_art_moved_to_network() {
+    assert_eq!(
+        QuickRow::NETWORK,
+        [
+            QuickRow::WifiPower,
+            QuickRow::Networks,
+            QuickRow::CheckUpdates,
+            QuickRow::FetchArt,
+        ]
+    );
+    assert_eq!(
+        QuickRow::NETWORK.map(QuickRow::label),
+        [
+            "Wi-Fi",
+            "Networks",
+            "Check for Updates",
+            "Fetch Missing Art"
+        ]
+    );
+    assert!(!QuickRow::GENERAL.contains(&QuickRow::FetchArt));
+    assert_eq!(QuickRow::FetchArt.parent(), Some(QuickRow::Network));
+    let (_d, a, _) = on_carousel();
+    for row in QuickRow::NETWORK {
+        assert!(!a.hidden_rows().contains(&row), "{row:?} is hidden");
+    }
+}
+
+#[test]
+fn wifi_row_toggles_with_a_and_left_right() {
+    let (d, mut a, _) = on_carousel();
+    open_at(&mut a, QuickRow::WifiPower);
+    assert_eq!(a.quick_value(QuickRow::WifiPower), Some(QuickValue::On));
+    for (btn, off) in [
+        (Btn::A, true),
+        (Btn::A, false),
+        (Btn::Left, true),
+        (Btn::Right, false),
+        (Btn::Right, true),
+    ] {
+        press(&mut a, btn);
+        assert_eq!(a.wifi_is_off(), off, "{btn:?}");
+        assert_eq!(
+            a.quick_value(QuickRow::WifiPower),
+            Some(QuickValue::flag(!off)),
+            "{btn:?}"
+        );
+        assert_eq!(
+            a.quick_menu(),
+            Some(QuickRow::WifiPower),
+            "{btn:?} moved the bar"
+        );
+    }
+    assert!(read_slot_state(d.path()).wifi_off, "Off was not saved");
+}
+
+#[test]
+fn wifi_off_leaves_only_the_wifi_row_on_the_network_page() {
+    let (_d, mut a, _) = on_carousel();
+    open_at(&mut a, QuickRow::WifiPower);
+    press(&mut a, Btn::A);
+    assert!(a.wifi_is_off());
+    assert_eq!(
+        QuickRow::WifiPower.shown(&a.hidden_rows()),
+        [QuickRow::WifiPower]
+    );
+    press(&mut a, Btn::Down);
+    assert_eq!(a.quick_menu(), Some(QuickRow::WifiPower));
+    press(&mut a, Btn::A);
+    assert!(QuickRow::WifiPower
+        .shown(&a.hidden_rows())
+        .contains(&QuickRow::Networks));
+}
+
+#[test]
+fn the_network_row_waits_for_wlan0() {
+    let (d, mut a, _) = on_carousel();
+    let wlan0 = d.path().join("net/wlan0");
+    a.set_wifi_probe(wlan0.clone());
+    a.tick_ms(a.now() + 1);
+    assert!(a.hidden_rows().contains(&QuickRow::Network));
+    std::fs::create_dir_all(&wlan0).unwrap();
+    a.tick_ms(a.now() + 1100);
+    assert!(!a.hidden_rows().contains(&QuickRow::Network));
+    std::fs::remove_dir(&wlan0).unwrap();
+    a.tick_ms(a.now() + 1100);
+    assert!(!a.hidden_rows().contains(&QuickRow::Network));
+}
+
+#[test]
+fn the_networks_row_says_off_or_not_connected() {
+    let (_d, mut a, _) = on_carousel();
+    assert_eq!(a.networks_value(), "Not Connected");
+    a.set_wifi_off(true);
+    assert_eq!(a.networks_value(), "Off");
+}
+
+#[test]
+fn fetch_missing_art_with_no_network_says_so() {
+    let (d, mut a, _) = on_carousel();
+    open_at(&mut a, QuickRow::FetchArt);
+    press(&mut a, Btn::A);
+    assert!(a.fetch_art().is_none(), "fetch opened with no network");
+    assert_eq!(
+        a.update_text(),
+        Some(("No network".into(), "Join a network in Networks.".into()))
+    );
+    press(&mut a, Btn::B);
+    assert_eq!(a.update_text(), None);
+    assert_eq!(a.quick_menu(), Some(QuickRow::FetchArt));
+    std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
+    press(&mut a, Btn::A);
+    assert!(a.fetch_art().is_some(), "fetch did not open");
 }
 
 #[test]

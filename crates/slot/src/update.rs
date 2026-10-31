@@ -628,7 +628,7 @@ fn run(root: &Path, job: &UpdateJob, ticket: &Ticket, tx: &Sender<UpdateEvent>) 
     if clock_is_wrong(now_unix()) {
         return UpdateEvent::Failed(UpdateFail::Clock);
     }
-    if let Err(e) = crate::art::jobs::hold_radio(root) {
+    if let Err(e) = wait_online() {
         return UpdateEvent::Failed(e);
     }
     let event = match job {
@@ -684,28 +684,8 @@ fn run(root: &Path, job: &UpdateJob, ticket: &Ticket, tx: &Sender<UpdateEvent>) 
 }
 
 #[cfg(feature = "device")]
-fn radio(root: &Path, args: &[&std::ffi::OsStr]) -> Option<i32> {
-    std::process::Command::new("/bin/sh")
-        .arg(root.join("System/slotlink.sh"))
-        .args(args)
-        .status()
-        .ok()
-        .and_then(|s| s.code())
-}
-
-#[cfg(feature = "device")]
-pub(crate) fn radio_up(root: &Path) -> Result<(), UpdateFail> {
-    let conf = root.join(WIFI_CONF);
-    match radio(root, &["update".as_ref(), "up".as_ref(), conf.as_os_str()]) {
-        Some(0) => Ok(()),
-        Some(4) => Err(UpdateFail::Offline),
-        _ => Err(UpdateFail::NoWifi),
-    }
-}
-
-#[cfg(feature = "device")]
-pub(crate) fn radio_down(root: &Path) {
-    let _ = radio(root, &["update".as_ref(), "down".as_ref()]);
+pub(crate) fn wait_online() -> Result<(), UpdateFail> {
+    crate::wifi::wait_online(ONLINE_TIMEOUT)
 }
 
 #[cfg(feature = "device")]
@@ -735,14 +715,13 @@ fn free_space(root: &Path) -> u64 {
 }
 
 #[cfg(not(feature = "device"))]
-pub(crate) fn radio_up(_root: &Path) -> Result<(), UpdateFail> {
+pub(crate) fn wait_online() -> Result<(), UpdateFail> {
     Ok(())
 }
 
-#[cfg(not(feature = "device"))]
-pub(crate) fn radio_down(_root: &Path) {}
-
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+#[cfg(feature = "device")]
+const ONLINE_TIMEOUT: Duration = Duration::from_secs(30);
 pub(crate) const API_TIMEOUT: Duration = Duration::from_secs(15);
 pub(crate) const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(120);
 pub(crate) const DOWNLOAD_LIMIT: u64 = 64 * 1024 * 1024;

@@ -24,15 +24,14 @@ fn booted(wifi: bool) -> (TempDir, App) {
 }
 
 #[test]
-fn row_hidden_without_wifi_conf() {
-    let (_d, a) = booted(false);
-    assert!(a.hidden_rows().contains(&QuickRow::FetchArt));
-}
-
-#[test]
-fn row_shown_with_wifi_conf() {
-    let (_d, a) = booted(true);
-    assert!(!a.hidden_rows().contains(&QuickRow::FetchArt));
+fn row_shown_with_or_without_wifi_conf() {
+    for wifi in [false, true] {
+        let (_d, a) = booted(wifi);
+        assert!(
+            !a.hidden_rows().contains(&QuickRow::FetchArt),
+            "wifi.conf {wifi}"
+        );
+    }
 }
 
 use std::collections::VecDeque;
@@ -470,8 +469,17 @@ fn no_skip_while_connecting() {
 
 #[test]
 fn already_connected_skips_the_connecting_line() {
-    let (_d, mut a, art) = running();
-    art.send(&mut a, ArtEvent::Radio(true));
+    let (_d, mut a, _art) = running();
+    a.set_wifi(slot::wifi::Wifi::inline(Box::new(slot::wifi::Fake::demo())));
+    a.wifi_send(slot::wifi::Cmd::Hold);
+    a.tick_ms(a.now() + 1);
+    assert_eq!(a.fetch_art_lines(), vec!["Connecting to WiFi".to_string()]);
+    a.wifi_send(slot::wifi::Cmd::Join {
+        ssid: "Home".into(),
+        password: "password".into(),
+        hidden: false,
+    });
+    a.tick_ms(a.now() + 1);
     assert_eq!(
         a.fetch_art_lines(),
         vec!["Fetching Art".to_string(), "Looking for art".to_string()]

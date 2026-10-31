@@ -39,7 +39,7 @@ pub fn draw_footer(
     printed(canvas.w - FOOTER_MARGIN - clock.w as f32, clock, out);
 }
 
-const WIFI_GLYPH: [&str; 10] = [
+pub(crate) const WIFI_GLYPH: [&str; 10] = [
     "....3333333....",
     "..333.....333..",
     ".33.........33.",
@@ -51,7 +51,7 @@ const WIFI_GLYPH: [&str; 10] = [
     "......111......",
     ".......1.......",
 ];
-const WIFI_DIM: f32 = 0.3;
+pub(crate) const WIFI_DIM: f32 = 0.3;
 const WIFI_GAP: f32 = 12.0;
 
 pub fn draw_wifi_icon(percent: Printed, ink: [u8; 3], bars: u8, out: &mut Vec<Draw>) {

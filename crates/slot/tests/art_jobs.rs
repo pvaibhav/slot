@@ -282,46 +282,6 @@ fn carts_run_at_the_same_time() {
     assert_eq!(peak.load(Ordering::SeqCst), 3);
 }
 
-mod held {
-    use slot::art::jobs::{HeldRadio, Radio};
-    use slot::update::UpdateFail;
-    use std::cell::RefCell;
-    use std::rc::Rc;
-
-    #[derive(Clone, Default)]
-    struct Fake(Rc<RefCell<Vec<&'static str>>>);
-
-    impl Radio for Fake {
-        fn up(&mut self) -> Result<(), UpdateFail> {
-            self.0.borrow_mut().push("up");
-            Ok(())
-        }
-
-        fn down(&mut self) {
-            self.0.borrow_mut().push("down");
-        }
-    }
-
-    #[test]
-    fn a_held_radio_is_not_reconnected() {
-        let log = Fake::default();
-        let mut r = HeldRadio::new(log.clone());
-        r.hold().unwrap();
-        r.hold().unwrap();
-        assert_eq!(*log.0.borrow(), vec!["up"]);
-    }
-
-    #[test]
-    fn release_is_once() {
-        let log = Fake::default();
-        let mut r = HeldRadio::new(log.clone());
-        r.hold().unwrap();
-        r.release();
-        r.release();
-        assert_eq!(*log.0.borrow(), vec!["up", "down"]);
-    }
-}
-
 mod one_cart {
     use super::*;
     use slot::art::jobs::studio_art_with;
@@ -555,7 +515,6 @@ fn a_fetch_cancelled_before_it_starts_still_ends() {
     use slot::art::make::Kind;
     let d = card(&[]);
     let mut jobs = art_jobs(d.path().to_path_buf());
-    jobs.ask(ArtJob::RadioHold);
     jobs.ask(ArtJob::FetchMissing(Kind::Real));
     jobs.ask(ArtJob::Cancel);
     for _ in 0..500 {

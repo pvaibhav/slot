@@ -1485,6 +1485,22 @@ fn a_cart_gpsp_cannot_carry_is_refused_the_link_screen_and_told_why() {
 }
 
 #[test]
+fn a_device_without_wifi_is_refused_the_link_screen_and_told_why() {
+    let d = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
+    common::write_retail_header(&d, "Emerald", "POKEMON EMER", "BPEE");
+    let mut app = seated_on_gpsp(&d);
+    let wlan0 = d.path().join("net/wlan0");
+    app.set_wifi_probe(wlan0.clone());
+    app.apply(Action::GameMenu);
+    assert!(!app.game_menu_open(), "a device with no radio offered a link");
+    assert_eq!(app.toast(), Some(Toast::NoWifi));
+    assert!(matches!(app.phase(), Phase::Playing { .. }));
+    std::fs::create_dir_all(&wlan0).unwrap();
+    app.apply(Action::GameMenu);
+    assert!(app.game_menu_open(), "wlan0 arrived and the link stayed refused");
+}
+
+#[test]
 fn a_cart_gpsp_carries_still_opens_the_link_screen() {
     for (stem, title, code) in [
         ("Mario Golf", "MARIO GOLF", "BMGE"),

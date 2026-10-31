@@ -122,6 +122,7 @@ const WIFI_SETTLE_MS: Millis = 2_000;
 const STUDIO_SLIDE_MS: f32 = 240.0;
 const WIFI_SAMPLE_MS: Millis = 5000;
 const WIFI_RETRY_MS: Millis = 60_000;
+const WIFI_PROBE_MS: Millis = 1_000;
 const SUMMARY_WAIT_MS: f64 = 1500.0;
 const SLIP_SHUFFLE_PX: f32 = 28.0;
 pub const LINK_SCRIM: [f32; 4] = [0.0, 0.0, 0.0, 0.5];
@@ -317,6 +318,26 @@ pub enum Phase {
     Doze {
         cart: Option<String>,
     },
+    Networks {
+        name: Option<String>,
+    },
+    NetworkPage {
+        ssid: String,
+        row: usize,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KeyboardFor {
+    Password { ssid: String, hidden: bool },
+    NetworkName,
+}
+
+pub struct NetLegends {
+    pub join: [(TexId, u32); 2],
+    pub connect: [(TexId, u32); 2],
+    pub disconnect: [(TexId, u32); 2],
+    pub forget: [(TexId, u32); 2],
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -364,6 +385,13 @@ enum UpdateState {
     Cancelling(Release, u64),
     Closing(Release),
     Failed(UpdateFail),
+    Notice(NetNotice),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NetNotice {
+    NoNetwork,
+    Password,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -510,6 +538,7 @@ pub struct App {
     quick_menu_faces: Option<QuickMenuFaces>,
     quick_clock_faces: Option<[(TexId, u32, u32); 2]>,
     quick_wallpaper_faces: Option<[(TexId, u32, u32); 2]>,
+    quick_network_faces: Option<[(TexId, u32, u32); 2]>,
     quick_palette_faces: Option<[(TexId, u32, u32); 2]>,
     quick_bezel_faces: [Option<[(TexId, u32, u32); 2]>; 3],
     game_bezel: Option<TexId>,
@@ -570,14 +599,24 @@ pub struct App {
     art_jobs: Box<dyn ArtJobs>,
     fetch_art: Option<FetchArt>,
     wifi_held: bool,
+    wifi_boot_blocked: bool,
+    wifi_probe: Option<(PathBuf, Millis)>,
     core_stale: bool,
     studio_saving: Option<String>,
     studio_write: Option<(std::thread::JoinHandle<bool>, Box<crate::studio::Studio>)>,
     studio_hex: Option<(String, crate::studio_view::Style)>,
     wifi_wanted_at: Option<Millis>,
-    wifi_up: bool,
+    wifi: Option<(crate::wifi::Wifi, std::time::Instant, Millis)>,
     wifi_bars: u8,
     wifi_sampled: Millis,
+    wifi_scanning: bool,
+    keyboard: Option<(slot_ui::Keyboard, KeyboardFor)>,
+    keyboard_tex: Option<slot_ui::KeyboardTex>,
+    net_lines: Vec<slot_ui::NetLine>,
+    net_message: Option<slot_ui::NetFace>,
+    net_legends: Option<NetLegends>,
+    forget_prompt: bool,
+    forget_faces: Vec<(TexId, u32, u32)>,
     studio_art: Option<crate::art::jobs::StudioArt>,
     studio_fetched: bool,
     studio_stale: usize,
@@ -616,7 +655,7 @@ pub struct App {
     update_at: Millis,
     update_sounded: bool,
     update_faces: Vec<(TexId, u32, u32)>,
-    update_legends: Option<[(TexId, u32); 5]>,
+    update_legends: Option<[(TexId, u32); 3]>,
     update_scene: Option<UpdateScene>,
     update_picker: Option<CorePicker>,
     update_seat_at: Option<Millis>,
@@ -718,14 +757,24 @@ impl App {
             art_jobs: no_art_jobs(),
             fetch_art: None,
             wifi_held: false,
+            wifi_boot_blocked: false,
+            wifi_probe: None,
             core_stale: false,
             studio_saving: None,
             studio_write: None,
             studio_hex: None,
             wifi_wanted_at: None,
-            wifi_up: false,
+            wifi: None,
             wifi_bars: 3,
             wifi_sampled: 0,
+            wifi_scanning: false,
+            keyboard: None,
+            keyboard_tex: None,
+            net_lines: Vec::new(),
+            net_message: None,
+            net_legends: None,
+            forget_prompt: false,
+            forget_faces: Vec::new(),
             studio_art: None,
             studio_fetched: false,
             studio_stale: 0,
@@ -868,6 +917,7 @@ impl App {
             quick_menu_faces: None,
             quick_clock_faces: None,
             quick_wallpaper_faces: None,
+            quick_network_faces: None,
             quick_palette_faces: None,
             quick_bezel_faces: [None, None, None],
             game_bezel: None,
@@ -1488,8 +1538,12 @@ impl App {
             } else {
                 QuickValue::Dark
             }),
+            QuickRow::WifiPower => Some(QuickValue::flag(!self.state.wifi_off)),
             QuickRow::DateTime
             | QuickRow::FetchArt
+            | QuickRow::Network
+            | QuickRow::Networks
+            | QuickRow::CheckUpdates
             | QuickRow::About
             | QuickRow::Screen
             | QuickRow::Game
@@ -1567,6 +1621,10 @@ impl App {
 
     pub fn set_quick_wallpaper_faces(&mut self, dim: (TexId, u32, u32), lit: (TexId, u32, u32)) {
         self.quick_wallpaper_faces = Some([dim, lit]);
+    }
+
+    pub fn set_quick_network_faces(&mut self, dim: (TexId, u32, u32), lit: (TexId, u32, u32)) {
+        self.quick_network_faces = Some([dim, lit]);
     }
 
     pub fn set_quick_bezel_faces(
@@ -1878,8 +1936,11 @@ impl App {
         if !self.state.turbo {
             hidden.extend([QuickRow::GameTurboA, QuickRow::GameTurboB]);
         }
-        if !self.root.as_deref().is_some_and(crate::update::wifi_conf) || self.link_active() {
-            hidden.push(QuickRow::FetchArt);
+        if self.wifi_probe.is_some() {
+            hidden.push(QuickRow::Network);
+        }
+        if self.state.wifi_off {
+            hidden.extend(QuickRow::NETWORK.into_iter().filter(|r| *r != QuickRow::WifiPower));
         }
         hidden
     }
@@ -2715,6 +2776,9 @@ impl App {
         self.sync_link_badge();
         self.radio.ask(RadioJob::Down);
         self.radio.ask(RadioJob::Cool);
+        if self.state.wifi_off {
+            self.wifi_send(crate::wifi::Cmd::PowerOff);
+        }
     }
 
     pub fn peer_lost(&mut self) {
@@ -3190,6 +3254,12 @@ impl App {
         if self.update.is_some() {
             return self.update_input(action);
         }
+        if self.forget_prompt {
+            return self.forget_input(action);
+        }
+        if self.keyboard.is_some() {
+            return self.keyboard_input(action);
+        }
         if self.repair_prompt {
             match action {
                 Action::GbaDown(Btn::A) => self.begin_repair(),
@@ -3313,11 +3383,12 @@ impl App {
                     row: QuickRow::About,
                 }
             }
-            Phase::About if action == Action::Restart => self.begin_restart(),
-            Phase::About if action == Action::GbaDown(Btn::X) && self.update_offered() => {
-                self.check_for_update()
+            Phase::About if action == Action::Restart || action == Action::GbaDown(Btn::X) => {
+                self.begin_restart()
             }
             Phase::QuickMenu { row } => self.quick_menu_input(row, action),
+            Phase::Networks { .. } => self.networks_input(action),
+            Phase::NetworkPage { .. } => self.network_page_input(action),
             _ => {}
         }
     }
@@ -3450,7 +3521,10 @@ impl App {
                 self.phase = clock_screen(self.utc_secs(), &self.state, true);
             }
             QuickRow::About => self.phase = Phase::About,
-            QuickRow::FetchArt => self.open_fetch_art(),
+            QuickRow::FetchArt => self.open_fetch_missing_art(),
+            QuickRow::CheckUpdates => self.open_check_for_updates(),
+            QuickRow::WifiPower => self.set_wifi_off(!self.state.wifi_off),
+            QuickRow::Networks => self.open_networks(),
             QuickRow::Screen
             | QuickRow::ScreenGeneral
             | QuickRow::Game
@@ -3459,6 +3533,7 @@ impl App {
             | QuickRow::ScreenGb
             | QuickRow::Shortcuts
             | QuickRow::General
+            | QuickRow::Network
             | QuickRow::Controls
             | QuickRow::ControlsShelf
             | QuickRow::ControlsInGame => {
@@ -3564,6 +3639,9 @@ impl App {
     }
 
     fn change_setting(&mut self, row: QuickRow, right: bool) {
+        if row == QuickRow::WifiPower {
+            return self.set_wifi_off(!self.state.wifi_off);
+        }
         if row == QuickRow::Blending {
             let to = self
                 .blending_in_play()
@@ -3826,7 +3904,11 @@ impl App {
             | QuickRow::ControlsShelf
             | QuickRow::ControlsInGame
             | QuickRow::LidOff
-            | QuickRow::FetchArt => return,
+            | QuickRow::FetchArt
+            | QuickRow::Network
+            | QuickRow::WifiPower
+            | QuickRow::Networks
+            | QuickRow::CheckUpdates => return,
         }
         self.persist();
     }
@@ -4739,6 +4821,9 @@ impl App {
         if let Some(row) = self.reset_prompt {
             return self.draw_prompt(&self.reset_prompt_faces(row), out);
         }
+        if self.forget_prompt {
+            return self.draw_prompt(&self.forget_faces, out);
+        }
         if self.delete_prompt {
             return match self.shot_viewer {
                 Some(_) => {
@@ -4778,6 +4863,7 @@ impl App {
                 values: QuickRow::ALL.map(|r| self.quick_value(r)),
                 clock: self.quick_clock_faces,
                 wallpaper: self.quick_wallpaper_faces,
+                networks: self.quick_network_faces,
                 faces: self.quick_menu_faces.as_ref(),
                 ground: self.menu_ground(),
                 palette: self.quick_palette_faces,
@@ -4832,7 +4918,7 @@ impl App {
                     footer_ink(self.light()),
                     out,
                 );
-                if self.wifi_up {
+                if self.wifi_up() {
                     slot_ui::draw_wifi_icon(self.battery_percent, footer_ink(self.light()), self.wifi_bars, out);
                 }
                 if let Some(picker) = self.core_picker_shown() {
@@ -4844,6 +4930,10 @@ impl App {
                 slot_ui::draw_menu_ground(self.canvas(), self.menu_ground(), out);
                 draw_sticker(self.canvas(), self.sticker_face, out);
                 self.draw_menu_footer(out);
+                return;
+            }
+            Phase::Networks { .. } | Phase::NetworkPage { .. } => {
+                self.draw_networks(out);
                 return;
             }
             Phase::Inserting { .. } if self.powering_up() && self.framed_panel() => {
@@ -4950,6 +5040,7 @@ impl App {
                 values: QuickRow::ALL.map(|r| self.quick_value(r)),
                 clock: None,
                 wallpaper: None,
+                networks: None,
                 faces: self.quick_menu_faces.as_ref(),
                 ground: None,
                 palette: self.quick_palette_faces,
@@ -5071,7 +5162,7 @@ impl App {
             footer_ink(self.light()),
             out,
         );
-        if self.wifi_up {
+        if self.wifi_up() {
             slot_ui::draw_wifi_icon(self.battery_percent, footer_ink(self.light()), self.wifi_bars, out);
         }
         shift_down(&mut out[start..], self.menu_footer_offset());
@@ -5131,15 +5222,12 @@ impl App {
         let Some(faces) = &self.quick_menu_faces else {
             return;
         };
-        let [back, ..] = match self.light() {
+        let [back, _, _, _, restart, ..] = match self.light() {
             true => faces.legend_light,
             false => faces.legend,
         };
         self.draw_side_legend(back, false, LINK_LEGEND_Y, out);
-        if let (true, Some([ota, ota_light, ..])) = (self.update_offered(), self.update_legends) {
-            let ota = if self.light() { ota_light } else { ota };
-            self.draw_side_legend(ota, true, LINK_LEGEND_Y, out);
-        }
+        self.draw_side_legend(restart, true, LINK_LEGEND_Y, out);
     }
 
     fn draw_menu_legends(&self, row: QuickRow, y: f32, out: &mut Vec<Draw>) {
@@ -5801,6 +5889,8 @@ impl App {
         }
         self.close_game_menu();
         self.core_picker = None;
+        self.keyboard = None;
+        self.forget_prompt = false;
         self.shot_wanted = false;
         if matches!(self.phase, Phase::Doze { .. }) {
             return;
@@ -5934,6 +6024,10 @@ impl App {
         if self.link_active() {
             return self.refuse();
         }
+        if !self.has_wifi_hardware() {
+            self.hud.toast(Toast::NoWifi, self.now());
+            return;
+        }
         if self.core == Core::Mgba {
             let wireless = self
                 .seated()
@@ -6013,7 +6107,7 @@ impl App {
     }
 
     fn open_studio(&mut self) {
-        let wifi = self.root.as_deref().is_some_and(crate::update::wifi_conf);
+        let wifi = self.has_saved() && !self.state.wifi_off;
         let shelf = self.shelf();
         let picked = shelf.carts.get(shelf.index).cloned();
         if picked.as_ref().is_some_and(|c| self.studio_saving.as_deref() == Some(c.stem.as_str())) {
@@ -6062,14 +6156,46 @@ impl App {
         };
         self.studio_fetched = true;
         self.art_pending += 1;
-        self.wifi_held = true;
+        self.hold_wifi();
         self.art_jobs.ask(ArtJob::StudioFetch(cart));
     }
 
-    fn radio_failed(&mut self) {
-        self.wifi_up = false;
-        if std::mem::take(&mut self.wifi_held) {
-            self.wifi_wanted_at = Some(self.now() + WIFI_RETRY_MS);
+    pub fn set_wifi(&mut self, wifi: crate::wifi::Wifi) {
+        self.wifi = Some((wifi, std::time::Instant::now(), self.now()));
+        self.wifi_held = false;
+        self.wifi_scanning = false;
+        self.wifi_boot_blocked = false;
+    }
+
+    pub fn wifi(&self) -> &crate::wifi::Snapshot {
+        static NONE: std::sync::OnceLock<crate::wifi::Snapshot> = std::sync::OnceLock::new();
+        match &self.wifi {
+            Some((w, _, _)) => w.snapshot(),
+            None => NONE.get_or_init(crate::wifi::Snapshot::default),
+        }
+    }
+
+    pub fn wifi_send(&mut self, cmd: crate::wifi::Cmd) {
+        if let Some((w, _, _)) = &mut self.wifi {
+            w.send(cmd);
+        }
+    }
+
+    fn hold_wifi(&mut self) {
+        if !std::mem::replace(&mut self.wifi_held, true) {
+            self.wifi_send(crate::wifi::Cmd::Hold);
+        }
+    }
+
+    fn poll_wifi(&mut self) {
+        let now = self.now();
+        let Some((w, at, from)) = &mut self.wifi else {
+            return;
+        };
+        w.poll(*at + std::time::Duration::from_millis(now.saturating_sub(*from)));
+        if self.wifi_held && !w.busy() && !w.snapshot().held {
+            self.wifi_held = false;
+            self.wifi_wanted_at = Some(now + WIFI_RETRY_MS);
         }
     }
 
@@ -6080,22 +6206,57 @@ impl App {
     pub fn release_radio(&mut self) {
         self.wifi_wanted_at = None;
         if std::mem::take(&mut self.wifi_held) {
-            self.art_jobs.ask(ArtJob::RadioRelease);
+            self.wifi_send(if self.state.wifi_off {
+                crate::wifi::Cmd::PowerOff
+            } else {
+                crate::wifi::Cmd::Release
+            });
         }
     }
 
     pub fn wifi_up(&self) -> bool {
-        self.wifi_up
+        let snap = self.wifi();
+        snap.status.state == crate::wifi::State::Completed && snap.status.ip.is_some()
     }
 
     fn wifi_wanted(&self) -> bool {
         matches!(
             self.phase,
-            Phase::Shelf | Phase::QuickMenu { .. } | Phase::About | Phase::SetClock { .. }
+            Phase::Shelf
+                | Phase::QuickMenu { .. }
+                | Phase::About
+                | Phase::SetClock { .. }
+                | Phase::Networks { .. }
+                | Phase::NetworkPage { .. }
         ) && self.seated_cart().is_none()
             && !self.link_active()
             && !self.shutting_down()
-            && self.root.as_deref().is_some_and(crate::update::wifi_conf)
+            && !self.state.wifi_off
+            && (self.has_saved()
+                || matches!(
+                    self.phase,
+                    Phase::Networks { .. } | Phase::NetworkPage { .. }
+                ))
+    }
+
+    pub fn wifi_is_off(&self) -> bool {
+        self.state.wifi_off
+    }
+
+    pub fn set_wifi_off(&mut self, off: bool) {
+        if self.state.wifi_off == off {
+            return;
+        }
+        self.state.wifi_off = off;
+        self.persist();
+        if off {
+            self.wifi_wanted_at = None;
+            self.wifi_held = false;
+            self.wifi_boot_blocked = true;
+            self.wifi_send(crate::wifi::Cmd::PowerOff);
+        } else if self.wifi_wanted() {
+            self.hold_wifi();
+        }
     }
 
     pub fn wifi_configured(&self) -> bool {
@@ -6103,13 +6264,56 @@ impl App {
     }
 
     pub fn connect_wifi(&mut self) {
-        if self.wifi_wanted() && !self.wifi_held {
-            self.wifi_held = true;
-            self.art_jobs.ask(ArtJob::RadioHold);
+        if self.wifi_wanted() {
+            self.hold_wifi();
+        }
+    }
+
+    pub fn set_wifi_probe(&mut self, wlan0: PathBuf) {
+        self.wifi_probe = Some((wlan0, 0));
+    }
+
+    fn has_wifi_hardware(&mut self) -> bool {
+        if self.wifi_probe.as_ref().is_some_and(|(p, _)| p.exists()) {
+            self.wifi_probe = None;
+        }
+        self.wifi_probe.is_none()
+    }
+
+    fn probe_wifi(&mut self) {
+        let now = self.now();
+        let Some((path, next)) = &mut self.wifi_probe else {
+            return;
+        };
+        if now < *next {
+            return;
+        }
+        match path.exists() {
+            true => self.wifi_probe = None,
+            false => *next = now + WIFI_PROBE_MS,
         }
     }
 
     fn steer_wifi(&mut self) {
+        self.probe_wifi();
+        let scan = matches!(self.phase, Phase::Networks { .. })
+            && self.keyboard.is_none()
+            && !self.state.wifi_off;
+        if scan != self.wifi_scanning {
+            self.wifi_scanning = scan;
+            if let Some((w, _, _)) = &mut self.wifi {
+                w.want_scans(scan);
+            }
+        }
+        self.poll_wifi();
+        if self.state.wifi_off
+            && !self.wifi_boot_blocked
+            && self.wifi.is_some()
+            && matches!(self.phase, Phase::Shelf)
+        {
+            self.wifi_boot_blocked = true;
+            self.wifi_send(crate::wifi::Cmd::PowerOff);
+        }
         if !self.wifi_wanted() {
             if !self.updating() {
                 self.release_radio();
@@ -6117,7 +6321,7 @@ impl App {
             return;
         }
         let now = self.now();
-        if self.wifi_up && now.saturating_sub(self.wifi_sampled) >= WIFI_SAMPLE_MS {
+        if self.wifi_up() && now.saturating_sub(self.wifi_sampled) >= WIFI_SAMPLE_MS {
             self.wifi_sampled = now;
             if let Some(rssi) = crate::update::wifi_rssi() {
                 self.wifi_bars = crate::update::signal_bars(rssi);
@@ -6129,8 +6333,7 @@ impl App {
         let now = self.now();
         let since = *self.wifi_wanted_at.get_or_insert(now);
         if now.saturating_sub(since) >= WIFI_SETTLE_MS {
-            self.wifi_held = true;
-            self.art_jobs.ask(ArtJob::RadioHold);
+            self.hold_wifi();
         }
     }
 
@@ -6970,7 +7173,7 @@ impl App {
             (Some(FetchArt::Choice { pick, .. }), Btn::A) => {
                 let kind = *pick;
                 self.art_pending += 1;
-                self.wifi_held = true;
+                self.hold_wifi();
                 self.art_jobs.ask(ArtJob::FetchMissing(kind));
                 self.fetch_art = Some(FetchArt::Running(ArtRun::new(kind)));
             }
@@ -7092,7 +7295,7 @@ impl App {
                     format!("{} of {}", scene.number, run.total.max(scene.number)),
                 ],
                 None if run.stopping => vec!["Stopping".into()],
-                None if !run.counted && !self.wifi_up => vec!["Connecting to WiFi".into()],
+                None if !run.counted && !self.wifi_up() => vec!["Connecting to WiFi".into()],
                 None => vec!["Fetching Art".into(), "Looking for art".into()],
             },
             Some(FetchArt::Summary {
@@ -7472,16 +7675,7 @@ impl App {
             ) {
                 self.art_pending = self.art_pending.saturating_sub(1);
             }
-            match &event {
-                ArtEvent::Counted(_) | ArtEvent::StudioArt(crate::art::jobs::StudioArt { failed: None, .. }) => {
-                    self.wifi_up = true;
-                }
-                ArtEvent::Failed(_) | ArtEvent::StudioArt(_) if !self.wifi_up => self.radio_failed(),
-                _ => {}
-            }
             match (&mut self.fetch_art, event) {
-                (_, ArtEvent::Radio(up)) => self.wifi_up = up,
-                (_, ArtEvent::RadioFailed) => self.radio_failed(),
                 (_, ArtEvent::StudioSaved(stem)) => {
                     self.studio_saving = None;
                     self.reface(&stem);
@@ -7564,11 +7758,376 @@ impl App {
     }
 
     pub fn update_offered(&self) -> bool {
-        matches!(self.phase, Phase::About)
-            && !self.update_busy
-            && !self.art_busy()
-            && self.root.as_deref().is_some_and(crate::update::wifi_conf)
-            && !self.link_active()
+        !self.update_busy && !self.art_busy() && !self.link_active()
+    }
+
+    fn net_notice(&self) -> Option<NetNotice> {
+        (!self.has_network()).then_some(NetNotice::NoNetwork)
+    }
+
+    fn has_saved(&self) -> bool {
+        match &self.wifi {
+            Some((w, _, _)) => !w.snapshot().saved.is_empty(),
+            None => self.wifi_configured(),
+        }
+    }
+
+    fn has_network(&self) -> bool {
+        if self.wifi.is_none() || !self.wifi().saved.is_empty() {
+            return self.wifi_configured() || !self.wifi().saved.is_empty();
+        }
+        let Some(conf) = self.root.as_deref().map(|r| r.join(crate::update::WIFI_CONF)) else {
+            return false;
+        };
+        match std::fs::read_to_string(&conf) {
+            Ok(text) => crate::networks::has_network_blocks(&text),
+            Err(_) => self.wifi_configured(),
+        }
+    }
+
+    fn open_check_for_updates(&mut self) {
+        match self.net_notice() {
+            Some(notice) => self.set_update(Some(UpdateState::Notice(notice))),
+            None if self.update_offered() => self.check_for_update(),
+            None => {}
+        }
+    }
+
+    fn open_fetch_missing_art(&mut self) {
+        match self.net_notice() {
+            Some(notice) => self.set_update(Some(UpdateState::Notice(notice))),
+            None if !self.link_active() => self.open_fetch_art(),
+            None => {}
+        }
+    }
+
+    fn net_rows(&self) -> Vec<crate::networks::NetRow> {
+        crate::networks::list_rows(self.wifi(), self.state.wifi_off)
+    }
+
+    fn open_networks(&mut self) {
+        let name = self
+            .net_rows()
+            .first()
+            .and_then(|r| r.name().map(str::to_string));
+        self.phase = Phase::Networks { name };
+        if !self.state.wifi_off {
+            self.hold_wifi();
+        }
+    }
+
+    fn networks_input(&mut self, action: Action) {
+        let rows = self.net_rows();
+        let Phase::Networks { name } = &self.phase else {
+            return;
+        };
+        let at = crate::networks::selected(&rows, name.as_deref());
+        let n = rows.len();
+        let to = match action {
+            Action::GbaDown(Btn::Up) if n > 0 => (at + n - 1) % n,
+            Action::GbaDown(Btn::Down) if n > 0 => (at + 1) % n,
+            Action::GbaDown(Btn::A) => {
+                if let Some(row) = rows.get(at).cloned() {
+                    self.pick_network(row);
+                }
+                return;
+            }
+            Action::GbaDown(Btn::B) | Action::QuickMenu => {
+                self.phase = Phase::QuickMenu {
+                    row: QuickRow::Networks,
+                };
+                return;
+            }
+            _ => return,
+        };
+        self.phase = Phase::Networks {
+            name: rows[to].name().map(str::to_string),
+        };
+    }
+
+    fn pick_network(&mut self, row: crate::networks::NetRow) {
+        use crate::networks::{NetRow, NAME_TITLE, PASSWORD_TITLE};
+        match row {
+            NetRow::Saved(s) => {
+                self.phase = Phase::NetworkPage {
+                    ssid: s.ssid,
+                    row: 0,
+                }
+            }
+            NetRow::Nearby(n) if n.secured => self.open_keyboard(
+                PASSWORD_TITLE,
+                Some(&n.ssid),
+                KeyboardFor::Password {
+                    ssid: n.ssid.clone(),
+                    hidden: false,
+                },
+            ),
+            NetRow::Nearby(n) => self.join_network(n.ssid, String::new(), false),
+            NetRow::Other => self.open_keyboard(NAME_TITLE, None, KeyboardFor::NetworkName),
+        }
+    }
+
+    fn open_keyboard(&mut self, title: &str, subtitle: Option<&str>, task: KeyboardFor) {
+        let kb = slot_ui::Keyboard::new(slot_ui::Layout::General, title, subtitle, "");
+        self.keyboard = Some((kb, task));
+    }
+
+    fn join_network(&mut self, ssid: String, password: String, hidden: bool) {
+        self.wifi_send(crate::wifi::Cmd::Join {
+            ssid: ssid.clone(),
+            password,
+            hidden,
+        });
+        self.phase = Phase::NetworkPage { ssid, row: 0 };
+    }
+
+    fn keyboard_input(&mut self, action: Action) {
+        let btn = match action {
+            Action::GbaDown(b) => b,
+            Action::QuickMenu => Btn::Menu,
+            _ => return,
+        };
+        let Some((kb, _)) = self.keyboard.as_mut() else {
+            return;
+        };
+        match kb.press(btn) {
+            slot_ui::Typed::Cancelled => self.keyboard = None,
+            slot_ui::Typed::Done(text) => self.keyboard_done(text),
+            _ => {}
+        }
+    }
+
+    fn keyboard_done(&mut self, text: String) {
+        use crate::networks::{OPEN_HINT, PASSWORD_TITLE};
+        use crate::wifi::wpa::password_ok;
+        let Some(task) = self.keyboard.as_ref().map(|k| k.1.clone()) else {
+            return;
+        };
+        let refuse = |a: &mut App| a.set_update(Some(UpdateState::Notice(NetNotice::Password)));
+        match task {
+            KeyboardFor::NetworkName if text.is_empty() => {}
+            KeyboardFor::NetworkName => self.open_keyboard(
+                PASSWORD_TITLE,
+                Some(OPEN_HINT),
+                KeyboardFor::Password {
+                    ssid: text,
+                    hidden: true,
+                },
+            ),
+            KeyboardFor::Password { ssid, hidden } => {
+                if !password_ok(&text, !hidden) {
+                    return refuse(self);
+                }
+                self.keyboard = None;
+                self.join_network(ssid, text, hidden);
+            }
+        }
+    }
+
+    fn network_page_input(&mut self, action: Action) {
+        use crate::networks::{page_rows, PageRow};
+        use crate::wifi::Cmd;
+        let Phase::NetworkPage { ssid, row } = &self.phase else {
+            return;
+        };
+        let (ssid, row) = (ssid.clone(), *row);
+        let snap = self.wifi();
+        let saved = snap.saved.iter().find(|s| s.ssid == ssid).cloned();
+        let rows = page_rows(snap, &ssid, self.state.wifi_off);
+        let n = rows.len();
+        let at = row.min(n - 1);
+        let to = match action {
+            Action::GbaDown(Btn::Up) => (at + n - 1) % n,
+            Action::GbaDown(Btn::Down) => (at + 1) % n,
+            Action::GbaDown(Btn::B) | Action::QuickMenu => {
+                self.phase = Phase::Networks { name: Some(ssid) };
+                return;
+            }
+            Action::GbaDown(Btn::A | Btn::Left | Btn::Right) => {
+                let Some(saved) = saved else {
+                    return;
+                };
+                let a = action == Action::GbaDown(Btn::A);
+                match rows[at] {
+                    PageRow::AutoJoin => self.wifi_send(Cmd::AutoJoin {
+                        id: saved.id,
+                        on: !saved.auto_join,
+                    }),
+                    PageRow::Connect if a => self.wifi_send(Cmd::Connect(saved.id)),
+                    PageRow::Disconnect if a => self.wifi_send(Cmd::Disconnect),
+                    PageRow::Forget if a => self.forget_prompt = true,
+                    _ => {}
+                }
+                return;
+            }
+            _ => return,
+        };
+        self.phase = Phase::NetworkPage { ssid, row: to };
+    }
+
+    fn forget_input(&mut self, action: Action) {
+        match action {
+            Action::GbaDown(Btn::A) => {
+                self.forget_prompt = false;
+                let Phase::NetworkPage { ssid, .. } = &self.phase else {
+                    return;
+                };
+                let ssid = ssid.clone();
+                let mut ids: Vec<u32> = self
+                    .wifi()
+                    .saved
+                    .iter()
+                    .filter(|s| s.ssid == ssid)
+                    .map(|s| s.id)
+                    .collect();
+                ids.sort_unstable_by(|a, b| b.cmp(a));
+                for id in ids {
+                    self.wifi_send(crate::wifi::Cmd::Forget(id));
+                }
+                self.phase = Phase::Networks { name: Some(ssid) };
+            }
+            Action::GbaDown(Btn::B) => self.forget_prompt = false,
+            _ => {}
+        }
+    }
+
+    pub fn forget_prompt(&self) -> Option<String> {
+        match (&self.phase, self.forget_prompt) {
+            (Phase::NetworkPage { ssid, .. }, true) => Some(format!("Forget {ssid}?")),
+            _ => None,
+        }
+    }
+
+    pub fn network_screen(&self) -> Option<crate::networks::NetScreen> {
+        use crate::networks::{list_line, list_rows, page_line, page_rows, selected, NetScreen};
+        let (snap, off) = (self.wifi(), self.state.wifi_off);
+        match &self.phase {
+            Phase::Networks { name } => {
+                let rows = list_rows(snap, off);
+                Some(NetScreen {
+                    selected: selected(&rows, name.as_deref()),
+                    lines: rows.iter().map(|r| list_line(r, snap)).collect(),
+                    message: off.then_some(crate::networks::WIFI_OFF_MESSAGE),
+                })
+            }
+            Phase::NetworkPage { ssid, row } => {
+                let rows = page_rows(snap, ssid, off);
+                Some(NetScreen {
+                    selected: (*row).min(rows.len() - 1),
+                    lines: rows.iter().map(|r| page_line(*r, snap, ssid, off)).collect(),
+                    message: None,
+                })
+            }
+            _ => None,
+        }
+    }
+
+    pub fn network_action(&self) -> Option<&'static str> {
+        use crate::networks::{list_rows, page_rows, selected, NetRow, PageRow};
+        let (snap, off) = (self.wifi(), self.state.wifi_off);
+        match &self.phase {
+            Phase::Networks { name } => {
+                let rows = list_rows(snap, off);
+                match rows.get(selected(&rows, name.as_deref()))? {
+                    NetRow::Saved(_) => Some("Open"),
+                    NetRow::Nearby(_) | NetRow::Other => Some("Join"),
+                }
+            }
+            Phase::NetworkPage { ssid, row } => {
+                let rows = page_rows(snap, ssid, off);
+                match rows[(*row).min(rows.len() - 1)] {
+                    PageRow::Status | PageRow::Ip => None,
+                    PageRow::Connect => Some("Connect"),
+                    PageRow::Disconnect => Some("Disconnect"),
+                    PageRow::AutoJoin => Some("Change"),
+                    PageRow::Forget => Some("Forget"),
+                }
+            }
+            _ => None,
+        }
+    }
+
+    pub fn keyboard(&self) -> Option<&slot_ui::Keyboard> {
+        self.keyboard.as_ref().map(|k| &k.0)
+    }
+
+    pub fn keyboard_for(&self) -> Option<&KeyboardFor> {
+        self.keyboard.as_ref().map(|k| &k.1)
+    }
+
+    pub fn take_keyboard_tex(&mut self) -> Option<slot_ui::KeyboardTex> {
+        self.keyboard_tex.take()
+    }
+
+    pub fn set_keyboard_tex(&mut self, tex: Option<slot_ui::KeyboardTex>) {
+        self.keyboard_tex = tex;
+    }
+
+    pub fn set_network_faces(
+        &mut self,
+        lines: Vec<slot_ui::NetLine>,
+        message: Option<slot_ui::NetFace>,
+    ) {
+        self.net_lines = lines;
+        self.net_message = message;
+    }
+
+    pub fn set_network_legends(&mut self, legends: NetLegends) {
+        self.net_legends = Some(legends);
+    }
+
+    pub fn set_forget_faces(&mut self, faces: Vec<(TexId, u32, u32)>) {
+        self.forget_faces = faces;
+    }
+
+    fn draw_networks(&self, out: &mut Vec<Draw>) {
+        if let (Some((kb, _)), Some(tex)) = (&self.keyboard, &self.keyboard_tex) {
+            slot_ui::draw_keyboard(self.canvas(), self.menu_ground(), tex, kb, out);
+            draw_empty_slot(self.canvas(), self.slot_faces, out);
+            slot_ui::draw_keyboard_legends(self.canvas(), tex, out);
+            return;
+        }
+        slot_ui::NetworkList {
+            lines: &self.net_lines,
+            selected: self.network_screen().map_or(0, |s| s.selected),
+            message: self.net_message,
+            pointer: self.quick_menu_faces.as_ref().map(|f| f.pointer),
+            ground: self.menu_ground(),
+            canvas: self.canvas(),
+        }
+        .draw(out);
+        draw_empty_slot(self.canvas(), self.slot_faces, out);
+        let Some(faces) = &self.quick_menu_faces else {
+            return;
+        };
+        let light = self.light();
+        let [back, change, open, ..] = match light {
+            true => faces.legend_light,
+            false => faces.legend,
+        };
+        self.draw_side_legend(back, false, LINK_LEGEND_Y, out);
+        let net = self.net_legends.as_ref();
+        let right = match self.network_action() {
+            Some("Open") => Some(open),
+            Some("Change") => Some(change),
+            Some("Join") => net.map(|n| n.join[light as usize]),
+            Some("Connect") => net.map(|n| n.connect[light as usize]),
+            Some("Disconnect") => net.map(|n| n.disconnect[light as usize]),
+            Some("Forget") => net.map(|n| n.forget[light as usize]),
+            _ => None,
+        };
+        if let Some(right) = right {
+            self.draw_side_legend(right, true, LINK_LEGEND_Y, out);
+        }
+    }
+
+    pub fn networks_value(&self) -> String {
+        let status = &self.wifi().status;
+        match (self.state.wifi_off, status.state, &status.ssid) {
+            (true, _, _) => "Off".into(),
+            (false, crate::wifi::State::Completed, Some(ssid)) => ssid.clone(),
+            _ => "Not Connected".into(),
+        }
     }
 
     pub fn update_shown(&self) -> bool {
@@ -7612,6 +8171,13 @@ impl App {
                 "slot is up to date".into(),
                 format!("{running} is the latest version."),
             ),
+            UpdateState::Notice(NetNotice::NoNetwork) => {
+                ("No network".into(), "Join a network in Networks.".into())
+            }
+            UpdateState::Notice(NetNotice::Password) => (
+                "Passwords are 8 to 63 characters".into(),
+                "Nothing was saved.".into(),
+            ),
             UpdateState::Downloading(..)
             | UpdateState::Cancelling(..)
             | UpdateState::Closing(_) => return None,
@@ -7619,7 +8185,7 @@ impl App {
                 let (title, detail) = match f {
                     UpdateFail::NoWifi => (
                         "Could not join Wi-Fi",
-                        "Check the networks in Config/wifi.conf.",
+                        "Check Networks in the Network menu.",
                     ),
                     UpdateFail::Offline => (
                         "Could not connect",
@@ -7645,7 +8211,7 @@ impl App {
     }
 
     fn check_for_update(&mut self) {
-        self.wifi_held = true;
+        self.hold_wifi();
         self.update_jobs.ask(UpdateJob::Check);
         self.update_busy = true;
         self.set_update(Some(UpdateState::Checking));
@@ -7693,7 +8259,7 @@ impl App {
     }
 
     fn install_update(&mut self, r: Release) {
-        self.wifi_held = true;
+        self.hold_wifi();
         self.update_jobs.ask(UpdateJob::Install(r.clone()));
         self.update_busy = true;
         let mut picker = CorePicker::open(Core::Mgba, self.now());
@@ -7949,7 +8515,7 @@ impl App {
                 alpha: 1.0,
             });
         }
-        let Some([_, _, cancel, install, _]) = self.update_legends else {
+        let Some([cancel, install, _]) = self.update_legends else {
             return;
         };
         match self.update {
@@ -8072,7 +8638,7 @@ impl App {
                 });
             }
         }
-        let Some([_, _, cancel, install, back]) = self.update_legends else {
+        let Some([cancel, install, back]) = self.update_legends else {
             return;
         };
         match self.update {
@@ -8084,7 +8650,7 @@ impl App {
                 self.draw_side_legend(cancel, false, LINK_LEGEND_Y, out);
                 self.draw_side_legend(install, true, LINK_LEGEND_Y, out);
             }
-            Some(UpdateState::UpToDate | UpdateState::Failed(_)) => {
+            Some(UpdateState::UpToDate | UpdateState::Failed(_) | UpdateState::Notice(_)) => {
                 self.draw_side_legend(back, false, LINK_LEGEND_Y, out)
             }
             _ => {}
@@ -8141,7 +8707,7 @@ impl App {
         matches!(self.update, Some(UpdateState::Available(..)))
     }
 
-    pub fn set_update_legends(&mut self, legends: [(TexId, u32); 5]) {
+    pub fn set_update_legends(&mut self, legends: [(TexId, u32); 3]) {
         self.update_legends = Some(legends);
     }
 
