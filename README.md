@@ -65,13 +65,10 @@ notes are in the [changelog](CHANGELOG.md).
   slot remembers which are on for each game. To use your own, add a RetroArch `.cht` file named
   after the ROM to `Cheats/GBA`, `Cheats/GB` or `Cheats/GBC`. Cheats need the mGBA core.
 
-Existing blending preferences are kept: the old On setting becomes Mix, and Off stays Off.
-mGBA also offers upstream's Ghosting mode.
+Your Frame Blending choice carries over when you update.
 
-Authentic moves ghosting and colour effects from mGBA's CPU filters to the GPU. That leaves
-enough CPU time for the tested GB and GBC games to run smoothly with `schedutil`.
-GBA on mGBA still misses frame handoffs with dynamic scaling, so slot selects `performance`
-for that combination and returns to `schedutil` when play pauses or ends.
+With Authentic, GB and GBC games run smoothly at a lower CPU speed, which saves battery.
+GBA games on mGBA run at full speed so they stay smooth.
 
 ## How to configure
 
