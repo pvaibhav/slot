@@ -42,6 +42,19 @@ Drop a `.png` into `Wallpapers/` and pick it under Wallpaper in Settings → Gen
 
 Random picks one at boot.
 
+Shelf changes the wallpaper as you move between shelves. Name a file after each shelf:
+
+| Shelf                  | File                                |
+|------------------------|-------------------------------------|
+| Game Boy               | `GB.png`                            |
+| Game Boy Color         | `GBC.png`                           |
+| Game Boy Advance       | `GBA.png`                           |
+| Game Boy Advance Video | `GBAV.png`, otherwise `GBA.png`     |
+| Favorites              | `Favorites.png`                     |
+| Recents                | `Recents.png`                       |
+
+A shelf without a file shows the default wallpaper.
+
 | Device                                  | Suggested Size |
 |-----------------------------------------|----------------|
 | RG SP, RG34XX, RG34XXSP                 | 720×480        |
