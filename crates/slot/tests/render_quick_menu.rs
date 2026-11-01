@@ -657,6 +657,7 @@ fn the_network_page_renders() {
     clocked(d.path());
     std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
     let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+    common::connect(f.app_mut());
     f.upload_faces(&mut c);
     let mut input = Script(VecDeque::new());
     open_network(&mut f, &mut input);
@@ -681,16 +682,16 @@ fn the_network_page_renders() {
             if valued { "missing" } else { "drawn" }
         );
     }
-    assert_eq!(f.app().networks_value(), "Not Connected");
+    assert_eq!(f.app().networks_value(), "Home");
     let networks = quick_row_top(QuickRow::Networks, &[]) as usize;
     let span = inked(&px, 360..right + 4, networks);
     assert!(
         span.last().is_some_and(|x| x.abs_diff(right) <= 3),
-        "Not Connected does not end at the right edge: {span:?}"
+        "Home does not end at the right edge: {span:?}"
     );
     assert!(
-        span.first().is_some_and(|x| *x < right - 150),
-        "Not Connected is too short to be the words: {span:?}"
+        span.first().is_some_and(|x| *x < right - 60),
+        "Home is too short to be the word: {span:?}"
     );
     tap(&mut f, &mut input, Btn::Up);
     tap(&mut f, &mut input, Btn::A);
@@ -698,13 +699,13 @@ fn the_network_page_renders() {
     let off = composed(&mut f, &mut c, "network-page-off");
     let hidden = f.app().hidden_rows();
     assert_eq!(QuickRow::WifiPower.shown(&hidden), [QuickRow::WifiPower]);
-    let wifi = quick_row_top(QuickRow::WifiPower, &hidden) as usize;
-    assert!(!inked(&off, 40..360, wifi).is_empty(), "the Wi-Fi row is gone");
+    let wifi = quick_row_top(QuickRow::WifiPower, &[]) as usize;
+    assert!(
+        !inked(&off, 40..360, wifi).is_empty(),
+        "the Wi-Fi row moved when Wi-Fi went off"
+    );
     for row in [QuickRow::Networks, QuickRow::CheckUpdates, QuickRow::FetchArt] {
         let top = quick_row_top(row, &[]) as usize;
-        if top.abs_diff(wifi) < 20 {
-            continue;
-        }
         assert!(
             inked(&off, 40..right + 4, top).is_empty(),
             "{row:?} is still drawn with Wi-Fi off"
@@ -724,6 +725,7 @@ fn about_shows_x_restart() {
     clocked(d.path());
     std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
     let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+    common::connect(f.app_mut());
     f.upload_faces(&mut c);
     let mut input = Script(VecDeque::new());
     tap(&mut f, &mut input, Btn::Menu);
@@ -789,6 +791,7 @@ fn the_baseos_update_scene_renders_beside_slot() {
     clocked(d.path());
     std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
     let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+    common::connect(f.app_mut());
     let answers = Answers::default();
     f.set_update_jobs(Box::new(answers.clone()));
     let say = |e| answers.0.lock().unwrap().push_back(e);
@@ -834,6 +837,7 @@ fn the_update_scene_renders_each_moment() {
     clocked(d.path());
     std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
     let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+    common::connect(f.app_mut());
     let answers = Answers::default();
     f.set_update_jobs(Box::new(answers.clone()));
     let say = |e| answers.0.lock().unwrap().push_back(e);
@@ -894,6 +898,7 @@ fn a_cancelled_download_puts_the_carts_back_without_dropping_them() {
     clocked(d.path());
     std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
     let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+    common::connect(f.app_mut());
     let answers = Answers::default();
     f.set_update_jobs(Box::new(answers.clone()));
     let say = |e| answers.0.lock().unwrap().push_back(e);
@@ -931,4 +936,35 @@ fn a_cancelled_download_puts_the_carts_back_without_dropping_them() {
         lowest < f32::MAX && lowest > 100.0,
         "a cart rose to y {lowest} over the header"
     );
+}
+
+#[test]
+fn the_network_tools_are_not_drawn_until_connected() {
+    let Ok(surface) = HeadlessSurface::new() else {
+        return;
+    };
+    let Ok(mut c) = Compositor::new(&surface) else {
+        return;
+    };
+    let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
+    clocked(d.path());
+    std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
+    let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+    f.upload_faces(&mut c);
+    let mut input = Script(VecDeque::new());
+    open_network(&mut f, &mut input);
+    assert!(!f.app().wifi_up());
+    let px = composed(&mut f, &mut c, "network-page-unconnected");
+    let right = OUT_W as usize - 32;
+    for row in [QuickRow::WifiPower, QuickRow::Networks] {
+        let top = quick_row_top(row, &[]) as usize;
+        assert!(!inked(&px, 40..360, top).is_empty(), "{row:?} is not drawn");
+    }
+    for row in [QuickRow::Server, QuickRow::CheckUpdates, QuickRow::FetchArt] {
+        let top = quick_row_top(row, &[]) as usize;
+        assert!(
+            inked(&px, 40..right + 4, top).is_empty(),
+            "{row:?} is drawn without a connection"
+        );
+    }
 }

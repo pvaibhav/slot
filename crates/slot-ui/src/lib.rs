@@ -75,10 +75,12 @@ pub use guide::{
 };
 pub use keyboard::{
     draw_keyboard, draw_keyboard_legends, key_rect, keyboard_cap_faces, keyboard_faces,
-    keyboard_text_face, Cap, KeyTex, Keyboard, KeyboardFaces, KeyboardTex, Layout, Special, Typed,
+    keyboard_help_columns, keyboard_help_face, keyboard_text_face, Cap, KeyTex, Keyboard,
+    KeyboardFaces, KeyboardTex, Layout, Shortcut, Special, Typed, KEYBOARD_HELP_TITLE,
 };
 pub use network_menu::{
-    bars_rect, lock_rect, net_row_top, net_window, NetFace, NetLine, NetworkList,
+    bars_rect, lock_rect, net_bars_face, net_lock_face, net_row_top, net_window, wifi_face, NetFace,
+    NetIcons, NetLine, NetworkList,
 };
 pub use hud::{
     badge_at, ff_badge, footer_ink, FfState, Hud, HudKind, LinkBadge, Millis, ALARM_BAND_H,
@@ -133,4 +135,4 @@ pub use sticker::{
     draw_sticker, head_rows, sticker_face, sticker_lines, sticker_rect, StickerFields, COPYRIGHT,
     CREDITS, DC, HOME, ORIGIN, STICKER_H, STICKER_W,
 };
-pub use toast::{toast_box, toast_face, toast_rect, Toast};
+pub use toast::{toast_box, toast_face, toast_face_text, toast_rect, Toast};

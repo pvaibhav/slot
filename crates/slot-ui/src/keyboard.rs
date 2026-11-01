@@ -2,11 +2,12 @@ use slot_input::Btn;
 
 use crate::bitmaps::ButtonLegend;
 use crate::draw::{Canvas, Draw, TexId, OUT_H};
+use crate::guide::{draw_help_screen, help_rows_face, GUIDE_HELP_HINT};
 use crate::hud::footer_ink;
 use crate::icon::{icon_coverage, Icon};
-use crate::plate::{blit, word_ink, UndoFace, CAP_GAP, HINT_EDGE};
+use crate::plate::{blit, hint_face, title_face, word_ink, UndoFace, CAP_GAP, HINT_EDGE};
 use crate::power_menu::{heading_face, MENU_INK};
-use crate::quick_menu::{button_face, draw_menu_ground, DIM_INK};
+use crate::quick_menu::{button_face, button_pair, draw_menu_ground, DIM_INK};
 use crate::slot_chrome::MOUTH_H;
 use crate::text;
 
@@ -51,7 +52,7 @@ pub struct Keyboard {
     col: usize,
     shift: bool,
     symbols: bool,
-    help: Option<usize>,
+    help: bool,
 }
 
 use Cap::{Char as C, Special as S};
@@ -120,26 +121,6 @@ const LOWER: &str = "1234567890qwertyuiopasdfghjklzxcvbnm";
 const UPPER: &str = "1234567890QWERTYUIOPASDFGHJKLZXCVBNM";
 const SYMBOL: &str = "!@#$%^&*()`~[]\\|{};:'\"<>?/+=_,.-\u{20ac}\u{a3}\u{a5}\u{a2}";
 
-const GENERAL_HELP: &[&str] = &[
-    "D-Pad: Navigate between keys",
-    "A: Type the selected key",
-    "B: Backspace",
-    "X: Space",
-    "L1 / R1: Move cursor within text",
-    "Select: Toggle Shift (uppercase/symbols)",
-    "Y: Cancel",
-    "Start: Done",
-];
-
-const NUMERIC_HELP: &[&str] = &[
-    "D-Pad: Navigate between keys",
-    "A: Type the selected digit",
-    "B: Backspace",
-    "L1 / R1: Move cursor within text",
-    "Y: Cancel",
-    "Start: Done",
-];
-
 fn layout_rows(layout: Layout) -> &'static [&'static [Cap]] {
     match layout {
         Layout::General => GENERAL,
@@ -165,7 +146,7 @@ impl Keyboard {
             col: 0,
             shift: false,
             symbols: false,
-            help: None,
+            help: false,
         }
     }
 
@@ -205,19 +186,12 @@ impl Keyboard {
         self.symbols
     }
 
-    pub fn help_top(&self) -> Option<usize> {
+    pub fn help(&self) -> bool {
         self.help
     }
 
     pub fn rows(&self) -> &'static [&'static [Cap]] {
         layout_rows(self.layout)
-    }
-
-    pub fn help_lines(&self) -> &'static [&'static str] {
-        match self.layout {
-            Layout::General => GENERAL_HELP,
-            Layout::Numeric => NUMERIC_HELP,
-        }
     }
 
     fn value(&self, i: usize) -> char {
@@ -282,12 +256,11 @@ impl Keyboard {
     }
 
     pub fn press(&mut self, b: Btn) -> Typed {
-        if let Some(top) = self.help {
-            match b {
-                Btn::Up => self.help = Some(top.saturating_sub(1)),
-                Btn::Down => self.help = Some((top + 1).min(self.help_lines().len() - 1)),
-                _ => self.help = None,
+        if self.help {
+            if !matches!(b, Btn::B | Btn::Menu) {
+                return Typed::Nothing;
             }
+            self.help = false;
             return Typed::Changed;
         }
         let general = self.layout == Layout::General;
@@ -327,7 +300,7 @@ impl Keyboard {
                 Typed::Changed
             }
             Btn::Menu => {
-                self.help = Some(0);
+                self.help = true;
                 Typed::Help
             }
             _ => Typed::Nothing,
@@ -343,7 +316,9 @@ pub struct KeyboardFaces {
     pub text: UndoFace,
     pub stops: Vec<f32>,
     pub caps: Vec<Vec<[UndoFace; 2]>>,
-    pub help: Vec<UndoFace>,
+    pub help: UndoFace,
+    pub help_title: UndoFace,
+    pub help_back: UndoFace,
     pub legends: [UndoFace; 2],
 }
 
@@ -353,7 +328,9 @@ pub struct KeyboardTex {
     pub text: KeyTex,
     pub stops: Vec<f32>,
     pub caps: Vec<Vec<[KeyTex; 2]>>,
-    pub help: Vec<KeyTex>,
+    pub help: KeyTex,
+    pub help_title: KeyTex,
+    pub help_back: KeyTex,
     pub legends: [KeyTex; 2],
 }
 
@@ -370,7 +347,9 @@ impl KeyboardFaces {
                 .iter()
                 .map(|row| row.iter().map(|[a, b]| [tex(a), tex(b)]).collect())
                 .collect(),
-            help: self.help.iter().map(&mut tex).collect(),
+            help: tex(&self.help),
+            help_title: tex(&self.help_title),
+            help_back: tex(&self.help_back),
             legends: [tex(&self.legends[0]), tex(&self.legends[1])],
         }
     }
@@ -395,7 +374,9 @@ const ROW_PITCH: f32 = 50.0;
 const KEY_H: u32 = 44;
 const KEY_W: u32 = 50;
 const KEY_GAP: u32 = 6;
-const WIDE_W: u32 = 2 * KEY_W + KEY_GAP;
+const KEY_MARGIN: f32 = 24.0;
+const HELP_COLUMN_GAP: u32 = 40;
+const ROW_KEYS: u32 = 12;
 const SPACE_W: u32 = 300;
 const KEY_R: f32 = 7.0;
 const CAP_PX: f32 = 24.0;
@@ -404,30 +385,35 @@ const ICON_PX: f32 = 28.0;
 const TILE: [u8; 4] = [0x12, 0x12, 0x14, 0xb8];
 const CHOSEN: [u8; 4] = [0xf0, 0xf0, 0xee, 0xff];
 const CHOSEN_INK: [u8; 3] = [0x18, 0x18, 0x1a];
-const HELP_PX: f32 = 20.0;
-const HELP_H: u32 = 30;
-const HELP_PAD: f32 = 6.0;
-const HELP_INSET: f32 = 24.0;
-const HELP_SCRIM: f32 = 0.88;
 
-fn cap_width(cap: Cap) -> u32 {
+fn key_w(canvas: Canvas) -> u32 {
+    let room = canvas.w - 2.0 * KEY_MARGIN - ((ROW_KEYS - 1) * KEY_GAP) as f32;
+    ((room / ROW_KEYS as f32).floor() as u32).min(KEY_W)
+}
+
+fn cap_width(cap: Cap, key_w: u32) -> u32 {
     match cap {
-        Cap::Char(_) => KEY_W,
+        Cap::Char(_) => key_w,
         Cap::Special(Space) => SPACE_W,
-        Cap::Special(_) => WIDE_W,
+        Cap::Special(_) => 2 * key_w + KEY_GAP,
     }
 }
 
-fn block_width(layout: Layout) -> f32 {
+fn block_width(layout: Layout, key_w: u32) -> f32 {
     layout_rows(layout)
         .iter()
-        .map(|row| row.iter().map(|c| cap_width(*c) + KEY_GAP).sum::<u32>() - KEY_GAP)
+        .map(|row| {
+            row.iter()
+                .map(|c| cap_width(*c, key_w) + KEY_GAP)
+                .sum::<u32>()
+                - KEY_GAP
+        })
         .max()
         .unwrap_or(0) as f32
 }
 
-fn indent(layout: Layout, row: usize) -> f32 {
-    let pitch = (KEY_W + KEY_GAP) as f32;
+fn indent(layout: Layout, row: usize, key_w: u32) -> f32 {
+    let pitch = (key_w + KEY_GAP) as f32;
     match (layout, row) {
         (Layout::General, 1) => pitch,
         (Layout::General, 2 | 3) => pitch / 2.0,
@@ -438,12 +424,16 @@ fn indent(layout: Layout, row: usize) -> f32 {
 pub fn key_rect(canvas: Canvas, layout: Layout, row: usize, col: usize) -> [f32; 4] {
     let caps = layout_rows(layout)[row];
     let y = GRID_Y + row as f32 * ROW_PITCH;
-    let w = cap_width(caps[col]) as f32;
+    let kw = key_w(canvas);
+    let w = cap_width(caps[col], kw) as f32;
     if caps[col] == Cap::Special(Space) {
         return [canvas.centred(w).round(), y, w, KEY_H as f32];
     }
-    let left = canvas.centred(block_width(layout)).round() + indent(layout, row);
-    let before: u32 = caps[..col].iter().map(|c| cap_width(*c) + KEY_GAP).sum();
+    let left = canvas.centred(block_width(layout, kw)).round() + indent(layout, row, kw);
+    let before: u32 = caps[..col]
+        .iter()
+        .map(|c| cap_width(*c, kw) + KEY_GAP)
+        .sum();
     [left + before as f32, y, w, KEY_H as f32]
 }
 
@@ -550,8 +540,8 @@ fn cap_icon(cap: Cap) -> Option<Icon> {
     }
 }
 
-fn cap_face(kb: &Keyboard, cap: Cap, chosen: bool) -> UndoFace {
-    let (w, h) = (cap_width(cap), KEY_H);
+fn cap_face(kb: &Keyboard, cap: Cap, chosen: bool, key_w: u32) -> UndoFace {
+    let (w, h) = (cap_width(cap, key_w), KEY_H);
     let (fill, ink) = match chosen {
         true => (CHOSEN, CHOSEN_INK),
         false => (TILE, MENU_INK),
@@ -582,12 +572,13 @@ fn cap_face(kb: &Keyboard, cap: Cap, chosen: bool) -> UndoFace {
     UndoFace { rgba, w, h }
 }
 
-pub fn keyboard_cap_faces(kb: &Keyboard) -> Vec<Vec<[UndoFace; 2]>> {
+pub fn keyboard_cap_faces(kb: &Keyboard, canvas: Canvas) -> Vec<Vec<[UndoFace; 2]>> {
+    let kw = key_w(canvas);
     kb.rows()
         .iter()
         .map(|row| {
             row.iter()
-                .map(|cap| [cap_face(kb, *cap, false), cap_face(kb, *cap, true)])
+                .map(|cap| [cap_face(kb, *cap, false, kw), cap_face(kb, *cap, true, kw)])
                 .collect()
         })
         .collect()
@@ -608,22 +599,76 @@ fn legend(button: UndoFace, word: &str, button_first: bool) -> UndoFace {
     UndoFace { rgba, w, h }
 }
 
-pub fn keyboard_faces(kb: &Keyboard) -> KeyboardFaces {
+pub const KEYBOARD_HELP_TITLE: &str = "Keyboard Help";
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Shortcut {
+    Delete,
+    Space,
+    Shift,
+    Cursor,
+    Cancel,
+    Done,
+}
+
+impl Shortcut {
+    pub fn label(self) -> &'static str {
+        match self {
+            Shortcut::Delete => "Delete",
+            Shortcut::Space => "Space",
+            Shortcut::Shift => "Shift",
+            Shortcut::Cursor => "Cursor",
+            Shortcut::Cancel => "Cancel",
+            Shortcut::Done => "Done",
+        }
+    }
+
+    fn art(self) -> UndoFace {
+        match self {
+            Shortcut::Delete => button_face(ButtonLegend::B),
+            Shortcut::Space => button_face(ButtonLegend::X),
+            Shortcut::Shift => button_face(ButtonLegend::Select),
+            Shortcut::Cursor => button_pair(ButtonLegend::L1, ButtonLegend::R1),
+            Shortcut::Cancel => button_face(ButtonLegend::Y),
+            Shortcut::Done => button_face(ButtonLegend::Start),
+        }
+    }
+}
+
+pub fn keyboard_help_columns(layout: Layout) -> [Vec<Shortcut>; 2] {
+    use Shortcut::*;
+    match layout {
+        Layout::General => [vec![Delete, Space, Shift], vec![Cursor, Cancel, Done]],
+        Layout::Numeric => [vec![Delete, Cursor], vec![Cancel, Done]],
+    }
+}
+
+pub fn keyboard_help_face(layout: Layout) -> UndoFace {
+    let [left, right] = keyboard_help_columns(layout)
+        .map(|column| help_rows_face(column.into_iter().map(|s| (s.art(), s.label())).collect()));
+    let w = left.w + HELP_COLUMN_GAP + right.w;
+    let h = left.h.max(right.h);
+    let mut rgba = vec![0u8; (w * h * 4) as usize];
+    blit(&mut rgba, w, &left.rgba, left.w, left.h, 0, 0);
+    let x = left.w + HELP_COLUMN_GAP;
+    blit(&mut rgba, w, &right.rgba, right.w, right.h, x, 0);
+    UndoFace { rgba, w, h }
+}
+
+pub fn keyboard_faces(kb: &Keyboard, canvas: Canvas) -> KeyboardFaces {
     let (text, stops) = keyboard_text_face(kb);
     KeyboardFaces {
         title: heading_face(kb.title()),
         subtitle: kb.subtitle().map(subtitle_face),
         text,
         stops,
-        caps: keyboard_cap_faces(kb),
-        help: kb
-            .help_lines()
-            .iter()
-            .map(|l| line_face(l, HELP_PX, HELP_H, MENU_INK).0)
-            .collect(),
+        caps: keyboard_cap_faces(kb, canvas),
+        help: keyboard_help_face(kb.layout()),
+        help_title: title_face(KEYBOARD_HELP_TITLE),
+        help_back: hint_face(GUIDE_HELP_HINT.0, GUIDE_HELP_HINT.1),
         legends: [
             legend(button_face(ButtonLegend::Y), "Cancel", true),
-            legend(button_face(ButtonLegend::Start), "Done", false),
+            legend(button_face(ButtonLegend::Menu), "Help", false),
         ],
     }
 }
@@ -686,29 +731,6 @@ fn draw_field(canvas: Canvas, faces: &KeyboardTex, kb: &Keyboard, out: &mut Vec<
     });
 }
 
-fn draw_help(canvas: Canvas, faces: &KeyboardTex, top: usize, out: &mut Vec<Draw>) {
-    let w = block_width(Layout::General) + 2.0 * HELP_PAD;
-    let x = canvas.centred(w).round();
-    let y = GRID_Y - HELP_PAD;
-    let h = (GENERAL.len() as f32 - 1.0) * ROW_PITCH + KEY_H as f32 + 2.0 * HELP_PAD;
-    out.push(Draw::Rect {
-        x,
-        y,
-        w,
-        h,
-        colour: [0.0, 0.0, 0.0, HELP_SCRIM],
-    });
-    let fits = ((h - 2.0 * HELP_PAD) / HELP_H as f32) as usize;
-    for (i, line) in faces.help.iter().skip(top).take(fits).enumerate() {
-        place(
-            out,
-            *line,
-            x + HELP_INSET,
-            GRID_Y + i as f32 * HELP_H as f32,
-        );
-    }
-}
-
 pub fn draw_keyboard(
     canvas: Canvas,
     ground: Option<(TexId, u32)>,
@@ -716,6 +738,17 @@ pub fn draw_keyboard(
     kb: &Keyboard,
     out: &mut Vec<Draw>,
 ) {
+    if kb.help() {
+        out.push(Draw::Rect {
+            x: 0.0,
+            y: 0.0,
+            w: canvas.w,
+            h: canvas.h,
+            colour: [0.0, 0.0, 0.0, 1.0],
+        });
+        let (title, back) = (faces.help_title.0, faces.help_back.0);
+        return draw_help_screen(canvas, Some(title), Some(back), Some(faces.help), out);
+    }
     draw_menu_ground(canvas, ground, out);
     place(
         out,
@@ -733,9 +766,6 @@ pub fn draw_keyboard(
             let [x, y, _, _] = key_rect(canvas, kb.layout(), r, c);
             place(out, pair[chosen as usize], x, y);
         }
-    }
-    if let Some(top) = kb.help_top() {
-        draw_help(canvas, faces, top, out);
     }
 }
 

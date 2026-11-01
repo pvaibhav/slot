@@ -603,9 +603,9 @@ impl QuickRow {
             QuickRow::General => "General",
             QuickRow::LidOff => "Lid Power Off",
             QuickRow::FetchArt => "Fetch Missing Art",
-            QuickRow::Network => "Network",
+            QuickRow::Network => "Wireless",
             QuickRow::WifiPower => "Wi-Fi",
-            QuickRow::Networks => "Networks",
+            QuickRow::Networks => "Network",
             QuickRow::CheckUpdates => "Check for Updates",
             QuickRow::Server => "Gamebit",
             QuickRow::Controls => "Controls",
@@ -1651,7 +1651,11 @@ pub fn quick_scroll(selected: QuickRow, hidden: &[QuickRow]) -> Option<QuickScro
 
 pub fn quick_row_top_at(row: QuickRow, selected: QuickRow, hidden: &[QuickRow]) -> f32 {
     let (start, len) = quick_window(selected, hidden);
-    let rows = QUICK_PITCH * len as f32;
+    let held = match row.page() == QuickRow::NETWORK {
+        true => QuickRow::NETWORK.len(),
+        false => len,
+    };
+    let rows = QUICK_PITCH * held as f32;
     let top = match row.page() == QuickRow::PLAY_SCREEN {
         true => OUT_H as f32 - MOUTH_H - PANEL_GAP - rows,
         false => (LEGEND_Y - rows) / 2.0,

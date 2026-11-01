@@ -1,42 +1,50 @@
-use slot_ui::{draw_wifi_icon, Draw, Printed, TexId};
+use slot_ui::{draw_wifi_icon, wifi_face, Draw, Printed, TexId, UndoFace};
 
-fn extent(out: &[Draw]) -> (f32, f32, f32, f32) {
-    let mut e = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
-    for d in out {
-        if let Draw::Rect { x, y, w, h, .. } = *d {
-            e = (e.0.min(x), e.1.min(y), e.2.max(x + w), e.3.max(y + h));
-        }
+fn tex(out: &[Draw]) -> (f32, f32, f32, f32) {
+    match out {
+        [Draw::Tex { x, y, w, h, .. }] => (*x, *y, *x + *w, *y + *h),
+        _ => panic!("{out:?}"),
     }
-    e
+}
+
+fn ink(f: &UndoFace) -> Vec<[u8; 3]> {
+    f.rgba
+        .chunks(4)
+        .filter(|p| p[3] > 128)
+        .map(|p| [p[0], p[1], p[2]])
+        .collect()
 }
 
 #[test]
 fn it_sits_right_of_the_percent() {
     let mut out = Vec::new();
-    draw_wifi_icon(Printed::new(TexId::from_raw(1), 50), [255; 3], 3, &mut out);
-    let (left, top, _, bottom) = extent(&out);
+    let face = (TexId::from_raw(2), 18, 14);
+    draw_wifi_icon(Printed::new(TexId::from_raw(1), 50), Some(face), &mut out);
+    let (left, top, _, bottom) = tex(&out);
     assert!(left > 24.0 + 14.0 + 5.0 + 26.4 + 3.0 + 7.0 + 50.0, "{left}");
     assert!(top > 422.0 && bottom < 480.0, "{top}..{bottom}");
 }
 
 #[test]
-fn it_uses_the_footer_ink() {
+fn nothing_draws_before_the_faces_arrive() {
     let mut out = Vec::new();
-    draw_wifi_icon(Printed::default(), [0, 0, 0], 3, &mut out);
-    assert!(out.iter().all(|d| matches!(d, Draw::Rect { colour, .. } if colour[0] == 0.0)));
-    assert!(!out.is_empty());
+    draw_wifi_icon(Printed::default(), None, &mut out);
+    assert!(out.is_empty());
 }
 
 #[test]
-fn weak_signal_dims_the_outer_arcs() {
-    let lit = |bars: u8| {
-        let mut out = Vec::new();
-        draw_wifi_icon(Printed::default(), [255; 3], bars, &mut out);
-        let on = out.iter().filter(|d| matches!(d, Draw::Rect { colour, .. } if colour[3] == 1.0)).count();
-        (on, out.len())
-    };
-    let (one, two, three) = (lit(1), lit(2), lit(3));
-    assert!(one.0 < two.0 && two.0 < three.0, "{one:?} {two:?} {three:?}");
-    assert_eq!(one.1, three.1, "the dim arcs stay on screen");
-    assert_eq!(three.0, three.1);
+fn it_wears_the_footer_ink() {
+    let face = wifi_face(3, [10, 20, 30]);
+    let inked = ink(&face);
+    assert!(inked.len() > 30, "{}", inked.len());
+    assert!(inked.iter().all(|c| *c == [10, 20, 30]));
+}
+
+#[test]
+fn a_stronger_signal_fills_more_of_the_fan_in_the_same_box() {
+    let faces: Vec<UndoFace> = (1..=3).map(|n| wifi_face(n, [255; 3])).collect();
+    let fills: Vec<usize> = faces.iter().map(|f| ink(f).len()).collect();
+    assert!(fills.windows(2).all(|w| w[1] > w[0]), "{fills:?}");
+    assert!(faces.iter().all(|f| (f.w, f.h) == (faces[0].w, faces[0].h)));
+    assert!(faces[0].h <= 16, "{}", faces[0].h);
 }

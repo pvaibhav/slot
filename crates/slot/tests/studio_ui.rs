@@ -17,8 +17,9 @@ fn on_shelf() -> (TempDir, App) {
     )
     .unwrap();
     std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
-    let (a, _clock) = app_booting_at(d.path(), CLOCK_IS_SET);
+    let (mut a, _clock) = app_booting_at(d.path(), CLOCK_IS_SET);
     assert!(matches!(a.phase(), Phase::Shelf));
+    common::connect(&mut a);
     (d, a)
 }
 
@@ -154,6 +155,7 @@ mod radio {
         write_slot_state(d.path(), &SlotState { clock_set: true, ..SlotState::default() }).unwrap();
         std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
         let (mut first, _clock) = app_booting_at(d.path(), CLOCK_IS_SET);
+        common::connect(&mut first);
         first.set_art_jobs(Box::new(FakeArt::default()));
         first.apply(Action::SelectTap);
         let cart = first.studio().unwrap().cart.clone();
@@ -607,6 +609,7 @@ fn stickers_only_shuffle_when_you_move_between_them() {
     .unwrap();
     std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
     let (mut a, _clock) = app_booting_at(d.path(), CLOCK_IS_SET);
+    common::connect(&mut a);
     a.set_art_jobs(slot::art::jobs::no_art_jobs());
     a.apply(Action::SelectTap);
     let t = a.now();

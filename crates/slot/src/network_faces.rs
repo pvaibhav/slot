@@ -3,13 +3,12 @@ use std::collections::HashMap;
 use slot_gfx::{Compositor, TexId};
 use slot_ui::{
     footer_ink, keyboard_cap_faces, keyboard_faces, keyboard_text_face, menu_detail_face,
-    menu_face, prompt_legends, quick_value_face, Keyboard, NetFace, NetLine, UndoFace,
+    menu_face, net_bars_face, net_lock_face, prompt_legends, quick_value_face, toast_face_text,
+    Keyboard, NetFace, NetIcons, NetLine, Toast, UndoFace,
 };
 
 use crate::app::{App, NetLegends};
-use crate::networks::{Line, WIFI_OFF_MESSAGE};
-
-const FORGET_DETAIL: &str = "Its saved password is removed.";
+use crate::networks::{Line, SCANNING_MESSAGE, WIFI_OFF_MESSAGE};
 
 #[derive(PartialEq)]
 struct KeyShape {
@@ -36,13 +35,14 @@ impl KeyShape {
 pub struct NetworkSync {
     texts: HashMap<String, [NetFace; 2]>,
     spare: Vec<TexId>,
-    shown: Option<(Vec<Line>, bool)>,
-    message: Option<NetFace>,
+    shown: Option<(Vec<Line>, Option<&'static str>)>,
+    messages: Vec<(&'static str, NetFace)>,
     statics: bool,
     forget: Vec<(TexId, u32, u32)>,
     forget_for: Option<String>,
     pool: Vec<TexId>,
     keys: Option<KeyShape>,
+    forgotten: Option<String>,
 }
 
 fn reuse(compositor: &mut Compositor, spare: &mut Vec<TexId>, face: &UndoFace) -> NetFace {
@@ -64,6 +64,7 @@ fn swap(compositor: &mut Compositor, at: &mut (TexId, u32, u32), face: &UndoFace
 impl NetworkSync {
     pub fn sync(&mut self, app: &mut App, compositor: &mut Compositor) {
         self.sync_keyboard(app, compositor);
+        self.sync_forgotten(app, compositor);
         let Some(screen) = app.network_screen() else {
             return;
         };
@@ -79,7 +80,7 @@ impl NetworkSync {
             }
             self.forget_for = prompt;
         }
-        let key = (screen.lines, screen.message.is_some());
+        let key = (screen.lines, screen.message);
         if self.shown.as_ref() == Some(&key) {
             return;
         }
@@ -116,13 +117,24 @@ impl NetworkSync {
                 bars: l.bars,
             })
             .collect();
-        app.set_network_faces(lines, self.message.filter(|_| key.1));
+        let message = self
+            .messages
+            .iter()
+            .find(|(m, _)| Some(*m) == key.1)
+            .map(|(_, f)| *f);
+        app.set_network_faces(lines, message);
         self.shown = Some(key);
     }
 
     fn load_statics(&mut self, app: &mut App, compositor: &mut Compositor) {
         let mut up = |f: &UndoFace| (compositor.create_texture(f.w, f.h, &f.rgba), f.w, f.h);
-        self.message = Some(up(&menu_detail_face(WIFI_OFF_MESSAGE)));
+        self.messages = [WIFI_OFF_MESSAGE, SCANNING_MESSAGE]
+            .map(|m| (m, up(&menu_detail_face(m))))
+            .to_vec();
+        app.set_network_icons(NetIcons {
+            bars: [0, 1, 2, 3].map(|n| [false, true].map(|l| up(&net_bars_face(n, l)))),
+            lock: [false, true].map(|l| up(&net_lock_face(l))),
+        });
         let mut word = |w: &str| {
             [false, true].map(|light| {
                 let [_, face] = prompt_legends(footer_ink(light), "Back", w);
@@ -137,16 +149,21 @@ impl NetworkSync {
             forget: word("Forget"),
         });
         let [no, yes] = prompt_legends(footer_ink(false), "Cancel", "Forget");
-        self.forget = [
-            menu_face("Forget"),
-            menu_detail_face(FORGET_DETAIL),
-            no,
-            yes,
-        ]
-        .iter()
-        .map(&mut up)
-        .collect();
+        self.forget = [menu_face("Forget"), no, yes].iter().map(&mut up).collect();
         app.set_forget_faces(self.forget.clone());
+    }
+
+    fn sync_forgotten(&mut self, app: &App, compositor: &mut Compositor) {
+        let name = app.forgotten_network();
+        if name == self.forgotten.as_deref() {
+            return;
+        }
+        self.forgotten = name.map(str::to_string);
+        let (Some(name), Some(tex)) = (name, app.toast_tex(Toast::Forgotten)) else {
+            return;
+        };
+        let face = toast_face_text(Toast::Forgotten, &format!("{name} was forgotten"));
+        compositor.update_texture(tex, face.w, face.h, &face.rgba);
     }
 
     fn sync_keyboard(&mut self, app: &mut App, compositor: &mut Compositor) {
@@ -173,7 +190,8 @@ impl NetworkSync {
             tex.stops = stops;
         }
         if (was.shift, was.symbols) != (now.shift, now.symbols) {
-            for (row, faces) in tex.caps.iter_mut().zip(keyboard_cap_faces(&kb)) {
+            let faces = keyboard_cap_faces(&kb, app.canvas());
+            for (row, faces) in tex.caps.iter_mut().zip(faces) {
                 for (pair, faces) in row.iter_mut().zip(faces) {
                     for (slot, face) in pair.iter_mut().zip(faces.iter()) {
                         swap(compositor, slot, face);
@@ -194,7 +212,8 @@ impl NetworkSync {
     ) {
         let pool = &mut self.pool;
         let mut at = 0;
-        let tex = keyboard_faces(kb).upload(|f| {
+        let canvas = app.canvas();
+        let tex = keyboard_faces(kb, canvas).upload(|f| {
             let id = match pool.get(at) {
                 Some(&id) => {
                     compositor.update_texture(id, f.w, f.h, &f.rgba);

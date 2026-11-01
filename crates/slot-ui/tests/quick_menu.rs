@@ -82,7 +82,7 @@ fn the_fast_forward_row_offers_off_a_slow_speed_and_the_four_ceilings() {
 fn the_rows_run_in_the_order_the_user_chose() {
     assert_eq!(
         QuickRow::MAIN.map(QuickRow::label),
-        ["General", "Screen", "Gameplay", "Controls", "Network", "About"]
+        ["General", "Screen", "Gameplay", "Controls", "Wireless", "About"]
     );
     assert_eq!(
         QuickRow::GENERAL.map(QuickRow::label),
@@ -100,7 +100,7 @@ fn the_rows_run_in_the_order_the_user_chose() {
         QuickRow::NETWORK.map(QuickRow::label),
         [
             "Wi-Fi",
-            "Networks",
+            "Network",
             "Gamebit",
             "Check for Updates",
             "Fetch Missing Art"
@@ -628,4 +628,15 @@ fn server_sits_last_on_the_network_page() {
     assert!(QuickRow::Server.page() == QuickRow::NETWORK);
     assert!(QuickRow::ALL.contains(&QuickRow::Server));
     assert_eq!(QuickRow::ALL[QuickRow::Server.index()], QuickRow::Server);
+}
+
+#[test]
+fn the_wifi_row_holds_its_place_when_the_rest_of_the_network_page_hides() {
+    let all = slot_ui::quick_row_top(QuickRow::WifiPower, &[]);
+    let off: Vec<QuickRow> = QuickRow::NETWORK[1..].to_vec();
+    assert_eq!(slot_ui::quick_row_top(QuickRow::WifiPower, &off), all);
+    assert_eq!(
+        slot_ui::quick_row_top(QuickRow::WifiPower, &[QuickRow::Server]),
+        all
+    );
 }

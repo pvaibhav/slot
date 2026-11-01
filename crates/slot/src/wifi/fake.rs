@@ -26,6 +26,7 @@ pub struct Fake {
     silent: bool,
     current: Option<(u32, u32)>,
     rejected: Vec<u32>,
+    joins_saved: bool,
 }
 
 impl Fake {
@@ -56,6 +57,7 @@ impl Fake {
             silent: false,
             current: None,
             rejected: Vec::new(),
+            joins_saved: false,
         }
     }
 
@@ -69,6 +71,13 @@ impl Fake {
             ],
             &[("Home", "password")],
         )
+    }
+
+    pub fn joined() -> Fake {
+        let mut f = Fake::demo();
+        f.add("Home", "password", false);
+        f.joins_saved = true;
+        f
     }
 
     pub fn broken() -> Fake {
@@ -133,6 +142,9 @@ impl Backend for Fake {
                 .filter_map(|r| old.iter().position(|o| o == r).map(|i| i as u32))
                 .collect();
             self.next_id = self.nets.len() as u32;
+            if self.joins_saved && self.current.is_none() {
+                self.current = self.nets.iter().find(|n| !n.manual).map(|n| (n.id, 0));
+            }
         }
         self.running.store(self.on, Ordering::SeqCst);
         self.on

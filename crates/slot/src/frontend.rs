@@ -701,6 +701,13 @@ impl Frontend {
             compositor.create_texture(dark_bolt.w, dark_bolt.h, &dark_bolt.rgba),
             compositor.create_texture(light_bolt.w, light_bolt.h, &light_bolt.rgba),
         ];
+        let wifi = [false, true].map(|light| {
+            [0, 1, 2, 3].map(|bars| {
+                let f = slot_ui::wifi_face(bars, footer_ink(light));
+                (compositor.create_texture(f.w, f.h, &f.rgba), f.w, f.h)
+            })
+        });
+        self.session.app_mut().set_wifi_faces(wifi);
         self.look = Some(ShelfLook {
             slot,
             plugged,
@@ -1251,7 +1258,7 @@ fn wifi_worker(root: &std::path::Path) -> crate::wifi::Wifi {
 
 #[cfg(not(feature = "device"))]
 fn wifi_worker(_root: &std::path::Path) -> crate::wifi::Wifi {
-    crate::wifi::Wifi::spawn(Box::new(crate::wifi::Fake::demo()))
+    crate::wifi::Wifi::spawn(Box::new(crate::wifi::Fake::joined()))
 }
 
 fn link_legend_faces(ink: [u8; 3]) -> Vec<UndoFace> {

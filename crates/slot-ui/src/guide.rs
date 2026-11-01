@@ -424,37 +424,13 @@ impl Guide {
     }
 
     fn draw_help(&self, canvas: Canvas, out: &mut Vec<Draw>) {
-        out.push(plate(canvas, 0.0));
-        if let Some(tex) = self.help_title {
-            out.push(Draw::Tex {
-                x: canvas.centred(TITLE_W as f32),
-                y: (PLATE_H - TITLE_H as f32) / 2.0,
-                w: TITLE_W as f32,
-                h: TITLE_H as f32,
-                tex,
-                alpha: 1.0,
-            });
-        }
-        let top = canvas.h - PLATE_H;
-        out.push(plate(canvas, top));
-        let (key, label) = GUIDE_HELP_HINT;
-        out.push(hint_quad(
-            EDGE,
-            top + (PLATE_H - HINT_H as f32) / 2.0,
-            hint_width(key, label) as f32,
+        draw_help_screen(
+            canvas,
+            self.help_title,
             self.hint_faces.get(GUIDE_HINTS.len()).copied(),
-        ));
-        let Some((tex, w, h)) = self.help_face else {
-            return;
-        };
-        out.push(Draw::Tex {
-            x: canvas.centred(w as f32).floor(),
-            y: ((canvas.h - h as f32) / 2.0).floor(),
-            w: w as f32,
-            h: h as f32,
-            tex,
-            alpha: 1.0,
-        });
+            self.help_face,
+            out,
+        );
     }
 
     fn draw_bar(&self, canvas: Canvas, out: &mut Vec<Draw>) {
@@ -484,15 +460,61 @@ impl Guide {
     }
 }
 
+pub(crate) fn draw_help_screen(
+    canvas: Canvas,
+    title: Option<TexId>,
+    back: Option<TexId>,
+    face: Option<(TexId, u32, u32)>,
+    out: &mut Vec<Draw>,
+) {
+    out.push(plate(canvas, 0.0));
+    if let Some(tex) = title {
+        out.push(Draw::Tex {
+            x: canvas.centred(TITLE_W as f32),
+            y: (PLATE_H - TITLE_H as f32) / 2.0,
+            w: TITLE_W as f32,
+            h: TITLE_H as f32,
+            tex,
+            alpha: 1.0,
+        });
+    }
+    let top = canvas.h - PLATE_H;
+    out.push(plate(canvas, top));
+    let (key, label) = GUIDE_HELP_HINT;
+    out.push(hint_quad(
+        EDGE,
+        top + (PLATE_H - HINT_H as f32) / 2.0,
+        hint_width(key, label) as f32,
+        back,
+    ));
+    let Some((tex, w, h)) = face else {
+        return;
+    };
+    out.push(Draw::Tex {
+        x: canvas.centred(w as f32).floor(),
+        y: ((canvas.h - h as f32) / 2.0).floor(),
+        w: w as f32,
+        h: h as f32,
+        tex,
+        alpha: 1.0,
+    });
+}
+
 pub fn guide_help_face() -> UndoFace {
-    let rows = [
+    help_rows_face(vec![
         (up_down_pair(), "Scroll"),
         (button_pair(ButtonLegend::L1, ButtonLegend::R1), "Page"),
         (button_pair(ButtonLegend::Left, ButtonLegend::Right), "Pan"),
         (button_pair(ButtonLegend::A, ButtonLegend::B), "Zoom"),
         (button_face(ButtonLegend::X), "Wrap"),
-    ]
-    .map(|(art, label)| (art, quick_text_face(label, MENU_INK)));
+    ])
+}
+
+pub(crate) fn help_rows_face(rows: Vec<(UndoFace, &str)>) -> UndoFace {
+    let rows: Vec<(UndoFace, UndoFace)> = rows
+        .into_iter()
+        .map(|(art, label)| (art, quick_text_face(label, MENU_INK)))
+        .collect();
     let art_w = rows.iter().map(|(a, _)| a.w).max().unwrap_or(0);
     let label_w = rows.iter().map(|(_, l)| l.w - MENU_PAD).max().unwrap_or(0);
     let row_h = rows.iter().map(|(a, l)| a.h.max(l.h)).max().unwrap_or(0);

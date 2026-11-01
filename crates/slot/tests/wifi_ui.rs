@@ -1,7 +1,6 @@
 mod common;
 
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Duration;
 
 use common::{app_booting_at, tmp_root_with_carts, CLOCK_IS_SET};
 use slot::app::{App, Phase};
@@ -151,9 +150,11 @@ fn menus_keep_it() {
 }
 
 #[test]
-fn a_studio_fetch_holds_it_once_and_a_game_releases_it() {
+fn a_studio_fetch_keeps_the_radio_once_and_a_game_releases_it() {
     let _g = serial();
     let (_d, mut a, log) = on_shelf();
+    settle(&mut a);
+    join_home(&mut a);
     a.apply(Action::SelectTap);
     a.tick_ms(a.now() + 1);
     assert_eq!(count(&log, "start"), 1);
@@ -185,22 +186,28 @@ fn a_failed_hold_tries_again_after_a_minute() {
 fn the_status_bar_follows_the_connection() {
     let _g = serial();
     let (_d, mut a, _log) = on_shelf();
+    let face = |n: usize| (slot_ui::TexId::from_raw(900 + n), 18, 14);
+    a.set_wifi_faces([
+        [face(0), face(1), face(2), face(3)],
+        [face(4), face(5), face(6), face(7)],
+    ]);
     settle(&mut a);
     assert!(!a.wifi_up());
-    let before = rects(&a);
+    assert_eq!(wifi_icons(&a), 0);
     join_home(&mut a);
     assert!(a.wifi_up());
-    assert!(rects(&a) > before);
+    assert_eq!(wifi_icons(&a), 1);
     a.apply(Action::Insert);
     frames(&mut a, 2);
     assert!(!a.wifi_up());
 }
 
-fn rects(a: &App) -> usize {
+fn wifi_icons(a: &App) -> usize {
     let mut out = Vec::new();
     a.draw(&mut out);
+    let ids: Vec<_> = (900..908).map(slot_ui::TexId::from_raw).collect();
     out.iter()
-        .filter(|d| matches!(d, slot_ui::Draw::Rect { .. }))
+        .filter(|d| matches!(d, slot_ui::Draw::Tex { tex, .. } if ids.contains(tex)))
         .count()
 }
 
@@ -224,30 +231,25 @@ impl UpdateJobs for FakeJobs {
 }
 
 #[test]
-fn an_ota_check_waits_for_online_and_leaves_the_radio_held() {
+fn an_ota_check_leaves_the_radio_held() {
     let _g = serial();
     let (_d, mut a, log) = on_shelf();
     let jobs = FakeJobs::default();
     a.set_update_jobs(Box::new(jobs.clone()));
-    a.apply(Action::QuickMenu);
-    while a.quick_menu() != Some(QuickRow::Network) {
-        press(&mut a, Btn::Down);
-    }
-    press(&mut a, Btn::A);
-    while a.quick_menu() != Some(QuickRow::CheckUpdates) {
-        press(&mut a, Btn::Down);
-    }
-    press(&mut a, Btn::A);
-    assert_eq!(jobs.0.lock().unwrap().asked, [UpdateJob::Check]);
-    a.tick_ms(a.now() + 1);
-    assert!(a.wifi().held);
-    assert_eq!(count(&log, "start"), 1);
-    assert!(matches!(
-        slot::wifi::wait_online(Duration::from_millis(50)),
-        Err(slot::update::UpdateFail::Offline)
-    ));
     join_home(&mut a);
-    assert!(slot::wifi::wait_online(Duration::from_millis(50)).is_ok());
+    assert!(a.wifi_up());
+    a.apply(Action::QuickMenu);
+    for row in [QuickRow::Network, QuickRow::CheckUpdates] {
+        for _ in 0..12 {
+            if a.quick_menu() == Some(row) {
+                break;
+            }
+            press(&mut a, Btn::Down);
+        }
+        assert_eq!(a.quick_menu(), Some(row), "{:?}", a.hidden_rows());
+        press(&mut a, Btn::A);
+    }
+    assert_eq!(jobs.0.lock().unwrap().asked, [UpdateJob::Check]);
     jobs.0
         .lock()
         .unwrap()
@@ -373,6 +375,8 @@ fn the_studio_does_not_hold_the_radio_when_wifi_is_off() {
 fn a_held_radio_turned_off_stays_blocked_through_a_game() {
     let _g = serial();
     let (_d, mut a, log) = on_shelf();
+    settle(&mut a);
+    join_home(&mut a);
     a.apply(Action::SelectTap);
     assert!(a.studio().is_some());
     a.tick_ms(a.now() + 1);
@@ -401,4 +405,26 @@ fn the_networks_row_names_the_joined_network() {
     assert_eq!(a.networks_value(), "Home");
     a.set_wifi_off(true);
     assert_eq!(a.networks_value(), "Off");
+}
+
+#[test]
+fn the_studio_offers_the_label_printer_only_while_connected() {
+    let _g = serial();
+    let (_d, mut a, _log) = booted(true, Fake::silent());
+    settle(&mut a);
+    assert!(!a.wifi_up());
+    a.apply(Action::SelectTap);
+    a.tick_ms(a.now() + 1);
+    let rows = a.studio().expect("no studio").rows();
+    assert!(!rows.contains(&slot::studio::Row::Label), "{rows:?}");
+    a.close_studio();
+    settle(&mut a);
+    let (_d, mut a, _log) = on_shelf();
+    settle(&mut a);
+    join_home(&mut a);
+    assert!(a.wifi_up());
+    a.apply(Action::SelectTap);
+    a.tick_ms(a.now() + 1);
+    let rows = a.studio().expect("no studio").rows();
+    assert!(rows.contains(&slot::studio::Row::Label), "{rows:?}");
 }

@@ -55,6 +55,7 @@ fn on_shelf() -> (TempDir, App) {
     .unwrap();
     let (mut a, _clock) = app_booting_at(d.path(), CLOCK_IS_SET);
     assert!(matches!(a.phase(), Phase::Shelf));
+    common::connect(&mut a);
     (d, a)
 }
 
@@ -262,7 +263,7 @@ fn no_wifi_prints_a_plain_message() {
     });
     open(&mut a);
     assert_eq!(paper(&mut a), ServerPaper::Plain(NO_WIFI));
-    assert_eq!(NO_WIFI, "NO WIFI");
+    assert_eq!(NO_WIFI, "NO WI-FI");
     assert!(!answers(port));
     press(&mut a, Btn::B);
     until(&mut a, |a| !a.server_open());
@@ -495,6 +496,35 @@ fn stop_hands_new_and_replaced_labels_to_the_rebuild() {
     assert_eq!(a.take_stale_labels().len(), 1);
 }
 
+#[test]
+fn stop_leaves_labels_that_were_stale_before_it_opened() {
+    let (d, mut a) = on_shelf();
+    a.set_server_net(net(&[free_port()]));
+    let dir = d.path().join("Labels/GBA");
+    std::fs::create_dir_all(&dir).unwrap();
+    solid_png(&dir.join("Emerald.png"), 64, 32, [200, 20, 20]);
+    open(&mut a);
+    paper(&mut a);
+    press(&mut a, Btn::B);
+    until(&mut a, |a| !a.server_open());
+    let cart = a.carts().find(|c| c.stem == "Emerald").unwrap().clone();
+    let _ = a.take_stale_labels();
+    let _ = slot::label_cache::label_art(d.path(), &cart);
+    let later = std::time::SystemTime::now() + Duration::from_secs(5);
+    std::fs::File::options()
+        .write(true)
+        .open(dir.join("Emerald.png"))
+        .unwrap()
+        .set_modified(later)
+        .unwrap();
+    assert!(!slot::label_cache::fresh(d.path(), &cart));
+    open_from_menu(&mut a);
+    paper(&mut a);
+    press(&mut a, Btn::B);
+    until(&mut a, |a| !a.server_open());
+    assert_eq!(a.take_stale_labels(), Vec::new());
+}
+
 fn open_from_menu(a: &mut App) {
     if !matches!(a.phase(), Phase::QuickMenu { row: QuickRow::Server }) {
         panic!("not on the Server row");
@@ -618,6 +648,7 @@ mod screen {
             c.fit(window);
             f.upload_faces(&mut c);
             f.app_mut().set_server_net(net);
+            common::connect(f.app_mut());
             let mut r = Rig {
                 c,
                 f,

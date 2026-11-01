@@ -40,11 +40,13 @@ fn rendered(c: &mut Compositor, kb: &Keyboard) -> Vec<u8> {
     let ground = default_background().map(|g| (c.create_texture(OUT_W, OUT_H, g), OUT_W));
     let back = c.create_texture(SLOT_W, SLOT_H, slot_back());
     let front = c.create_texture(SLOT_W, SLOT_H, slot_front());
-    let tex = keyboard_faces(kb).upload(|f| c.create_texture(f.w, f.h, &f.rgba));
+    let tex = keyboard_faces(kb, canvas).upload(|f| c.create_texture(f.w, f.h, &f.rgba));
     let mut list: Vec<Draw> = Vec::new();
     draw_keyboard(canvas, ground, &tex, kb, &mut list);
-    draw_empty_slot(canvas, Some((back, front)), &mut list);
-    draw_keyboard_legends(canvas, &tex, &mut list);
+    if !kb.help() {
+        draw_empty_slot(canvas, Some((back, front)), &mut list);
+        draw_keyboard_legends(canvas, &tex, &mut list);
+    }
     c.begin_frame();
     c.draw_list(&list);
     c.read_frame()
@@ -125,8 +127,50 @@ fn the_number_pad_and_its_help_render() {
     kb.press(Btn::Menu);
     let px = rendered(&mut c, &kb);
     shot(&px, "keyboard-numeric-help");
-    let (under, _, _) = tile(&px, &kb, 0, 0);
-    assert!(under < 0.4, "the help does not cover the keys: {under}");
+    help_is_full_screen(&px);
+}
+
+fn lit_in(px: &[u8], [x0, y0, x1, y1]: [usize; 4]) -> usize {
+    (y0..y1)
+        .flat_map(|y| (x0..x1).map(move |x| (x, y)))
+        .filter(|&(x, y)| luma(px, x, y) > 0.75)
+        .count()
+}
+
+fn help_is_full_screen(px: &[u8]) {
+    let (w, h) = (OUT_W as usize, OUT_H as usize);
+    assert!(lit_in(px, [w / 2 - 80, 0, w / 2 + 80, 40]) > 50, "no title");
+    assert!(lit_in(px, [0, h - 40, 140, h]) > 50, "no B Back");
+    assert!(
+        lit_in(px, [w - 140, h - 40, w, h]) == 0,
+        "a legend on the help"
+    );
+    assert!(
+        lit_in(px, [w / 2 - 120, 120, w / 2 + 120, 360]) > 300,
+        "no rows"
+    );
+    for (x, y) in [(20, 200), (w - 20, 300), (60, 149), (w - 60, 149)] {
+        assert!(
+            luma(px, x, y) < 0.05,
+            "the keyboard shows through at {x},{y}"
+        );
+    }
+}
+
+#[test]
+fn the_keyboard_help_is_a_full_screen_page_and_menu_is_the_right_legend() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    let mut kb = Keyboard::new(Layout::General, "Password", Some("HOME"), "hunter22");
+    let px = rendered(&mut c, &kb);
+    shot(&px, "keyboard-legends");
+    let (w, h) = (OUT_W as usize, OUT_H as usize);
+    assert!(lit_in(&px, [w - 140, h - 40, w, h]) > 50, "no right legend");
+    kb.press(Btn::Menu);
+    let px = rendered(&mut c, &kb);
+    shot(&px, "keyboard-general-help");
+    help_is_full_screen(&px);
 }
 
 #[test]

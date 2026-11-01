@@ -352,6 +352,9 @@ pub struct Wifi {
     snap: Snapshot,
     busy: bool,
     waiting: usize,
+    posted: u64,
+    replied: u64,
+    auto_join: Vec<(u64, u32, bool)>,
 }
 
 impl Wifi {
@@ -400,6 +403,9 @@ impl Wifi {
             snap: Snapshot::default(),
             busy: false,
             waiting: 0,
+            posted: 0,
+            replied: 0,
+            auto_join: Vec::new(),
         }
     }
 
@@ -414,6 +420,9 @@ impl Wifi {
             snap,
             busy: false,
             waiting: 0,
+            posted: 0,
+            replied: 0,
+            auto_join: Vec::new(),
         }
     }
 
@@ -423,13 +432,30 @@ impl Wifi {
             Mode::Thread { tx, .. } => {
                 if tx.send(msg).is_ok() {
                     self.waiting += 1;
+                    self.posted += 1;
                 }
             }
         }
     }
 
     pub fn send(&mut self, cmd: Cmd) {
+        let flip = match cmd {
+            Cmd::AutoJoin { id, on } => Some((id, on)),
+            _ => None,
+        };
         self.post(Msg::Cmd(cmd));
+        if let (Some((id, on)), Mode::Thread { .. }) = (flip, &self.mode) {
+            self.auto_join.push((self.posted, id, on));
+            self.show_auto_join();
+        }
+    }
+
+    fn show_auto_join(&mut self) {
+        for &(_, id, on) in &self.auto_join {
+            if let Some(n) = self.snap.saved.iter_mut().find(|n| n.id == id) {
+                n.auto_join = on;
+            }
+        }
     }
 
     pub fn want_scans(&mut self, on: bool) {
@@ -453,8 +479,12 @@ impl Wifi {
                     self.busy = r.busy;
                     if r.reply {
                         self.waiting = self.waiting.saturating_sub(1);
+                        self.replied += 1;
                     }
                 }
+                let replied = self.replied;
+                self.auto_join.retain(|(at, ..)| *at > replied);
+                self.show_auto_join();
             }
         }
         self.snap != before

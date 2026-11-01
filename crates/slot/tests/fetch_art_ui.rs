@@ -24,14 +24,17 @@ fn booted(wifi: bool) -> (TempDir, App) {
 }
 
 #[test]
-fn row_shown_with_or_without_wifi_conf() {
+fn row_shown_only_while_connected() {
     for wifi in [false, true] {
         let (_d, a) = booted(wifi);
         assert!(
-            !a.hidden_rows().contains(&QuickRow::FetchArt),
+            a.hidden_rows().contains(&QuickRow::FetchArt),
             "wifi.conf {wifi}"
         );
     }
+    let (_d, mut a) = booted(true);
+    common::connect(&mut a);
+    assert!(!a.hidden_rows().contains(&QuickRow::FetchArt));
 }
 
 use std::collections::VecDeque;
@@ -315,9 +318,9 @@ fn choice_carts_fit_a_640_screen() {
 #[test]
 fn connecting_until_the_worker_counts() {
     let (_d, mut a, art) = running();
-    assert_eq!(a.fetch_art_lines(), vec!["Connecting to WiFi".to_string()]);
+    assert_eq!(a.fetch_art_lines(), vec!["Connecting to Wi-Fi".to_string()]);
     art.send(&mut a, ArtEvent::Counted(2));
-    assert_eq!(a.fetch_art_lines(), vec!["Fetching Art".to_string(), "Looking for art".to_string()]);
+    assert_eq!(a.fetch_art_lines(), vec!["Fetching Art".to_string()]);
 }
 
 #[test]
@@ -345,7 +348,7 @@ fn a_lost_connection_says_so() {
     let (_d, mut a, art) = running();
     art.send(&mut a, ArtEvent::Failed(UpdateFail::Offline));
     advance(&mut a, 100.0);
-    assert_eq!(a.fetch_art_lines()[0], "WiFi Lost");
+    assert_eq!(a.fetch_art_lines()[0], "Wi-Fi Lost");
 }
 
 #[test]
@@ -473,7 +476,7 @@ fn already_connected_skips_the_connecting_line() {
     a.set_wifi(slot::wifi::Wifi::inline(Box::new(slot::wifi::Fake::demo())));
     a.wifi_send(slot::wifi::Cmd::Hold);
     a.tick_ms(a.now() + 1);
-    assert_eq!(a.fetch_art_lines(), vec!["Connecting to WiFi".to_string()]);
+    assert_eq!(a.fetch_art_lines(), vec!["Connecting to Wi-Fi".to_string()]);
     a.wifi_send(slot::wifi::Cmd::Join {
         ssid: "Home".into(),
         password: "password".into(),
@@ -482,6 +485,6 @@ fn already_connected_skips_the_connecting_line() {
     a.tick_ms(a.now() + 1);
     assert_eq!(
         a.fetch_art_lines(),
-        vec!["Fetching Art".to_string(), "Looking for art".to_string()]
+        vec!["Fetching Art".to_string()]
     );
 }

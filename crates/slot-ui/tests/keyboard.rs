@@ -185,12 +185,20 @@ fn y_cancels() {
 }
 
 #[test]
-fn menu_shows_help_and_any_button_closes_it() {
+fn menu_opens_help_and_only_b_or_menu_closes_it() {
     let mut kb = general("a");
     assert_eq!(kb.press(Btn::Menu), Typed::Help);
-    assert_eq!(kb.help_top(), Some(0));
-    assert_eq!(kb.press(Btn::A), Typed::Changed);
-    assert_eq!(kb.help_top(), None);
+    assert!(kb.help());
+    for b in [Btn::A, Btn::X, Btn::Y, Btn::Start, Btn::Up, Btn::Select] {
+        assert_eq!(kb.press(b), Typed::Nothing, "{b:?}");
+        assert!(kb.help(), "{b:?} closed the help");
+    }
+    assert_eq!(kb.press(Btn::B), Typed::Changed);
+    assert!(!kb.help());
+    assert_eq!(text(&kb), "a");
+    kb.press(Btn::Menu);
+    assert_eq!(kb.press(Btn::Menu), Typed::Changed);
+    assert!(!kb.help());
     assert_eq!(text(&kb), "a");
 }
 
@@ -228,4 +236,65 @@ fn the_symbols_key_reads_hash_plus_equals() {
     select(&mut kb, "#+=");
     press(&mut kb, &[Btn::A]);
     assert_eq!(kb.label(Cap::Special(Special::Symbols)), "abc");
+}
+
+#[test]
+fn the_help_fits_between_the_plates_and_inside_a_640_screen() {
+    for layout in [Layout::General, Layout::Numeric] {
+        let face = slot_ui::keyboard_help_face(layout);
+        assert!(
+            face.h as f32 <= 480.0 - 2.0 * slot_ui::PLATE_H,
+            "{layout:?}: {}",
+            face.h
+        );
+        assert!(face.w <= 600, "{layout:?}: {}", face.w);
+    }
+}
+
+#[test]
+fn every_key_fits_both_screens() {
+    for panel in [(640, 480), (720, 480)] {
+        let canvas = slot_ui::Canvas::of(panel);
+        for layout in [Layout::General, Layout::Numeric] {
+            let kb = Keyboard::new(layout, "T", None, "");
+            for (r, row) in kb.rows().iter().enumerate() {
+                let mut last = f32::MIN;
+                for c in 0..row.len() {
+                    let [x, _, w, _] = slot_ui::key_rect(canvas, layout, r, c);
+                    assert!(
+                        x >= 16.0 && x + w <= canvas.w - 16.0,
+                        "{panel:?} {layout:?} key {r},{c} at {x}+{w}"
+                    );
+                    assert!(x > last, "{panel:?} {layout:?} key {r},{c} overlaps");
+                    last = x + w;
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn the_wide_screen_keeps_its_key_size() {
+    let canvas = slot_ui::Canvas::of((720, 480));
+    let [_, _, w, h] = slot_ui::key_rect(canvas, Layout::General, 1, 0);
+    assert_eq!((w, h), (50.0, 44.0));
+}
+
+#[test]
+fn the_help_lists_only_the_shortcuts_in_two_columns() {
+    let labels = |layout| {
+        slot_ui::keyboard_help_columns(layout)
+            .map(|c| c.iter().map(|s| s.label()).collect::<Vec<_>>())
+    };
+    assert_eq!(
+        labels(Layout::General),
+        [
+            vec!["Delete", "Space", "Shift"],
+            vec!["Cursor", "Cancel", "Done"]
+        ]
+    );
+    assert_eq!(
+        labels(Layout::Numeric),
+        [vec!["Delete", "Cursor"], vec!["Cancel", "Done"]]
+    );
 }

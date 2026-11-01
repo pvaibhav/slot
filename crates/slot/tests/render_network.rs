@@ -130,6 +130,7 @@ fn the_networks_list_renders() {
     let top = |i| net_row_top(count, at, i);
     assert!(pointer_at(&px, top(at)), "no pointer on the selected row");
     assert!(!pointer_at(&px, top(0)), "a pointer on an unselected row");
+    let mut fills = Vec::new();
     for (i, line) in screen.lines.iter().enumerate() {
         if line.value.is_some() {
             continue;
@@ -143,24 +144,16 @@ fn the_networks_list_renders() {
             "{}: bar ink {bars}",
             line.label
         );
-        let Some(n) = line.bars else {
-            continue;
-        };
-        let [bx, by, _, _] = bars_rect(canvas, top(i));
-        let outer = [bx + 8.0, by, 14.0, 2.0];
-        let middle = [bx + 10.0, by + 6.0, 10.0, 2.0];
-        assert_eq!(
-            count_in(&px, outer, inked) > 0,
-            n >= 3,
-            "{} outer arc",
-            line.label
-        );
-        assert_eq!(
-            count_in(&px, middle, inked) > 0,
-            n >= 2,
-            "{} middle arc",
-            line.label
-        );
+        if let Some(n) = line.bars {
+            fills.push((n, bars));
+        }
+    }
+    for &(n, ink) in &fills {
+        for &(m, more) in &fills {
+            if m > n {
+                assert!(more > ink, "{m} bars draw {more} ink, {n} bars draw {ink}");
+            }
+        }
     }
     let value = [canvas.w - 250.0, top(0) + 8.0, 210.0, 36.0];
     assert!(
@@ -201,8 +194,19 @@ fn a_network_page_renders() {
     assert!(f.app().forget_prompt().is_some());
     let px = frame(&mut f, &mut c);
     dump(&px, "forget");
-    let title = [0.0, 150.0, canvas.w, 100.0];
+    let title = [0.0, 200.0, canvas.w, 80.0];
     assert!(count_in(&px, title, bright) > 100, "no Forget prompt");
+    let below = [0.0, 280.0, canvas.w, 100.0];
+    assert_eq!(count_in(&px, below, bright), 0, "a line under Forget");
+    press(&mut f, Btn::A);
+    assert_eq!(f.app().toast(), Some(slot_ui::Toast::Forgotten));
+    let px = frame(&mut f, &mut c);
+    dump(&px, "forgotten");
+    let (x, y, w, h) = slot_ui::toast_rect(canvas, slot_ui::Toast::Forgotten);
+    assert!(
+        count_in(&px, [x, y, w, h], bright) > 100,
+        "no Forgotten toast"
+    );
 }
 
 #[test]
@@ -319,4 +323,121 @@ fn the_symbols_layer_draws_its_currency_keys() {
         }
     }
     assert!(missing.is_empty(), "label.ttf lacks {missing:?}");
+}
+
+fn ink_span(frame: &[u8], top: f32) -> Option<(usize, usize, usize)> {
+    let (y0, y1) = (top.max(0.0) as usize, (top + 52.0) as usize);
+    let mut hits = (usize::MAX, 0, 0);
+    for y in y0..y1 {
+        for x in 0..OUT_W as usize {
+            if bright(px(frame, x, y)) {
+                hits = (hits.0.min(x), hits.1.max(x), hits.2 + 1);
+            }
+        }
+    }
+    (hits.2 > 0).then_some(hits)
+}
+
+#[test]
+fn the_list_says_it_is_scanning_until_results_arrive_then_offers_other() {
+    for panel in [(640, 480), (720, 480)] {
+        let Some((_d, mut f, mut c, _s)) = setup() else {
+            return;
+        };
+        f.app_mut().set_panel(panel);
+        let canvas = f.app().canvas();
+        f.app_mut().apply(Action::QuickMenu);
+        for row in [QuickRow::Network, QuickRow::Networks] {
+            while f.app().quick_menu() != Some(row) {
+                press(&mut f, Btn::Down);
+            }
+            press(&mut f, Btn::A);
+        }
+        let s = f.app().network_screen().unwrap();
+        assert_eq!(s.message, Some("Scanning for networks"));
+        assert!(s.lines.is_empty(), "{panel:?}: rows before the scan");
+        let px = frame(&mut f, &mut c);
+        dump(&px, &format!("scanning-{}", panel.0));
+        let top = net_row_top(1, 0, 0);
+        let (left, right, n) = ink_span(&px, top).expect("no scanning message");
+        assert!(n > 100, "{panel:?}: message too faint");
+        let mid = (left + right) as f32 / 2.0;
+        assert!(
+            (mid - canvas.w / 2.0).abs() <= 4.0 && (right as f32) < canvas.w,
+            "{panel:?}: message spans {left}..{right} on a {} canvas",
+            canvas.w
+        );
+        settle(&mut f);
+        let s = f.app().network_screen().unwrap();
+        assert_eq!(s.message, None);
+        assert!(s.lines.iter().any(|l| l.label == "Neighbor 5G"));
+        assert_eq!(s.lines.last().unwrap().label, "Other Network");
+        let px = frame(&mut f, &mut c);
+        dump(&px, &format!("scanned-{}", panel.0));
+        let count = s.lines.len();
+        let below = net_row_top(count, s.selected, count.min(5));
+        assert!(
+            count >= 5 || ink_span(&px, below).is_none(),
+            "{panel:?}: message still drawn"
+        );
+    }
+}
+
+#[test]
+fn menu_on_the_keyboard_shows_a_full_screen_help() {
+    for panel in [(640, 480), (720, 480)] {
+        let Some((_d, mut f, mut c, _s)) = setup() else {
+            return;
+        };
+        f.app_mut().set_panel(panel);
+        open_home_keyboard(&mut f);
+        let w = f.app().canvas().w;
+        let px = frame(&mut f, &mut c);
+        dump(&px, &format!("keyboard-{}", panel.0));
+        let legend = [w - 140.0, 440.0, 140.0, 40.0];
+        assert!(
+            count_in(&px, legend, bright) > 50,
+            "{panel:?}: no Help legend"
+        );
+        f.app_mut().apply(Action::QuickMenu);
+        assert!(f.app().keyboard().unwrap().help());
+        let px = frame(&mut f, &mut c);
+        dump(&px, &format!("keyboard-help-{}", panel.0));
+        let title = [w / 2.0 - 80.0, 0.0, 160.0, 40.0];
+        assert!(count_in(&px, title, bright) > 50, "{panel:?}: no title");
+        let back = [0.0, 440.0, 140.0, 40.0];
+        assert!(count_in(&px, back, bright) > 50, "{panel:?}: no B Back");
+        assert_eq!(count_in(&px, legend, bright), 0, "{panel:?}: legend drawn");
+        let rows = [w / 2.0 - 150.0, 60.0, 300.0, 360.0];
+        assert!(count_in(&px, rows, bright) > 300, "{panel:?}: no rows");
+        press(&mut f, Btn::B);
+        assert!(!f.app().keyboard().unwrap().help());
+        assert_eq!(f.app().keyboard().unwrap().text(), "");
+    }
+}
+
+#[test]
+fn an_invalid_password_shows_one_line() {
+    for panel in [(640, 480), (720, 480)] {
+        let Some((_d, mut f, mut c, _s)) = setup() else {
+            return;
+        };
+        f.app_mut().set_panel(panel);
+        open_home_keyboard(&mut f);
+        press(&mut f, Btn::Start);
+        assert_eq!(
+            f.app().update_text(),
+            Some(("Invalid Password".to_string(), String::new()))
+        );
+        for _ in 0..10 {
+            let t = f.app().now();
+            f.app_mut().tick_ms(t + 100);
+            f.compose(&mut c);
+        }
+        let px = frame(&mut f, &mut c);
+        dump(&px, &format!("invalid-password-{}", panel.0));
+        let w = f.app().canvas().w;
+        let band = [0.0, 100.0, w, 300.0];
+        assert!(count_in(&px, band, bright) > 200, "{panel:?}: no notice");
+    }
 }

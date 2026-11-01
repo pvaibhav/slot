@@ -1,19 +1,21 @@
+use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::sync::Arc;
 use std::thread;
+use std::time::UNIX_EPOCH;
 
 use slot_input::Millis;
-use slot_store::{scan, Cart};
+use slot_store::{scan, Cart, Platform, ShellChoice};
 use slot_ui::ReceiptText;
 
 use super::{generate_pin, qr_modules, qr_url, shown_address, wifi_ip, Responder, Server, PORTS};
 use crate::label_cache::fresh;
 use crate::print_scene::{Cue, PaperJob, PrintArtState, PrintArtWorker, PrintFrame, PrintScene, PrintTextures};
 
-pub const NO_WIFI: &str = "NO WIFI";
+pub const NO_WIFI: &str = "NO WI-FI";
 pub const SERVER_FAILED: &str = "GAMEBIT FAILED";
 
 #[derive(Clone)]
@@ -47,6 +49,36 @@ pub enum ServerPaper {
 struct Serving {
     server: Server,
     responder: Option<Responder>,
+    before: Seen,
+}
+
+type Sig = (Option<(u64, u64)>, Option<ShellChoice>);
+type Seen = HashMap<(Platform, String), Sig>;
+
+fn sig(cart: &Cart) -> Sig {
+    let stamp = cart
+        .label
+        .as_deref()
+        .and_then(|p| std::fs::metadata(p).ok())
+        .map(|m| {
+            let mtime = m
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(UNIX_EPOCH).ok());
+            (m.len(), mtime.map_or(0, |d| d.as_secs()))
+        });
+    (stamp, cart.shell)
+}
+
+fn seen(root: &Path) -> Seen {
+    scan(root)
+        .map(|carts| {
+            carts
+                .iter()
+                .map(|c| ((c.platform, c.stem.clone()), sig(c)))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 struct Up {
@@ -67,6 +99,7 @@ fn bring_up(root: PathBuf, net: ServerNet) -> Up {
     let Some(ip) = (net.ip)() else {
         return plain(NO_WIFI);
     };
+    let before = seen(&root);
     let pin = generate_pin();
     let server = net
         .ports
@@ -85,7 +118,11 @@ fn bring_up(root: PathBuf, net: ServerNet) -> Up {
     let host = responder.as_ref().map(|r| shown_address(&r.host(), port));
     let shown = shown_address(&ip.to_string(), port);
     Up {
-        serving: Some(Serving { server, responder }),
+        serving: Some(Serving {
+            server,
+            responder,
+            before,
+        }),
         paper: ServerPaper::Code {
             url,
             host: host.clone(),
@@ -113,6 +150,7 @@ fn tear_down(serving: Serving, root: &Path, hurry: &AtomicBool) -> Option<Rescan
     let stale = carts
         .iter()
         .take_while(|_| !hurry.load(Ordering::SeqCst))
+        .filter(|c| serving.before.get(&(c.platform, c.stem.clone())) != Some(&sig(c)))
         .filter(|c| !fresh(root, c))
         .cloned()
         .collect();

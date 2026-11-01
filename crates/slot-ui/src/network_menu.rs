@@ -1,6 +1,9 @@
+use std::sync::OnceLock;
+
 use crate::draw::{Canvas, Draw, TexId};
-use crate::footer::{WIFI_DIM, WIFI_GLYPH};
 use crate::hud::HUD_INK;
+use crate::icon::symbols_font;
+use crate::plate::UndoFace;
 use crate::power_menu::{MENU_H, MENU_INK, MENU_PAD};
 use crate::quick_menu::{
     draw_menu_ground, DIM_INK, LEGEND_Y, POINTER_BLEED, POINTER_GAP, QUICK_EDGE, QUICK_LABEL_X,
@@ -18,8 +21,15 @@ pub struct NetLine {
     pub bars: Option<u8>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NetIcons {
+    pub bars: [[NetFace; 2]; 4],
+    pub lock: [NetFace; 2],
+}
+
 pub struct NetworkList<'a> {
     pub lines: &'a [NetLine],
+    pub icons: Option<NetIcons>,
     pub selected: usize,
     pub message: Option<NetFace>,
     pub pointer: Option<NetFace>,
@@ -27,78 +37,123 @@ pub struct NetworkList<'a> {
     pub canvas: Canvas,
 }
 
-pub const GLYPH_SCALE: f32 = 2.0;
 pub const GLYPH_GAP: f32 = 12.0;
+pub const NET_ICON_PX: f32 = 30.0;
+pub const WIFI_ICON_PX: f32 = 14.0;
 
-const LOCK_GLYPH: [&str; 10] = [
-    "..XXXXX..",
-    ".XX...XX.",
-    ".X.....X.",
-    ".X.....X.",
-    "XXXXXXXXX",
-    "XXXXXXXXX",
-    "XXXX.XXXX",
-    "XXXX.XXXX",
-    "XXXXXXXXX",
-    "XXXXXXXXX",
+const BAR_GLYPHS: [char; 4] = ['\u{f092f}', '\u{f091f}', '\u{f0925}', '\u{f0928}'];
+const LOCK: char = '\u{f033e}';
+const NET_GLYPHS: [char; 5] = [
+    BAR_GLYPHS[0],
+    BAR_GLYPHS[1],
+    BAR_GLYPHS[2],
+    BAR_GLYPHS[3],
+    LOCK,
 ];
 
-fn glyph_w(glyph: &[&str]) -> f32 {
-    glyph[0].len() as f32 * GLYPH_SCALE
+#[derive(Clone, Copy)]
+struct Frame {
+    w: u32,
+    h: u32,
+    left: i32,
+    top: i32,
 }
 
-fn glyph_h(glyph: &[&str]) -> f32 {
-    glyph.len() as f32 * GLYPH_SCALE
+fn frame_at(px: f32, glyphs: &[char]) -> Option<Frame> {
+    let font = symbols_font()?;
+    let (mut left, mut right, mut top, mut bottom) = (i32::MAX, i32::MIN, i32::MIN, i32::MAX);
+    for &ch in glyphs {
+        let m = font.metrics(ch, px);
+        left = left.min(m.xmin);
+        right = right.max(m.xmin + m.width as i32);
+        top = top.max(m.ymin + m.height as i32);
+        bottom = bottom.min(m.ymin);
+    }
+    Some(Frame {
+        w: (right - left).max(1) as u32,
+        h: (top - bottom).max(1) as u32,
+        left,
+        top,
+    })
+}
+
+fn frame() -> Option<Frame> {
+    static FRAME: OnceLock<Option<Frame>> = OnceLock::new();
+    *FRAME.get_or_init(|| frame_at(NET_ICON_PX, &NET_GLYPHS))
+}
+
+fn glyph_face(ch: char, px: f32, glyphs: &[char], ink: [u8; 3]) -> UndoFace {
+    let (Some(font), Some(f)) = (symbols_font(), frame_at(px, glyphs)) else {
+        return UndoFace {
+            rgba: vec![0; 4],
+            w: 1,
+            h: 1,
+        };
+    };
+    let (m, cov) = font.rasterize(ch, px);
+    let x0 = m.xmin - f.left;
+    let y0 = f.top - (m.ymin + m.height as i32);
+    let mut rgba = vec![0u8; (f.w * f.h * 4) as usize];
+    for gy in 0..m.height {
+        for gx in 0..m.width {
+            let (dx, dy) = (x0 + gx as i32, y0 + gy as i32);
+            if dx < 0 || dy < 0 || dx >= f.w as i32 || dy >= f.h as i32 {
+                continue;
+            }
+            let at = ((dy as u32 * f.w + dx as u32) * 4) as usize;
+            rgba[at..at + 3].copy_from_slice(&ink);
+            rgba[at + 3] = cov[gy * m.width + gx];
+        }
+    }
+    UndoFace {
+        rgba,
+        w: f.w,
+        h: f.h,
+    }
+}
+
+pub fn net_bars_face(bars: u8, lit: bool) -> UndoFace {
+    let ink = if lit { MENU_INK } else { DIM_INK };
+    glyph_face(
+        BAR_GLYPHS[bars.min(3) as usize],
+        NET_ICON_PX,
+        &NET_GLYPHS,
+        ink,
+    )
+}
+
+pub fn wifi_face(bars: u8, ink: [u8; 3]) -> UndoFace {
+    glyph_face(
+        BAR_GLYPHS[bars.min(3) as usize],
+        WIFI_ICON_PX,
+        &BAR_GLYPHS,
+        ink,
+    )
+}
+
+pub fn net_lock_face(lit: bool) -> UndoFace {
+    let ink = if lit { MENU_INK } else { DIM_INK };
+    glyph_face(LOCK, NET_ICON_PX, &NET_GLYPHS, ink)
+}
+
+fn icon_size() -> (f32, f32) {
+    frame().map_or((0.0, 0.0), |f| (f.w as f32, f.h as f32))
 }
 
 pub fn bars_rect(canvas: Canvas, row_top: f32) -> [f32; 4] {
     let right = canvas.w - QUICK_EDGE;
-    let (w, h) = (glyph_w(&WIFI_GLYPH), glyph_h(&WIFI_GLYPH));
+    let (w, h) = icon_size();
     [right - w, glyph_top(row_top, h), w, h]
 }
 
 pub fn lock_rect(canvas: Canvas, row_top: f32) -> [f32; 4] {
     let [bx, ..] = bars_rect(canvas, row_top);
-    let (w, h) = (glyph_w(&LOCK_GLYPH), glyph_h(&LOCK_GLYPH));
+    let (w, h) = icon_size();
     [bx - GLYPH_GAP - w, glyph_top(row_top, h), w, h]
 }
 
 fn glyph_top(row_top: f32, h: f32) -> f32 {
     (row_top + TYPE_DROP + (MENU_H as f32 - h) / 2.0).round()
-}
-
-fn draw_glyph(
-    glyph: &[&str],
-    x: f32,
-    y: f32,
-    ink: [u8; 3],
-    lit: impl Fn(u8) -> bool,
-    out: &mut Vec<Draw>,
-) {
-    let [r, g, b] = ink.map(|c| c as f32 / 255.0);
-    for (row, line) in glyph.iter().enumerate() {
-        let cells = line.as_bytes();
-        let mut col = 0;
-        while col < cells.len() {
-            let cell = cells[col];
-            if cell == b'.' {
-                col += 1;
-                continue;
-            }
-            let start = col;
-            while col < cells.len() && cells[col] == cell {
-                col += 1;
-            }
-            let alpha = if lit(cell) { 1.0 } else { WIFI_DIM };
-            out.push(Draw::Rect {
-                x: x + start as f32 * GLYPH_SCALE,
-                y: y + row as f32 * GLYPH_SCALE,
-                w: (col - start) as f32 * GLYPH_SCALE,
-                h: GLYPH_SCALE,
-                colour: [r, g, b, alpha],
-            });
-        }
-    }
 }
 
 pub fn net_window(count: usize, selected: usize) -> (usize, usize) {
@@ -145,17 +200,16 @@ impl NetworkList<'_> {
                 continue;
             };
             let lit = at == self.selected;
-            let ink = if lit { MENU_INK } else { DIM_INK };
             let y = top + TYPE_DROP;
             let mut end = right;
-            if let Some(bars) = line.bars {
+            if let (Some(bars), Some(icons)) = (line.bars, self.icons) {
                 let [x, gy, _, _] = bars_rect(self.canvas, top);
-                draw_glyph(&WIFI_GLYPH, x, gy, ink, |c| c - b'0' <= bars, out);
+                push(out, icons.bars[bars.min(3) as usize][lit as usize], x, gy);
                 end = x;
             }
-            if line.lock {
+            if let (true, Some(icons)) = (line.lock, self.icons) {
                 let [x, gy, _, _] = lock_rect(self.canvas, top);
-                draw_glyph(&LOCK_GLYPH, x, gy, ink, |_| true, out);
+                push(out, icons.lock[lit as usize], x, gy);
                 end = x;
             }
             if let Some(value) = line.value {

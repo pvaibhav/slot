@@ -174,6 +174,10 @@ impl Hud {
         self.toasts = toasts;
     }
 
+    pub fn toast_tex(&self, toast: Toast) -> Option<TexId> {
+        self.toasts.get(toast.index()).copied()
+    }
+
     pub fn toast(&mut self, toast: Toast, now: Millis) {
         self.said = Some((toast, now));
     }

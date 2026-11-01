@@ -3,6 +3,7 @@ use crate::wifi::{Phase, Saved, Scanned, Snapshot, State};
 
 pub const OTHER_NETWORK: &str = "Other Network";
 pub const WIFI_OFF_MESSAGE: &str = "Turn on Wi-Fi to see networks";
+pub const SCANNING_MESSAGE: &str = "Scanning for networks";
 pub const PASSWORD_TITLE: &str = "Password";
 pub const NAME_TITLE: &str = "Network Name";
 pub const OPEN_HINT: &str = "Leave it empty for an open network";
@@ -66,7 +67,7 @@ pub fn list_rows(snap: &Snapshot, off: bool) -> Vec<NetRow> {
             rows.push(NetRow::Saved(s.clone()));
         }
     }
-    if off {
+    if off || snap.scan.is_none() {
         return rows;
     }
     rows.extend(nearby(snap).into_iter().map(NetRow::Nearby));
@@ -74,8 +75,37 @@ pub fn list_rows(snap: &Snapshot, off: bool) -> Vec<NetRow> {
     rows
 }
 
-pub fn selected(rows: &[NetRow], name: Option<&str>) -> usize {
-    rows.iter().position(|r| r.name() == name).unwrap_or(0)
+pub fn list_message(snap: &Snapshot, off: bool) -> Option<&'static str> {
+    match (off, snap.scan.is_none()) {
+        (true, _) => Some(WIFI_OFF_MESSAGE),
+        (false, true) => Some(SCANNING_MESSAGE),
+        (false, false) => None,
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NetPick {
+    Top,
+    Name(String),
+    Other,
+}
+
+impl NetPick {
+    pub fn of(row: &NetRow) -> NetPick {
+        match row.name() {
+            Some(n) => NetPick::Name(n.to_string()),
+            None => NetPick::Other,
+        }
+    }
+}
+
+pub fn selected(rows: &[NetRow], pick: &NetPick) -> usize {
+    let at = match pick {
+        NetPick::Top => return 0,
+        NetPick::Name(n) => rows.iter().position(|r| r.name() == Some(n)),
+        NetPick::Other => rows.iter().position(|r| *r == NetRow::Other),
+    };
+    at.unwrap_or(0)
 }
 
 fn in_progress(snap: &Snapshot, ssid: &str) -> Option<Phase> {
@@ -209,9 +239,4 @@ pub fn page_line(row: PageRow, snap: &Snapshot, ssid: &str, off: bool) -> Line {
         _ => None,
     };
     Line::plain(row.label(), value)
-}
-
-pub fn has_network_blocks(conf: &str) -> bool {
-    conf.lines()
-        .any(|l| l.trim_start().starts_with("network={"))
 }

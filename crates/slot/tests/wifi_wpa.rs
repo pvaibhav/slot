@@ -241,9 +241,9 @@ fn phases_follow_wpa_state() {
         Phase::Connected
     );
     assert!(a.done());
-    assert_eq!(Phase::GettingIp.label(), "Getting IP...");
-    assert_eq!(Phase::Authenticating.label(), "Authenticating...");
-    assert_eq!(Phase::Connecting.label(), "Connecting...");
+    assert_eq!(Phase::GettingIp.label(), "Getting IP");
+    assert_eq!(Phase::Authenticating.label(), "Authenticating");
+    assert_eq!(Phase::Connecting.label(), "Connecting");
     assert_eq!(Phase::Connected.label(), "Connected");
 }
 

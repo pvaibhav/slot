@@ -35,9 +35,9 @@ pub enum Phase {
 impl Phase {
     pub fn label(&self) -> &'static str {
         match self {
-            Phase::Connecting => "Connecting...",
-            Phase::Authenticating => "Authenticating...",
-            Phase::GettingIp => "Getting IP...",
+            Phase::Connecting => "Connecting",
+            Phase::Authenticating => "Authenticating",
+            Phase::GettingIp => "Getting IP",
             Phase::Connected => "Connected",
             Phase::Failed(f) => f.label(),
         }

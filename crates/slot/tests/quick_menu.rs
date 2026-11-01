@@ -607,7 +607,7 @@ fn network_sits_between_controls_and_about() {
     let at = |row| QuickRow::MAIN.iter().position(|r| *r == row);
     assert_eq!(at(QuickRow::Network), at(QuickRow::Controls).map(|i| i + 1));
     assert_eq!(at(QuickRow::About), at(QuickRow::Network).map(|i| i + 1));
-    assert_eq!(QuickRow::Network.label(), "Network");
+    assert_eq!(QuickRow::Network.label(), "Wireless");
     let (_d, mut a, _) = on_carousel();
     open_at(&mut a, QuickRow::Network);
     press(&mut a, Btn::A);
@@ -632,7 +632,7 @@ fn fetch_missing_art_moved_to_network() {
         QuickRow::NETWORK.map(QuickRow::label),
         [
             "Wi-Fi",
-            "Networks",
+            "Network",
             "Gamebit",
             "Check for Updates",
             "Fetch Missing Art"
@@ -640,7 +640,8 @@ fn fetch_missing_art_moved_to_network() {
     );
     assert!(!QuickRow::GENERAL.contains(&QuickRow::FetchArt));
     assert_eq!(QuickRow::FetchArt.parent(), Some(QuickRow::Network));
-    let (_d, a, _) = on_carousel();
+    let (_d, mut a, _) = on_carousel();
+    common::connect(&mut a);
     for row in QuickRow::NETWORK {
         assert!(!a.hidden_rows().contains(&row), "{row:?} is hidden");
     }
@@ -716,19 +717,11 @@ fn the_networks_row_says_off_or_not_connected() {
 }
 
 #[test]
-fn fetch_missing_art_with_no_network_says_so() {
-    let (d, mut a, _) = on_carousel();
+fn fetch_missing_art_waits_for_a_connection() {
+    let (_d, mut a, _) = on_carousel();
+    assert!(a.hidden_rows().contains(&QuickRow::FetchArt));
+    common::connect(&mut a);
     open_at(&mut a, QuickRow::FetchArt);
-    press(&mut a, Btn::A);
-    assert!(a.fetch_art().is_none(), "fetch opened with no network");
-    assert_eq!(
-        a.update_text(),
-        Some(("No network".into(), "Join a network in Networks.".into()))
-    );
-    press(&mut a, Btn::B);
-    assert_eq!(a.update_text(), None);
-    assert_eq!(a.quick_menu(), Some(QuickRow::FetchArt));
-    std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
     press(&mut a, Btn::A);
     assert!(a.fetch_art().is_some(), "fetch did not open");
 }

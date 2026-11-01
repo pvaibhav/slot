@@ -39,40 +39,22 @@ pub fn draw_footer(
     printed(canvas.w - FOOTER_MARGIN - clock.w as f32, clock, out);
 }
 
-pub(crate) const WIFI_GLYPH: [&str; 10] = [
-    "....3333333....",
-    "..333.....333..",
-    ".33.........33.",
-    "33...22222...33",
-    "...222...222...",
-    "..22.......22..",
-    "......111......",
-    ".....11.11.....",
-    "......111......",
-    ".......1.......",
-];
-pub(crate) const WIFI_DIM: f32 = 0.3;
 const WIFI_GAP: f32 = 12.0;
 
-pub fn draw_wifi_icon(percent: Printed, ink: [u8; 3], bars: u8, out: &mut Vec<Draw>) {
+pub fn draw_wifi_icon(percent: Printed, face: Option<(TexId, u32, u32)>, out: &mut Vec<Draw>) {
+    let Some((tex, w, h)) = face else {
+        return;
+    };
     let x = FOOTER_MARGIN + GAUGE_ROW_W + percent.w as f32 + WIFI_GAP;
-    let top = FOOTER_Y + (HINT_H as f32 - WIFI_GLYPH.len() as f32) / 2.0;
-    let colour = ink.map(|c| c as f32 / 255.0);
-    let [r, g, b] = colour;
-    for (row, line) in WIFI_GLYPH.iter().enumerate() {
-        for (col, cell) in line.bytes().enumerate() {
-            if cell != b'.' {
-                let alpha = if cell - b'0' <= bars { 1.0 } else { WIFI_DIM };
-                out.push(Draw::Rect {
-                    x: x + col as f32,
-                    y: top + row as f32,
-                    w: 1.0,
-                    h: 1.0,
-                    colour: [r, g, b, alpha],
-                });
-            }
-        }
-    }
+    let y = FOOTER_Y + (HINT_H as f32 - h as f32) / 2.0;
+    out.push(Draw::Tex {
+        x: x.round(),
+        y: y.round(),
+        w: w as f32,
+        h: h as f32,
+        tex,
+        alpha: 1.0,
+    });
 }
 
 pub fn draw_corners(

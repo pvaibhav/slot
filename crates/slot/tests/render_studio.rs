@@ -93,6 +93,7 @@ fn the_full_menu_renders_with_wifi() {
         return;
     };
     std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
+    common::connect(f.app_mut());
     f.set_art_jobs(slot::art::jobs::no_art_jobs());
     f.app_mut().apply(Action::SelectTap);
     let img = frame(&mut f, &mut c, "list-wifi");
@@ -174,6 +175,7 @@ fn the_printer_waits_with_blank_paper() {
         return;
     };
     std::fs::write(_d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
+    common::connect(f.app_mut());
     f.set_art_jobs(slot::art::jobs::no_art_jobs());
     f.app_mut().apply(Action::SelectTap);
     assert!(f.app().studio().unwrap().row().is_some());
@@ -226,6 +228,7 @@ mod apply {
             return;
         };
         std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
+        common::connect(f.app_mut());
         let art = Fake::default();
         f.set_art_jobs(Box::new(art.clone()));
         let (real, logo) = (d.path().join("real.png"), d.path().join("logo.png"));
@@ -271,11 +274,58 @@ mod apply {
         assert!(matches!(studio.screen, Screen::Sheet { .. }));
     }
 
+    #[test]
+    fn a_cart_wearing_its_only_art_prints_the_text_sticker() {
+        let Some(surface) = HeadlessSurface::new().ok() else {
+            return;
+        };
+        let Ok(mut c) = Compositor::new(&surface) else {
+            return;
+        };
+        let d = tmp_root_with_gb_carts(&["Kirby", "Tetris"]);
+        clocked(d.path());
+        std::fs::create_dir_all(d.path().join("Labels/GB")).unwrap();
+        label(&d.path().join("Labels/GB/Kirby.png"), [40, 60, 200]);
+        std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
+        let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+        common::connect(f.app_mut());
+        let art = Fake::default();
+        f.set_art_jobs(Box::new(art.clone()));
+        f.app_mut().apply(Action::SelectTap);
+        let stem = f.app().studio().unwrap().cart.stem.clone();
+        assert!(f.app().studio().unwrap().cart.label.is_some());
+        art.0.lock().unwrap().push_back(ArtEvent::StudioArt(StudioArt {
+            stem,
+            duplicates: true,
+            ..StudioArt::default()
+        }));
+        press(&mut f, Btn::A);
+        for _ in 0..400 {
+            let now = f.app().now();
+            f.app_mut().tick_ms(now + 40);
+            f.compose(&mut c);
+            if f.app().studio_slip_count() == 1 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(f.app().studio().unwrap().sheet, vec![LabelKind::Title]);
+        for _ in 0..80 {
+            let now = f.app().now();
+            f.app_mut().tick_ms(now + 40);
+            f.compose(&mut c);
+        }
+        let img = frame(&mut f, &mut c, "text-sticker");
+        assert_eq!(f.app().studio_slip_count(), 1);
+        assert!(lit(&img, 370..700, 24..200) > 1000, "no sticker came out of the printer");
+    }
+
     fn apply_run(bottom: bool) {
         let Some((d, mut f, mut c, _s)) = setup() else {
             return;
         };
         std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
+        common::connect(f.app_mut());
         let art = Fake::default();
         f.set_art_jobs(Box::new(art.clone()));
         let (real, logo) = (d.path().join("real.png"), d.path().join("logo.png"));

@@ -4,11 +4,11 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use common::{app_booting_at, tmp_root_with_carts, CLOCK_IS_SET};
 use slot::app::{App, KeyboardFor, Phase};
-use slot::networks::Line;
+use slot::networks::{Line, NetPick};
 use slot::wifi::{Cmd, Fake, Wifi};
 use slot_input::{Action, Btn};
 use slot_store::{write_slot_state, SlotState};
-use slot_ui::QuickRow;
+use slot_ui::{QuickRow, Toast};
 use tempfile::TempDir;
 
 static SERIAL: Mutex<()> = Mutex::new(());
@@ -232,6 +232,28 @@ fn the_selection_stays_on_its_name_across_a_rescan() {
 }
 
 #[test]
+fn the_list_starts_at_the_top_once_the_scan_lands() {
+    let _g = serial();
+    let (_d, mut a, _log) = booted(Fake::demo());
+    open_networks(&mut a);
+    assert_eq!(labels(&a).last().unwrap(), "Other Network");
+    assert_eq!(a.network_screen().unwrap().selected, 0);
+    assert_eq!(selected_label(&a), "Home");
+}
+
+#[test]
+fn other_network_keeps_the_pointer_across_a_rescan() {
+    let _g = serial();
+    let (_d, mut a, _log) = booted(Fake::demo());
+    open_networks(&mut a);
+    select(&mut a, "Other Network");
+    for _ in 0..4 {
+        settle(&mut a);
+    }
+    assert_eq!(selected_label(&a), "Other Network");
+}
+
+#[test]
 fn a_secured_network_asks_for_a_password_then_lands_on_its_page() {
     let _g = serial();
     let (_d, mut a, log) = booted(Fake::demo());
@@ -286,7 +308,7 @@ fn a_saved_network_opens_its_page() {
     assert!(a.keyboard().is_none());
     assert!(matches!(a.phase(), Phase::NetworkPage { ssid, .. } if ssid == "Home"));
     press(&mut a, Btn::B);
-    assert!(matches!(a.phase(), Phase::Networks { name: Some(n) } if n == "Home"));
+    assert!(matches!(a.phase(), Phase::Networks { pick: NetPick::Name(n) } if n == "Home"));
     assert_eq!(
         log.lock()
             .unwrap()
@@ -314,7 +336,22 @@ fn cancel_on_the_keyboard_saves_nothing() {
 }
 
 #[test]
-fn a_short_password_keeps_the_text_and_says_why() {
+fn a_password_over_63_characters_is_invalid() {
+    let _g = serial();
+    let (_d, mut a, _log) = booted(Fake::demo());
+    open_networks(&mut a);
+    select(&mut a, "Home");
+    press(&mut a, Btn::A);
+    type_text(&mut a, &"a".repeat(64));
+    press(&mut a, Btn::Start);
+    assert_eq!(
+        a.update_text(),
+        Some(("Invalid Password".to_string(), String::new()))
+    );
+}
+
+#[test]
+fn a_short_password_keeps_the_text_and_says_it_is_invalid() {
     let _g = serial();
     let (_d, mut a, log) = booted(Fake::demo());
     open_networks(&mut a);
@@ -323,8 +360,8 @@ fn a_short_password_keeps_the_text_and_says_why() {
     type_text(&mut a, "abc");
     press(&mut a, Btn::Start);
     assert_eq!(
-        a.update_text().map(|t| t.0),
-        Some("Passwords are 8 to 63 characters".to_string())
+        a.update_text(),
+        Some(("Invalid Password".to_string(), String::new()))
     );
     press(&mut a, Btn::B);
     assert_eq!(a.update_text(), None);
@@ -486,6 +523,8 @@ fn forget_asks_first() {
     press(&mut a, Btn::A);
     press(&mut a, Btn::A);
     assert_eq!(a.forget_prompt(), None);
+    assert_eq!(a.toast(), Some(Toast::Forgotten));
+    assert_eq!(a.forgotten_network(), Some("Home"));
     settle(&mut a);
     assert!(logged(&log, "forget 0"));
     assert!(
@@ -564,15 +603,7 @@ fn disconnect_is_hidden_when_wifi_is_off() {
     assert_eq!(screen.message, Some("Turn on Wi-Fi to see networks"));
     press(&mut a, Btn::A);
     assert!(matches!(a.phase(), Phase::NetworkPage { .. }));
-    assert_eq!(
-        labels(&a),
-        [
-            "Status",
-            "IP Address",
-            "Auto-Join",
-            "Forget"
-        ]
-    );
+    assert_eq!(labels(&a), ["Status", "IP Address", "Auto-Join", "Forget"]);
     assert_eq!(lines(&a)[0].value.as_deref(), Some("Wi-Fi Off"));
     assert!(!a.wifi().held);
 }
@@ -680,4 +711,51 @@ fn forgetting_the_only_network_releases_the_radio_on_the_shelf() {
     settle(&mut a);
     settle(&mut a);
     assert!(!a.wifi().held);
+}
+
+const TOOLS: [QuickRow; 3] = [QuickRow::Server, QuickRow::CheckUpdates, QuickRow::FetchArt];
+
+#[test]
+fn the_network_tools_show_only_while_connected() {
+    let _g = serial();
+    let (_d, mut a, _log) = booted(Fake::demo());
+    assert!(!a.wifi_up());
+    let hidden = a.hidden_rows();
+    assert!(TOOLS.iter().all(|r| hidden.contains(r)), "{hidden:?}");
+    assert!(!hidden.contains(&QuickRow::Networks));
+    join(&mut a, "CoffeeShop Guest", "");
+    assert!(a.wifi_up());
+    let hidden = a.hidden_rows();
+    assert!(TOOLS.iter().all(|r| !hidden.contains(r)), "{hidden:?}");
+}
+
+#[test]
+fn losing_the_connection_moves_the_pointer_off_a_tool() {
+    let _g = serial();
+    let (_d, mut a, _log) = booted(Fake::demo());
+    join(&mut a, "CoffeeShop Guest", "");
+    a.apply(Action::QuickMenu);
+    for _ in 0..12 {
+        if a.quick_menu() == Some(QuickRow::Network) {
+            break;
+        }
+        press(&mut a, Btn::Down);
+    }
+    press(&mut a, Btn::A);
+    for _ in 0..6 {
+        if a.quick_menu() == Some(QuickRow::FetchArt) {
+            break;
+        }
+        press(&mut a, Btn::Down);
+    }
+    assert_eq!(
+        a.quick_menu(),
+        Some(QuickRow::FetchArt),
+        "{:?}",
+        a.hidden_rows()
+    );
+    a.wifi_send(Cmd::Disconnect);
+    settle(&mut a);
+    assert!(!a.wifi_up());
+    assert_eq!(a.quick_menu(), Some(QuickRow::Networks));
 }

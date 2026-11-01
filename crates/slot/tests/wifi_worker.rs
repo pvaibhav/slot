@@ -354,3 +354,56 @@ fn a_wrong_password_is_not_retried_after_a_release() {
         Some(("Home".to_string(), Failure::WrongPassword))
     );
 }
+
+#[test]
+fn auto_join_flips_the_moment_it_is_sent() {
+    let _g = serial();
+    let mut w = Wifi::spawn(Box::new(home()));
+    w.send(Cmd::Hold);
+    w.send(join("Home", "password"));
+    let t = Instant::now();
+    while (w.busy() || w.snapshot().saved.is_empty()) && t.elapsed() < Duration::from_secs(5) {
+        w.poll(Instant::now());
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let id = id_of(&w, "Home");
+    let auto = |w: &Wifi| {
+        w.snapshot()
+            .saved
+            .iter()
+            .find(|n| n.id == id)
+            .unwrap()
+            .auto_join
+    };
+    assert!(auto(&w));
+    w.send(Cmd::AutoJoin { id, on: false });
+    assert!(!auto(&w), "Off waits for the worker");
+    w.poll(Instant::now());
+    assert!(!auto(&w), "a report sent before the command undid it");
+    w.send(Cmd::AutoJoin { id, on: true });
+    assert!(auto(&w), "On waits for the worker");
+    let t = Instant::now();
+    while w.busy() && t.elapsed() < Duration::from_secs(5) {
+        w.poll(Instant::now());
+        assert!(auto(&w), "it flickered back while the worker caught up");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(auto(&w));
+    w.send(Cmd::Release);
+}
+
+#[test]
+fn the_mac_fake_joins_its_saved_network_when_held() {
+    let _g = serial();
+    let mut w = Wifi::inline(Box::new(Fake::joined()));
+    let t = Instant::now();
+    w.send(Cmd::Hold);
+    settle(&mut w, t, 0, 3);
+    let snap = w.snapshot();
+    assert_eq!(snap.status.state, slot::wifi::State::Completed);
+    assert_eq!(snap.status.ssid.as_deref(), Some("Home"));
+    assert!(snap.status.ip.is_some());
+    assert!(snap.saved.iter().any(|n| n.ssid == "Home" && n.auto_join));
+    w.send(Cmd::Release);
+    w.poll(secs(t, 4));
+}
