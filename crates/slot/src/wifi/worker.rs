@@ -61,6 +61,7 @@ struct Core {
     backend: Box<dyn Backend>,
     snap: Snapshot,
     attempt: Option<Attempt>,
+    joining: Option<u32>,
     scans: bool,
     next_scan: Option<Instant>,
     next_status: Option<Instant>,
@@ -78,6 +79,7 @@ impl Core {
                 ..Snapshot::default()
             },
             attempt: None,
+            joining: None,
             scans: false,
             next_scan: None,
             next_status: None,
@@ -167,6 +169,7 @@ impl Core {
                     }
                     self.intent = Intent::Manual(ssid);
                     self.connect(id, now);
+                    self.joining = Some(id);
                 }
             }
             Cmd::Connect(id) => {
@@ -257,6 +260,24 @@ impl Core {
         self.next_status = Some(now);
     }
 
+    fn settle_join(&mut self, id: u32, ssid: &str, phase: Phase) {
+        let doomed: Vec<u32> = match phase {
+            Phase::Failed(Failure::WrongPassword) => vec![id],
+            Phase::Connected => self
+                .snap
+                .saved
+                .iter()
+                .filter(|n| n.ssid == ssid && n.id != id)
+                .map(|n| n.id)
+                .collect(),
+            _ => Vec::new(),
+        };
+        for id in doomed {
+            self.backend.forget(id);
+        }
+        self.snap.saved = self.backend.saved();
+    }
+
     fn end_attempt(&mut self) {
         if self.attempt.take().is_some() {
             self.backend.finish_connect();
@@ -289,7 +310,11 @@ impl Core {
                     }
                 }
                 if a.done() {
+                    let (id, ssid) = (a.id, a.ssid.clone());
                     self.end_attempt();
+                    if self.joining.take() == Some(id) {
+                        self.settle_join(id, &ssid, phase);
+                    }
                 }
             }
             self.next_status = Some(now + self.status_gap());

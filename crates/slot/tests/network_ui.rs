@@ -4,8 +4,10 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use common::{app_booting_at, tmp_root_with_carts, CLOCK_IS_SET};
 use slot::app::{App, KeyboardFor, Phase};
-use slot::networks::{Line, NetPick, OTHER_NETWORK, SCANNING_MESSAGE, SCAN_NETWORKS};
-use slot::wifi::{Cmd, Fake, Wifi};
+use slot::networks::{
+    Line, NetPick, ENTER_PASSWORD, OTHER_NETWORK, SCANNING_MESSAGE, SCAN_NETWORKS,
+};
+use slot::wifi::{Backend, Cmd, Fake, Wifi};
 use slot_input::{Action, Btn};
 use slot_store::{write_slot_state, SlotState};
 use slot_ui::{QuickRow, Toast};
@@ -461,13 +463,8 @@ fn the_network_page_shows_status_and_ip() {
 fn a_wrong_password_shows_on_status() {
     let _g = serial();
     let (_d, mut a, _log) = booted(Fake::demo());
-    open_networks(&mut a);
-    join(&mut a, "Home", "wrongpass");
-    select(&mut a, "Home");
-    press(&mut a, Btn::A);
-    for _ in 0..8 {
-        settle(&mut a);
-    }
+    open_scan(&mut a);
+    enter(&mut a, "wrongpass");
     assert_eq!(lines(&a)[0].value.as_deref(), Some("Wrong Password"));
 }
 
@@ -571,9 +568,11 @@ fn closing_the_lid_drops_the_forget_prompt() {
 #[test]
 fn a_name_saved_twice_lists_once_and_forgets_both() {
     let _g = serial();
-    let (_d, mut a, _log) = booted(Fake::demo());
-    join(&mut a, "Home", "password");
-    join(&mut a, "Home", "password");
+    let mut fake = Fake::demo();
+    fake.add("Home", "password", false);
+    fake.add("Home", "password", false);
+    let (_d, mut a, _log) = booted(fake);
+    settle(&mut a);
     assert_eq!(a.wifi().saved.len(), 2);
     open_networks(&mut a);
     assert_eq!(labels(&a).iter().filter(|l| *l == "Home").count(), 1);
@@ -865,4 +864,100 @@ fn wifi_off_has_no_scan_row() {
     open_networks(&mut a);
     a.set_wifi_off(true);
     assert_eq!(labels(&a), vec!["Home"]);
+}
+
+fn page_labels(a: &App) -> Vec<String> {
+    labels(a)
+}
+
+fn wait_failed(a: &mut App) {
+    for _ in 0..8 {
+        settle(a);
+    }
+}
+
+fn enter(a: &mut App, password: &str) {
+    select(a, "Home");
+    press(a, Btn::A);
+    type_text(a, password);
+    press(a, Btn::Start);
+    assert!(a.keyboard().is_none());
+    wait_failed(a);
+}
+
+fn retype(a: &mut App, password: &str) {
+    select(a, ENTER_PASSWORD);
+    press(a, Btn::A);
+    assert!(a.keyboard().is_some());
+    type_text(a, password);
+    press(a, Btn::Start);
+    assert!(a.keyboard().is_none());
+    wait_failed(a);
+}
+
+#[test]
+fn a_new_network_with_a_wrong_password_is_not_saved() {
+    let _g = serial();
+    let (_d, mut a, log) = booted(Fake::demo());
+    open_scan(&mut a);
+    enter(&mut a, "wrongpass");
+    assert!(a.wifi().saved.is_empty(), "{:?}", a.wifi().saved);
+    assert!(logged(&log, "forget 0"), "{log:?}");
+    let rows = page_labels(&a);
+    assert!(rows.iter().any(|r| r == ENTER_PASSWORD), "{rows:?}");
+    assert!(!rows.iter().any(|r| r == "Forget"), "{rows:?}");
+    assert!(!rows.iter().any(|r| r == "Auto-Join"), "{rows:?}");
+    assert_eq!(lines(&a)[0].value.as_deref(), Some("Wrong Password"));
+}
+
+#[test]
+fn entering_the_right_password_joins_and_saves_once() {
+    let _g = serial();
+    let (_d, mut a, _log) = booted(Fake::demo());
+    open_scan(&mut a);
+    enter(&mut a, "wrongpass");
+    retype(&mut a, "password");
+    assert_eq!(a.wifi().saved.len(), 1);
+    assert_eq!(lines(&a)[0].value.as_deref(), Some("Connected"));
+    assert!(page_labels(&a).iter().any(|r| r == "Forget"));
+}
+
+fn with_old_password() -> (TempDir, App, Log) {
+    let mut fake = Fake::demo();
+    let id = fake.add("Home", "oldpassword", false).unwrap();
+    let (d, mut a, log) = booted(fake);
+    a.wifi_send(Cmd::Connect(id));
+    open_networks(&mut a);
+    select(&mut a, "Home");
+    press(&mut a, Btn::A);
+    wait_failed(&mut a);
+    (d, a, log)
+}
+
+#[test]
+fn a_saved_network_that_rejects_its_password_stays_saved() {
+    let _g = serial();
+    let (_d, a, _log) = with_old_password();
+    assert_eq!(a.wifi().saved.len(), 1);
+    let rows = page_labels(&a);
+    assert!(rows.iter().any(|r| r == ENTER_PASSWORD), "{rows:?}");
+    assert!(rows.iter().any(|r| r == "Forget"), "{rows:?}");
+}
+
+#[test]
+fn a_new_password_replaces_the_old_one() {
+    let _g = serial();
+    let (_d, mut a, _log) = with_old_password();
+    retype(&mut a, "password");
+    assert_eq!(a.wifi().saved.len(), 1);
+    assert_eq!(lines(&a)[0].value.as_deref(), Some("Connected"));
+}
+
+#[test]
+fn a_second_wrong_password_keeps_the_saved_network() {
+    let _g = serial();
+    let (_d, mut a, _log) = with_old_password();
+    retype(&mut a, "stillwrong");
+    assert_eq!(a.wifi().saved.len(), 1);
+    assert_eq!(lines(&a)[0].value.as_deref(), Some("Wrong Password"));
 }

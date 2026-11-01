@@ -1,7 +1,8 @@
 use crate::update::signal_bars;
-use crate::wifi::{Phase, Saved, Scanned, Snapshot, State};
+use crate::wifi::{Failure, Phase, Saved, Scanned, Snapshot, State};
 
 pub const OTHER_NETWORK: &str = "Other Network";
+pub const ENTER_PASSWORD: &str = "Enter Password";
 pub const SCAN_NETWORKS: &str = "Scan for Networks";
 pub const WIFI_OFF_MESSAGE: &str = "Turn on Wi-Fi to see networks";
 pub const SCANNING_MESSAGE: &str = "Scanning for networks";
@@ -182,6 +183,7 @@ pub enum PageRow {
     Ip,
     Connect,
     Disconnect,
+    Password,
     AutoJoin,
     Forget,
 }
@@ -193,6 +195,7 @@ impl PageRow {
             PageRow::Ip => "IP Address",
             PageRow::Connect => "Connect",
             PageRow::Disconnect => "Disconnect",
+            PageRow::Password => ENTER_PASSWORD,
             PageRow::AutoJoin => "Auto-Join",
             PageRow::Forget => "Forget",
         }
@@ -201,13 +204,20 @@ impl PageRow {
 
 pub fn page_rows(snap: &Snapshot, ssid: &str, off: bool) -> Vec<PageRow> {
     let mut rows = vec![PageRow::Status, PageRow::Ip];
-    if !off {
+    let saved = snap.saved.iter().any(|s| s.ssid == ssid);
+    let rejected = matches!(&snap.failure, Some((s, Failure::WrongPassword)) if s == ssid);
+    if !off && saved {
         rows.push(match active(snap, ssid) {
             true => PageRow::Disconnect,
             false => PageRow::Connect,
         });
     }
-    rows.extend([PageRow::AutoJoin, PageRow::Forget]);
+    if !off && rejected {
+        rows.push(PageRow::Password);
+    }
+    if saved {
+        rows.extend([PageRow::AutoJoin, PageRow::Forget]);
+    }
     rows
 }
 

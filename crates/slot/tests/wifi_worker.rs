@@ -234,8 +234,7 @@ fn a_failure_stays_until_the_next_attempt() {
     w.send(Cmd::Hold);
     w.poll(secs(t, 7));
     assert_eq!(w.snapshot().failure, want);
-    let home = id_of(&w, "Home");
-    w.send(Cmd::Connect(home));
+    w.send(join("Home", "password"));
     w.poll(secs(t, 8));
     assert_eq!(w.snapshot().failure, None);
 }

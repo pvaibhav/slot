@@ -617,6 +617,7 @@ pub struct App {
     wifi_wanted_at: Option<Millis>,
     wifi: Option<(crate::wifi::Wifi, std::time::Instant, Millis)>,
     net_time: crate::net_time::NetTime,
+    joined_hidden: Option<(String, bool)>,
     wifi_bars: u8,
     wifi_faces: Option<[[slot_ui::NetFace; 4]; 2]>,
     wifi_sampled: Millis,
@@ -785,6 +786,7 @@ impl App {
             wifi_wanted_at: None,
             wifi: None,
             net_time: crate::net_time::NetTime::new(std::sync::Arc::new(crate::sntp::fetch)),
+            joined_hidden: None,
             wifi_bars: 3,
             wifi_faces: None,
             wifi_sampled: 0,
@@ -8176,6 +8178,7 @@ impl App {
     }
 
     fn join_network(&mut self, ssid: String, password: String, hidden: bool) {
+        self.joined_hidden = Some((ssid.clone(), hidden));
         self.wifi_send(crate::wifi::Cmd::Join {
             ssid: ssid.clone(),
             password,
@@ -8249,10 +8252,21 @@ impl App {
                 return;
             }
             Action::GbaDown(Btn::A | Btn::Left | Btn::Right) => {
+                let a = action == Action::GbaDown(Btn::A);
+                if a && rows[at] == PageRow::Password {
+                    let hidden = self
+                        .joined_hidden
+                        .as_ref()
+                        .is_some_and(|(s, hidden)| *s == ssid && *hidden);
+                    let task = KeyboardFor::Password {
+                        ssid: ssid.clone(),
+                        hidden,
+                    };
+                    return self.open_keyboard(crate::networks::PASSWORD_TITLE, Some(&ssid), task);
+                }
                 let Some(saved) = saved else {
                     return;
                 };
-                let a = action == Action::GbaDown(Btn::A);
                 match rows[at] {
                     PageRow::AutoJoin => self.wifi_send(Cmd::AutoJoin {
                         id: saved.id,
@@ -8371,6 +8385,7 @@ impl App {
                 let rows = page_rows(snap, ssid, off);
                 match rows[(*row).min(rows.len() - 1)] {
                     PageRow::Status | PageRow::Ip => None,
+                    PageRow::Password => Some("Open"),
                     PageRow::Connect => Some("Connect"),
                     PageRow::Disconnect => Some("Disconnect"),
                     PageRow::AutoJoin => Some("Change"),
