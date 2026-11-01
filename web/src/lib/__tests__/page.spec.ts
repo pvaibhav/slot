@@ -7,6 +7,7 @@ import { pinFromSearch, normalizePin, pinComplete, PIN_LENGTH } from '@/lib/pin'
 import { saveWarning } from '@/lib/saveWarning'
 import { groupStates, stampLabel } from '@/lib/states'
 
+const storage = { setItem: () => {}, removeItem: () => {}, getItem: () => null }
 const src = (...parts: string[]) => readFileSync(resolve(__dirname, '../..', ...parts), 'utf8')
 
 describe('platforms', () => {
@@ -88,6 +89,48 @@ describe('carts', () => {
     expect(view).toContain('game.value?.cartUrl')
     expect(view).not.toContain('gameArtBlob')
     expect(view.match(/await reloadRow\(\)/g)).toHaveLength(3)
+  })
+
+  it('sends a stale PIN to login when the page checks its session', async () => {
+    vi.stubGlobal('localStorage', storage)
+    const out = vi.fn()
+    client.setUnauthorizedHandler(out)
+    client.setCredentials('1234')
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 401 })))
+    await client.checkSession()
+    vi.unstubAllGlobals()
+    expect(out).toHaveBeenCalledOnce()
+    expect(client.isAuthenticated()).toBe(false)
+  })
+
+  it('stays put when a session check cannot reach the device', async () => {
+    vi.stubGlobal('localStorage', storage)
+    const lost = vi.fn()
+    client.setConnectionErrorHandler(lost)
+    client.setCredentials('1234')
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')))
+    await client.checkSession()
+    expect(lost).not.toHaveBeenCalled()
+    expect(client.isAuthenticated()).toBe(true)
+    client.clearCredentials()
+    vi.unstubAllGlobals()
+  })
+
+  it('does not check a session before login', async () => {
+    vi.stubGlobal('localStorage', storage)
+    client.clearCredentials()
+    const send = vi.fn()
+    vi.stubGlobal('fetch', send)
+    await client.checkSession()
+    vi.unstubAllGlobals()
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('checks the session when the page comes back', () => {
+    const app = src('App.vue')
+    expect(app).toContain("'visibilitychange'")
+    expect(app).toContain("'focus'")
+    expect(app).toContain('checkSession')
   })
 
   it('keeps a failed image fetch away from the connection handler', async () => {

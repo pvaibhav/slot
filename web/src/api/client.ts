@@ -74,6 +74,19 @@ async function request(path: string, init?: RequestInit, quiet = false): Promise
   return res
 }
 
+let checkingSession = false
+
+export async function checkSession(): Promise<void> {
+  if (!authenticated.value || checkingSession) return
+  checkingSession = true
+  try {
+    await request('/api/tags', undefined, true)
+  } catch {
+  } finally {
+    checkingSession = false
+  }
+}
+
 export async function getTags(): Promise<string[]> {
   const res = await request('/api/tags')
   if (!res.ok) throw new Error(`getTags ${res.status}`)
