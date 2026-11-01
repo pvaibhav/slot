@@ -260,6 +260,8 @@ fn a_card_from_before_the_settings_keeps_all_its_values() {
             show_titles: false,
             left_stick_dpad: true,
             lid_off_min: None,
+            wifi_off: false,
+            network_time: false,
             bezel_gba: BezelPick::Ags102,
             bezel_gb: BezelPick::Ags102,
             bezel_gbc: BezelPick::Ags102,

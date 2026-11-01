@@ -507,3 +507,48 @@ fn changing_only_the_city_moves_utc_by_exactly_the_change_in_offset() {
         );
     }
 }
+
+#[test]
+fn network_time_is_not_offered_without_a_network() {
+    let p = ClockPicker::new(1_700_000_000, Zone::default(), true);
+    assert_eq!(p.network_time(), None);
+    assert_eq!(p.rows(), &ClockRow::ALL[1..]);
+}
+
+#[test]
+fn network_time_sits_on_top_when_offered() {
+    let p = ClockPicker::new(1_700_000_000, Zone::default(), true).with_network_time(Some(false));
+    assert_eq!(p.rows(), &ClockRow::ALL);
+    assert_eq!(p.row(), ClockRow::NetworkTime);
+    assert_eq!(p.value_text(ClockRow::NetworkTime), "Off");
+}
+
+#[test]
+fn turning_network_time_on_hides_the_date_and_the_time() {
+    let mut p =
+        ClockPicker::new(1_700_000_000, Zone::default(), true).with_network_time(Some(false));
+    p.a();
+    assert_eq!(p.network_time(), Some(true));
+    assert_eq!(p.value_text(ClockRow::NetworkTime), "On");
+    assert_eq!(
+        p.rows(),
+        &[ClockRow::NetworkTime, ClockRow::Zone, ClockRow::Clock]
+    );
+    p.down();
+    assert_eq!(p.row(), ClockRow::Zone);
+}
+
+#[test]
+fn left_and_right_flip_network_time_too() {
+    let mut p =
+        ClockPicker::new(1_700_000_000, Zone::default(), true).with_network_time(Some(true));
+    p.right();
+    assert_eq!(p.network_time(), Some(false));
+    p.left();
+    assert_eq!(p.network_time(), Some(true));
+}
+
+#[test]
+fn the_network_row_is_called_set_automatically() {
+    assert_eq!(ClockRow::NetworkTime.label(), "Set Automatically");
+}

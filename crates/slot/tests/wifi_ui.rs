@@ -7,7 +7,7 @@ use slot::app::{App, Phase};
 use slot::update::{UpdateEvent, UpdateJob, UpdateJobs};
 use slot::wifi::{Backend, Cmd, Fake, Wifi};
 use slot_input::{Action, Btn};
-use slot_store::{write_slot_state, SlotState};
+use slot_store::{read_slot_state, write_slot_state, SlotState};
 use slot_ui::QuickRow;
 use std::collections::VecDeque;
 use tempfile::TempDir;
@@ -445,4 +445,107 @@ fn the_studio_offers_the_label_printer_only_while_connected() {
     a.tick_ms(a.now() + 1);
     let rows = a.studio().expect("no studio").rows();
     assert!(rows.contains(&slot::studio::Row::Label), "{rows:?}");
+}
+
+const NETWORK_NOW: i64 = 1_790_000_000;
+
+fn with_network_time(on: bool) -> (TempDir, App, common::Clock) {
+    let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
+    write_slot_state(
+        d.path(),
+        &SlotState {
+            clock_set: true,
+            network_time: on,
+            ..SlotState::default()
+        },
+    )
+    .unwrap();
+    std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
+    let (mut a, clock) = app_booting_at(d.path(), CLOCK_IS_SET);
+    a.set_net_time_source(Arc::new(|| Some(NETWORK_NOW)));
+    a.set_wifi(Wifi::inline(Box::new(Fake::joined())));
+    (d, a, clock)
+}
+
+fn open_clock(a: &mut App) {
+    a.apply(Action::QuickMenu);
+    for _ in 0..QuickRow::General.position(&[]) {
+        a.apply(Action::GbaDown(Btn::Down));
+    }
+    a.apply(Action::GbaDown(Btn::A));
+    for _ in 0..QuickRow::DateTime.position(&a.hidden_rows()) {
+        a.apply(Action::GbaDown(Btn::Down));
+    }
+    a.apply(Action::GbaDown(Btn::A));
+}
+
+fn wait_for_clock(a: &mut App, clock: &common::Clock) {
+    for _ in 0..200 {
+        settle(a);
+        if clock.get() == NETWORK_NOW {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+}
+
+#[test]
+fn network_time_sets_the_clock_once_online() {
+    let (_d, mut a, clock) = with_network_time(true);
+    wait_for_clock(&mut a, &clock);
+    assert_eq!(clock.get(), NETWORK_NOW);
+}
+
+#[test]
+fn network_time_left_off_never_touches_the_clock() {
+    let (_d, mut a, clock) = with_network_time(false);
+    for _ in 0..20 {
+        settle(&mut a);
+    }
+    assert!(a.wifi_up());
+    assert_eq!(clock.get(), CLOCK_IS_SET);
+}
+
+#[test]
+fn the_clock_screen_offers_network_time_with_a_saved_network() {
+    let (_d, mut a, _clock) = with_network_time(false);
+    settle(&mut a);
+    open_clock(&mut a);
+    assert_eq!(a.picker().and_then(|p| p.network_time()), Some(false));
+}
+
+#[test]
+fn the_clock_screen_keeps_quiet_without_a_saved_network() {
+    let (_d, mut a, _log) = booted(false, Fake::demo());
+    settle(&mut a);
+    open_clock(&mut a);
+    assert_eq!(a.picker().and_then(|p| p.network_time()), None);
+}
+
+#[test]
+fn confirming_network_time_saves_it_and_asks_at_once() {
+    let (d, mut a, clock) = with_network_time(false);
+    settle(&mut a);
+    open_clock(&mut a);
+    a.apply(Action::GbaDown(Btn::A));
+    a.confirm_clock();
+    assert!(read_slot_state(d.path()).network_time);
+    wait_for_clock(&mut a, &clock);
+    assert_eq!(clock.get(), NETWORK_NOW);
+}
+
+#[test]
+fn an_edit_left_behind_network_time_is_dropped() {
+    let (_d, mut a, clock) = with_network_time(false);
+    a.set_net_time_source(Arc::new(|| None));
+    settle(&mut a);
+    open_clock(&mut a);
+    a.apply(Action::GbaDown(Btn::Down));
+    a.apply(Action::GbaDown(Btn::A));
+    a.apply(Action::GbaDown(Btn::Up));
+    a.apply(Action::GbaDown(Btn::A));
+    a.apply(Action::GbaDown(Btn::Up));
+    a.apply(Action::GbaDown(Btn::A));
+    a.confirm_clock();
+    assert_eq!(clock.get(), CLOCK_IS_SET);
 }

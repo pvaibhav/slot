@@ -349,6 +349,7 @@ pub struct SlotState {
     pub clock_set: bool,
     pub zone: Zone,
     pub clock_24h: bool,
+    pub network_time: bool,
     pub rumble: bool,
     pub ff_speed: u8,
     pub ff_sound: bool,
@@ -518,6 +519,7 @@ impl Default for SlotState {
             clock_set: false,
             zone: Zone::default(),
             clock_24h: true,
+            network_time: false,
             rumble: true,
             ff_speed: FF_SPEED_DEFAULT,
             ff_sound: false,
@@ -608,7 +610,7 @@ fn write_list(root: &Path, name: &str, list: &[Recent]) -> std::io::Result<()> {
 
 pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
     let mut text = format!(
-        "cart={}\ncart_platform={}\nbrightness={}\nblue_light={}\nvolume={}\nvolume_hp={}\nmuted={}\nmuted_hp={}\nclock_set={}\nzone={}\nclock_24h={}\nrumble={}\nff_speed={}\nff_sound={}\ncolour_correction_gba={}\ncolour_correction_gb={}\nshader_gba={}\nshader_gb={}\neject_save={}\nturbo={}\nrewind={}\ngb_palettes={}\ngb_palette={}\nappearance={}\nwallpaper={}\n",
+        "cart={}\ncart_platform={}\nbrightness={}\nblue_light={}\nvolume={}\nvolume_hp={}\nmuted={}\nmuted_hp={}\nclock_set={}\nzone={}\nclock_24h={}\nnetwork_time={}\nrumble={}\nff_speed={}\nff_sound={}\ncolour_correction_gba={}\ncolour_correction_gb={}\nshader_gba={}\nshader_gb={}\neject_save={}\nturbo={}\nrewind={}\ngb_palettes={}\ngb_palette={}\nappearance={}\nwallpaper={}\n",
         s.cart.as_deref().unwrap_or(""),
         s.cart_platform.map_or(String::new(), platform_key),
         s.brightness,
@@ -620,6 +622,7 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
         s.clock_set as u8,
         s.zone.id(),
         s.clock_24h as u8,
+        s.network_time as u8,
         s.rumble as u8,
         ff_speed_text(s.ff_speed),
         s.ff_sound as u8,
@@ -693,6 +696,7 @@ fn parse(text: &str) -> Option<SlotState> {
     let mut utc_offset_min = None;
     let mut zone = None;
     let mut clock_24h = None;
+    let mut network_time = None;
     let mut rumble = None;
     let mut ff_speed = None;
     let mut ff_sound = None;
@@ -749,6 +753,7 @@ fn parse(text: &str) -> Option<SlotState> {
             "utc_offset_min" => utc_offset_min = Some(offset(value)?),
             "zone" => zone = Zone::parse(value),
             "clock_24h" => clock_24h = flag(value),
+            "network_time" => network_time = flag(value),
             "rumble" => rumble = flag(value),
             "ff_speed" => ff_speed = ff_speed_value(value),
             "ff_sound" => ff_sound = flag(value),
@@ -805,6 +810,7 @@ fn parse(text: &str) -> Option<SlotState> {
         clock_set: clock_set?,
         zone: zone.or_else(|| utc_offset_min.map(|m| Zone::for_offset(i64::from(m), now())))?,
         clock_24h: clock_24h.unwrap_or(fallback.clock_24h),
+        network_time: network_time.unwrap_or(fallback.network_time),
         rumble: rumble.unwrap_or(fallback.rumble),
         ff_speed: ff_speed.unwrap_or(fallback.ff_speed),
         ff_sound: ff_sound.unwrap_or(fallback.ff_sound),

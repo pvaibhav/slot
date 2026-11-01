@@ -149,6 +149,7 @@ const ALERT_HOLD: f32 = 0.45;
 const ALERT_GONE: f32 = 0.9;
 
 const CLOCK_FLOOR: i64 = 1_577_836_800;
+const CLOCK_DRIFT_SECS: i64 = 2;
 
 pub enum PendingUndo {
     Save {
@@ -610,6 +611,7 @@ pub struct App {
     studio_hex: Option<(String, crate::studio_view::Style)>,
     wifi_wanted_at: Option<Millis>,
     wifi: Option<(crate::wifi::Wifi, std::time::Instant, Millis)>,
+    net_time: crate::net_time::NetTime,
     wifi_bars: u8,
     wifi_faces: Option<[[slot_ui::NetFace; 4]; 2]>,
     wifi_sampled: Millis,
@@ -790,6 +792,7 @@ impl App {
             studio_hex: None,
             wifi_wanted_at: None,
             wifi: None,
+            net_time: crate::net_time::NetTime::new(std::sync::Arc::new(crate::sntp::fetch)),
             wifi_bars: 3,
             wifi_faces: None,
             wifi_sampled: 0,
@@ -1035,7 +1038,7 @@ impl App {
         if app.state.clock_set {
             app.start();
         } else {
-            app.phase = clock_screen(system_secs(), &app.state, false);
+            app.phase = clock_screen(system_secs(), &app.state, app.has_saved(), false);
         }
         app
     }
@@ -1293,18 +1296,19 @@ impl App {
         else {
             return;
         };
-        let (moved, zone, clock_24h, from_menu) = (
-            picker.secs() - *seed,
-            picker.zone(),
-            picker.clock_24h(),
-            *from_menu,
-        );
+        let network_time = picker.network_time();
+        let moved = match network_time {
+            Some(true) => 0,
+            _ => picker.secs() - *seed,
+        };
+        let (zone, clock_24h, from_menu) = (picker.zone(), picker.clock_24h(), *from_menu);
         let utc = self.utc_secs() + moved;
         if let Some(power) = &mut self.power {
             power.set_clock(utc);
         }
         self.state.zone = zone;
         self.state.clock_24h = clock_24h;
+        self.state.network_time = network_time.unwrap_or(self.state.network_time);
         self.state.clock_set = true;
         self.persist();
         if from_menu {
@@ -2895,7 +2899,7 @@ impl App {
         self.hud.set_headphones(self.headphones);
         let secs = power.now();
         if matches!(self.phase, Phase::SetClock { .. }) || secs < CLOCK_FLOOR {
-            self.phase = clock_screen(secs, &self.state, false);
+            self.phase = clock_screen(secs, &self.state, self.has_saved(), false);
         }
         self.copy_card_log(&power);
         if let Some(result) = power.take_repair_result() {
@@ -3580,7 +3584,7 @@ impl App {
     fn open_quick_row(&mut self, row: QuickRow) {
         match row {
             QuickRow::DateTime => {
-                self.phase = clock_screen(self.utc_secs(), &self.state, true);
+                self.phase = clock_screen(self.utc_secs(), &self.state, self.has_saved(), true);
             }
             QuickRow::About => self.phase = Phase::About,
             QuickRow::FetchArt => self.open_fetch_missing_art(),
@@ -4525,8 +4529,26 @@ impl App {
         self.timers();
     }
 
+    pub fn set_net_time_source(&mut self, source: crate::net_time::Source) {
+        self.net_time = crate::net_time::NetTime::new(source);
+    }
+
+    fn step_net_time(&mut self) {
+        let ready = self.state.network_time && self.wifi_up();
+        let now = self.now();
+        let Some(utc) = self.net_time.step(ready, now) else {
+            return;
+        };
+        if let Some(power) = &mut self.power {
+            if (utc - power.now()).abs() >= CLOCK_DRIFT_SECS {
+                power.set_clock_in_background(utc);
+            }
+        }
+    }
+
     fn timers(&mut self) {
         self.step_server();
+        self.step_net_time();
         self.take_art_events();
         self.take_update_events();
         self.play_hold();
@@ -5344,7 +5366,7 @@ impl App {
             (None, true, _) => vec![back, turn, done],
             (None, false, ClockRow::Date | ClockRow::Time) => vec![back, edit],
             (None, false, ClockRow::Zone) => vec![back, open],
-            (None, false, ClockRow::Clock) => vec![back, change],
+            (None, false, ClockRow::Clock | ClockRow::NetworkTime) => vec![back, change],
         };
         self.draw_spread_legends(&legends, LINK_LEGEND_Y, 1.0, out);
     }
@@ -10091,9 +10113,10 @@ fn ff_next(from: u8, right: bool) -> u8 {
     }]
 }
 
-fn clock_screen(utc: i64, state: &SlotState, from_menu: bool) -> Phase {
+fn clock_screen(utc: i64, state: &SlotState, networked: bool, from_menu: bool) -> Phase {
     Phase::SetClock {
-        picker: ClockPicker::new(utc, state.zone, state.clock_24h),
+        picker: ClockPicker::new(utc, state.zone, state.clock_24h)
+            .with_network_time(networked.then_some(state.network_time)),
         seed: utc - utc.rem_euclid(60),
         from_menu,
     }
