@@ -202,9 +202,22 @@ fn an_empty_sheet_of_duplicates_says_so() {
     let mut s = gba();
     to_row(&mut s, Row::Label);
     s.press(Btn::A);
+    s.adopt_text([7, 8, 9]);
     s.duplicates = true;
     s.art_arrived(false, false);
     assert!(texts(&view(&s, 720.0).items).contains(&"No New Labels".to_string()));
+}
+
+#[test]
+fn a_worn_label_with_nothing_new_shows_the_text_sticker() {
+    let mut s = gba();
+    to_row(&mut s, Row::Label);
+    s.press(Btn::A);
+    s.duplicates = true;
+    s.art_arrived(false, false);
+    let items = view(&s, 720.0).items;
+    assert!(!texts(&items).contains(&"No New Labels".to_string()));
+    assert!(items.iter().any(|i| matches!(i, Item::Sheet)));
 }
 
 #[test]

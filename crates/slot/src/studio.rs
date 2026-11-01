@@ -247,7 +247,7 @@ impl Studio {
             LabelKind::Logo => logo,
             _ => true,
         });
-        if self.sheet.len() == 1 && self.cart.label.is_some() && !self.text_worn {
+        if self.sheet.len() < 2 && self.cart.label.is_some() && !self.text_worn {
             self.sheet.push(LabelKind::Title);
         }
         if let Screen::Sheet { at } = self.screen {

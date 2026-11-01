@@ -268,6 +268,31 @@ fn one_option_on_a_cart_with_art_adds_the_text_label() {
 }
 
 #[test]
+fn a_cart_wearing_its_only_art_keeps_the_text_label_on_offer() {
+    let mut s = gba();
+    s.duplicates = true;
+    s.art_arrived(false, false);
+    assert_eq!(s.sheet, vec![LabelKind::Title]);
+    s.press(Btn::A);
+    assert_eq!(s.press(Btn::A), Some(Effect::Apply(LabelKind::Title)));
+}
+
+#[test]
+fn no_art_at_all_still_offers_the_text_label() {
+    let mut s = gba();
+    s.art_arrived(false, false);
+    assert_eq!(s.sheet, vec![LabelKind::Title]);
+}
+
+#[test]
+fn the_text_label_is_not_offered_while_it_is_worn() {
+    let mut s = gba();
+    s.adopt_text([7, 8, 9]);
+    s.art_arrived(false, false);
+    assert!(s.sheet.is_empty());
+}
+
+#[test]
 fn an_artless_cart_never_gets_the_text_label() {
     let mut s = Studio::new(cart(Platform::Gba, false), true);
     s.art_arrived(true, false);
