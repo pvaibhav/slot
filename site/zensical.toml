@@ -27,6 +27,7 @@ nav = [
       "guide/screen.md",
       "guide/controls.md",
       "guide/customizing.md",
+      "guide/gamebit.md",
     ] },
     { "Reference and Help" = [
       "guide/settings.md",

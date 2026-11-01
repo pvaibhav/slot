@@ -1,0 +1,64 @@
+# cart:
+# state: show_recents=0
+# state: show_titles=0
+# wifi
+# bare: Pokemon - Emerald Version (USA, Europe)
+# shell: Pokemon - Emerald Version (USA, Europe) = auto 333031 solid
+# On the shelf: open cart studio on a bare black Emerald, compare two labels from the printer, print one, change the shell color and finish, then close.
+wait 180
+tap right
+wait 30
+tap right
+wait 30
+tap right
+wait 30
+tap right
+wait 30
+tap right
+wait 30
+tap right
+wait 30
+tap right
+wait 30
+tap right
+wait 30
+tap right
+wait 30
+tap right
+wait 30
+wait 60
+rec
+wait 60
+tap select
+wait 110
+tap a
+wait 130
+tap right
+wait 100
+tap left
+wait 80
+tap a
+wait 130
+tap b
+wait 50
+tap down
+wait 30
+tap a
+wait 60
+tap down
+wait 40
+tap down
+wait 40
+tap right
+wait 70
+tap b
+wait 40
+tap down
+wait 40
+tap right
+wait 70
+tap left
+wait 70
+tap b
+wait 120
+cut

@@ -15,6 +15,10 @@ hide:
 
 Press <kbd>Y</kbd> to heart the cart you're on.<br>Press <kbd>Y</kbd> again to remove.
 
+### Cart Studio { #cart-studio data-clip="studio.mp4" }
+
+Press <kbd>SELECT</kbd> to open the cart studio.<br>Print a new label when you are on Wi-Fi.<br>You can also change the shell color and finish.<br>Label Printer needs Wi-Fi.
+
 ### Pick an Emulator { #core-picker data-clip="core-picker.mp4" }
 
 Press <kbd>START</kbd> to open a cart.<br><kbd>Left</kbd> and <kbd>Right</kbd> swap the core "chip".<br><kbd>A</kbd> saves your choice.
