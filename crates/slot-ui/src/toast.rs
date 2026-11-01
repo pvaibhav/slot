@@ -202,9 +202,9 @@ fn setting(toast: Toast) -> Setting {
             middle: OUT_H as f32 / 2.0,
         },
         false => Setting {
-            w: match toast.icon() {
-                Some(_) => WARNING_W,
-                None => TOAST_W,
+            w: match (toast.icon(), toast) {
+                (Some(_), _) | (_, Toast::NeedsMgba | Toast::NoWifi | Toast::PeerEnded) => WARNING_W,
+                _ => TOAST_W,
             },
             h: TOAST_H,
             px: TOAST_PX,
