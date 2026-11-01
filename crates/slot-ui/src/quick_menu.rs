@@ -262,8 +262,8 @@ impl QuickRow {
         QuickRow::WifiPower,
         QuickRow::Networks,
         QuickRow::Server,
-        QuickRow::CheckUpdates,
         QuickRow::FetchArt,
+        QuickRow::CheckUpdates,
     ];
 
     pub const CONTROL_PAGES: [QuickRow; 3] = [

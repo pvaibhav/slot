@@ -102,8 +102,8 @@ fn the_rows_run_in_the_order_the_user_chose() {
             "Wi-Fi",
             "Network",
             "Gamebit",
-            "Check for Updates",
-            "Fetch Missing Art"
+            "Fetch Missing Art",
+            "Check for Updates"
         ]
     );
     assert_eq!(
@@ -600,11 +600,12 @@ fn fetch_legends_are_built_like_the_other_prompts() {
 }
 
 #[test]
-fn fetch_art_sits_last_on_the_network_page() {
+fn fetch_art_sits_above_check_for_updates_on_the_network_page() {
     assert_eq!(
         slot_ui::QuickRow::NETWORK.last(),
-        Some(&slot_ui::QuickRow::FetchArt)
+        Some(&slot_ui::QuickRow::CheckUpdates)
     );
+    assert_eq!(slot_ui::QuickRow::NETWORK[3], slot_ui::QuickRow::FetchArt);
     assert_eq!(slot_ui::QuickRow::FetchArt.label(), "Fetch Missing Art");
     assert!(slot_ui::QuickRow::FetchArt.opens());
 }

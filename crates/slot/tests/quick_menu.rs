@@ -624,8 +624,8 @@ fn fetch_missing_art_moved_to_network() {
             QuickRow::WifiPower,
             QuickRow::Networks,
             QuickRow::Server,
-            QuickRow::CheckUpdates,
             QuickRow::FetchArt,
+            QuickRow::CheckUpdates,
         ]
     );
     assert_eq!(
@@ -634,8 +634,8 @@ fn fetch_missing_art_moved_to_network() {
             "Wi-Fi",
             "Network",
             "Gamebit",
-            "Check for Updates",
-            "Fetch Missing Art"
+            "Fetch Missing Art",
+            "Check for Updates"
         ]
     );
     assert!(!QuickRow::GENERAL.contains(&QuickRow::FetchArt));
