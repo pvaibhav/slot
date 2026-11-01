@@ -15,6 +15,8 @@ Shaders make the picture look more like a real handheld screen.
 | Dot            | Simpletex (default)         |
 | Shimmerless    | Shimmerless                 |
 
+Shimmerless is only available for GBA on 4:3 devices. GBA on a 3:2 device is always exactly 3x resolution and Shimmerless has no visual impact.
+
 <kbd>SELECT</kbd> + <kbd>A</kbd> and <kbd>SELECT</kbd> + <kbd>B</kbd> step through them while you play.
 
 ## Color correction

@@ -35,7 +35,7 @@ Each system has its own page.
 
 | Setting | Choices | Default |
 | --- | --- | --- |
-| Shader | GBA: Off, LCD3x, Grid, Dot, Shimmerless. GB and GBC: Off, LCD3x, Grid, Simpletex, Shimmerless | Grid on GBA, Simpletex on GB and GBC |
+| Shader | GBA: Off, LCD3x, Grid, Dot, Shimmerless (4:3 devices only). GB and GBC: Off, LCD3x, Grid, Simpletex, Shimmerless | Grid on GBA, Simpletex on GB and GBC |
 | Color Correction | On, Off | Off |
 | Palette | Game Boy only. Auto, then 48 palettes | Auto |
 | Scale | GBA: Fit, Integer, Full Screen. GB and GBC: SP Screen, Integer, Fit | Fit on GBA, SP Screen on GB and GBC |
