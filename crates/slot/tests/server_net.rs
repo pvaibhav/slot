@@ -20,8 +20,8 @@ fn query(labels: &[&str]) -> Vec<u8> {
     q
 }
 
-const HOST: &str = "gamebit";
-const NAME: [u8; 15] = *b"\x07gamebit\x05local\x00";
+const HOST: &str = "slot";
+const NAME: [u8; 12] = *b"\x04slot\x05local\x00";
 
 fn expected_a(id: [u8; 2], question: bool, class: [u8; 2], ttl: u8) -> Vec<u8> {
     let mut v = id.to_vec();
@@ -42,28 +42,28 @@ fn src(port: u16) -> SocketAddrV4 {
 }
 
 #[test]
-fn answers_gamebit_local_a_query() {
-    let reply = answer(&query(&["gamebit", "local"]), IP, HOST).unwrap();
+fn answers_slot_local_a_query() {
+    let reply = answer(&query(&["slot", "local"]), IP, HOST).unwrap();
     assert_eq!(reply, expected_a([0, 0], false, [0x80, 1], 120));
 }
 
 #[test]
 fn legacy_unicast_a_query() {
-    let (reply, to) = respond(&query(&["gamebit", "local"]), IP, HOST, src(49152)).unwrap();
+    let (reply, to) = respond(&query(&["slot", "local"]), IP, HOST, src(49152)).unwrap();
     assert_eq!(to, src(49152));
     assert_eq!(reply, expected_a([0x12, 0x34], true, [0, 1], 10));
 }
 
 #[test]
 fn port_5353_query_goes_to_the_group() {
-    let (reply, to) = respond(&query(&["gamebit", "local"]), IP, HOST, src(5353)).unwrap();
+    let (reply, to) = respond(&query(&["slot", "local"]), IP, HOST, src(5353)).unwrap();
     assert_eq!(to, SocketAddrV4::new(Ipv4Addr::new(224, 0, 0, 251), 5353));
     assert_eq!(reply, expected_a([0, 0], false, [0x80, 1], 120));
 }
 
 #[test]
 fn aaaa_query_gets_nsec_saying_only_a_exists() {
-    let reply = answer(&query_type(&["gamebit", "local"], 28), IP, HOST).unwrap();
+    let reply = answer(&query_type(&["slot", "local"], 28), IP, HOST).unwrap();
     let mut want = vec![0, 0, 0x84, 0, 0, 0, 0, 1, 0, 0, 0, 0];
     want.extend_from_slice(&NAME);
     want.extend_from_slice(&[0, 47, 0x80, 1, 0, 0, 0, 120, 0, 15]);
@@ -74,30 +74,30 @@ fn aaaa_query_gets_nsec_saying_only_a_exists() {
 
 #[test]
 fn any_case_name_matches() {
-    assert!(answer(&query(&["GAMEBIT", "Local"]), IP, HOST).is_some());
+    assert!(answer(&query(&["SLOT", "Local"]), IP, HOST).is_some());
 }
 
 #[test]
 fn ignores_other_names() {
     assert!(answer(&query(&["other", "local"]), IP, HOST).is_none());
-    assert!(answer(&query(&["gamebit", "local", "x"]), IP, HOST).is_none());
+    assert!(answer(&query(&["slot", "local", "x"]), IP, HOST).is_none());
 }
 
 #[test]
 fn ignores_non_a_queries_and_responses() {
-    let mut q = query(&["gamebit", "local"]);
+    let mut q = query(&["slot", "local"]);
     let n = q.len();
     q[n - 4] = 0;
     q[n - 3] = 16;
     assert!(answer(&q, IP, HOST).is_none());
-    let mut r = query(&["gamebit", "local"]);
+    let mut r = query(&["slot", "local"]);
     r[2] = 0x84;
     assert!(answer(&r, IP, HOST).is_none());
 }
 
 #[test]
 fn ignores_malformed_packets() {
-    let q = query(&["gamebit", "local"]);
+    let q = query(&["slot", "local"]);
     for n in 0..q.len() {
         assert!(answer(&q[..n], IP, HOST).is_none(), "truncated at {n}");
     }
@@ -115,7 +115,7 @@ fn ignores_malformed_packets() {
 #[test]
 fn compressed_name_pointing_forward_is_followed() {
     let mut p = vec![0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0];
-    p.extend_from_slice(&[7, b'g', b'a', b'm', b'e', b'b', b'i', b't', 0xc0, 26, 0, 1, 0, 1, 5, b'l', b'o', b'c', b'a', b'l', 0]);
+    p.extend_from_slice(&[4, b's', b'l', b'o', b't', 0xc0, 23, 0, 1, 0, 1, 5, b'l', b'o', b'c', b'a', b'l', 0]);
     assert!(answer(&p, IP, HOST).is_some());
 }
 
@@ -144,8 +144,8 @@ fn every_baseos_model_makes_a_name() {
 fn a_probe_draws_an_answer_that_claims_the_name() {
     let reply = answer(&probe("rgsp"), IP, "rgsp").unwrap();
     assert_eq!(claims(&reply, "rgsp"), Some(true));
-    assert_eq!(claims(&reply, "gamebit"), Some(false));
-    assert!(answer(&probe("gamebit"), IP, "rgsp").is_none());
+    assert_eq!(claims(&reply, "slot"), Some(false));
+    assert!(answer(&probe("slot"), IP, "rgsp").is_none());
 }
 
 #[test]
@@ -170,7 +170,7 @@ fn only_another_device_is_a_rival() {
     let other = std::net::SocketAddr::V4(src(5353));
     assert!(!rival(&reply, me, IP, "rgsp"));
     assert!(rival(&reply, other, IP, "rgsp"));
-    assert!(!rival(&reply, other, IP, "gamebit"));
+    assert!(!rival(&reply, other, IP, "slot"));
 }
 
 #[test]
@@ -182,5 +182,5 @@ fn a_started_responder_names_a_host() {
     let Some(first) = Responder::start(ip) else {
         return;
     };
-    assert!(["GAMEBIT.LOCAL", "RGSP.LOCAL"].contains(&first.host().as_str()));
+    assert!(["SLOT.LOCAL", "RGSP.LOCAL"].contains(&first.host().as_str()));
 }

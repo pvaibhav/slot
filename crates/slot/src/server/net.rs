@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 const GROUP: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
 const MDNS_PORT: u16 = 5353;
-const NAME: &str = "gamebit";
+const NAME: &str = "slot";
 const DOMAIN: &str = "local";
 const MAX_JUMPS: usize = 8;
 const MAX_QUESTIONS: usize = 16;

@@ -26,7 +26,7 @@ fn job() -> PaperJob {
     PaperJob::Code {
         modules: qr_modules(URL).unwrap(),
         text: ReceiptText {
-            host: Some("gamebit.local:2003".into()),
+            host: Some("RG35XXPLUS.LOCAL:2003".into()),
             ip: "192.168.100.200:2003".into(),
             pin: "4821".into(),
         },
