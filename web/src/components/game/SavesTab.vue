@@ -9,6 +9,7 @@ import { saveWarning } from '@/lib/saveWarning'
 import { Save, Upload, Download, Trash2, TriangleAlert } from 'lucide-vue-next'
 
 const props = defineProps<{ tag: string; id: number }>()
+const emit = defineEmits<{ changed: [] }>()
 const { t } = useI18n()
 
 const entries = ref<GameFile[]>([])
@@ -52,6 +53,7 @@ async function onUpload() {
     const result = await uploadGameSave(props.tag, props.id, file)
     warning.value = saveWarning(result.resumeCores)
     await load()
+    emit('changed')
   } catch {
     error.value = t('game.uploadFailed')
   } finally {
@@ -72,6 +74,7 @@ async function onDelete(f: GameFile) {
   try {
     await deleteGameSave(props.tag, props.id, f.name)
     await load()
+    emit('changed')
   } catch {
     error.value = t('game.deleteFailed')
   } finally {

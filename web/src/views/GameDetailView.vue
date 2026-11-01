@@ -115,6 +115,7 @@ async function onUploadArt() {
 
 async function onFetchArt() {
   if (fetching.value) return
+  if (game.value?.hasArt && !await confirm({ title: t('game.fetchReplaceTitle'), confirmLabel: t('game.fetchReplace') })) return
   fetching.value = true
   toast(t('game.fetchingLabel'), true)
   try {
@@ -248,7 +249,7 @@ onMounted(loadGame)
       <div class="mt-6">
         <keep-alive>
           <RomTab v-if="activeTab === 'rom'" :tag="tag" :id="romId" />
-          <SavesTab v-else-if="activeTab === 'saves'" :tag="tag" :id="romId" />
+          <SavesTab v-else-if="activeTab === 'saves'" :tag="tag" :id="romId" @changed="reloadRow" />
           <StatesTab v-else-if="activeTab === 'states'" :tag="tag" :id="romId" :rom-name="game.rom" />
           <GuidesTab v-else-if="activeTab === 'guides'" :tag="tag" :id="romId" />
                   </keep-alive>

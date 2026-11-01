@@ -9,6 +9,8 @@ export default {
 
   customLabel: 'Custom Label',
   fetchLabel: 'Fetch Label',
+  fetchReplaceTitle: 'Replace the current label?',
+  fetchReplace: 'Replace',
   fetchingLabel: 'Fetching label...',
   fetchedLabel: 'Label fetched',
   fetchNoLabel: 'No label found for this game',
