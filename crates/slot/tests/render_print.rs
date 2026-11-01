@@ -220,23 +220,23 @@ fn no_stub_is_left_in_the_slot_when_the_rip_ends() {
 }
 
 #[test]
-fn legend_clears_the_resting_paper() {
+fn stop_is_printed_on_the_foot_of_the_sheet() {
     let Some(mut r) = rig((OUT_W, OUT_H)) else {
         return;
     };
     let px = r.at(REST_AT);
     let empty = r.bare(REST_AT);
-    for y in 456..468 {
-        for x in 518..600 {
+    let dark = |x: usize, y: usize| {
+        let [a, b, c] = at(&px, W, x, y);
+        a as u32 + b as u32 + c as u32 <= 300
+    };
+    let foot = (405..429).flat_map(|y| (442..668).map(move |x| (x, y)));
+    assert!(foot.filter(|(x, y)| dark(*x, *y)).count() > 150);
+    for y in 445..480 {
+        for x in 442..668 {
             assert!(near(at(&px, W, x, y), at(&empty, W, x, y), 8), "at {x},{y}");
         }
     }
-    let f = PrintFrame {
-        legend_alpha: 0.0,
-        ..PrintScene::new(0).frame(REST_AT)
-    };
-    let dark = r.shot(&f);
-    assert!((518..600).any(|x| !near(at(&px, W, x, 456), at(&dark, W, x, 456), 40)));
 }
 
 fn settled(worker: &mut PrintArtWorker) -> PrintArtState {

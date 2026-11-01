@@ -24,11 +24,8 @@ fn timeline_matches_the_table() {
     assert!(near(at(260 + 320).printer_y, 490.0 * 0.125));
     assert!(near(at(900).printer_y, 0.0));
     assert!(!at(899).lamp_on);
-    assert!(near(at(900).legend_alpha, 0.0));
     assert!(!at(900 + 117).lamp_on);
     assert!(at(900 + 118).lamp_on);
-    assert!(near(at(900 + 130).legend_alpha, 0.5));
-    assert!(near(at(PRINT_AT).legend_alpha, 1.0));
     assert!(at(PRINT_AT - 1).paper.is_none());
     let p = at(PRINT_AT).paper.unwrap();
     assert_eq!(p.pivot, (331.0, 727.0));
@@ -272,8 +269,6 @@ fn stop_during_rip_finishes_leaving_the_screen() {
         assert_eq!(s.frame(t), open.frame(t), "at {t}");
     }
     assert!(s.frame(GAP_AT).paper.is_none());
-    assert!(s.frame(GAP_AT + 190).legend_alpha > 0.0);
-    assert!(near(s.frame(GAP_AT + 380).legend_alpha, 0.0));
     assert!(s.frame(GAP_AT + 380).paper.is_none());
     let mut t = stop;
     while !s.done(t) {
@@ -307,7 +302,6 @@ fn stop_at_rest_runs_the_mockup_path() {
     let mut s = PrintScene::new(0);
     s.stop(stop);
     let f = s.frame(stop + 190);
-    assert!(near(f.legend_alpha, 0.5));
     assert!(f.lamp_on);
     assert!(f.paper_in_front);
     let p = f.paper.unwrap();

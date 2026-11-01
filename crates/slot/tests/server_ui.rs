@@ -833,9 +833,9 @@ mod screen {
         for y in 60..440 {
             assert!(!at(632, y).iter().all(|c| *c > 200), "paper past the edge at {y}");
         }
-        let legend = (450..470)
-            .flat_map(|y| (440..600).map(move |x| (x, y)))
-            .filter(|&(x, y)| at(x, y).iter().all(|c| *c > 200))
+        let legend = (405..429)
+            .flat_map(|y| (404..628).map(move |x| (x, y)))
+            .filter(|&(x, y)| at(x, y).iter().all(|c| *c < 100))
             .count();
         assert!(legend > 20, "{legend}");
     }

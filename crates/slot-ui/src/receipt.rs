@@ -1,4 +1,5 @@
 use crate::plate::UndoFace;
+use crate::quick_menu::print_stop_legend;
 use crate::text;
 
 const PW: usize = 226;
@@ -8,6 +9,9 @@ const TOP_PAD: usize = 40;
 const MODULE: usize = 7;
 const FIT_W: f32 = 204.0;
 const MIN_PX: f32 = 8.0;
+const STOP_Y: usize = 368;
+const STOP_LIGHT: f32 = 0.62;
+const STOP_DARK: f32 = 0.5;
 const TOOTH_W: usize = 6;
 const TOOTH_H: f32 = 5.0;
 const PAPER: [f32; 3] = [0.945, 0.955, 0.945];
@@ -153,6 +157,21 @@ fn type_ink(lines: &[Line], top: usize) -> Vec<f32> {
     out
 }
 
+fn stamp_stop(typed: &mut [f32]) {
+    let legend = print_stop_legend([0, 0, 0]);
+    let (w, h) = (legend.w as usize, legend.h as usize);
+    let ox = PW.saturating_sub(w) / 2;
+    for y in 0..h {
+        for x in 0..w.min(PW) {
+            let px = &legend.rgba[(y * w + x) * 4..][..4];
+            let lum = (px[0] as f32 + px[1] as f32 + px[2] as f32) / 765.0;
+            let at = (STOP_Y + y) * PW + ox + x;
+            let dark = ((STOP_LIGHT - lum) / (STOP_LIGHT - STOP_DARK)).clamp(0.0, 1.0);
+            typed[at] = typed[at].max(dark * px[3] as f32 / 255.0);
+        }
+    }
+}
+
 fn tooth_cut(x: usize, y: usize) -> bool {
     let t = (x % TOOTH_W) as f32 + 0.5;
     let depth = TOOTH_H * (1.0 - (t - 3.0).abs() / 3.0);
@@ -234,26 +253,27 @@ pub fn receipt_face(modules: &[Vec<bool>], text: &ReceiptText) -> UndoFace {
     let mut lines = vec![Line {
         text: "SCAN OR GO TO".into(),
         px: 18.0,
-        gap: 26,
+        gap: 24,
     }];
     if let Some(host) = &text.host {
         lines.push(Line {
             text: host.to_uppercase(),
             px: 26.0,
-            gap: 30,
+            gap: 28,
         });
     }
     lines.push(Line {
         text: text.ip.to_uppercase(),
         px: 22.0,
-        gap: 32,
+        gap: 28,
     });
     lines.push(Line {
         text: format!("PIN  {}", text.pin),
         px: 24.0,
         gap: 0,
     });
-    let typed = type_ink(&lines, (TOP_PAD + side + 14) / 2 * 2);
+    let mut typed = type_ink(&lines, (TOP_PAD + side + 12) / 2 * 2);
+    stamp_stop(&mut typed);
     print(&ink, &typed)
 }
 
@@ -266,6 +286,7 @@ pub fn receipt_blank(lines: &[&str]) -> UndoFace {
             gap: 32,
         })
         .collect();
-    let typed = type_ink(&rows, TOP_PAD);
+    let mut typed = type_ink(&rows, TOP_PAD);
+    stamp_stop(&mut typed);
     print(&vec![0.0; PW * PH], &typed)
 }

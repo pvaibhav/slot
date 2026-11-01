@@ -4,7 +4,7 @@ use std::thread;
 use slot_gfx::{paper_flap_shows, Canvas, Compositor, Draw, GfxError, TexId, OUT_H, OUT_W};
 use slot_input::Millis;
 use slot_ui::{
-    cover_bytes, default_background, print_stop_legend, receipt_blank, receipt_face, ReceiptText,
+    cover_bytes, default_background, receipt_blank, receipt_face, ReceiptText,
     UndoFace,
 };
 
@@ -72,7 +72,6 @@ pub struct PrintFrame {
     pub menu_alpha: f32,
     pub printer_y: f32,
     pub lamp_on: bool,
-    pub legend_alpha: f32,
     pub paper: Option<Paper>,
     pub paper_in_front: bool,
 }
@@ -87,11 +86,6 @@ pub struct PrintScene {
 
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
-}
-
-fn inout(t: f32) -> f32 {
-    let t = t.clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
 }
 
 fn eout(t: f32) -> f32 {
@@ -153,7 +147,6 @@ fn opening(t: Millis) -> PrintFrame {
         menu_alpha: 0.0,
         printer_y: 0.0,
         lamp_on: true,
-        legend_alpha: 1.0,
         paper: None,
         paper_in_front: false,
     };
@@ -171,23 +164,17 @@ fn opening(t: Millis) -> PrintFrame {
             menu_alpha: 1.0 - ratio(t, FADE),
             printer_y: OFF_Y,
             lamp_on: false,
-            legend_alpha: 0.0,
             ..up
         },
         t if t < LAMP_AT => PrintFrame {
             printer_y: OFF_Y * (1.0 - eout(ratio(t - RISE_AT, RISE))),
             lamp_on: false,
-            legend_alpha: 0.0,
             ..up
         },
-        t if t < PRINT_AT => {
-            let a = ratio(t - LAMP_AT, LAMP);
-            PrintFrame {
-                lamp_on: a > 0.45,
-                legend_alpha: inout(a),
-                ..up
-            }
-        }
+        t if t < PRINT_AT => PrintFrame {
+            lamp_on: ratio(t - LAMP_AT, LAMP) > 0.45,
+            ..up
+        },
         t if t < HOLD_AT => {
             let step = (ratio(t - PRINT_AT, PRINT) * STEPS).floor();
             back(held(
@@ -213,7 +200,7 @@ fn opening(t: Millis) -> PrintFrame {
 }
 
 fn clearing(base: &PrintFrame) -> Millis {
-    match base.paper.is_some() || base.legend_alpha > 0.0 {
+    match base.paper.is_some() || base.lamp_on {
         true => CLEAR + DARK,
         false => 0,
     }
@@ -249,14 +236,12 @@ fn closing(base: &PrintFrame, a: Millis) -> PrintFrame {
     if clear > 0 && a < CLEAR {
         let p = ratio(a, CLEAR);
         return PrintFrame {
-            legend_alpha: base.legend_alpha * (1.0 - p),
             paper: base.paper.map(|paper| cleared(base, paper, p)),
             ..*base
         };
     }
     let gone = PrintFrame {
         lamp_on: false,
-        legend_alpha: 0.0,
         paper: None,
         ..*base
     };
@@ -339,9 +324,6 @@ impl PrintScene {
 
 const PRINTER_PNG: &[u8] = include_bytes!("../../../assets/server/printer.png");
 const FRONT_PNG: &[u8] = include_bytes!("../../../assets/server/printer_front.png");
-const LEGEND_INK: [u8; 3] = [244, 245, 249];
-const LEGEND_X: f32 = 518.0;
-const LEGEND_Y: f32 = 444.0;
 const LAMP_R: f32 = 9.0;
 const LAMP_XY: (f32, f32) = (355.0, 349.0);
 const LAMP_OFF: [u8; 3] = [0x14, 0x16, 0x1b];
@@ -352,7 +334,6 @@ pub struct PrintArt {
     printer: Vec<u8>,
     front: Vec<u8>,
     paper: UndoFace,
-    legend: UndoFace,
     lamp: UndoFace,
 }
 
@@ -396,7 +377,6 @@ pub fn print_art(job: PaperJob) -> Option<PrintArt> {
         printer: cover_bytes(PRINTER_PNG, OUT_W, OUT_H)?,
         front: cover_bytes(FRONT_PNG, OUT_W, OUT_H)?,
         paper,
-        legend: print_stop_legend(LEGEND_INK),
         lamp: lamp_disc(),
     })
 }
@@ -452,7 +432,6 @@ pub struct PrintTextures {
     printer: TexId,
     front: TexId,
     paper: TexId,
-    legend: (TexId, u32, u32),
     lamp: (TexId, u32),
 }
 
@@ -464,11 +443,6 @@ impl PrintTextures {
             printer: c.create_texture(OUT_W, OUT_H, &art.printer),
             front: c.create_texture(OUT_W, OUT_H, &art.front),
             paper: c.create_texture(art.paper.w, art.paper.h, &art.paper.rgba),
-            legend: (
-                c.create_texture(art.legend.w, art.legend.h, &art.legend.rgba),
-                art.legend.w,
-                art.legend.h,
-            ),
             lamp: (
                 c.create_texture(art.lamp.w, art.lamp.h, &art.lamp.rgba),
                 art.lamp.w,
@@ -521,17 +495,6 @@ pub fn print_draws(f: &PrintFrame, tex: &PrintTextures, canvas: Canvas, out: &mu
             h: side,
             tex: lamp,
             alpha: 1.0,
-        });
-    }
-    if f.legend_alpha > 0.0 {
-        let (legend, lw, lh) = tex.legend;
-        out.push(Draw::Tex {
-            x: shift + LEGEND_X,
-            y: LEGEND_Y,
-            w: lw as f32,
-            h: lh as f32,
-            tex: legend,
-            alpha: f.legend_alpha,
         });
     }
     let Some(paper) = &f.paper else {
