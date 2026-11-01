@@ -122,11 +122,18 @@ fn serve(root: &Path, mut req: Request, t: Target) -> Reply {
             if t.sub.is_empty() {
                 return Reply::error(400, "path required");
             }
+            if segs.len() == 1 && path.is_dir() {
+                return Reply::error(403, "top-level folders can't be deleted");
+            }
             delete(&path)
         }
         "PATCH" => {
             if t.sub.is_empty() {
                 return Reply::error(400, "path required");
+            }
+            if segs.len() == 1 && path.is_dir() {
+                let _ = io::copy(&mut req.body, &mut io::sink());
+                return Reply::error(403, "top-level folders can't be renamed or moved");
             }
             let body = std::mem::replace(&mut req.body, Body::from_bytes(Vec::new()));
             patch(root, &t, &path, body)

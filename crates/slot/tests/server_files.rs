@@ -544,7 +544,50 @@ fn fs_root_hides_dot_folders() {
     assert_eq!(status, 200);
     assert_eq!(names_in(&body), vec!["Games"]);
     let (status, _) = call(p, "DELETE", "/api/fs/card/.Trashes", b"");
+    assert_eq!(status, 403);
+    assert!(d.path().join(".Trashes").exists());
+    server.stop();
+}
+
+#[test]
+fn top_level_folders_cannot_be_renamed_or_moved() {
+    let (d, server) = start();
+    let p = server.port();
+    std::fs::create_dir_all(d.path().join("Games/GBA")).unwrap();
+    std::fs::create_dir_all(d.path().join("Saves")).unwrap();
+    std::fs::write(d.path().join("loose.txt"), b"x").unwrap();
+    let (status, _) = call(p, "PATCH", "/api/fs/card/Games", br#"{"to":"Roms"}"#);
+    assert_eq!(status, 403);
+    let (status, _) = call(p, "PATCH", "/api/fs/card/Games", br#"{"to":"Saves/Games"}"#);
+    assert_eq!(status, 403);
+    assert!(d.path().join("Games/GBA").is_dir());
+    let (status, body) = call(p, "PATCH", "/api/fs/card/loose.txt", br#"{"to":"renamed.txt"}"#);
+    assert_eq!(status, 200, "{body}");
+    assert!(d.path().join("renamed.txt").exists());
+    let (status, body) = call(p, "PATCH", "/api/fs/card/Games/GBA", br#"{"to":"Games/Advance"}"#);
+    assert_eq!(status, 200, "{body}");
+    assert!(d.path().join("Games/Advance").is_dir());
+    server.stop();
+}
+
+#[test]
+fn top_level_folders_cannot_be_deleted() {
+    let (d, server) = start();
+    let p = server.port();
+    std::fs::create_dir_all(d.path().join("Games/GBA")).unwrap();
+    std::fs::write(d.path().join("Games/GBA/a.gba"), b"rom").unwrap();
+    std::fs::write(d.path().join("loose.txt"), b"x").unwrap();
+    let (status, _) = call(p, "DELETE", "/api/fs/card/Games", b"");
+    assert_eq!(status, 403);
+    assert!(d.path().join("Games/GBA/a.gba").exists());
+    let (status, _) = call(p, "DELETE", "/api/fs/card/Games/", b"");
+    assert_eq!(status, 403);
+    assert!(d.path().join("Games/GBA/a.gba").exists());
+    let (status, _) = call(p, "DELETE", "/api/fs/card/loose.txt", b"");
     assert_eq!(status, 200);
-    assert!(!d.path().join(".Trashes").exists());
+    assert!(!d.path().join("loose.txt").exists());
+    let (status, _) = call(p, "DELETE", "/api/fs/card/Games/GBA", b"");
+    assert_eq!(status, 200);
+    assert!(!d.path().join("Games/GBA").exists());
     server.stop();
 }

@@ -55,6 +55,7 @@ const subpath = computed<string[]>(() => {
 })
 
 const apiSegments = computed(() => [props.tag, ...subpath.value].filter(Boolean) as string[])
+const atCardRoot = computed(() => props.resource === 'fs' && apiSegments.value.length <= 1)
 
 const resourceLabel = computed(() => {
   if (props.resource === 'fs') return (route.query.label as string) || props.tag || 'fs'
@@ -490,6 +491,7 @@ onMounted(load)
           <Download v-else class="h-3.5 w-3.5" />
         </button>
         <button
+          v-if="!(entry.type === 'dir' && atCardRoot)"
           class="shrink-0 p-1 rounded text-muted-foreground/50 hover:text-accent hover:bg-accent/10 transition-colors"
           :title="$t('common.rename')"
           @click.stop="startRename(entry.name)"
@@ -497,7 +499,7 @@ onMounted(load)
           <Pencil class="h-3.5 w-3.5" />
         </button>
         <button
-          v-if="props.resource !== 'wallpapers'"
+          v-if="props.resource !== 'wallpapers' && !(entry.type === 'dir' && atCardRoot)"
           class="shrink-0 p-1 rounded text-muted-foreground/50 hover:text-accent hover:bg-accent/10 transition-colors"
           :title="$t('common.move')"
           @click.stop="startMove(entry.name)"
@@ -505,6 +507,7 @@ onMounted(load)
           <MoveRight class="h-3.5 w-3.5" />
         </button>
         <button
+          v-if="!(entry.type === 'dir' && atCardRoot)"
           class="shrink-0 p-1 rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
           :title="$t('common.delete')"
           :disabled="deleting === entry.name"
