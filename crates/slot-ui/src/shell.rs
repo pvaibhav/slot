@@ -30,7 +30,7 @@ const fn shell(colour: [u8; 3], finish: Finish) -> Shell {
 const EXACT: &[(&str, Shell)] = &[
     ("AXV", shell([0xc2, 0x33, 0x2e], Finish::Translucent)),
     ("AXP", shell([0x2f, 0x5c, 0xc0], Finish::Translucent)),
-    ("BPE", shell([0x24, 0x9c, 0x60], Finish::Translucent)),
+    ("BPE", shell([0x39, 0x9c, 0x3c], Finish::Translucent)),
     ("BPR", shell([0xd8, 0x52, 0x24], Finish::Solid)),
     ("BPG", shell([0x63, 0xb0, 0x44], Finish::Solid)),
     ("U3I", CLEAR),
