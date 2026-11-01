@@ -26,7 +26,7 @@ describe('platforms', () => {
 describe('saves warning', () => {
   it('shows when resumeCores is not empty', () => {
     expect(saveWarning(['mgba'])).toBe(
-      'This game has a suspended session, which will load over this save. Hold A when you start it next.',
+      'This game has a resume state, which loads instead of this save. Hold A when you start the game to use this save.',
     )
   })
 
@@ -165,7 +165,7 @@ describe('states', () => {
     expect(groups[0]!.resume).toBe(true)
   })
 
-  it('keeps a core that only has a suspended session', () => {
+  it('keeps a core that only has a resume state', () => {
     expect(groupStates([{ id: 'mgba', core: 'mGBA', resume: true, states: [] }])).toHaveLength(1)
   })
 

@@ -43,9 +43,9 @@ export default {
   loadStatesFailed: 'Failed to load save states',
   noStates: 'No save states yet.',
   noPreview: 'No preview',
-  resumeState: 'Suspended session',
+  resumeState: 'Resume state',
   deleteStateTitle: 'Delete this save state?',
-  deleteResumeTitle: 'Delete the suspended session?',
+  deleteResumeTitle: 'Delete the resume state?',
   deleteResumeBody: 'The game will start fresh next time.',
   stateDeleteFailed: 'Delete failed',
 

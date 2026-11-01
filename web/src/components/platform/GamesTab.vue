@@ -408,8 +408,8 @@ onBeforeUnmount(() => {
         >
           <span
             v-if="selectMode"
-            class="absolute top-1.5 left-1.5 z-10 inline-flex h-5 w-5 items-center justify-center rounded border-2 border-white/60 bg-black/60"
-            :class="selectedGameIds.has(game.id) ? 'bg-accent border-accent' : ''"
+            class="absolute top-1.5 left-1.5 z-10 inline-flex h-5 w-5 items-center justify-center rounded border-2"
+            :class="selectedGameIds.has(game.id) ? 'bg-accent border-accent' : 'border-white/60 bg-black/60'"
           >
             <Check v-if="selectedGameIds.has(game.id)" class="h-3 w-3 text-accent-foreground" />
           </span>

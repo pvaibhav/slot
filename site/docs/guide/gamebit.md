@@ -9,8 +9,8 @@ You need Wi-Fi set up first. Open the menu on the shelf and go to Network to joi
 Once you are connected to a Wi-Fi network:
 
 1. Open the menu on the shelf and pick Network → Gamebit.
-2. The device prints a receipt with a code and a PIN.
-3. Scan the code with your phone or go to `slot.local` in a browser and enter the PIN.
+2. The device prints a receipt with a QR code and a PIN.
+3. Scan the QR code on the receipt, or go to slot.local and enter the PIN.
 
 The PIN changes every time you open Gamebit. If you close it and open it again, the page will ask for the new one.
 
