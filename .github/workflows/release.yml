@@ -18,13 +18,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install zip, cmake and Task
+      - name: Install zip, cmake, Task and Bun
         run: |
           set -eu
           sed -i '/bullseye-security/d' /etc/apt/sources.list
           apt-get -o Acquire::Check-Valid-Until=false update
-          apt-get install -y --no-install-recommends zip cmake
+          apt-get install -y --no-install-recommends zip unzip cmake
           curl -fsSL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
+          curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash -s "bun-v1.2.6"
 
       - name: Build the tree
         run: task dist:device OUT="slot-${GITHUB_REF_NAME}"
