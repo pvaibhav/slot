@@ -53,6 +53,7 @@ pub struct Keyboard {
     shift: bool,
     symbols: bool,
     help: bool,
+    aim: Option<f32>,
 }
 
 use Cap::{Char as C, Special as S};
@@ -147,6 +148,7 @@ impl Keyboard {
             shift: false,
             symbols: false,
             help: false,
+            aim: None,
         }
     }
 
@@ -240,19 +242,47 @@ impl Keyboard {
         Typed::Done(self.text.iter().collect())
     }
 
+    fn centre(&self, row: usize, col: usize) -> f32 {
+        let [x, _, w, _] = key_rect(Canvas::of((720, 480)), self.layout, row, col);
+        x + w / 2.0
+    }
+
+    fn nearest(&self, row: usize, x: f32) -> usize {
+        (0..self.rows()[row].len())
+            .min_by(|a, b| {
+                let off = |c: usize| (self.centre(row, c) - x).abs();
+                off(*a).total_cmp(&off(*b))
+            })
+            .unwrap_or(0)
+    }
+
     fn navigate(&mut self, b: Btn) {
         let rows = self.rows();
         let n = rows.len();
         match b {
-            Btn::Up => self.row = (self.row + n - 1) % n,
-            Btn::Down => self.row = (self.row + 1) % n,
+            Btn::Up | Btn::Down => {
+                let x = self.aim.unwrap_or_else(|| self.centre(self.row, self.col));
+                self.row = match b {
+                    Btn::Up => (self.row + n - 1) % n,
+                    _ => (self.row + 1) % n,
+                };
+                self.col = self.nearest(self.row, x);
+                self.aim = Some(x);
+            }
             Btn::Left => {
                 let len = rows[self.row].len();
                 self.col = (self.col + len - 1) % len;
+                self.aim = None;
             }
-            _ => self.col = (self.col + 1) % rows[self.row].len(),
+            _ => {
+                self.col = (self.col + 1) % rows[self.row].len();
+                self.aim = None;
+            }
         }
-        self.col = self.col.min(rows[self.row].len() - 1);
+    }
+
+    pub fn on_delete(&self) -> bool {
+        self.rows()[self.row][self.col] == Cap::Special(Delete)
     }
 
     pub fn press(&mut self, b: Btn) -> Typed {

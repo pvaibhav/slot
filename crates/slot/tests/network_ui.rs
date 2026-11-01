@@ -961,3 +961,83 @@ fn a_second_wrong_password_keeps_the_saved_network() {
     assert_eq!(a.wifi().saved.len(), 1);
     assert_eq!(lines(&a)[0].value.as_deref(), Some("Wrong Password"));
 }
+
+fn hold(a: &mut App, btn: Btn, ms: u64) {
+    a.apply(Action::GbaDown(btn));
+    let start = a.now();
+    let mut t = start;
+    while t < start + ms {
+        t += 16;
+        a.tick_ms(t);
+    }
+    a.apply(Action::GbaUp(btn));
+}
+
+fn on_keyboard(a: &mut App) {
+    open_scan(a);
+    select(a, "Neighbor 5G");
+    press(a, Btn::A);
+    assert!(a.keyboard().is_some());
+}
+
+#[test]
+fn holding_a_direction_keeps_moving_on_the_keyboard() {
+    let _g = serial();
+    let (_d, mut a, _log) = booted(Fake::demo());
+    on_keyboard(&mut a);
+    let col = a.keyboard().unwrap().col();
+    a.apply(Action::GbaDown(Btn::Right));
+    let (start, mut far) = (a.now(), col);
+    for i in 1..60 {
+        a.tick_ms(start + i * 16);
+        far = far.max(a.keyboard().unwrap().col());
+    }
+    assert!(far > col + 1, "{col} to {far}");
+}
+
+#[test]
+fn holding_b_keeps_deleting() {
+    let _g = serial();
+    let (_d, mut a, _log) = booted(Fake::demo());
+    on_keyboard(&mut a);
+    type_text(&mut a, "secret99");
+    hold(&mut a, Btn::B, 1000);
+    assert!(a.keyboard().unwrap().text().len() < 7);
+}
+
+#[test]
+fn holding_a_types_one_letter() {
+    let _g = serial();
+    let (_d, mut a, _log) = booted(Fake::demo());
+    on_keyboard(&mut a);
+    hold(&mut a, Btn::A, 1000);
+    assert_eq!(a.keyboard().unwrap().text().len(), 1);
+}
+
+#[test]
+fn holding_a_on_delete_keeps_deleting() {
+    let _g = serial();
+    let (_d, mut a, _log) = booted(Fake::demo());
+    on_keyboard(&mut a);
+    type_text(&mut a, "secret99");
+    while a.keyboard().unwrap().row() != 0 {
+        press(&mut a, Btn::Up);
+    }
+    while a.keyboard().unwrap().on_delete() == false {
+        press(&mut a, Btn::Right);
+    }
+    hold(&mut a, Btn::A, 1000);
+    assert!(a.keyboard().unwrap().text().len() < 7);
+}
+
+#[test]
+fn b_held_to_close_the_help_does_not_delete() {
+    let _g = serial();
+    let (_d, mut a, _log) = booted(Fake::demo());
+    on_keyboard(&mut a);
+    type_text(&mut a, "secret99");
+    press(&mut a, Btn::Menu);
+    assert!(a.keyboard().unwrap().help());
+    hold(&mut a, Btn::B, 1000);
+    assert_eq!(a.keyboard().unwrap().text(), "secret99");
+}

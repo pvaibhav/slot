@@ -1153,6 +1153,11 @@ impl App {
                     self.held_dir = Some((b, self.now() + REPEAT_DELAY_MS, 0));
                 }
             }
+            Action::GbaDown(b @ (Btn::A | Btn::B | Btn::L1 | Btn::R1)) if self.keyboard.is_some() => {
+                if self.held_dir.map(|(held, ..)| held) != Some(b) {
+                    self.held_dir = Some((b, self.now() + REPEAT_DELAY_MS, 0));
+                }
+            }
             Action::GbaUp(b) if self.held_dir.is_some_and(|(held, ..)| held == b) => {
                 self.held_dir = None;
             }
@@ -1177,6 +1182,13 @@ impl App {
 
     fn repeats(&self, btn: Btn) -> bool {
         let vertical = matches!(btn, Btn::Up | Btn::Down);
+        let direction = vertical || matches!(btn, Btn::Left | Btn::Right);
+        if let Some((kb, _)) = &self.keyboard {
+            return !kb.help() && (btn != Btn::A || kb.on_delete());
+        }
+        if !direction {
+            return false;
+        }
         if self.game_menu.is_some() {
             return false;
         }
@@ -8196,6 +8208,9 @@ impl App {
         let Some((kb, _)) = self.keyboard.as_mut() else {
             return;
         };
+        if kb.help() {
+            self.held_dir = None;
+        }
         match kb.press(btn) {
             slot_ui::Typed::Cancelled => self.keyboard = None,
             slot_ui::Typed::Done(text) => self.keyboard_done(text),

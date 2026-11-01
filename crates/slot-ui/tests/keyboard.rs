@@ -82,7 +82,44 @@ fn vertical_moves_clamp_onto_short_rows() {
     press(&mut kb, &[Btn::Down]);
     assert_eq!(selected(&kb), "Space");
     press(&mut kb, &[Btn::Up]);
+    assert_eq!(selected(&kb), "m");
+}
+
+#[test]
+fn up_and_down_stay_in_line_across_the_staggered_rows() {
+    let mut kb = general("");
+    select(&mut kb, "d");
+    press(&mut kb, &[Btn::Down]);
+    assert_eq!(selected(&kb), "z");
+    press(&mut kb, &[Btn::Up]);
+    assert_eq!(selected(&kb), "d");
+    select(&mut kb, "b");
+    press(&mut kb, &[Btn::Up]);
+    assert_eq!(selected(&kb), "j");
+    press(&mut kb, &[Btn::Down]);
+    assert_eq!(selected(&kb), "b");
+    select(&mut kb, "a");
+    press(&mut kb, &[Btn::Down]);
     assert_eq!(selected(&kb), "Shift");
+}
+
+#[test]
+fn a_trip_through_the_space_bar_comes_back_to_the_same_key() {
+    let mut kb = general("");
+    select(&mut kb, "x");
+    press(&mut kb, &[Btn::Down, Btn::Up]);
+    assert_eq!(selected(&kb), "x");
+    select(&mut kb, "1");
+    press(&mut kb, &[Btn::Up, Btn::Down]);
+    assert_eq!(selected(&kb), "1");
+}
+
+#[test]
+fn moving_sideways_starts_a_new_line() {
+    let mut kb = general("");
+    select(&mut kb, "x");
+    press(&mut kb, &[Btn::Down, Btn::Up, Btn::Right, Btn::Up]);
+    assert_eq!(selected(&kb), "g");
 }
 
 #[test]
