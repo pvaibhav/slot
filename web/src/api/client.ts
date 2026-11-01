@@ -163,7 +163,7 @@ export async function fileBlob(resource: string, ...segments: string[]): Promise
 export async function uploadGameArt(tag: string, id: number, file: File): Promise<void> {
   const res = await request(`${gameBase(tag, id)}/art?name=${encodeURIComponent(file.name)}`, {
     method: 'POST',
-    body: file,
+    body: await file.arrayBuffer(),
   })
   if (!res.ok) throw new Error(`uploadGameArt ${res.status}`)
 }
@@ -220,7 +220,7 @@ export interface SaveUploadResult {
 export async function uploadGameSave(tag: string, id: number, file: File): Promise<SaveUploadResult> {
   const res = await request(`${gameBase(tag, id)}/saves?name=${encodeURIComponent(file.name)}`, {
     method: 'POST',
-    body: file,
+    body: await file.arrayBuffer(),
   })
   if (!res.ok) throw new Error(`uploadGameSave ${res.status}`)
   const data = await res.json()
@@ -251,7 +251,7 @@ export async function gameGuideText(tag: string, id: number, name: string): Prom
 export async function uploadGameGuide(tag: string, id: number, file: File): Promise<void> {
   const res = await request(`${gameBase(tag, id)}/guides?name=${encodeURIComponent(file.name)}`, {
     method: 'POST',
-    body: file,
+    body: await file.arrayBuffer(),
   })
   if (!res.ok) throw new Error(`uploadGameGuide ${res.status}`)
 }

@@ -130,6 +130,21 @@ describe('states', () => {
     expect(stampLabel('2026-10-30_09-15-30')).toBe('2026-10-30 09:15:30')
   })
 
+  it('sends a save as bytes because Safari hangs on a file body', async () => {
+    const send = vi.fn(async (_path: string, _init: RequestInit) => new Response('{"ok":true,"resumeCores":[]}'))
+    vi.stubGlobal('fetch', send)
+    await client.uploadGameSave('GBA', 8, new File([new Uint8Array(4)], 'x.sav'))
+    vi.unstubAllGlobals()
+    expect(send.mock.calls[0]?.[1].body).toBeInstanceOf(ArrayBuffer)
+  })
+
+  it('picks a save with an input on the page and no type filter', () => {
+    const tab = src('components/game/SavesTab.vue')
+    expect(tab).toContain('type="file"')
+    expect(tab).not.toContain("createElement('input')")
+    expect(tab).not.toContain('accept')
+  })
+
   it('has no state upload control', () => {
     expect('uploadGameState' in client).toBe(false)
     const tab = src('components/game/StatesTab.vue')
