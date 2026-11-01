@@ -43,6 +43,40 @@ fail() {
 	exit 1
 }
 
+printf '#!/bin/sh\necho "$*" >> "%s"\n' "$TMP/slot.log" > "$TMP/loader"
+chmod 755 "$TMP/loader"
+
+logo_boot() {
+	rm -f "$TMP/splash.log" "$TMP/slot.log"
+	: > "$TMP/splash.log"
+	: > "$TMP/slot.log"
+	SLOT_ROOT="$TMP/card" AGS_RUN="$TMP/run" AGS_SPLASH="$TMP/splash" AGS_HOLD=0 \
+		AGS_LOADER="$TMP/loader" AGS_SYNC="$TMP/sync" sh "$SCRIPT" 2>/dev/null || true
+}
+
+setup
+mkdir -p "$TMP/card/Config" "$TMP/card/Cache"
+echo mine > "$TMP/card/Config/bootlogo.bmp"
+logo_boot
+grep -q 'INSTALLING BOOT LOGO' "$TMP/splash.log" || fail "a new logo showed no pill"
+grep -q -- '--install-bootlogo' "$TMP/slot.log" || fail "a new logo was not installed"
+[ "$(grep -n -- '--install-bootlogo' "$TMP/slot.log" | cut -d: -f1)" = 1 ] || fail "slot started before the logo installed"
+
+cp "$TMP/card/Config/bootlogo.bmp" "$TMP/card/Cache/bootlogo.installed"
+logo_boot
+[ ! -s "$TMP/splash.log" ] || fail "an installed logo showed a pill: $(cat "$TMP/splash.log")"
+! grep -q -- '--install-bootlogo' "$TMP/slot.log" || fail "an installed logo was installed again"
+
+rm "$TMP/card/Config/bootlogo.bmp"
+echo shipped > "$TMP/card/System/bootlogo.bmp"
+logo_boot
+grep -q 'INSTALLING BOOT LOGO' "$TMP/splash.log" || fail "going back to the slot logo showed no pill"
+
+setup
+logo_boot
+[ ! -s "$TMP/splash.log" ] || fail "a card with no logo showed a pill"
+! grep -q -- '--install-bootlogo' "$TMP/slot.log" || fail "a card with no logo ran the install"
+
 setup
 echo "old run" > "$TMP/card/slot.log"
 echo "older run" > "$TMP/card/slot.log.1"

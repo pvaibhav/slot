@@ -119,6 +119,7 @@ onUnmounted(clearCustom)
         </Button>
       </div>
       <input ref="input" type="file" accept=".bmp,image/bmp" class="hidden" @change="picked" />
+      <p class="text-center text-sm text-muted-foreground">{{ $t('dashboard.bootLogoNote') }}</p>
       <p class="text-center text-sm">
         <a :href="DOCS" target="_blank" rel="noopener" class="text-muted-foreground underline hover:text-foreground">{{ $t('dashboard.bootLogoDocs') }}</a>
       </p>

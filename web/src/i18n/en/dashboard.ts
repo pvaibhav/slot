@@ -3,6 +3,7 @@ export default {
   tabCustomization: 'Customization',
   tabTools: 'Tools',
   bootLogo: 'Boot Logo',
+  bootLogoNote: 'A new logo shows on the second power-on. slot installs it during the first.',
   bootLogoDocs: 'Boot logo guide',
   bootLogoReplace: 'Replace',
   bootLogoRestore: 'Use slot logo',

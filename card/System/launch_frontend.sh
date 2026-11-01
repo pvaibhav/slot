@@ -9,6 +9,7 @@ SPLASH="${AGS_SPLASH:-/usr/bin/baseos-splash}"
 MV="${AGS_MV:-mv}"
 HOLD="${AGS_HOLD:-2}"
 SYNC="${AGS_SYNC:-sync}"
+LOADER="${AGS_LOADER:-/lib/ld-linux-aarch64.so.1}"
 export SLOT_ROOT="$SD"
 export SLOT_RUN="$RUN"
 
@@ -95,7 +96,15 @@ echo "|/bin/sh $SYS/coresave.sh %p %s %e %t" > /proc/sys/kernel/core_pattern 2>/
 [ -f "$RUN/slotlink.session" ] && sh "$SYS/slotlink.sh" link down > /dev/null 2>&1
 [ -f "$RUN/slotwifi.on" ] && sh "$SYS/slotlink.sh" wifi stop > /dev/null 2>&1
 
+logo="$SD/Config/bootlogo.bmp"
+[ -f "$logo" ] || logo="$SYS/bootlogo.bmp"
+if [ -f "$logo" ] && ! cmp -s "$logo" "$SD/Cache/bootlogo.installed"; then
+	log "installing boot logo"
+	say "INSTALLING BOOT LOGO"
+	"$LOADER" "$SYS/slot" --install-bootlogo >> "$LOGS/slot-session.log" 2>&1
+fi
+
 [ -f "$LOGS/slot.log" ] && mv -f "$LOGS/slot.log" "$LOGS/slot.log.1"
 log "exec $SYS/slot"
 
-exec /lib/ld-linux-aarch64.so.1 "$SYS/slot" > "$LOGS/slot.log" 2>&1
+exec "$LOADER" "$SYS/slot" > "$LOGS/slot.log" 2>&1
