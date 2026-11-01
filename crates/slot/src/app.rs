@@ -8392,10 +8392,11 @@ impl App {
     }
 
     pub fn networks_value(&self) -> String {
-        let status = &self.wifi().status;
-        match (self.state.wifi_off, status.state, &status.ssid) {
-            (true, _, _) => "Off".into(),
-            (false, crate::wifi::State::Completed, Some(ssid)) => ssid.clone(),
+        if self.state.wifi_off {
+            return "Off".into();
+        }
+        match &self.wifi().status.ssid {
+            Some(ssid) if self.wifi_up() => ssid.clone(),
             _ => "Not Connected".into(),
         }
     }

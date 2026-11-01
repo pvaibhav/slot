@@ -84,6 +84,15 @@ impl Core {
         }
     }
 
+    fn status_gap(&self) -> Duration {
+        let leasing = self.snap.status.state == State::Completed && self.snap.status.ip.is_none();
+        if self.attempt.is_some() || leasing {
+            STATUS_ATTEMPT
+        } else {
+            STATUS_IDLE
+        }
+    }
+
     fn publish(&self) {
         if OWNER.load(Ordering::SeqCst) != self.owner {
             return;
@@ -135,13 +144,7 @@ impl Core {
                         Intent::Auto => {}
                     }
                     self.snap.status = self.backend.status();
-                    self.next_status = Some(
-                        now + if self.attempt.is_some() {
-                            STATUS_ATTEMPT
-                        } else {
-                            STATUS_IDLE
-                        },
-                    );
+                    self.next_status = Some(now + self.status_gap());
                     if self.scans {
                         self.next_scan = Some(now);
                     }
@@ -288,13 +291,7 @@ impl Core {
                     self.end_attempt();
                 }
             }
-            self.next_status = Some(
-                now + if self.attempt.is_some() {
-                    STATUS_ATTEMPT
-                } else {
-                    STATUS_IDLE
-                },
-            );
+            self.next_status = Some(now + self.status_gap());
         }
         if self.scans && self.next_scan.is_some_and(|t| now >= t) {
             self.snap.scan = Some(self.backend.scan());

@@ -18,6 +18,7 @@ pub struct Fake {
     pub conf: Arc<Mutex<String>>,
     pub blocked: Arc<AtomicBool>,
     pub running: Arc<AtomicBool>,
+    pub no_lease: Arc<AtomicBool>,
     passwords: Vec<(String, String)>,
     nets: Vec<Net>,
     next_id: u32,
@@ -46,6 +47,7 @@ impl Fake {
             conf: Arc::new(Mutex::new(String::new())),
             blocked: Arc::new(AtomicBool::new(false)),
             running: Arc::new(AtomicBool::new(false)),
+            no_lease: Arc::new(AtomicBool::new(false)),
             passwords: passwords
                 .iter()
                 .map(|(s, p)| (s.to_string(), p.to_string()))
@@ -219,7 +221,7 @@ impl Backend for Fake {
             Status {
                 state: State::Completed,
                 ssid,
-                ip: Some("192.168.1.42".into()),
+                ip: (!self.no_lease.load(Ordering::SeqCst)).then(|| "192.168.1.42".into()),
             }
         } else if polls == 0 {
             Status {

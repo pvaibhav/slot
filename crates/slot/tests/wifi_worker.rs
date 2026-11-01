@@ -54,6 +54,23 @@ fn settle(w: &mut Wifi, t: Instant, from: u64, to: u64) {
 }
 
 #[test]
+fn a_missing_address_is_checked_every_second() {
+    let _g = serial();
+    let f = Fake::joined();
+    let no_lease = f.no_lease.clone();
+    no_lease.store(true, Ordering::SeqCst);
+    let mut w = Wifi::inline(Box::new(f));
+    let t = Instant::now();
+    w.send(Cmd::Hold);
+    w.poll(t);
+    assert_eq!(w.snapshot().status.state, slot::wifi::State::Completed);
+    assert_eq!(w.snapshot().status.ip, None);
+    no_lease.store(false, Ordering::SeqCst);
+    w.poll(secs(t, 2));
+    assert!(w.snapshot().status.ip.is_some());
+}
+
+#[test]
 fn hold_starts_and_release_stops() {
     let _g = serial();
     let f = home();

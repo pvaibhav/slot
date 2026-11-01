@@ -396,6 +396,24 @@ fn a_held_radio_turned_off_stays_blocked_through_a_game() {
 }
 
 #[test]
+fn the_networks_row_waits_for_an_address() {
+    let _g = serial();
+    let fake = Fake::demo();
+    let no_lease = fake.no_lease.clone();
+    no_lease.store(true, std::sync::atomic::Ordering::SeqCst);
+    let (_d, mut a, _log) = booted(true, fake);
+    settle(&mut a);
+    join_home(&mut a);
+    assert_eq!(a.wifi().status.state, slot::wifi::State::Completed);
+    assert!(!a.wifi_up());
+    assert_eq!(a.networks_value(), "Not Connected");
+    no_lease.store(false, std::sync::atomic::Ordering::SeqCst);
+    settle(&mut a);
+    assert!(a.wifi_up());
+    assert_eq!(a.networks_value(), "Home");
+}
+
+#[test]
 fn the_networks_row_names_the_joined_network() {
     let _g = serial();
     let (_d, mut a, _log) = on_shelf();
