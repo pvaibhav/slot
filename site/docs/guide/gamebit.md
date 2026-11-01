@@ -6,20 +6,17 @@ Gamebit is a web page for managing your card over Wi-Fi. Use it from a phone or 
 
 You need Wi-Fi set up first. Open the menu on the shelf and go to Network to join a network.
 
-Once Wi-Fi is set up, slot joins your network after every boot. There's nothing to turn on each time.
+Once you are connected to a Wi-Fi network:
 
 1. Open the menu on the shelf and pick Network → Gamebit.
 2. The device prints a receipt with a code and a PIN.
-3. Scan the code with your phone and you're in. No PIN needed.
-4. Or go to `slot.local` in a browser and enter the PIN.
+3. Scan the code with your phone or go to `slot.local` in a browser and enter the PIN.
 
 The PIN changes every time you open Gamebit. If you close it and open it again, the page will ask for the new one.
 
-If `slot.local` doesn't load, the receipt shows the device's address. Type that in instead.
+Some routers do not honor / support mDNS. If `slot.local` doesn't load, use the device IP shown instead.
 
 Press <kbd>B</kbd> on the device to stop Gamebit and go back to the menu.
-
-If you changed 50 or more labels, slot shows Caching New Labels on the way out. Fewer than that are cached quietly.
 
 ## Games
 
@@ -31,11 +28,11 @@ Open a game to rename it, delete it, or manage its files. Deleting a game remove
 
 ## Saves
 
-The Saves tab on a game lists its save files. You can upload, download and delete them. Uploads are `.sav` or `.srm` files.
+The Saves tab on a game lists its save files. You can upload, download and delete them. slot supports `.sav` or `.srm` files.
 
-!!! warning "Suspended sessions"
+!!! warning "Uploaded saves and auto-loaded states"
 
-    If the game has a suspended session, it loads over an uploaded save. Hold <kbd>A</kbd> the next time you start the game to use the save.
+    If the game has a save state it will be auto-loaded and not read the newly uploaded save. Hold <kbd>A</kbd> the next time you start the game to use the save.
 
 The Save States tab shows your save states with their previews, and you can delete them.
 

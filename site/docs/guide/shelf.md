@@ -34,7 +34,7 @@ slot remembers which shelf and cart you were on when it gets powered off and wil
 
 ## Favorites
 
-Press <kbd>Y</kbd> to heart a cart. It shows up on the Favorites shelf alongside any other favorites across all three platforms. Press <kbd>Y</kbd> again to take the star off.
+Press <kbd>Y</kbd> to heart a cart. It shows up on the Favorites shelf alongside any other favorites across all three platforms. Press <kbd>Y</kbd> again to take the heart off.
 
 ## Recents
 

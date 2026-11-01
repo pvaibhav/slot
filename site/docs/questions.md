@@ -38,7 +38,7 @@ No. I want to recreate the feeling I had playing my GBA SP as a child.
 
 ### RetroAchievements and cheats are the only thing keeping me from switching. Will you add them?
 
-No. These are two features I do not want to support. 
+No. These are two features I do not want to support.
 
 If they matter to you, a few of the forks have added them.
 

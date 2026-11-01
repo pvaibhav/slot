@@ -10,15 +10,15 @@ hide:
 <summary>Over the Air</summary>
 Make sure you are connected to Wi-Fi.
 
-From the shelf, open the menu and pick Network → Check for Updates. 
+From the shelf, open the menu and pick Network → Check for Updates.
 
 The OTA updater will reach out to GitHub to see if there is a new release of slot or BaseOS.
 
 If updates are available, they show up as a cart.
 
-Pick one and press <kbd>A</kbd> to download it. <kbd>B</kbd> cancels the download. 
+Pick one and press <kbd>A</kbd> to download it. <kbd>B</kbd> cancels the download.
 
-When updating BaseOS, slot will check your battery level. If you are below 20% and not currently charging, you will prompted to plug in. Press <kbd>A</kbd> to update anyway.
+When updating BaseOS, slot will check your battery level. If you are below 20% and not currently charging, you will be prompted to plug in. Press <kbd>A</kbd> to update anyway.
 
 </details>
 

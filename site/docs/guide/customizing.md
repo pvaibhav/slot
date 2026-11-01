@@ -105,7 +105,7 @@ Each template is the screen in grey with a hole where the game goes. Paint over 
 
 ## Boot logo
 
-Put a `.bmp` at `Config/bootlogo.bmp`, or upload one on Gamebit's Boot Logo page. 
+Put a `.bmp` at `Config/bootlogo.bmp`, or upload one on Gamebit's Boot Logo page.
 
 slot will install it on the next boot, so you'll see it on the second power-on after adding it.
 
