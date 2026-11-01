@@ -2,6 +2,7 @@ use crate::update::signal_bars;
 use crate::wifi::{Phase, Saved, Scanned, Snapshot, State};
 
 pub const OTHER_NETWORK: &str = "Other Network";
+pub const SCAN_NETWORKS: &str = "Scan for Networks";
 pub const WIFI_OFF_MESSAGE: &str = "Turn on Wi-Fi to see networks";
 pub const SCANNING_MESSAGE: &str = "Scanning for networks";
 pub const PASSWORD_TITLE: &str = "Password";
@@ -13,6 +14,7 @@ pub enum NetRow {
     Saved(Saved),
     Nearby(Scanned),
     Other,
+    Scan,
 }
 
 impl NetRow {
@@ -20,7 +22,7 @@ impl NetRow {
         match self {
             NetRow::Saved(s) => Some(&s.ssid),
             NetRow::Nearby(n) => Some(&n.ssid),
-            NetRow::Other => None,
+            NetRow::Other | NetRow::Scan => None,
         }
     }
 }
@@ -67,20 +69,27 @@ pub fn list_rows(snap: &Snapshot, off: bool) -> Vec<NetRow> {
             rows.push(NetRow::Saved(s.clone()));
         }
     }
-    if off || snap.scan.is_none() {
-        return rows;
+    if !off {
+        rows.push(NetRow::Scan);
     }
-    rows.extend(nearby(snap).into_iter().map(NetRow::Nearby));
+    rows
+}
+
+pub fn list_message(off: bool) -> Option<&'static str> {
+    off.then_some(WIFI_OFF_MESSAGE)
+}
+
+pub fn scan_rows(snap: &Snapshot) -> Vec<NetRow> {
+    if snap.scan.is_none() {
+        return Vec::new();
+    }
+    let mut rows: Vec<NetRow> = nearby(snap).into_iter().map(NetRow::Nearby).collect();
     rows.push(NetRow::Other);
     rows
 }
 
-pub fn list_message(snap: &Snapshot, off: bool) -> Option<&'static str> {
-    match (off, snap.scan.is_none()) {
-        (true, _) => Some(WIFI_OFF_MESSAGE),
-        (false, true) => Some(SCANNING_MESSAGE),
-        (false, false) => None,
-    }
+pub fn scan_message(snap: &Snapshot) -> Option<&'static str> {
+    snap.scan.is_none().then_some(SCANNING_MESSAGE)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -88,13 +97,17 @@ pub enum NetPick {
     Top,
     Name(String),
     Other,
+    Scan,
 }
 
 impl NetPick {
     pub fn of(row: &NetRow) -> NetPick {
-        match row.name() {
-            Some(n) => NetPick::Name(n.to_string()),
-            None => NetPick::Other,
+        match row {
+            NetRow::Saved(_) | NetRow::Nearby(_) => {
+                NetPick::Name(row.name().unwrap_or_default().to_string())
+            }
+            NetRow::Other => NetPick::Other,
+            NetRow::Scan => NetPick::Scan,
         }
     }
 }
@@ -104,6 +117,7 @@ pub fn selected(rows: &[NetRow], pick: &NetPick) -> usize {
         NetPick::Top => return 0,
         NetPick::Name(n) => rows.iter().position(|r| r.name() == Some(n)),
         NetPick::Other => rows.iter().position(|r| *r == NetRow::Other),
+        NetPick::Scan => rows.iter().position(|r| *r == NetRow::Scan),
     };
     at.unwrap_or(0)
 }
@@ -151,6 +165,7 @@ pub fn list_line(row: &NetRow, snap: &Snapshot) -> Line {
             bars: Some(signal_bars(n.signal)),
         },
         NetRow::Other => Line::plain(OTHER_NETWORK, None),
+        NetRow::Scan => Line::plain(SCAN_NETWORKS, None),
     }
 }
 

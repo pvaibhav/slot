@@ -325,6 +325,9 @@ pub enum Phase {
     Networks {
         pick: crate::networks::NetPick,
     },
+    NetworkScan {
+        pick: crate::networks::NetPick,
+    },
     NetworkPage {
         ssid: String,
         row: usize,
@@ -339,6 +342,8 @@ pub enum KeyboardFor {
 
 pub struct NetLegends {
     pub join: [(TexId, u32); 2],
+    pub scan: [(TexId, u32); 2],
+    pub cancel: [(TexId, u32); 2],
     pub connect: [(TexId, u32); 2],
     pub disconnect: [(TexId, u32); 2],
     pub forget: [(TexId, u32); 2],
@@ -3441,6 +3446,7 @@ impl App {
             }
             Phase::QuickMenu { row } => self.quick_menu_input(row, action),
             Phase::Networks { .. } => self.networks_input(action),
+            Phase::NetworkScan { .. } => self.network_scan_input(action),
             Phase::NetworkPage { .. } => self.network_page_input(action),
             _ => {}
         }
@@ -5013,7 +5019,7 @@ impl App {
                 self.draw_menu_footer(out);
                 return;
             }
-            Phase::Networks { .. } | Phase::NetworkPage { .. } => {
+            Phase::Networks { .. } | Phase::NetworkScan { .. } | Phase::NetworkPage { .. } => {
                 self.draw_networks(out);
                 return self.hud.draw(self.canvas(), self.now(), out);
             }
@@ -6318,6 +6324,7 @@ impl App {
                 | Phase::About
                 | Phase::SetClock { .. }
                 | Phase::Networks { .. }
+                | Phase::NetworkScan { .. }
                 | Phase::NetworkPage { .. }
         ) && self.seated_cart().is_none()
             && !self.link_active()
@@ -6326,7 +6333,7 @@ impl App {
             && (self.has_saved()
                 || matches!(
                     self.phase,
-                    Phase::Networks { .. } | Phase::NetworkPage { .. }
+                    Phase::Networks { .. } | Phase::NetworkScan { .. } | Phase::NetworkPage { .. }
                 ))
     }
 
@@ -6387,7 +6394,7 @@ impl App {
 
     fn steer_wifi(&mut self) {
         self.probe_wifi();
-        let scan = matches!(self.phase, Phase::Networks { .. })
+        let scan = matches!(self.phase, Phase::NetworkScan { .. })
             && self.keyboard.is_none()
             && !self.state.wifi_off;
         if scan != self.wifi_scanning {
@@ -8071,8 +8078,9 @@ impl App {
     }
 
     fn open_networks(&mut self) {
+        let joined = self.wifi().status.ssid.clone().filter(|_| self.wifi_up());
         self.phase = Phase::Networks {
-            pick: crate::networks::NetPick::Top,
+            pick: joined.map_or(crate::networks::NetPick::Top, crate::networks::NetPick::Name),
         };
         if !self.state.wifi_off {
             self.hold_wifi();
@@ -8108,9 +8116,41 @@ impl App {
         };
     }
 
+    fn network_scan_input(&mut self, action: Action) {
+        use crate::networks::NetPick;
+        let rows = crate::networks::scan_rows(self.wifi());
+        let Phase::NetworkScan { pick } = &self.phase else {
+            return;
+        };
+        let at = crate::networks::selected(&rows, pick);
+        let n = rows.len();
+        let to = match action {
+            Action::GbaDown(Btn::Up) if n > 0 => (at + n - 1) % n,
+            Action::GbaDown(Btn::Down) if n > 0 => (at + 1) % n,
+            Action::GbaDown(Btn::A) => {
+                if let Some(row) = rows.get(at).cloned() {
+                    self.pick_network(row);
+                }
+                return;
+            }
+            Action::GbaDown(Btn::B) | Action::QuickMenu => {
+                self.phase = Phase::Networks { pick: NetPick::Scan };
+                return;
+            }
+            _ => return,
+        };
+        self.phase = Phase::NetworkScan {
+            pick: NetPick::of(&rows[to]),
+        };
+    }
+
     fn pick_network(&mut self, row: crate::networks::NetRow) {
-        use crate::networks::{NetRow, NAME_TITLE, PASSWORD_TITLE};
+        use crate::networks::{NetPick, NetRow, NAME_TITLE, PASSWORD_TITLE};
         match row {
+            NetRow::Scan => {
+                self.wifi_send(crate::wifi::Cmd::ClearScan);
+                self.phase = Phase::NetworkScan { pick: NetPick::Top };
+            }
             NetRow::Saved(s) => {
                 self.phase = Phase::NetworkPage {
                     ssid: s.ssid,
@@ -8277,7 +8317,8 @@ impl App {
 
     pub fn network_screen(&self) -> Option<crate::networks::NetScreen> {
         use crate::networks::{
-            list_line, list_message, list_rows, page_line, page_rows, selected, NetScreen,
+            list_line, list_message, list_rows, page_line, page_rows, scan_message, scan_rows,
+            selected, NetScreen,
         };
         let (snap, off) = (self.wifi(), self.state.wifi_off);
         match &self.phase {
@@ -8286,7 +8327,15 @@ impl App {
                 Some(NetScreen {
                     selected: selected(&rows, pick),
                     lines: rows.iter().map(|r| list_line(r, snap)).collect(),
-                    message: list_message(snap, off),
+                    message: list_message(off),
+                })
+            }
+            Phase::NetworkScan { pick } => {
+                let rows = scan_rows(snap);
+                Some(NetScreen {
+                    selected: selected(&rows, pick),
+                    lines: rows.iter().map(|r| list_line(r, snap)).collect(),
+                    message: scan_message(snap),
                 })
             }
             Phase::NetworkPage { ssid, row } => {
@@ -8302,15 +8351,21 @@ impl App {
     }
 
     pub fn network_action(&self) -> Option<&'static str> {
-        use crate::networks::{list_rows, page_rows, selected, NetRow, PageRow};
+        use crate::networks::{list_rows, page_rows, scan_rows, selected, NetRow, PageRow};
         let (snap, off) = (self.wifi(), self.state.wifi_off);
+        let pick_action = |row: &NetRow| match row {
+            NetRow::Saved(_) => "Open",
+            NetRow::Nearby(_) | NetRow::Other => "Join",
+            NetRow::Scan => "Scan",
+        };
         match &self.phase {
             Phase::Networks { pick } => {
                 let rows = list_rows(snap, off);
-                match rows.get(selected(&rows, pick))? {
-                    NetRow::Saved(_) => Some("Open"),
-                    NetRow::Nearby(_) | NetRow::Other => Some("Join"),
-                }
+                rows.get(selected(&rows, pick)).map(pick_action)
+            }
+            Phase::NetworkScan { pick } => {
+                let rows = scan_rows(snap);
+                rows.get(selected(&rows, pick)).map(pick_action)
             }
             Phase::NetworkPage { ssid, row } => {
                 let rows = page_rows(snap, ssid, off);
@@ -8323,6 +8378,15 @@ impl App {
                 }
             }
             _ => None,
+        }
+    }
+
+    pub fn network_back(&self) -> &'static str {
+        let scanning = matches!(self.phase, Phase::NetworkScan { .. }) && self.wifi().scan.is_none();
+        if scanning {
+            "Cancel"
+        } else {
+            "Back"
         }
     }
 
@@ -8392,12 +8456,17 @@ impl App {
             true => faces.legend_light,
             false => faces.legend,
         };
-        self.draw_side_legend(back, false, LINK_LEGEND_Y, out);
         let net = self.net_legends.as_ref();
+        let left = match self.network_back() {
+            "Cancel" => net.map_or(back, |n| n.cancel[light as usize]),
+            _ => back,
+        };
+        self.draw_side_legend(left, false, LINK_LEGEND_Y, out);
         let right = match self.network_action() {
             Some("Open") => Some(open),
             Some("Change") => Some(change),
             Some("Join") => net.map(|n| n.join[light as usize]),
+            Some("Scan") => net.map(|n| n.scan[light as usize]),
             Some("Connect") => net.map(|n| n.connect[light as usize]),
             Some("Disconnect") => net.map(|n| n.disconnect[light as usize]),
             Some("Forget") => net.map(|n| n.forget[light as usize]),

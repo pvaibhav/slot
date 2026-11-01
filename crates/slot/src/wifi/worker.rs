@@ -153,6 +153,7 @@ impl Core {
             Cmd::Release => self.release(false),
             Cmd::PowerOff => self.release(true),
             Cmd::Scan => self.next_scan = Some(now),
+            Cmd::ClearScan => self.snap.scan = None,
             Cmd::Join {
                 ssid,
                 password,
@@ -440,6 +441,9 @@ impl Wifi {
             Cmd::AutoJoin { id, on } => Some((id, on)),
             _ => None,
         };
+        if cmd == Cmd::ClearScan {
+            self.snap.scan = None;
+        }
         self.post(Msg::Cmd(cmd));
         if let (Some((id, on)), Mode::Thread { .. }) = (flip, &self.mode) {
             self.auto_join.push((self.posted, id, on));

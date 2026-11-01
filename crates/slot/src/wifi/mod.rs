@@ -63,6 +63,7 @@ pub enum Cmd {
     Release,
     PowerOff,
     Scan,
+    ClearScan,
     Join {
         ssid: String,
         password: String,

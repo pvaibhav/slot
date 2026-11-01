@@ -87,6 +87,13 @@ fn open_networks(f: &mut Frontend) {
     settle(f);
 }
 
+fn open_scan(f: &mut Frontend) {
+    open_networks(f);
+    select(f, slot::networks::SCAN_NETWORKS);
+    press(f, Btn::A);
+    settle(f);
+}
+
 fn frame(f: &mut Frontend, c: &mut Compositor) -> Vec<u8> {
     f.compose(c);
     f.compose(c);
@@ -121,7 +128,20 @@ fn the_networks_list_renders() {
     });
     settle(&mut f);
     open_networks(&mut f);
-    let at = select(&mut f, "Neighbor 5G");
+    let saved = f.app().network_screen().unwrap();
+    assert_eq!(saved.lines.len(), 2);
+    let px = frame(&mut f, &mut c);
+    dump(&px, "saved");
+    let canvas = f.app().canvas();
+    let value = [canvas.w - 250.0, net_row_top(2, 0, 0) + 8.0, 210.0, 36.0];
+    assert!(
+        count_in(&px, value, inked) > 50,
+        "Home has no Connected value"
+    );
+    select(&mut f, slot::networks::SCAN_NETWORKS);
+    press(&mut f, Btn::A);
+    settle(&mut f);
+    let at = select(&mut f, "xfinitywifi");
     let screen = f.app().network_screen().unwrap();
     let count = screen.lines.len();
     let px = frame(&mut f, &mut c);
@@ -155,11 +175,6 @@ fn the_networks_list_renders() {
             }
         }
     }
-    let value = [canvas.w - 250.0, top(0) + 8.0, 210.0, 36.0];
-    assert!(
-        count_in(&px, value, inked) > 50,
-        "Home has no Connected value"
-    );
 }
 
 #[test]
@@ -232,7 +247,7 @@ fn tex_probe(c: &mut Compositor) -> usize {
 }
 
 fn open_home_keyboard(f: &mut Frontend) {
-    open_networks(f);
+    open_scan(f);
     select(f, "Home");
     press(f, Btn::A);
     assert!(f.app().keyboard().is_some());
@@ -353,6 +368,8 @@ fn the_list_says_it_is_scanning_until_results_arrive_then_offers_other() {
             }
             press(&mut f, Btn::A);
         }
+        select(&mut f, slot::networks::SCAN_NETWORKS);
+        press(&mut f, Btn::A);
         let s = f.app().network_screen().unwrap();
         assert_eq!(s.message, Some("Scanning for networks"));
         assert!(s.lines.is_empty(), "{panel:?}: rows before the scan");

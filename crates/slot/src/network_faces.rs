@@ -135,6 +135,11 @@ impl NetworkSync {
             bars: [0, 1, 2, 3].map(|n| [false, true].map(|l| up(&net_bars_face(n, l)))),
             lock: [false, true].map(|l| up(&net_lock_face(l))),
         });
+        let cancel = [false, true].map(|light| {
+            let [face, _] = prompt_legends(footer_ink(light), "Cancel", "Join");
+            let (id, w, _) = up(&face);
+            (id, w)
+        });
         let mut word = |w: &str| {
             [false, true].map(|light| {
                 let [_, face] = prompt_legends(footer_ink(light), "Back", w);
@@ -143,6 +148,8 @@ impl NetworkSync {
             })
         };
         app.set_network_legends(NetLegends {
+            cancel,
+            scan: word("Scan"),
             join: word("Join"),
             connect: word("Connect"),
             disconnect: word("Disconnect"),

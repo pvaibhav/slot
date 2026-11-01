@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use common::{app_booting_at, tmp_root_with_carts, CLOCK_IS_SET};
 use slot::app::{App, KeyboardFor, Phase};
-use slot::networks::{Line, NetPick};
+use slot::networks::{Line, NetPick, OTHER_NETWORK, SCANNING_MESSAGE, SCAN_NETWORKS};
 use slot::wifi::{Cmd, Fake, Wifi};
 use slot_input::{Action, Btn};
 use slot_store::{write_slot_state, SlotState};
@@ -150,15 +150,14 @@ fn join(a: &mut App, ssid: &str, password: &str) {
 }
 
 #[test]
-fn saved_networks_list_first_then_nearby_by_strength() {
+fn scan_results_run_by_strength_without_saved_networks() {
     let _g = serial();
     let (_d, mut a, _log) = booted(Fake::demo());
     join(&mut a, "CoffeeShop Guest", "");
-    open_networks(&mut a);
+    open_scan(&mut a);
     assert_eq!(
         lines(&a),
         vec![
-            line("CoffeeShop Guest", Some("Connected"), false, None),
             line("Home", None, true, Some(3)),
             line("Neighbor 5G", None, true, Some(2)),
             line("xfinitywifi", None, false, Some(1)),
@@ -174,7 +173,7 @@ fn the_list_scans_only_while_it_is_shown() {
     let scans = |log: &Log| log.lock().unwrap().iter().filter(|l| *l == "scan").count();
     settle(&mut a);
     assert_eq!(scans(&log), 0);
-    open_networks(&mut a);
+    open_scan(&mut a);
     assert_eq!(scans(&log), 1);
     for _ in 0..12 {
         settle(&mut a);
@@ -196,7 +195,7 @@ fn hidden_names_drop_and_duplicates_merge_into_the_strongest() {
         &[],
     );
     let (_d, mut a, _log) = booted(fake);
-    open_networks(&mut a);
+    open_scan(&mut a);
     assert_eq!(
         lines(&a),
         vec![
@@ -212,7 +211,7 @@ fn the_selection_stays_on_its_name_across_a_rescan() {
     let fake = Fake::demo();
     let nearby = fake.nearby.clone();
     let (_d, mut a, _log) = booted(fake);
-    open_networks(&mut a);
+    open_scan(&mut a);
     select(&mut a, "xfinitywifi");
     let before = a.network_screen().unwrap().selected;
     nearby
@@ -235,7 +234,7 @@ fn the_selection_stays_on_its_name_across_a_rescan() {
 fn the_list_starts_at_the_top_once_the_scan_lands() {
     let _g = serial();
     let (_d, mut a, _log) = booted(Fake::demo());
-    open_networks(&mut a);
+    open_scan(&mut a);
     assert_eq!(labels(&a).last().unwrap(), "Other Network");
     assert_eq!(a.network_screen().unwrap().selected, 0);
     assert_eq!(selected_label(&a), "Home");
@@ -245,7 +244,7 @@ fn the_list_starts_at_the_top_once_the_scan_lands() {
 fn other_network_keeps_the_pointer_across_a_rescan() {
     let _g = serial();
     let (_d, mut a, _log) = booted(Fake::demo());
-    open_networks(&mut a);
+    open_scan(&mut a);
     select(&mut a, "Other Network");
     for _ in 0..4 {
         settle(&mut a);
@@ -257,7 +256,7 @@ fn other_network_keeps_the_pointer_across_a_rescan() {
 fn a_secured_network_asks_for_a_password_then_lands_on_its_page() {
     let _g = serial();
     let (_d, mut a, log) = booted(Fake::demo());
-    open_networks(&mut a);
+    open_scan(&mut a);
     select(&mut a, "Home");
     press(&mut a, Btn::A);
     let kb = a.keyboard().expect("no keyboard");
@@ -288,7 +287,7 @@ fn a_secured_network_asks_for_a_password_then_lands_on_its_page() {
 fn an_open_network_joins_without_a_password() {
     let _g = serial();
     let (_d, mut a, log) = booted(Fake::demo());
-    open_networks(&mut a);
+    open_scan(&mut a);
     select(&mut a, "CoffeeShop Guest");
     press(&mut a, Btn::A);
     assert!(a.keyboard().is_none());
@@ -323,13 +322,13 @@ fn a_saved_network_opens_its_page() {
 fn cancel_on_the_keyboard_saves_nothing() {
     let _g = serial();
     let (_d, mut a, log) = booted(Fake::demo());
-    open_networks(&mut a);
+    open_scan(&mut a);
     select(&mut a, "Neighbor 5G");
     press(&mut a, Btn::A);
     type_text(&mut a, "secret99");
     press(&mut a, Btn::Y);
     assert!(a.keyboard().is_none());
-    assert!(matches!(a.phase(), Phase::Networks { .. }));
+    assert!(matches!(a.phase(), Phase::NetworkScan { .. }));
     assert_eq!(selected_label(&a), "Neighbor 5G");
     settle(&mut a);
     assert!(!log.lock().unwrap().iter().any(|l| l.starts_with("add")));
@@ -339,7 +338,7 @@ fn cancel_on_the_keyboard_saves_nothing() {
 fn a_password_over_63_characters_is_invalid() {
     let _g = serial();
     let (_d, mut a, _log) = booted(Fake::demo());
-    open_networks(&mut a);
+    open_scan(&mut a);
     select(&mut a, "Home");
     press(&mut a, Btn::A);
     type_text(&mut a, &"a".repeat(64));
@@ -354,7 +353,7 @@ fn a_password_over_63_characters_is_invalid() {
 fn a_short_password_keeps_the_text_and_says_it_is_invalid() {
     let _g = serial();
     let (_d, mut a, log) = booted(Fake::demo());
-    open_networks(&mut a);
+    open_scan(&mut a);
     select(&mut a, "Home");
     press(&mut a, Btn::A);
     type_text(&mut a, "abc");
@@ -380,7 +379,7 @@ fn a_short_password_keeps_the_text_and_says_it_is_invalid() {
 fn other_network_asks_name_then_password_and_saves_hidden() {
     let _g = serial();
     let (_d, mut a, log) = booted(Fake::demo());
-    open_networks(&mut a);
+    open_scan(&mut a);
     select(&mut a, "Other Network");
     press(&mut a, Btn::A);
     assert_eq!(a.keyboard().map(|k| k.title()), Some("Network Name"));
@@ -406,7 +405,7 @@ fn other_network_asks_name_then_password_and_saves_hidden() {
 fn an_empty_network_name_stays_on_the_keyboard() {
     let _g = serial();
     let (_d, mut a, _log) = booted(Fake::demo());
-    open_networks(&mut a);
+    open_scan(&mut a);
     select(&mut a, "Other Network");
     press(&mut a, Btn::A);
     press(&mut a, Btn::Start);
@@ -539,7 +538,7 @@ fn forget_asks_first() {
 fn closing_the_lid_drops_the_keyboard() {
     let _g = serial();
     let (_d, mut a, log) = booted(Fake::demo());
-    open_networks(&mut a);
+    open_scan(&mut a);
     select(&mut a, "Home");
     press(&mut a, Btn::A);
     type_text(&mut a, "password");
@@ -646,9 +645,10 @@ fn networks_holds_the_radio_without_a_wifi_conf() {
     a.set_wifi(Wifi::inline(Box::new(fake)));
     settle(&mut a);
     assert!(!logged(&log, "start"));
-    open_networks(&mut a);
+    open_scan(&mut a);
     assert!(a.wifi().held);
     assert!(labels(&a).contains(&"Home".to_string()));
+    press(&mut a, Btn::B);
     press(&mut a, Btn::B);
     press(&mut a, Btn::B);
     press(&mut a, Btn::B);
@@ -758,4 +758,111 @@ fn losing_the_connection_moves_the_pointer_off_a_tool() {
     settle(&mut a);
     assert!(!a.wifi_up());
     assert_eq!(a.quick_menu(), Some(QuickRow::Networks));
+}
+
+fn open_scan(a: &mut App) {
+    open_networks(a);
+    select(a, SCAN_NETWORKS);
+    press(a, Btn::A);
+    assert!(matches!(a.phase(), Phase::NetworkScan { .. }), "{:?}", a.phase());
+    settle(a);
+}
+
+#[test]
+fn the_network_page_is_saved_networks_then_the_scan_row() {
+    let _g = serial();
+    let (_d, mut a, log) = booted(Fake::joined());
+    open_networks(&mut a);
+    assert_eq!(labels(&a), vec!["Home", SCAN_NETWORKS]);
+    assert!(!logged(&log, "scan"));
+}
+
+#[test]
+fn the_pointer_starts_on_the_connected_network() {
+    let _g = serial();
+    let fake = Fake::joined();
+    let (_d, mut a, _log) = booted(fake);
+    a.wifi_send(Cmd::Join {
+        ssid: "CoffeeShop Guest".into(),
+        password: String::new(),
+        hidden: false,
+    });
+    settle(&mut a);
+    open_networks(&mut a);
+    assert_eq!(selected_label(&a), "CoffeeShop Guest");
+}
+
+#[test]
+fn nothing_saved_leaves_only_the_scan_row() {
+    let _g = serial();
+    let (_d, mut a, log) = booted(Fake::demo());
+    open_networks(&mut a);
+    assert_eq!(labels(&a), vec![SCAN_NETWORKS]);
+    assert!(!logged(&log, "scan"));
+}
+
+#[test]
+fn the_scan_screen_says_so_until_the_results_land() {
+    let _g = serial();
+    let (_d, mut a, _log) = booted(Fake::joined());
+    open_networks(&mut a);
+    select(&mut a, SCAN_NETWORKS);
+    press(&mut a, Btn::A);
+    let s = a.network_screen().unwrap();
+    assert!(s.lines.is_empty(), "{:?}", s.lines);
+    assert_eq!(s.message, Some(SCANNING_MESSAGE));
+    assert_eq!(a.network_action(), None);
+    assert_eq!(a.network_back(), "Cancel");
+    settle(&mut a);
+    assert_eq!(a.network_screen().unwrap().message, None);
+    assert_eq!(a.network_back(), "Back");
+}
+
+#[test]
+fn scan_results_leave_out_saved_networks() {
+    let _g = serial();
+    let (_d, mut a, _log) = booted(Fake::joined());
+    open_scan(&mut a);
+    let found = labels(&a);
+    assert!(!found.iter().any(|l| l == "Home"), "{found:?}");
+    assert!(found.iter().any(|l| l == "Neighbor 5G"), "{found:?}");
+    assert_eq!(found.last().map(String::as_str), Some(OTHER_NETWORK));
+}
+
+#[test]
+fn b_cancels_the_scan_and_lands_on_the_scan_row() {
+    let _g = serial();
+    let (_d, mut a, log) = booted(Fake::joined());
+    open_networks(&mut a);
+    select(&mut a, SCAN_NETWORKS);
+    press(&mut a, Btn::A);
+    press(&mut a, Btn::B);
+    assert!(matches!(a.phase(), Phase::Networks { .. }), "{:?}", a.phase());
+    assert_eq!(selected_label(&a), SCAN_NETWORKS);
+    settle(&mut a);
+    let scans = log.lock().unwrap().iter().filter(|l| *l == "scan").count();
+    settle(&mut a);
+    settle(&mut a);
+    assert_eq!(log.lock().unwrap().iter().filter(|l| *l == "scan").count(), scans);
+}
+
+#[test]
+fn a_second_scan_starts_from_the_message() {
+    let _g = serial();
+    let (_d, mut a, _log) = booted(Fake::joined());
+    open_scan(&mut a);
+    press(&mut a, Btn::B);
+    settle(&mut a);
+    select(&mut a, SCAN_NETWORKS);
+    press(&mut a, Btn::A);
+    assert_eq!(a.network_screen().unwrap().message, Some(SCANNING_MESSAGE));
+}
+
+#[test]
+fn wifi_off_has_no_scan_row() {
+    let _g = serial();
+    let (_d, mut a, _log) = booted(Fake::joined());
+    open_networks(&mut a);
+    a.set_wifi_off(true);
+    assert_eq!(labels(&a), vec!["Home"]);
 }
