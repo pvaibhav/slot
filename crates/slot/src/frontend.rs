@@ -63,6 +63,8 @@ pub struct Frontend {
     fetch_sync: FetchSync,
     studio_sync: StudioSync,
     print_tex: Option<crate::print_scene::PrintTextures>,
+    print_stage: Option<std::sync::mpsc::Receiver<Option<crate::print_scene::StageArt>>>,
+    print_stage_asked: bool,
     quick_clock: QuickClock,
     quick_network: QuickClock,
     networks: crate::network_faces::NetworkSync,
@@ -286,30 +288,19 @@ impl FetchSync {
 fn sync_server(
     app: &mut App,
     compositor: &mut Compositor,
-    tex: &mut Option<crate::print_scene::PrintTextures>,
+    tex: Option<crate::print_scene::PrintTextures>,
 ) {
-    use crate::print_scene::{PrintArtState, PrintTextures};
+    use crate::print_scene::PrintArtState;
+    let Some(have) = tex else {
+        return;
+    };
+    app.set_server_tex(have);
     match app.take_server_art() {
         PrintArtState::Pending => {}
         PrintArtState::Failed => app.server_art_failed(),
         PrintArtState::Ready(art) => {
-            let up = match *tex {
-                Some(have) => {
-                    have.set_paper(compositor, &art);
-                    Ok(have)
-                }
-                None => PrintTextures::upload(compositor, &art),
-            };
-            match up {
-                Ok(have) => {
-                    *tex = Some(have);
-                    app.set_server_tex(have);
-                }
-                Err(e) => {
-                    eprintln!("slot: server: {e}");
-                    app.server_art_failed();
-                }
-            }
+            have.set_paper(compositor, &art);
+            app.server_paper_up();
         }
     }
 }
@@ -543,6 +534,8 @@ impl Frontend {
             fetch_sync: FetchSync::new(),
             studio_sync: StudioSync::new(),
             print_tex: None,
+            print_stage: None,
+            print_stage_asked: false,
             quick_clock: QuickClock::default(),
             quick_network: QuickClock::default(),
             networks: Default::default(),
@@ -777,6 +770,41 @@ impl Frontend {
         }
     }
 
+    fn step_print_stage(&mut self, compositor: &mut Compositor) {
+        let app = self.session.app();
+        if !self.print_stage_asked && (matches!(app.phase(), Phase::Shelf) || app.server_open()) {
+            self.print_stage_asked = true;
+            let (tx, rx) = std::sync::mpsc::channel();
+            let spawned = std::thread::Builder::new()
+                .name("slot-print-stage".into())
+                .spawn(move || {
+                    let _ = tx.send(crate::print_scene::stage_art());
+                });
+            if let Err(e) = spawned {
+                eprintln!("slot: print stage: worker thread failed to start: {e}");
+            }
+            self.print_stage = Some(rx);
+        }
+        let Some(rx) = &self.print_stage else {
+            return;
+        };
+        match rx.try_recv() {
+            Ok(art) => {
+                self.print_stage = None;
+                self.print_tex = art.and_then(|art| {
+                    crate::print_scene::PrintTextures::upload(compositor, &art)
+                        .inspect_err(|e| eprintln!("slot: server: {e}"))
+                        .ok()
+                });
+                if self.print_tex.is_none() {
+                    self.session.app_mut().server_art_failed();
+                }
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => self.print_stage = None,
+        }
+    }
+
     fn poll_ui_faces(&mut self, compositor: &mut Compositor) {
         let Some(rx) = &self.ui_faces else {
             return;
@@ -976,7 +1004,8 @@ impl Frontend {
         sync_update(self.session.app_mut(), compositor, &mut self.update_text);
         sync_fetch_art(self.session.app_mut(), compositor, &mut self.fetch_sync);
         sync_studio(self.session.app_mut(), compositor, &mut self.studio_sync);
-        sync_server(self.session.app_mut(), compositor, &mut self.print_tex);
+        self.step_print_stage(compositor);
+        sync_server(self.session.app_mut(), compositor, self.print_tex);
         let stale = self.session.app_mut().take_stale_labels();
         if !stale.is_empty() {
             if let Some(root) = self.session.app().root().map(|r| r.to_path_buf()) {
@@ -1074,6 +1103,10 @@ impl Frontend {
         self.rebuild.is_some()
     }
 
+    pub fn rebuild_drawn(&self) -> bool {
+        self.rebuild_faces.shown.is_some()
+    }
+
     fn check_labels(
         root: &std::path::Path,
         carts: Vec<slot_store::Cart>,
@@ -1129,6 +1162,9 @@ impl Frontend {
             self.last = Instant::now();
             return false;
         }
+        if !rebuild.on_screen() {
+            return false;
+        }
         let faces = &mut self.rebuild_faces;
         let title = *faces.title.get_or_insert_with(|| {
             let f = rebuild_title_face("Caching New Labels");
@@ -1157,7 +1193,7 @@ impl Frontend {
     pub fn advance(&mut self, input: &mut dyn InputSource) {
         let now = self.now();
         let events = input.poll(now);
-        if self.rebuild.is_some() {
+        if self.rebuild.as_ref().is_some_and(Rebuild::on_screen) {
             return;
         }
         self.session.feed(events, now);

@@ -1,14 +1,15 @@
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread;
 
+use crate::app::shift_down;
 use slot_gfx::{paper_flap_shows, Canvas, Compositor, Draw, GfxError, TexId, OUT_H, OUT_W};
 use slot_input::Millis;
 use slot_ui::{
-    cover_bytes, default_background, receipt_blank, receipt_face, ReceiptText,
+    cover_bytes, default_background, ease, receipt_blank, receipt_face, ReceiptText,
     UndoFace,
 };
 
-const FADE: Millis = 260;
+const SLIDE: Millis = 260;
 const RISE: Millis = 640;
 const LAMP: Millis = 260;
 const PRINT: Millis = 3200;
@@ -22,7 +23,7 @@ const DARK: Millis = 60;
 const DROP: Millis = 480;
 const TEAR_INTO_RIP: Millis = 710;
 
-const RISE_AT: Millis = FADE;
+const RISE_AT: Millis = SLIDE;
 const LAMP_AT: Millis = RISE_AT + RISE;
 const PRINT_AT: Millis = LAMP_AT + LAMP;
 const HOLD_AT: Millis = PRINT_AT + PRINT;
@@ -69,7 +70,7 @@ pub struct Paper {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PrintFrame {
-    pub menu_alpha: f32,
+    pub slide: f32,
     pub printer_y: f32,
     pub lamp_on: bool,
     pub paper: Option<Paper>,
@@ -144,7 +145,7 @@ fn carried(a: Millis) -> Paper {
 
 fn opening(t: Millis) -> PrintFrame {
     let up = PrintFrame {
-        menu_alpha: 0.0,
+        slide: 0.0,
         printer_y: 0.0,
         lamp_on: true,
         paper: None,
@@ -161,7 +162,7 @@ fn opening(t: Millis) -> PrintFrame {
     };
     match t {
         t if t < RISE_AT => PrintFrame {
-            menu_alpha: 1.0 - ratio(t, FADE),
+            slide: 1.0 - ease(ratio(t, SLIDE)),
             printer_y: OFF_Y,
             lamp_on: false,
             ..up
@@ -207,10 +208,10 @@ fn clearing(base: &PrintFrame) -> Millis {
 }
 
 fn closing_time(base: &PrintFrame) -> Millis {
-    if base.menu_alpha > 0.0 {
-        return ((1.0 - base.menu_alpha) * FADE as f32).ceil() as Millis;
+    if base.slide > 0.0 {
+        return ((1.0 - base.slide) * SLIDE as f32).ceil() as Millis;
     }
-    clearing(base) + DROP + FADE
+    clearing(base) + DROP + SLIDE
 }
 
 fn cleared(base: &PrintFrame, paper: Paper, a: f32) -> Paper {
@@ -226,9 +227,9 @@ fn cleared(base: &PrintFrame, paper: Paper, a: f32) -> Paper {
 }
 
 fn closing(base: &PrintFrame, a: Millis) -> PrintFrame {
-    if base.menu_alpha > 0.0 {
+    if base.slide > 0.0 {
         return PrintFrame {
-            menu_alpha: (base.menu_alpha + ratio(a, FADE)).min(1.0),
+            slide: (base.slide + ratio(a, SLIDE)).min(1.0),
             ..*base
         };
     }
@@ -257,7 +258,7 @@ fn closing(base: &PrintFrame, a: Millis) -> PrintFrame {
         };
     }
     PrintFrame {
-        menu_alpha: ratio(a - DROP, FADE).min(1.0),
+        slide: ease(ratio(a - DROP, SLIDE).min(1.0)),
         printer_y: OFF_Y,
         ..gone
     }
@@ -284,6 +285,12 @@ impl PrintScene {
     pub fn stop(&mut self, now: Millis) {
         if self.stop.is_none() {
             self.stop = Some(now.saturating_sub(self.start));
+        }
+    }
+
+    pub fn hold_print(&mut self, now: Millis) {
+        if self.stop.is_none() && now.saturating_sub(self.start) >= PRINT_AT {
+            self.start = now - (PRINT_AT - 1);
         }
     }
 
@@ -329,12 +336,14 @@ const LAMP_XY: (f32, f32) = (355.0, 349.0);
 const LAMP_OFF: [u8; 3] = [0x14, 0x16, 0x1b];
 const SCENE_W: f32 = OUT_W as f32;
 
-pub struct PrintArt {
-    wood: Vec<u8>,
+pub struct StageArt {
     printer: Vec<u8>,
     front: Vec<u8>,
-    paper: UndoFace,
     lamp: UndoFace,
+}
+
+pub struct PrintArt {
+    paper: UndoFace,
 }
 
 pub enum PaperJob {
@@ -372,11 +381,13 @@ pub fn print_art(job: PaperJob) -> Option<PrintArt> {
             receipt_blank(&lines)
         }
     };
-    Some(PrintArt {
-        wood: default_background()?.to_vec(),
+    Some(PrintArt { paper })
+}
+
+pub fn stage_art() -> Option<StageArt> {
+    Some(StageArt {
         printer: cover_bytes(PRINTER_PNG, OUT_W, OUT_H)?,
         front: cover_bytes(FRONT_PNG, OUT_W, OUT_H)?,
-        paper,
         lamp: lamp_disc(),
     })
 }
@@ -436,13 +447,13 @@ pub struct PrintTextures {
 }
 
 impl PrintTextures {
-    pub fn upload(c: &mut Compositor, art: &PrintArt) -> Result<PrintTextures, GfxError> {
+    pub fn upload(c: &mut Compositor, art: &StageArt) -> Result<PrintTextures, GfxError> {
         c.prepare_paper()?;
         Ok(PrintTextures {
-            wood: c.create_texture(OUT_W, OUT_H, &art.wood),
+            wood: c.create_texture(OUT_W, OUT_H, default_background().unwrap_or_default()),
             printer: c.create_texture(OUT_W, OUT_H, &art.printer),
             front: c.create_texture(OUT_W, OUT_H, &art.front),
-            paper: c.create_texture(art.paper.w, art.paper.h, &art.paper.rgba),
+            paper: c.create_texture(1, 1, &[0; 4]),
             lamp: (
                 c.create_texture(art.lamp.w, art.lamp.h, &art.lamp.rgba),
                 art.lamp.w,
@@ -473,6 +484,12 @@ fn paper_draw(tex: TexId, p: &Paper, shift: f32, flap: bool) -> Draw {
 }
 
 pub fn print_draws(f: &PrintFrame, tex: &PrintTextures, canvas: Canvas, out: &mut Vec<Draw>) {
+    let from = out.len();
+    scene_draws(f, tex, canvas, out);
+    shift_down(&mut out[from..], -f.slide * canvas.h);
+}
+
+fn scene_draws(f: &PrintFrame, tex: &PrintTextures, canvas: Canvas, out: &mut Vec<Draw>) {
     let shift = canvas.centred(SCENE_W);
     let (w, h) = (SCENE_W, OUT_H as f32);
     let layer = |tex, y| Draw::Tex {
@@ -484,6 +501,9 @@ pub fn print_draws(f: &PrintFrame, tex: &PrintTextures, canvas: Canvas, out: &mu
         alpha: 1.0,
     };
     out.push(layer(tex.wood, 0.0));
+    if f.slide > 0.0 {
+        return;
+    }
     out.push(layer(tex.printer, f.printer_y));
     if !f.lamp_on {
         let (lamp, side) = tex.lamp;

@@ -1,7 +1,7 @@
 #![cfg(target_os = "macos")]
 
 use slot::print_scene::{
-    print_art, print_draws, PaperJob, PrintArtState, PrintArtWorker, PrintFrame, PrintScene,
+    print_art, print_draws, stage_art, PaperJob, PrintArtState, PrintArtWorker, PrintFrame, PrintScene,
     PrintTextures,
 };
 use slot::server::qr_modules;
@@ -37,8 +37,8 @@ fn rig(window: (u32, u32)) -> Option<Rig> {
     let surface = HeadlessSurface::new().ok()?;
     let mut c = Compositor::new(&surface).ok()?;
     c.fit(window);
-    let art = print_art(job()).unwrap();
-    let tex = PrintTextures::upload(&mut c, &art).unwrap();
+    let tex = PrintTextures::upload(&mut c, &stage_art().unwrap()).unwrap();
+    tex.set_paper(&mut c, &print_art(job()).unwrap());
     Some(Rig {
         c,
         tex,
@@ -478,4 +478,36 @@ fn contact_sheet() {
         .unwrap()
         .write_image_data(&sheet)
         .unwrap();
+}
+
+#[test]
+fn the_slide_carries_the_whole_scene_up() {
+    let Some(mut r) = rig((OUT_W, OUT_H)) else {
+        return;
+    };
+    let mut s = PrintScene::new(0);
+    s.stop(REST_AT);
+    let still = s.frame(REST_AT + 920);
+    assert!(still.slide == 0.0 && !still.lamp_on && still.paper.is_none());
+    let half = PrintFrame {
+        slide: 0.5,
+        ..still
+    };
+    let whole = r.shot(&still);
+    let slid = r.shot(&half);
+    let row = |px: &[u8], y: usize| px[y * OUT_W as usize * 4..(y + 1) * OUT_W as usize * 4].to_vec();
+    assert_eq!(row(&slid, 0), row(&whole, OUT_H as usize / 2));
+    assert_ne!(row(&slid, OUT_H as usize - 1), row(&whole, OUT_H as usize - 1));
+}
+
+#[test]
+fn the_printer_does_not_ride_up_with_the_slide() {
+    let Some(r) = rig((OUT_W, OUT_H)) else {
+        return;
+    };
+    let mut s = PrintScene::new(0);
+    s.stop(REST_AT);
+    let mut d = Vec::new();
+    print_draws(&s.frame(REST_AT + 1040), &r.tex, r.canvas, &mut d);
+    assert_eq!(d.len(), 1, "{d:?}");
 }

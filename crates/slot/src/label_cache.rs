@@ -12,6 +12,7 @@ use slot_ui::{cover, label_size};
 const DIR: &str = "Cache/Labels";
 const HEAD: usize = 24;
 const STALL: Duration = Duration::from_secs(20);
+pub const SCREEN_FROM: usize = 50;
 
 pub fn label_art(root: &Path, cart: &Cart) -> Option<Vec<u8>> {
     let src = cart.label.as_deref()?;
@@ -125,6 +126,10 @@ impl Rebuild {
             moved: Instant::now(),
             stall,
         }
+    }
+
+    pub fn on_screen(&self) -> bool {
+        self.total >= SCREEN_FROM
     }
 
     pub fn done(&self) -> usize {

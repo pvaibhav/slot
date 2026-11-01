@@ -16,10 +16,10 @@ fn near(a: f32, b: f32) -> bool {
 fn timeline_matches_the_table() {
     let s = PrintScene::new(1000);
     let at = |t: u64| s.frame(1000 + t);
-    assert!(near(at(0).menu_alpha, 1.0));
-    assert!(near(at(130).menu_alpha, 0.5));
+    assert!(near(at(0).slide, 1.0));
+    assert!(near(at(130).slide, 0.5));
     assert!(near(at(130).printer_y, 490.0));
-    assert!(near(at(260).menu_alpha, 0.0));
+    assert!(near(at(260).slide, 0.0));
     assert!(near(at(260).printer_y, 490.0));
     assert!(near(at(260 + 320).printer_y, 490.0 * 0.125));
     assert!(near(at(900).printer_y, 0.0));
@@ -313,8 +313,8 @@ fn stop_at_rest_runs_the_mockup_path() {
     assert!(near(dark.printer_y, 0.0));
     assert!(near(s.frame(stop + 440 + 240).printer_y, 490.0 * 0.125));
     assert!(near(s.frame(stop + 920).printer_y, 490.0));
-    assert!(near(s.frame(stop + 920).menu_alpha, 0.0));
-    assert!(near(s.frame(stop + 1050).menu_alpha, 0.5));
+    assert!(near(s.frame(stop + 920).slide, 0.0));
+    assert!(near(s.frame(stop + 1050).slide, 0.5));
     smooth_from(&s, stop);
 }
 
@@ -325,20 +325,20 @@ fn stop_during_the_rise_drops_from_where_it_is() {
     let y = s.frame(stop).printer_y;
     s.stop(stop);
     assert!(near(s.frame(stop).printer_y, y));
-    assert!(s.frame(stop + 480 + 300).menu_alpha > 0.0);
+    assert!(s.frame(stop + 480 + 120).slide > 0.0);
     smooth_from(&s, stop);
     assert!(s.done(stop + 480 + 260));
 }
 
 #[test]
-fn stop_during_the_fade_returns_to_the_menu() {
+fn stop_during_the_slide_returns_to_the_menu() {
     let mut s = PrintScene::new(0);
     s.stop(130);
-    assert!(near(s.frame(130).menu_alpha, 0.5));
-    assert!(near(s.frame(195).menu_alpha, 0.75));
+    assert!(near(s.frame(130).slide, 0.5));
+    assert!(near(s.frame(195).slide, 0.75));
     assert!(!s.done(259));
     assert!(s.done(260));
-    assert!(near(s.frame(260).menu_alpha, 1.0));
+    assert!(near(s.frame(260).slide, 1.0));
 }
 
 #[test]
@@ -351,7 +351,7 @@ fn a_second_stop_changes_nothing() {
 }
 
 #[test]
-fn done_after_the_menu_fades_in() {
+fn done_after_the_scene_slides_away() {
     let stop = REST_AT + 500;
     let mut s = PrintScene::new(0);
     assert!(!s.done(stop));
@@ -359,7 +359,27 @@ fn done_after_the_menu_fades_in() {
     let end = stop + 380 + 60 + 480 + 260;
     assert!(!s.done(end - 1));
     assert!(s.done(end));
-    assert!(near(s.frame(end).menu_alpha, 1.0));
+    assert!(near(s.frame(end).slide, 1.0));
     assert!(near(s.frame(end).printer_y, 490.0));
     assert!(s.frame(end).paper.is_none());
+}
+
+#[test]
+fn printing_waits_for_the_paper() {
+    let mut s = PrintScene::new(0);
+    assert!(s.cues(PRINT_AT - 1).is_empty());
+    s.hold_print(PRINT_AT - 1);
+    s.hold_print(PRINT_AT + 500);
+    assert!(s.cues(PRINT_AT + 500).is_empty());
+    assert!(s.frame(PRINT_AT + 500).lamp_on);
+    assert_eq!(s.cues(PRINT_AT + 501), vec![Cue::Buzz]);
+}
+
+#[test]
+fn a_stopped_scene_is_not_held() {
+    let mut s = PrintScene::new(0);
+    s.stop(PRINT_AT + 100);
+    let f = s.frame(PRINT_AT + 300);
+    s.hold_print(PRINT_AT + 300);
+    assert_eq!(s.frame(PRINT_AT + 300), f);
 }

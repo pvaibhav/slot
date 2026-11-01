@@ -164,6 +164,7 @@ pub struct ServerSession {
     paper: Option<ServerPaper>,
     art: Option<PrintArtWorker>,
     tex: Option<PrintTextures>,
+    paper_up: bool,
     scene: Option<PrintScene>,
     stop_asked: bool,
     hurry: Arc<AtomicBool>,
@@ -192,6 +193,7 @@ impl ServerSession {
             paper: None,
             art: None,
             tex: None,
+            paper_up: false,
             scene: None,
             stop_asked: false,
             hurry: Arc::new(AtomicBool::new(false)),
@@ -223,6 +225,9 @@ impl ServerSession {
         }
         if self.tex.is_some() && self.scene.is_none() && !self.stop_asked {
             self.scene = Some(PrintScene::new(now));
+        }
+        if let Some(scene) = self.scene.as_mut().filter(|_| !self.paper_up) {
+            scene.hold_print(now);
         }
     }
 
@@ -274,6 +279,14 @@ impl ServerSession {
 
     pub fn set_tex(&mut self, tex: PrintTextures) {
         self.tex = Some(tex);
+    }
+
+    pub fn set_paper_up(&mut self) {
+        self.paper_up = true;
+    }
+
+    pub fn paper_up(&self) -> bool {
+        self.paper_up
     }
 
     pub fn fail(&mut self, now: Millis) {

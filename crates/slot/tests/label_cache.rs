@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use slot::label_cache::{cache_path, fresh, label_art, stale, Rebuild};
+use slot::label_cache::{cache_path, fresh, label_art, stale, Rebuild, SCREEN_FROM};
 use slot_store::{Cart, Platform};
 use slot_ui::label_size;
 
@@ -175,4 +175,13 @@ fn ensure_drops_the_old_cache_when_the_new_one_exists() {
     assert!(new.is_file());
     assert!(!d.path().join("Cache/Labels/GBA/old.bin").exists());
     assert!(!d.path().join("System/Cache").exists());
+}
+
+#[test]
+fn only_a_big_rebuild_takes_the_screen() {
+    let d = tempfile::tempdir().unwrap();
+    let cart = cart_with_label(d.path(), [10, 10, 10]);
+    let batch = |n: usize| Rebuild::start(d.path(), vec![cart.clone(); n]);
+    assert!(!batch(SCREEN_FROM - 1).on_screen());
+    assert!(batch(SCREEN_FROM).on_screen());
 }

@@ -735,20 +735,7 @@ fn wallpaper_of_rack(rack: Rack, files: &[String]) -> Option<String> {
         })
 }
 
-fn fade_draws(draws: &mut [Draw], by: f32) {
-    for draw in draws {
-        match draw {
-            Draw::Rect { colour, .. } => colour[3] *= by,
-            Draw::Tex { alpha, .. }
-            | Draw::Part { alpha, .. }
-            | Draw::Turned { alpha, .. }
-            | Draw::Quad { alpha, .. } => *alpha *= by,
-            Draw::Paper { .. } | Draw::Game | Draw::Shot { .. } | Draw::Capture => {}
-        }
-    }
-}
-
-fn shift_down(draws: &mut [Draw], dy: f32) {
+pub(crate) fn shift_down(draws: &mut [Draw], dy: f32) {
     if dy == 0.0 {
         return;
     }
@@ -7997,14 +7984,12 @@ impl App {
     }
 
     fn draw_server(&self, frame: &PrintFrame, tex: &PrintTextures, out: &mut Vec<Draw>) {
-        print_draws(frame, tex, self.canvas(), out);
-        if frame.menu_alpha > 0.0 {
-            let from = out.len();
+        if frame.slide > 0.0 {
             self.draw_app(out);
-            fade_draws(&mut out[from..], frame.menu_alpha);
-        } else {
-            self.hud.draw(self.canvas(), self.now(), out);
+            return print_draws(frame, tex, self.canvas(), out);
         }
+        print_draws(frame, tex, self.canvas(), out);
+        self.hud.draw(self.canvas(), self.now(), out);
     }
 
     pub fn server_open(&self) -> bool {
@@ -8033,6 +8018,16 @@ impl App {
     pub fn set_server_tex(&mut self, tex: PrintTextures) {
         if let Some(server) = &mut self.server {
             server.set_tex(tex);
+        }
+    }
+
+    pub fn server_paper_ready(&self) -> bool {
+        self.server.as_ref().is_some_and(ServerSession::paper_up)
+    }
+
+    pub fn server_paper_up(&mut self) {
+        if let Some(server) = &mut self.server {
+            server.set_paper_up();
         }
     }
 

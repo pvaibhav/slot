@@ -695,7 +695,7 @@ mod screen {
 
         fn wait_scene(&mut self) {
             let by = Instant::now() + Duration::from_secs(20);
-            while !self.f.app().server_scene_running() {
+            while !self.f.app().server_paper_ready() {
                 assert!(Instant::now() < by, "the scene never started");
                 self.step(16);
                 std::thread::sleep(Duration::from_millis(1));
@@ -979,6 +979,86 @@ mod screen {
         for cart in r.f.app().carts().filter(|c| c.stem.starts_with('L')) {
             assert!(slot::label_cache::fresh(r.d.path(), cart));
         }
+    }
+
+    #[test]
+    fn a_quick_rebuild_never_reaches_the_screen() {
+        let Some(mut r) = Rig::new(net(&[free_port()])) else {
+            return;
+        };
+        r.wait_scene();
+        let dir = r.d.path().join("Labels/GBA");
+        std::fs::create_dir_all(&dir).unwrap();
+        for i in 0..8 {
+            std::fs::write(r.d.path().join(format!("Games/GBA/Q{i}.gba")), vec![0u8; 512]).unwrap();
+            solid_png(&dir.join(format!("Q{i}.png")), 640, 320, [200, 20, 20]);
+        }
+        r.input.0.push_back(vec![RawEvent::Down(Btn::B)]);
+        let mut seen = false;
+        for _ in 0..5000 {
+            r.step(16);
+            seen |= r.f.rebuilding_labels();
+            if seen && !r.f.rebuilding_labels() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert!(seen);
+        assert!(!r.f.rebuild_drawn());
+    }
+
+    #[test]
+    fn buttons_work_while_a_small_rebuild_runs() {
+        let Some(mut r) = Rig::new(net(&[free_port()])) else {
+            return;
+        };
+        r.wait_scene();
+        let dir = r.d.path().join("Labels/GBA");
+        std::fs::create_dir_all(&dir).unwrap();
+        for i in 0..8 {
+            std::fs::write(r.d.path().join(format!("Games/GBA/B{i}.gba")), vec![0u8; 512]).unwrap();
+            solid_png(&dir.join(format!("B{i}.png")), 640, 320, [200, 20, 20]);
+        }
+        r.input.0.push_back(vec![RawEvent::Down(Btn::B)]);
+        r.step(16);
+        r.input.0.push_back(vec![RawEvent::Up(Btn::B)]);
+        for _ in 0..5000 {
+            r.step(16);
+            if r.f.rebuilding_labels() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert!(r.f.rebuilding_labels());
+        let before = r.f.app().quick_menu();
+        assert!(before.is_some(), "{:?}", r.f.app().phase());
+        r.input.0.push_back(vec![RawEvent::Down(Btn::Down)]);
+        r.f.advance(&mut r.input);
+        r.input.0.push_back(vec![RawEvent::Up(Btn::Down)]);
+        r.f.advance(&mut r.input);
+        assert!(r.f.rebuilding_labels());
+        assert_ne!(r.f.app().quick_menu(), before);
+    }
+
+    fn slow_mdns(_: std::net::Ipv4Addr) -> Option<slot::server::Responder> {
+        std::thread::sleep(Duration::from_millis(1500));
+        None
+    }
+
+    #[test]
+    fn the_scene_starts_before_the_paper_is_ready() {
+        let net = ServerNet {
+            responder: slow_mdns,
+            ..net(&[free_port()])
+        };
+        let Some(mut r) = Rig::new(net) else {
+            return;
+        };
+        while !r.f.app().server_scene_running() {
+            r.step(16);
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert!(r.f.app().server_paper().is_none());
     }
 
     #[test]
