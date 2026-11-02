@@ -96,7 +96,10 @@ pub fn label_art(root: &Path, cart: &Cart) -> Option<Vec<u8>> {
         }
         None => stamp,
     };
-    let art = cover(src, w, h);
+    let art = match old_art(&cached.with_extension(OLD_EXT), stamp, w, h) {
+        Some(art) => art,
+        None => cover(src, w, h),
+    };
     if let Some(dir) = cached.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
@@ -251,6 +254,21 @@ fn stamp_of(meta: &std::fs::Metadata) -> Stamp {
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map_or(0, |d| d.as_secs());
     (meta.len(), mtime)
+}
+
+fn old_art(path: &Path, stamp: Stamp, w: u32, h: u32) -> Option<Option<Vec<u8>>> {
+    let bytes = std::fs::read(path).ok()?;
+    let (head, rgba) = bytes.split_at_checked(24)?;
+    let word = |at: usize| u64::from_le_bytes(head[at..at + 8].try_into().unwrap_or_default());
+    let half = |at: usize| u32::from_le_bytes(head[at..at + 4].try_into().unwrap_or_default());
+    if (word(0), word(8)) != stamp {
+        return None;
+    }
+    match (half(16), half(20)) {
+        (0, 0) if rgba.is_empty() => Some(None),
+        size if size == (w, h) && rgba.len() == (w * h * 4) as usize => Some(Some(rgba.to_vec())),
+        _ => None,
+    }
 }
 
 fn parse(bytes: &[u8], stamp: Stamp, w: u32, h: u32) -> Option<Option<Vec<u8>>> {

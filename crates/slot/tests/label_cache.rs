@@ -257,3 +257,51 @@ fn a_label_changed_again_after_the_refresh_lands_is_redrawn() {
     relearn_stamps(d.path()).unwrap().join().unwrap();
     assert_eq!(&label_art(d.path(), &cart).unwrap()[..3], &[10, 10, 200]);
 }
+
+fn old_cache(root: &Path, cart: &Cart, rgb: [u8; 3]) -> std::path::PathBuf {
+    let src = cart.label.as_ref().unwrap();
+    let meta = std::fs::metadata(src).unwrap();
+    let mtime = meta
+        .modified()
+        .unwrap()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let (w, h) = label_size(cart);
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(&meta.len().to_le_bytes());
+    bytes.extend_from_slice(&mtime.to_le_bytes());
+    bytes.extend_from_slice(&w.to_le_bytes());
+    bytes.extend_from_slice(&h.to_le_bytes());
+    for _ in 0..w * h {
+        bytes.extend_from_slice(&[rgb[0], rgb[1], rgb[2], 255]);
+    }
+    let path = root.join("Cache/Labels/GBA/Emerald.rgba");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, bytes).unwrap();
+    path
+}
+
+#[test]
+fn a_current_old_cache_is_converted_without_decoding_the_label() {
+    let d = tempfile::tempdir().unwrap();
+    let cart = cart_with_label(d.path(), [200, 10, 10]);
+    let old = old_cache(d.path(), &cart, [10, 10, 200]);
+    let art = label_art(d.path(), &cart).unwrap();
+    assert_eq!(
+        &art[..4],
+        &[10, 10, 200, 255],
+        "the label was decoded instead of converted"
+    );
+    assert!(!old.exists(), "the old cache was left behind");
+    assert_eq!(label_art(d.path(), &cart), Some(art));
+}
+
+#[test]
+fn an_out_of_date_old_cache_is_not_converted() {
+    let d = tempfile::tempdir().unwrap();
+    let cart = cart_with_label(d.path(), [200, 10, 10]);
+    old_cache(d.path(), &cart, [10, 10, 200]);
+    label_png(cart.label.as_ref().unwrap(), 600, 330, [10, 200, 10]);
+    assert_eq!(&label_art(d.path(), &cart).unwrap()[..3], &[10, 200, 10]);
+}
