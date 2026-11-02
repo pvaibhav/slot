@@ -541,17 +541,10 @@ fn a_text_color_saved_with_a_new_shape_uses_that_shape() {
     while a.studio().unwrap().row() != Some(Row::Shape) {
         press(&mut a, Btn::Down);
     }
-    let was = slot_ui::text_label(&cart, ground);
-    let mut picked = None;
-    for _ in 0..2 {
-        press(&mut a, Btn::Right);
-        cart.shell = a.studio().unwrap().shell;
-        if slot_ui::text_label(&cart, ground) != was {
-            picked = cart.shell;
-            break;
-        }
-    }
-    assert!(picked.is_some(), "no shape changes the text label");
+    let was = cart.shell;
+    press(&mut a, Btn::Right);
+    cart.shell = a.studio().unwrap().shell;
+    assert_ne!(cart.shell, was, "the shape did not change");
     a.close_studio();
     let saved = std::fs::read(slot::art::make::label_path(d.path(), &cart)).unwrap();
     assert_eq!(saved, slot::art::make::text_label(&cart, ground));

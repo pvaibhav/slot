@@ -33,19 +33,10 @@ pub const LABEL_Y: u32 = label_panel(CART_W, CART_H).1;
 pub const LABEL_W: u32 = label_panel(CART_W, CART_H).2 - LABEL_X;
 pub const LABEL_H: u32 = label_panel(CART_W, CART_H).3 - LABEL_Y;
 
-pub const fn gb_label_panel(w: u32, h: u32) -> (u32, u32, u32, u32) {
-    (
-        (w * 147 + 500) / 1000,
-        (h * 291 + 500) / 1000,
-        (w * 854 + 500) / 1000,
-        (h * 868 + 500) / 1000,
-    )
-}
-
-pub const GB_LABEL_X: u32 = gb_label_panel(GB_CART_W, GB_CART_H).0;
-pub const GB_LABEL_Y: u32 = gb_label_panel(GB_CART_W, GB_CART_H).1;
-pub const GB_LABEL_W: u32 = gb_label_panel(GB_CART_W, GB_CART_H).2 - GB_LABEL_X;
-pub const GB_LABEL_H: u32 = gb_label_panel(GB_CART_W, GB_CART_H).3 - GB_LABEL_Y;
+pub const GB_LABEL_X: u32 = 44;
+pub const GB_LABEL_Y: u32 = 95;
+pub const GB_LABEL_W: u32 = 223;
+pub const GB_LABEL_H: u32 = 199;
 
 /// The Game Boy Color pak's label box: exactly the flat label well drawn in
 /// `assets/gbc_neutral.png`, x 45..267, y 110..308 of 312x337. It is the same 223x199

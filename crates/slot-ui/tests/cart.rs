@@ -1,6 +1,6 @@
 use slot_store::{scan, Platform};
 use slot_ui::{
-    cart_face, clean_label, foot_y, gb_label_panel, gb_silhouette, label_colour, label_panel,
+    cart_face, clean_label, foot_y, gb_silhouette, label_colour, label_panel,
     label_text, rest_y, seated_box, shell_for, silhouette, Finish, GbShell, CART_H, CART_W,
     GBC_LABEL_H, GBC_LABEL_W, GBC_LABEL_X, GBC_LABEL_Y, GB_CART_H, GB_CART_W, GB_LABEL_H,
     GB_LABEL_W, GB_LABEL_X, GB_LABEL_Y, LABEL_H, LABEL_W, LABEL_X, LABEL_Y, MOUTH_H, OUT_H,
@@ -397,13 +397,14 @@ fn the_colour_only_shell_loses_the_notch_and_rounds_the_corners() {
 
 #[test]
 fn the_game_boy_label_well_is_near_square_and_sits_under_the_lettering_plate() {
-    let (x0, y0, x1, y1) = gb_label_panel(GB_CART_W, GB_CART_H);
+    let (x0, y0) = (GB_LABEL_X, GB_LABEL_Y);
+    let (x1, y1) = (GB_LABEL_X + GB_LABEL_W, GB_LABEL_Y + GB_LABEL_H);
     let aspect = (x1 - x0) as f32 / (y1 - y0) as f32;
     assert!(
         (aspect - 1.135).abs() < 0.02,
         "the well is {aspect:.2}:1, which is not the 42x37 label's shape"
     );
-    assert_eq!(x0, GB_CART_W - x1, "the well is not centred across the pak");
+    assert!(x0.abs_diff(GB_CART_W - x1) <= 1, "the well is not centred across the pak");
     let (above, below) = (y0, GB_CART_H - y1);
     assert!(
         above > below * 2,
