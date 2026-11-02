@@ -702,6 +702,7 @@ pub struct App {
 }
 
 const FACE_AHEAD: i32 = 8;
+const LETTER_REPEAT_MS: Option<Millis> = None;
 const FACE_KEEP: i32 = 12;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -1176,8 +1177,21 @@ impl App {
             self.held_dir = None;
             return;
         }
-        self.held_dir = Some((btn, self.now() + repeat_gap(fired), fired + 1));
+        let gap = match LETTER_REPEAT_MS {
+            Some(ms) if self.jumps_letters(btn) => ms,
+            _ => repeat_gap(fired),
+        };
+        self.held_dir = Some((btn, self.now() + gap, fired + 1));
         self.apply(Action::GbaDown(btn));
+    }
+
+    fn jumps_letters(&self, btn: Btn) -> bool {
+        matches!(btn, Btn::Up | Btn::Down)
+            && matches!(self.phase, Phase::Shelf)
+            && self.core_picker.is_none()
+            && self.studio.is_none()
+            && self.keyboard.is_none()
+            && self.game_menu.is_none()
     }
 
     fn repeats(&self, btn: Btn) -> bool {
