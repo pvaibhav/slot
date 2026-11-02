@@ -62,6 +62,7 @@ pub enum Action {
     PreviousShelf,
     NextShelf,
     Favorite,
+    ForgetRecent,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]

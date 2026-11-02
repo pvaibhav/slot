@@ -53,6 +53,7 @@ pub enum QuickRow {
     ShelfPrev,
     ShelfNext,
     ShelfFavorite,
+    ShelfForget,
     PlayControls,
     Shortcuts,
     GameUp,
@@ -124,7 +125,7 @@ pub enum QuickRow {
 }
 
 impl QuickRow {
-    pub const ALL: [QuickRow; 112] = [
+    pub const ALL: [QuickRow; 113] = [
         QuickRow::FastForward,
         QuickRow::FastForwardSound,
         QuickRow::Screen,
@@ -169,6 +170,7 @@ impl QuickRow {
         QuickRow::ShelfPrev,
         QuickRow::ShelfNext,
         QuickRow::ShelfFavorite,
+        QuickRow::ShelfForget,
         QuickRow::PlayControls,
         QuickRow::Shortcuts,
         QuickRow::GameUp,
@@ -272,10 +274,11 @@ impl QuickRow {
         QuickRow::ControlsInGame,
     ];
 
-    pub const SHELF_KEYS: [QuickRow; 3] = [
+    pub const SHELF_KEYS: [QuickRow; 4] = [
         QuickRow::ShelfPrev,
         QuickRow::ShelfNext,
         QuickRow::ShelfFavorite,
+        QuickRow::ShelfForget,
     ];
 
     pub const CONTROLS: [QuickRow; 12] = [
@@ -644,9 +647,10 @@ impl QuickRow {
             | QuickRow::ScSunlightDown
             | QuickRow::ScReset
             | QuickRow::ScGuide => self.shortcut().map_or("", Shortcut::label),
-            QuickRow::ShelfPrev | QuickRow::ShelfNext | QuickRow::ShelfFavorite => {
-                self.carousel_action().map_or("", CarouselAction::label)
-            }
+            QuickRow::ShelfPrev
+            | QuickRow::ShelfNext
+            | QuickRow::ShelfFavorite
+            | QuickRow::ShelfForget => self.carousel_action().map_or("", CarouselAction::label),
             QuickRow::PlayScreen => "Screen",
             QuickRow::PlayGameplay => "Gameplay",
             QuickRow::Shader => "Shader",
@@ -754,6 +758,7 @@ impl QuickRow {
             QuickRow::ShelfPrev => CarouselAction::PreviousShelf,
             QuickRow::ShelfNext => CarouselAction::NextShelf,
             QuickRow::ShelfFavorite => CarouselAction::Favorite,
+            QuickRow::ShelfForget => CarouselAction::ForgetRecent,
             _ => return None,
         })
     }

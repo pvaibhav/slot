@@ -113,12 +113,13 @@ fn shortcuts_are_one_set_for_every_console_and_read_back() {
 }
 
 #[test]
-fn the_carousel_starts_on_the_shoulders_and_y_and_reads_back() {
+fn the_carousel_starts_on_the_shoulders_y_and_x_and_reads_back() {
     let d = card();
     let keys = CarouselKeys::default();
     assert_eq!(keys.get(CarouselAction::PreviousShelf), plain(Device::L1));
     assert_eq!(keys.get(CarouselAction::NextShelf), plain(Device::R1));
     assert_eq!(keys.get(CarouselAction::Favorite), plain(Device::Y));
+    assert_eq!(keys.get(CarouselAction::ForgetRecent), plain(Device::X));
     assert_eq!(read_carousel(d.path()), keys);
     let mut moved = keys;
     moved.set(CarouselAction::PreviousShelf, plain(Device::Y));

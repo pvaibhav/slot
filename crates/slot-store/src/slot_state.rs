@@ -421,6 +421,11 @@ impl SlotState {
         self.recents.truncate(RECENTS_MAX);
     }
 
+    pub fn forget(&mut self, platform: Platform, stem: &str) {
+        self.recents
+            .retain(|r| !(r.platform == platform && r.stem == stem));
+    }
+
     pub fn is_favorite(&self, platform: Platform, stem: &str) -> bool {
         self.favorites
             .iter()
