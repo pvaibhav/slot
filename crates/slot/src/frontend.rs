@@ -495,6 +495,7 @@ impl Frontend {
         let now = Instant::now();
         let cart_faces = CartFaces::spawn(platform.root().to_path_buf());
         save_headers_when_changed(platform.root().to_path_buf());
+        let lid_root = platform.root().to_path_buf();
         let mut session = Session::boot_with(platform.root().to_path_buf(), sink);
         session
             .app_mut()
@@ -528,7 +529,7 @@ impl Frontend {
             draws: Vec::new(),
             polaroid_texes: Vec::new(),
             title_tex: None,
-            faces: FaceBuilder::spawn(),
+            faces: FaceBuilder::spawn(lid_root),
             cart_faces,
             rebuild: None,
             stale_check,
