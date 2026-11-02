@@ -1013,6 +1013,9 @@ impl Frontend {
             }
         }
         if self.session.app_mut().take_rescanned() {
+            if let Some(root) = self.session.app().root() {
+                label_cache::relearn_stamps(root);
+            }
             self.wallpaper.image = None;
             self.wallpaper.label.clear();
             self.wallpaper.shelf_asked.clear();
@@ -1117,6 +1120,7 @@ impl Frontend {
             .name("slot-label-check".into())
             .spawn(move || {
                 let _ = tx.send(label_cache::stale(&root, carts.iter()));
+                label_cache::learn_stamps(&root);
             })
             .ok()
             .map(|_| rx)

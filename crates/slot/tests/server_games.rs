@@ -393,7 +393,7 @@ fn art_upload_caches_the_label_for_the_shelf() {
     library(d.path());
     let (status, _) = call(server.port(), "POST", "/api/games/GBA/1/art?name=cover.png", b"\x89PNG\r\n\x1a\nrest");
     assert_eq!(status, 200);
-    assert!(d.path().join("Cache/Labels/GBA/Beta.rgba").exists());
+    assert!(d.path().join("Cache/Labels/GBA/Beta.lz4").exists());
     server.stop();
 }
 
