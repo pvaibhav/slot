@@ -1,11 +1,8 @@
 use slot_gfx::{Canvas, Draw, TexId, OUT_H};
 use slot_store::{Cart, Platform};
-use std::sync::OnceLock;
 
 use crate::board::{board_in, Placed};
-use crate::cart::{
-    cart_box, gb_shell_of, is_clear, label_colour, label_rect, label_text, CART_H, CART_W,
-};
+use crate::cart::{cart_box, label_colour, label_rect, label_text, shelf_shape, CART_H, CART_W};
 use crate::hud::Millis;
 use crate::silhouette::GbShell;
 use crate::slot_chrome::{draw_empty_slot, MOUTH_H};
@@ -55,8 +52,6 @@ pub struct Shelf {
     backing: Option<TexId>,
     gb_backing: Option<TexId>,
     gbc_backing: Option<TexId>,
-    shells: Vec<OnceLock<Option<GbShell>>>,
-    clears: Vec<OnceLock<bool>>,
     hearted: Vec<bool>,
     heart: Option<(TexId, f32, f32)>,
     ride: f32,
@@ -67,8 +62,6 @@ pub struct Shelf {
 impl Shelf {
     pub fn new(carts: Vec<Cart>) -> Self {
         Shelf {
-            shells: carts.iter().map(|_| OnceLock::new()).collect(),
-            clears: carts.iter().map(|_| OnceLock::new()).collect(),
             faces: vec![None; carts.len()],
             interiors: vec![None; carts.len()],
             hearted: vec![false; carts.len()],
@@ -89,17 +82,11 @@ impl Shelf {
     }
 
     fn shell(&self, i: usize) -> Option<GbShell> {
-        let (Some(cell), Some(cart)) = (self.shells.get(i), self.carts.get(i)) else {
-            return None;
-        };
-        *cell.get_or_init(|| gb_shell_of(cart))
+        self.carts.get(i).and_then(|c| shelf_shape(c).0)
     }
 
     fn clear(&self, i: usize) -> bool {
-        let (Some(cell), Some(cart)) = (self.clears.get(i), self.carts.get(i)) else {
-            return false;
-        };
-        *cell.get_or_init(|| is_clear(cart))
+        self.carts.get(i).is_some_and(|c| shelf_shape(c).1)
     }
 
     pub fn restock(&mut self, carts: Vec<Cart>) -> Vec<TexId> {
@@ -109,8 +96,6 @@ impl Shelf {
             .chain(self.interiors.drain(..))
             .flatten()
             .collect();
-        self.shells = carts.iter().map(|_| OnceLock::new()).collect();
-        self.clears = carts.iter().map(|_| OnceLock::new()).collect();
         self.faces = vec![None; carts.len()];
         self.interiors = vec![None; carts.len()];
         self.hearted = vec![false; carts.len()];

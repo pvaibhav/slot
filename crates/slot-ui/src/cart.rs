@@ -79,6 +79,43 @@ enum Shape {
     Gb(GbShell),
 }
 
+pub fn folder_gb_shell(cart: &Cart) -> Option<GbShell> {
+    match cart.platform {
+        Platform::Gba | Platform::Gbav => None,
+        Platform::Gb | Platform::Gbc => Some(match cart.shell.map(|c| c.outline) {
+            Some(Outline::Notched) => GbShell::Notched,
+            Some(Outline::Rounded) => GbShell::Rounded,
+            _ if cart.platform == Platform::Gbc => GbShell::Rounded,
+            _ => GbShell::Notched,
+        }),
+    }
+}
+
+pub fn folder_is_clear(cart: &Cart) -> bool {
+    cart.shell
+        .is_some_and(|c| c.finish != slot_store::ShellFinish::Solid)
+}
+
+pub fn shelf_shape(cart: &Cart) -> (Option<GbShell>, bool) {
+    let clear = |shell: Option<Shell>| match shell {
+        Some(s) => s.finish != Finish::Solid,
+        None => folder_is_clear(cart),
+    };
+    let shell = crate::shell::indexed_shell(cart);
+    let outline = cart.shell.map(|c| c.outline);
+    let shape = match (cart.platform, outline) {
+        (Platform::Gba | Platform::Gbav, _) => None,
+        (_, Some(Outline::Notched)) => Some(GbShell::Notched),
+        (_, Some(Outline::Rounded)) => Some(GbShell::Rounded),
+        _ => match slot_store::header_index::peek_gb_header(&cart.rom).flatten() {
+            Some(h) if h.class() == Class::ColourOnly => Some(GbShell::Rounded),
+            Some(_) => Some(GbShell::Notched),
+            None => folder_gb_shell(cart),
+        },
+    };
+    (shape, clear(shell))
+}
+
 pub fn gb_shell_of(cart: &Cart) -> Option<GbShell> {
     match cart.platform {
         Platform::Gba | Platform::Gbav => None,

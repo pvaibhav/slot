@@ -473,6 +473,19 @@ struct Switcher {
     prompt_detail: Option<TexId>,
 }
 
+fn save_headers_when_changed(root: std::path::PathBuf) {
+    let _ = std::thread::Builder::new()
+        .name("slot-headers".into())
+        .spawn(move || loop {
+            std::thread::sleep(std::time::Duration::from_secs(10));
+            if slot_store::header_index::dirty() {
+                if let Err(e) = slot_store::header_index::save(&root) {
+                    eprintln!("slot: header index: {e}");
+                }
+            }
+        });
+}
+
 impl Frontend {
     pub fn boot(platform: Box<dyn Platform>) -> Self {
         Self::boot_with(platform, crate::audio::opened_sink())
@@ -481,6 +494,7 @@ impl Frontend {
     pub fn boot_with(platform: Box<dyn Platform>, sink: Box<dyn crate::audio::AudioSink>) -> Self {
         let now = Instant::now();
         let cart_faces = CartFaces::spawn(platform.root().to_path_buf());
+        save_headers_when_changed(platform.root().to_path_buf());
         let mut session = Session::boot_with(platform.root().to_path_buf(), sink);
         session
             .app_mut()

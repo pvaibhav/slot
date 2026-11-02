@@ -58,8 +58,8 @@ pub use board::{
 };
 pub use cart::{
     bare_face, cart_backing, cart_box, cart_face, cart_face_with, cart_interior, cart_shadow, clean_label,
-    gb_cart_shadow, gb_label_panel, gb_shell_of, is_clear, label_colour, label_panel, label_size,
-    label_tags, label_text, neutral_shell, seated_box, shows_interior, text_label, CartFace, CART_H, CART_W,
+    folder_gb_shell, gb_cart_shadow, gb_label_panel, gb_shell_of, is_clear, label_colour, label_panel, label_size,
+    label_tags, label_text, neutral_shell, seated_box, shelf_shape, shows_interior, text_label, CartFace, CART_H, CART_W,
     GBC_LABEL_H, GBC_LABEL_W, GBC_LABEL_X, GBC_LABEL_Y, GB_CART_H, GB_CART_W, GB_LABEL_H,
     GB_LABEL_W, GB_LABEL_X, GB_LABEL_Y, LABEL_H, LABEL_W, LABEL_WELL, LABEL_X, LABEL_Y,
 };
@@ -119,7 +119,7 @@ pub use refusal::Refusal;
 pub use shelf::{foot_y, repeat_gap, rest_y, Shelf, HEART_INK, HEART_SCALE, REPEAT_DELAY_MS};
 pub use shell::{
     gb_plastics, gb_table_shells, gba_plastics, gba_shell_for,
-    lookup_order_is_exact_then_family_then_default, shell_for, shell_presets, table_keys, Finish,
+    indexed_shell, lookup_order_is_exact_then_family_then_default, shell_for, shell_presets, table_keys, Finish,
     Shell, DEFAULT_SHELL, DMG_SHELL, DUAL_MODE_SHELL, GB_CLEAR_SHELL,
 };
 pub use shot_viewer::{

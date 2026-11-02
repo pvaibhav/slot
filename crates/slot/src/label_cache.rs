@@ -196,6 +196,7 @@ impl Rebuild {
                         return;
                     };
                     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        slot_ui::shell_for(cart);
                         label_art(&root, cart)
                     }));
                     done.fetch_add(1, Ordering::Release);

@@ -11,6 +11,7 @@ pub mod cart_shell;
 mod config;
 mod core;
 pub mod gb;
+pub mod header_index;
 mod gb_palette;
 mod gba;
 mod guides;

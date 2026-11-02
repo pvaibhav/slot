@@ -185,6 +185,7 @@ fn work(queue: &Shared, outbox: &Sender<Built>, root: &Path) {
                 q = wake.wait(q).unwrap_or_else(|e| e.into_inner());
             }
         };
+        slot_store::header_index::verify(&cart.rom);
         let face = cart_face_with(&cart, label_art(root, &cart));
         let interior = shows_interior(&cart).then(|| cart_interior(&cart));
         if outbox.send((key, face, interior)).is_err() {
