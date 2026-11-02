@@ -1277,3 +1277,127 @@ fn only_a_hearted_cart_wears_the_heart_in_its_label_top_right_corner() {
         "heart top {top}, label top {ly}"
     );
 }
+
+fn screen_is_full_of_carts(s: &Shelf) -> Result<(), String> {
+    let mut out = Vec::new();
+    s.draw_row(Canvas::FRAMED, None, 0.0, 0.0, 1.0, &mut out);
+    let mut spans: Vec<(f32, f32)> = cart_spans(&out)
+        .into_iter()
+        .map(|(a, b)| (a.max(0.0), b.min(OUT_W as f32)))
+        .collect();
+    spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let (mut covered, mut reach) = (0.0f32, 0.0f32);
+    for (a, b) in spans {
+        if b > reach {
+            covered += b - a.max(reach);
+            reach = b;
+        }
+    }
+    match covered >= 0.75 * OUT_W as f32 {
+        true => Ok(()),
+        false => Err(format!(
+            "carts cover {covered} of {OUT_W} px, scroll {} target {}",
+            s.scroll,
+            s.scroll_target()
+        )),
+    }
+}
+
+#[test]
+fn a_row_held_at_full_speed_leaves_no_empty_screen() {
+    for (name, hold) in [
+        ("right", Shelf::hold_right as fn(&mut Shelf, u64)),
+        ("left", Shelf::hold_left as fn(&mut Shelf, u64)),
+    ] {
+        let mut s = shelf_with(500);
+        hold(&mut s, 0);
+        for f in 1..360u64 {
+            s.tick(f * 1000 / 60);
+            s.update(1.0 / 60.0);
+            if let Err(e) = screen_is_full_of_carts(&s) {
+                panic!("held {name}, frame {f}: {e}");
+            }
+        }
+    }
+}
+
+#[test]
+fn a_slow_frame_mid_scroll_does_not_fling_the_row_off_screen() {
+    for stall in [0.1f32, 0.2, 0.32, 1.0] {
+        let mut s = shelf_with(500);
+        s.hold_right(0);
+        let mut now = 0u64;
+        for f in 0..200 {
+            let dt = if f == 120 { stall } else { 1.0 / 60.0 };
+            now += (dt * 1000.0) as u64;
+            s.tick(now);
+            s.update(dt);
+            if let Err(e) = screen_is_full_of_carts(&s) {
+                panic!("a {stall} s frame at frame 120, frame {f}: {e}");
+            }
+        }
+    }
+}
+
+#[test]
+fn a_row_held_through_slow_frames_stays_on_screen() {
+    for frame_ms in [60u64, 75, 100, 150] {
+        let mut s = shelf_with(500);
+        s.hold_right(0);
+        for f in 1..(4000 / frame_ms) {
+            s.tick(f * frame_ms);
+            s.update(frame_ms as f32 / 1000.0);
+            if let Err(e) = screen_is_full_of_carts(&s) {
+                panic!("held through {frame_ms} ms frames, frame {f}: {e}");
+            }
+        }
+    }
+}
+
+fn lettered_shelf(n: usize) -> Shelf {
+    Shelf::new(
+        (0..n)
+            .map(|i| {
+                let letter = (b'A' + (i * 26 / n) as u8) as char;
+                Cart {
+                    platform: Platform::Gba,
+                    stem: format!("{letter} Game {i}"),
+                    rom: format!("Games/GBA/{letter} Game {i}.gba").into(),
+                    label: None,
+                    code: String::new(),
+                    shell: None,
+                    title: format!("{letter} GAME {i}"),
+                }
+            })
+            .collect(),
+    )
+}
+
+#[test]
+fn letter_jumps_held_through_slow_frames_keep_the_row_on_screen() {
+    for frame_ms in [16u64, 70, 100, 150] {
+        for (name, jump) in [
+            ("down", Shelf::jump_next_letter as fn(&mut Shelf)),
+            ("up", Shelf::jump_prev_letter as fn(&mut Shelf)),
+        ] {
+            let mut s = lettered_shelf(5000);
+            let mut next = 0u64;
+            for f in 0..(4000 / frame_ms) {
+                let now = f * frame_ms;
+                if now >= next {
+                    jump(&mut s);
+                    next = now + 100;
+                }
+                s.update(frame_ms as f32 / 1000.0);
+                assert!(
+                    s.scroll.is_finite(),
+                    "held {name}, {frame_ms} ms frames: scroll {}",
+                    s.scroll
+                );
+                if let Err(e) = screen_is_full_of_carts(&s) {
+                    panic!("held {name} through {frame_ms} ms frames, frame {f}: {e}");
+                }
+            }
+        }
+    }
+}

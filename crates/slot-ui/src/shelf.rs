@@ -408,9 +408,12 @@ impl Shelf {
     }
 
     pub fn update(&mut self, dt: f32) {
-        let accel = -2.0 * OMEGA * self.vel - OMEGA * OMEGA * (self.scroll - self.scroll_target());
-        self.vel += accel * dt;
-        self.scroll += self.vel * dt;
+        let target = self.scroll_target();
+        let off = self.scroll - target;
+        let pull = self.vel + OMEGA * off;
+        let decay = (-OMEGA * dt).exp();
+        self.scroll = target + (off + pull * dt) * decay;
+        self.vel = (self.vel - OMEGA * pull * dt) * decay;
     }
 
     pub fn draw(
