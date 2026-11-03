@@ -122,7 +122,7 @@ fn open_named(
         if !path.exists() {
             continue;
         }
-        match LibretroCore::open_with(path, &bios, &saves) {
+        match LibretroCore::open_preset(path, &bios, &saves, init_options(core)) {
             Ok(mut opened) => {
                 apply_core_options(
                     &mut opened,
@@ -268,6 +268,13 @@ pub fn palette_options(which: Core, colors: GbColors) -> Vec<(&'static str, &'st
     }
 }
 
+fn init_options(core: Core) -> &'static [(&'static str, &'static str)] {
+    match core {
+        Core::Gambatte => &[("gambatte_gb_bootloader", "enabled")],
+        _ => &[],
+    }
+}
+
 pub fn apply_core_options(
     core: &mut LibretroCore,
     which: Core,
@@ -300,7 +307,6 @@ pub fn apply_core_options(
     }
     if which == Core::Gambatte {
         core.set_option("gambatte_gb_hwmode", "Auto");
-        core.set_option("gambatte_gb_bootloader", "enabled");
         for (key, value) in palette_options(which, palette.unwrap_or(GbColors::Auto)) {
             core.set_option(key, value);
         }
