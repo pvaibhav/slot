@@ -14,6 +14,7 @@ use crate::text;
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Layout {
     General,
+    Host,
     Numeric,
 }
 
@@ -120,11 +121,12 @@ const NUMERIC: &[&[Cap]] = &[
 
 const LOWER: &str = "1234567890qwertyuiopasdfghjklzxcvbnm";
 const UPPER: &str = "1234567890QWERTYUIOPASDFGHJKLZXCVBNM";
+const HOST_SHIFT: &str = ".-_:/~@+=,";
 const SYMBOL: &str = "!@#$%^&*()`~[]\\|{};:'\"<>?/+=_,.-\u{20ac}\u{a3}\u{a5}\u{a2}";
 
 fn layout_rows(layout: Layout) -> &'static [&'static [Cap]] {
     match layout {
-        Layout::General => GENERAL,
+        Layout::General | Layout::Host => GENERAL,
         Layout::Numeric => NUMERIC,
     }
 }
@@ -136,7 +138,7 @@ fn nth(s: &str, i: usize) -> char {
 impl Keyboard {
     pub fn new(layout: Layout, title: &str, subtitle: Option<&str>, text: &str) -> Keyboard {
         let text: Vec<char> = text.chars().collect();
-        let row = if layout == Layout::General { 1 } else { 0 };
+        let row = if layout == Layout::Numeric { 0 } else { 1 };
         Keyboard {
             layout,
             title: title.to_string(),
@@ -199,6 +201,8 @@ impl Keyboard {
     fn value(&self, i: usize) -> char {
         if self.layout == Layout::Numeric {
             nth(LOWER, i)
+        } else if self.layout == Layout::Host && !self.symbols && self.shift && i < 10 {
+            nth(HOST_SHIFT, i)
         } else if self.symbols || (self.shift && i < 10) {
             nth(SYMBOL, i)
         } else if self.shift {
@@ -293,7 +297,7 @@ impl Keyboard {
             self.help = false;
             return Typed::Changed;
         }
-        let general = self.layout == Layout::General;
+        let general = self.layout != Layout::Numeric;
         match b {
             Btn::Up | Btn::Down | Btn::Left | Btn::Right => {
                 self.navigate(b);
@@ -445,8 +449,8 @@ fn block_width(layout: Layout, key_w: u32) -> f32 {
 fn indent(layout: Layout, row: usize, key_w: u32) -> f32 {
     let pitch = (key_w + KEY_GAP) as f32;
     match (layout, row) {
-        (Layout::General, 1) => pitch,
-        (Layout::General, 2 | 3) => pitch / 2.0,
+        (Layout::General | Layout::Host, 1) => pitch,
+        (Layout::General | Layout::Host, 2 | 3) => pitch / 2.0,
         _ => 0.0,
     }
 }
@@ -483,6 +487,8 @@ fn plain(line: &str, px: f32) -> text::Layout {
     }
 }
 
+const LINE_LEAD: f32 = 1.0;
+
 fn line_face(line: &str, px: f32, h: u32, ink: [u8; 3]) -> (UndoFace, f32) {
     let Some(font) = text::label_font() else {
         return (blank(), 0.0);
@@ -490,8 +496,8 @@ fn line_face(line: &str, px: f32, h: u32, ink: [u8; 3]) -> (UndoFace, f32) {
     let set = text::line_width(font, line, px, 0.0);
     let w = set.ceil() as u32 + 2;
     let mut rgba = vec![0u8; (w * h * 4) as usize];
-    text::draw_centred(&mut rgba, w, h, &plain(line, px), ink);
-    (UndoFace { rgba, w, h }, (w as f32 - set) / 2.0)
+    text::draw_left(&mut rgba, w, h, &plain(line, px), LINE_LEAD, ink);
+    (UndoFace { rgba, w, h }, LINE_LEAD)
 }
 
 pub fn keyboard_text_face(kb: &Keyboard) -> (UndoFace, Vec<f32>) {
@@ -668,7 +674,7 @@ impl Shortcut {
 pub fn keyboard_help_columns(layout: Layout) -> [Vec<Shortcut>; 2] {
     use Shortcut::*;
     match layout {
-        Layout::General => [vec![Delete, Space, Shift], vec![Cursor, Cancel, Done]],
+        Layout::General | Layout::Host => [vec![Delete, Space, Shift], vec![Cursor, Cancel, Done]],
         Layout::Numeric => [vec![Delete, Cursor], vec![Cancel, Done]],
     }
 }

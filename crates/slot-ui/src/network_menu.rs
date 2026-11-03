@@ -1,10 +1,11 @@
 use std::sync::OnceLock;
 
-use crate::draw::{Canvas, Draw, TexId};
+use crate::draw::{Canvas, Draw, TexId, OUT_H};
 use crate::hud::HUD_INK;
 use crate::icon::symbols_font;
 use crate::plate::UndoFace;
 use crate::power_menu::{MENU_H, MENU_INK, MENU_PAD};
+use crate::slot_chrome::MOUTH_H;
 use crate::quick_menu::{
     draw_menu_ground, DIM_INK, LEGEND_Y, POINTER_BLEED, POINTER_GAP, QUICK_EDGE, QUICK_LABEL_X,
     QUICK_PITCH, QUICK_VALUE_GAP, QUICK_VISIBLE, SCROLL_INSET, SCROLL_W, TYPE_DROP,
@@ -278,6 +279,108 @@ impl NetworkList<'_> {
                 h: thumb_h,
                 colour: [lit[0], lit[1], lit[2], 1.0],
             });
+        }
+    }
+}
+
+pub const PAIR_X: f32 = 40.0;
+pub const PAIR_TOP: f32 = 50.0;
+pub const PAIR_QR: u32 = 300;
+pub const PAIR_GAP: f32 = 32.0;
+pub const PAIR_EDGE: f32 = 20.0;
+pub const PAIR_LABEL_PX: f32 = 24.0;
+pub const PAIR_CODE_PX: f32 = 40.0;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum PairSlot {
+    Scan,
+    Phone,
+    Enter,
+    Code,
+    Status,
+}
+
+impl PairSlot {
+    fn y(self) -> f32 {
+        match self {
+            PairSlot::Scan => 58.0,
+            PairSlot::Phone => 92.0,
+            PairSlot::Enter => 152.0,
+            PairSlot::Code => 186.0,
+            PairSlot::Status => 316.0,
+        }
+    }
+
+    pub fn px(self) -> f32 {
+        match self {
+            PairSlot::Code => PAIR_CODE_PX,
+            _ => PAIR_LABEL_PX,
+        }
+    }
+
+    pub fn ink(self) -> [u8; 3] {
+        match self {
+            PairSlot::Code => MENU_INK,
+            _ => DIM_INK,
+        }
+    }
+}
+
+pub fn pair_text_width(canvas: Canvas) -> f32 {
+    canvas.w - PAIR_X - PAIR_QR as f32 - PAIR_GAP - PAIR_EDGE
+}
+
+pub fn pair_face(text: &str, slot: PairSlot, max_w: f32) -> UndoFace {
+    let Some(font) = crate::text::label_font() else {
+        return UndoFace {
+            rgba: Vec::new(),
+            w: 0,
+            h: 0,
+        };
+    };
+    let px = slot.px();
+    let layout = crate::text::fit(font, text, max_w, 1, px, 12.0);
+    let ink = crate::text::line_width(font, &layout.lines.join(""), layout.px, layout.tracking)
+        .ceil() as u32;
+    let (w, h) = (ink.max(1), (px * 1.4).ceil() as u32);
+    let mut rgba = vec![0u8; (w * h * 4) as usize];
+    crate::text::draw_centred(&mut rgba, w, h, &layout, slot.ink());
+    UndoFace { rgba, w, h }
+}
+
+pub struct PairScreen<'a> {
+    pub qr: Option<NetFace>,
+    pub lines: &'a [(PairSlot, NetFace)],
+    pub ground: Option<(TexId, u32)>,
+    pub canvas: Canvas,
+}
+
+impl PairScreen<'_> {
+    pub fn draw(&self, out: &mut Vec<Draw>) {
+        draw_menu_ground(self.canvas, self.ground, out);
+        if let Some(face) = self.qr {
+            let inset = (PAIR_QR.saturating_sub(face.1) / 2) as f32;
+            push(out, face, PAIR_X + inset, PAIR_TOP + inset);
+        }
+        let Some(first) = self.lines.first() else {
+            return;
+        };
+        if self.qr.is_some() {
+            let x = PAIR_X + PAIR_QR as f32 + PAIR_GAP;
+            for (slot, face) in self.lines {
+                push(out, *face, x, slot.y());
+            }
+            return;
+        }
+        let top = first.0.y();
+        let bottom = self
+            .lines
+            .iter()
+            .map(|(slot, face)| slot.y() + face.2 as f32)
+            .fold(top, f32::max);
+        let shift = (OUT_H as f32 - MOUTH_H - (bottom - top)) / 2.0 - top;
+        for (slot, face) in self.lines {
+            push(out, *face, self.canvas.centred(face.1 as f32), slot.y() + shift);
         }
     }
 }

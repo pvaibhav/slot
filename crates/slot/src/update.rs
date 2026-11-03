@@ -722,7 +722,7 @@ pub(crate) fn wait_online() -> Result<(), UpdateFail> {
     Ok(())
 }
 
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+pub(crate) const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 #[cfg(feature = "device")]
 const ONLINE_TIMEOUT: Duration = Duration::from_secs(30);
 pub(crate) const API_TIMEOUT: Duration = Duration::from_secs(15);

@@ -274,7 +274,7 @@ fn every_failure_has_its_own_words() {
         (
             UpdateFail::NoWifi,
             "Could not join Wi-Fi",
-            "Check Network in the Wireless menu.",
+            "Check Wi-Fi in the General menu.",
         ),
         (
             UpdateFail::Offline,
@@ -677,4 +677,24 @@ fn a_second_install_after_a_cancel_starts_a_fresh_download() {
     assert_eq!(a.update_progress(), Some(0.0));
     jobs.send(&mut a, UpdateEvent::Cancelled);
     assert_eq!(a.update_progress(), Some(0.0));
+}
+
+#[test]
+fn a_wifi_drop_mid_check_keeps_the_check_state() {
+    let (_d, mut a, _jobs) = on_updates();
+    press(&mut a, Btn::A);
+    assert_eq!(
+        a.update_text(),
+        Some(("Checking for updates".into(), String::new()))
+    );
+    a.wifi_send(slot::wifi::Cmd::Disconnect);
+    for _ in 0..3 {
+        a.tick_ms(a.now() + 1_000);
+    }
+    assert!(!a.wifi_up());
+    assert_eq!(a.quick_menu(), Some(QuickRow::CheckUpdates));
+    assert_eq!(
+        a.update_text(),
+        Some(("Checking for updates".into(), String::new()))
+    );
 }

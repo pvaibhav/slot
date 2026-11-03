@@ -71,7 +71,7 @@ fn count_in(frame: &[u8], [x, y, w, h]: [f32; 4], test: fn([u8; 3]) -> bool) -> 
 
 fn open_networks(f: &mut Frontend) {
     f.app_mut().apply(Action::QuickMenu);
-    for row in [QuickRow::Network, QuickRow::Networks] {
+    for row in [QuickRow::General, QuickRow::Wifi, QuickRow::Networks] {
         for _ in 0..12 {
             if f.app().quick_menu() == Some(row) {
                 break;
@@ -79,7 +79,7 @@ fn open_networks(f: &mut Frontend) {
             press(f, Btn::Down);
         }
         assert_eq!(f.app().quick_menu(), Some(row));
-        if row == QuickRow::Network {
+        if row != QuickRow::Networks {
             press(f, Btn::A);
         }
     }
@@ -362,7 +362,7 @@ fn the_list_says_it_is_scanning_until_results_arrive_then_offers_other() {
         f.app_mut().set_panel(panel);
         let canvas = f.app().canvas();
         f.app_mut().apply(Action::QuickMenu);
-        for row in [QuickRow::Network, QuickRow::Networks] {
+        for row in [QuickRow::General, QuickRow::Wifi, QuickRow::Networks] {
             while f.app().quick_menu() != Some(row) {
                 press(&mut f, Btn::Down);
             }
@@ -456,5 +456,243 @@ fn an_invalid_password_shows_one_line() {
         let w = f.app().canvas().w;
         let band = [0.0, 100.0, w, 300.0];
         assert!(count_in(&px, band, bright) > 200, "{panel:?}: no notice");
+    }
+}
+
+#[cfg(feature = "romm")]
+mod romm_pages {
+    use super::*;
+    use slot::romm::{RommEvent, RommJob, RommJobs};
+    use std::sync::{Arc, Mutex};
+
+    const PANELS: [(u32, u32); 2] = [(720, 480), (640, 480)];
+    const URL: &str = "https://romm.example.com/pair/device?user_code=K7M2QX9P";
+    const LONG: &str = "romm-library.home.example-network.com";
+
+    #[derive(Clone, Default)]
+    struct Script {
+        asked: Arc<Mutex<Vec<RommJob>>>,
+        events: Arc<Mutex<Vec<RommEvent>>>,
+    }
+
+    impl RommJobs for Script {
+        fn ask(&mut self, job: RommJob) {
+            self.asked.lock().unwrap().push(job);
+        }
+
+        fn take(&mut self) -> Option<RommEvent> {
+            let mut events = self.events.lock().unwrap();
+            match events.is_empty() {
+                true => None,
+                false => Some(events.remove(0)),
+            }
+        }
+    }
+
+    fn shot(frame: &[u8], size: (u32, u32), name: &str) {
+        let Ok(dir) = std::env::var("SCRATCH_PNG_DIR") else {
+            return;
+        };
+        let file = std::fs::File::create(format!("{dir}/romm-{name}-{}.png", size.0)).unwrap();
+        let mut e = png::Encoder::new(std::io::BufWriter::new(file), size.0, size.1);
+        e.set_color(png::ColorType::Rgba);
+        e.set_depth(png::BitDepth::Eight);
+        e.write_header().unwrap().write_image_data(frame).unwrap();
+    }
+
+    fn fit(f: &mut Frontend, c: &mut Compositor, panel: (u32, u32)) {
+        f.app_mut().set_panel(panel);
+        c.fit(panel);
+        settle(f);
+    }
+
+    fn seen(f: &mut Frontend, c: &mut Compositor) -> (Vec<u8>, (u32, u32)) {
+        f.compose(c);
+        f.compose(c);
+        (c.read_frame(), c.frame_size())
+    }
+
+    fn join_home(f: &mut Frontend) {
+        f.app_mut().wifi_send(Cmd::Join {
+            ssid: "Home".into(),
+            password: "password".into(),
+            hidden: false,
+        });
+        settle(f);
+        assert!(f.app().wifi_up());
+    }
+
+    fn open_row(f: &mut Frontend, row: QuickRow) {
+        f.app_mut().apply(Action::QuickMenu);
+        let mut path = vec![row];
+        while let Some(parent) = path.last().and_then(|r| r.parent()) {
+            path.push(parent);
+        }
+        for (depth, step) in path.iter().rev().enumerate() {
+            if depth > 0 {
+                press(f, Btn::A);
+            }
+            let hidden = f.app().hidden_rows();
+            for _ in 0..step.position(&hidden) {
+                press(f, Btn::Down);
+            }
+        }
+        assert_eq!(f.app().quick_menu(), Some(row));
+        settle(f);
+    }
+
+    fn region_ink(frame: &[u8], size: (u32, u32), [x, y, w, h]: [f32; 4]) -> usize {
+        let mut n = 0;
+        for yy in y as usize..((y + h) as usize).min(size.1 as usize) {
+            for xx in x as usize..((x + w) as usize).min(size.0 as usize) {
+                let o = (yy * size.0 as usize + xx) * 4;
+                if frame[o..o + 3].iter().all(|c| *c > 0xa0) {
+                    n += 1;
+                }
+            }
+        }
+        n
+    }
+
+    fn decode(frame: &[u8], size: (u32, u32)) -> Option<String> {
+        let w = size.0 as usize;
+        let mut img = rqrr::PreparedImage::prepare_from_greyscale(w, size.1 as usize, |x, y| {
+            let o = (y * w + x) * 4;
+            ((frame[o] as u32 + frame[o + 1] as u32 + frame[o + 2] as u32) / 3) as u8
+        });
+        let grids = img.detect_grids();
+        let (_, text) = grids.first()?.decode().ok()?;
+        Some(text)
+    }
+
+    #[test]
+    fn the_romm_setup_page_renders() {
+        for panel in PANELS {
+            let Some((_d, mut f, mut c, _s)) = setup() else {
+                return;
+            };
+            join_home(&mut f);
+            f.app_mut().romm.server = LONG.into();
+            open_row(&mut f, QuickRow::RommProtocol);
+            fit(&mut f, &mut c, panel);
+            let (px, size) = seen(&mut f, &mut c);
+            assert_eq!(size, panel);
+            shot(&px, size, "setup");
+            let band = [0.0, 60.0, size.0 as f32, 300.0];
+            assert!(region_ink(&px, size, band) > 500, "{panel:?} drew nothing");
+            let right = [size.0 as f32 * 0.55, 60.0, size.0 as f32 * 0.45, 300.0];
+            assert!(region_ink(&px, size, right) > 100, "{panel:?} has no values");
+        }
+    }
+
+    #[test]
+    fn the_romm_host_keyboard_renders() {
+        for panel in PANELS {
+            let Some((_d, mut f, mut c, _s)) = setup() else {
+                return;
+            };
+            join_home(&mut f);
+            open_row(&mut f, QuickRow::RommServer);
+            press(&mut f, Btn::A);
+            assert!(f.app().keyboard().is_some());
+            fit(&mut f, &mut c, panel);
+            let (px, size) = seen(&mut f, &mut c);
+            assert_eq!(size, panel);
+            shot(&px, size, "host-keyboard");
+            let keys = [0.0, 200.0, size.0 as f32, 200.0];
+            assert!(region_ink(&px, size, keys) > 500, "{panel:?} drew no keys");
+        }
+    }
+
+    #[test]
+    fn the_romm_qr_screen_renders_and_decodes() {
+        for panel in PANELS {
+            let Some((_d, mut f, mut c, _s)) = setup() else {
+                return;
+            };
+            join_home(&mut f);
+            let script = Script::default();
+            f.set_romm_jobs(Box::new(script.clone()));
+            f.app_mut().romm.server = "romm.example.com".into();
+            open_row(&mut f, QuickRow::RommPair);
+            press(&mut f, Btn::A);
+            script.events.lock().unwrap().push(RommEvent::PairShow {
+                url: URL.into(),
+                code: "K7M2QX9P".into(),
+            });
+            fit(&mut f, &mut c, panel);
+            let (px, size) = seen(&mut f, &mut c);
+            assert_eq!(size, panel);
+            shot(&px, size, "qr");
+            assert_eq!(decode(&px, size).as_deref(), Some(URL), "{panel:?}");
+            let code = [372.0, 186.0, size.0 as f32 - 372.0, 52.0];
+            assert!(region_ink(&px, size, code) > 200, "{panel:?} has no code");
+            let legend = [0.0, 430.0, size.0 as f32 * 0.5, 50.0];
+            assert!(region_ink(&px, size, legend) > 100, "{panel:?} has no Cancel");
+        }
+    }
+
+    fn ink_box(frame: &[u8], size: (u32, u32), limit: u32) -> Option<[usize; 4]> {
+        let mut found: Option<[usize; 4]> = None;
+        for y in 0..limit as usize {
+            for x in 0..size.0 as usize {
+                let o = (y * size.0 as usize + x) * 4;
+                if frame[o..o + 3].iter().all(|c| *c > 0x70) {
+                    let b = found.get_or_insert([x, y, x, y]);
+                    b[0] = b[0].min(x);
+                    b[1] = b[1].min(y);
+                    b[2] = b[2].max(x);
+                    b[3] = b[3].max(y);
+                }
+            }
+        }
+        found
+    }
+
+    #[test]
+    fn the_romm_connecting_screen_is_centred() {
+        for panel in PANELS {
+            let Some((_d, mut f, mut c, _s)) = setup() else {
+                return;
+            };
+            join_home(&mut f);
+            let script = Script::default();
+            f.set_romm_jobs(Box::new(script.clone()));
+            f.app_mut().romm.server = "romm.example.com".into();
+            open_row(&mut f, QuickRow::RommPair);
+            press(&mut f, Btn::A);
+            fit(&mut f, &mut c, panel);
+            let (px, size) = seen(&mut f, &mut c);
+            assert_eq!(size, panel);
+            shot(&px, size, "connecting");
+            let above = (OUT_H as f32 - slot_ui::MOUTH_H) as u32;
+            let [x0, y0, x1, y1] = ink_box(&px, size, above).expect("no text drawn");
+            let mid_x = (x0 + x1) as f32 / 2.0;
+            assert!((mid_x - size.0 as f32 / 2.0).abs() <= 3.0, "{panel:?}: x {mid_x}");
+            let mid_y = (y0 + y1) as f32 / 2.0;
+            assert!((mid_y - above as f32 / 2.0).abs() <= 8.0, "{panel:?}: y {mid_y}");
+        }
+    }
+
+    #[test]
+    fn the_romm_failed_screen_renders() {
+        let Some((_d, mut f, mut c, _s)) = setup() else {
+            return;
+        };
+        join_home(&mut f);
+        let script = Script::default();
+        f.set_romm_jobs(Box::new(script.clone()));
+        f.app_mut().romm.server = "romm.example.com".into();
+        open_row(&mut f, QuickRow::RommPair);
+        press(&mut f, Btn::A);
+        script
+            .events
+            .lock()
+            .unwrap()
+            .push(RommEvent::PairFailed(slot::romm::PairFail::Expired));
+        fit(&mut f, &mut c, (640, 480));
+        let (px, size) = seen(&mut f, &mut c);
+        shot(&px, size, "expired");
+        assert!(decode(&px, size).is_none());
     }
 }

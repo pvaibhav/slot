@@ -217,6 +217,15 @@ fn one_cart(
     }
 }
 
+pub fn fetch_one(root: &Path, cart: Cart, index: &ArtIndex, agent: &ureq::Agent) -> bool {
+    let outcome = one_cart(root, cart, Kind::Real, index, &|url| fetch_art(agent, url));
+    matches!(outcome, Outcome::Landed(..))
+}
+
+pub fn load_art_index(root: &Path) -> Result<ArtIndex, UpdateFail> {
+    load_index(root, &mut get_index)
+}
+
 pub fn fetch_missing_with(
     root: &Path,
     kind: Kind,

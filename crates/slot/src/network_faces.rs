@@ -4,10 +4,10 @@ use slot_gfx::{Compositor, TexId};
 use slot_ui::{
     footer_ink, keyboard_cap_faces, keyboard_faces, keyboard_text_face, menu_detail_face,
     menu_face, net_bars_face, net_lock_face, prompt_legends, quick_value_face, toast_face_text,
-    Keyboard, NetFace, NetIcons, NetLine, Toast, UndoFace,
+    pair_face, pair_text_width, Keyboard, NetFace, NetIcons, NetLine, Toast, UndoFace,
 };
 
-use crate::app::{App, NetLegends};
+use crate::app::{App, NetLegends, PairFaces, PairView};
 use crate::networks::{Line, SCANNING_MESSAGE, WIFI_OFF_MESSAGE};
 
 #[derive(PartialEq)]
@@ -43,6 +43,8 @@ pub struct NetworkSync {
     pool: Vec<TexId>,
     keys: Option<KeyShape>,
     forgotten: Option<String>,
+    pair: Option<PairView>,
+    pair_pool: Vec<TexId>,
 }
 
 fn reuse(compositor: &mut Compositor, spare: &mut Vec<TexId>, face: &UndoFace) -> NetFace {
@@ -65,6 +67,7 @@ impl NetworkSync {
     pub fn sync(&mut self, app: &mut App, compositor: &mut Compositor) {
         self.sync_keyboard(app, compositor);
         self.sync_forgotten(app, compositor);
+        self.sync_pair(app, compositor);
         let Some(screen) = app.network_screen() else {
             return;
         };
@@ -140,6 +143,11 @@ impl NetworkSync {
             let (id, w, _) = up(&face);
             (id, w)
         });
+        let retry = [false, true].map(|light| {
+            let [_, face] = prompt_legends(footer_ink(light), "Cancel", "Retry");
+            let (id, w, _) = up(&face);
+            (id, w)
+        });
         let mut word = |w: &str| {
             [false, true].map(|light| {
                 let [_, face] = prompt_legends(footer_ink(light), "Back", w);
@@ -149,6 +157,7 @@ impl NetworkSync {
         };
         app.set_network_legends(NetLegends {
             cancel,
+            retry,
             scan: word("Scan"),
             join: word("Join"),
             connect: word("Connect"),
@@ -158,6 +167,53 @@ impl NetworkSync {
         let [no, yes] = prompt_legends(footer_ink(false), "Cancel", "Forget");
         self.forget = [menu_face("Forget"), no, yes].iter().map(&mut up).collect();
         app.set_forget_faces(self.forget.clone());
+    }
+
+    fn sync_pair(&mut self, app: &mut App, compositor: &mut Compositor) {
+        let view = app.pair_view();
+        if view == self.pair {
+            return;
+        }
+        let Some(now) = view else {
+            self.pair = None;
+            app.set_pair_faces(None);
+            return;
+        };
+        if !self.statics {
+            self.statics = true;
+            self.load_statics(app, compositor);
+        }
+        let mut at = 0;
+        let pool = &mut self.pair_pool;
+        let mut up = |face: &UndoFace| {
+            let id = match pool.get(at) {
+                Some(&id) => {
+                    compositor.update_texture(id, face.w, face.h, &face.rgba);
+                    id
+                }
+                None => {
+                    let id = compositor.create_texture(face.w, face.h, &face.rgba);
+                    pool.push(id);
+                    id
+                }
+            };
+            at += 1;
+            (id, face.w, face.h)
+        };
+        let qr = now
+            .url
+            .as_deref()
+            .and_then(|url| crate::romm::qr::qr_rgba(url, slot_ui::PAIR_QR))
+            .map(|(rgba, side)| up(&UndoFace { rgba, w: side, h: side }));
+        let max_w = pair_text_width(app.canvas());
+        let lines = now
+            .lines
+            .iter()
+            .filter(|(_, text)| !text.is_empty())
+            .map(|(slot, text)| (*slot, up(&pair_face(text, *slot, max_w))))
+            .collect();
+        app.set_pair_faces(Some(PairFaces { qr, lines }));
+        self.pair = Some(now);
     }
 
     fn sync_forgotten(&mut self, app: &App, compositor: &mut Compositor) {

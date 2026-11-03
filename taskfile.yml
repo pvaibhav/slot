@@ -47,7 +47,7 @@ tasks:
     env:
       SLOT_SILENT: '1'
     cmds:
-      - cargo nextest run --workspace --no-fail-fast -E 'not ({{.IN_PROCESS}})'
+      - cargo nextest run --workspace --features slot/romm --no-fail-fast -E 'not ({{.IN_PROCESS}})'
       - cargo test -p slot --no-fail-fast {{.SLOT_IN_PROCESS}}
       - cargo test -p slot-gfx --test pipeline
       - cargo test -p slot-ui --test render_row_edges

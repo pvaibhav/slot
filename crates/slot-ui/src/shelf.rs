@@ -24,6 +24,14 @@ pub fn rest_y(h: f32) -> f32 {
 pub fn foot_y(h: f32) -> f32 {
     rest_y(h) + h
 }
+
+pub fn box_size(platform: Platform) -> (u32, u32) {
+    match platform {
+        Platform::Gba | Platform::Gbav => (318, 282),
+        Platform::Gb | Platform::Gbc => (312, 277),
+    }
+}
+
 const OMEGA: f32 = 16.0;
 const PART: f32 = 130.0;
 
@@ -45,6 +53,7 @@ pub struct Shelf {
     pub index: usize,
     pub scroll: f32,
     faces: Vec<Option<TexId>>,
+    wrapped: Vec<Option<TexId>>,
     interiors: Vec<Option<TexId>>,
     shadow: Option<TexId>,
     gb_shadow: Option<TexId>,
@@ -63,6 +72,7 @@ impl Shelf {
     pub fn new(carts: Vec<Cart>) -> Self {
         Shelf {
             faces: vec![None; carts.len()],
+            wrapped: vec![None; carts.len()],
             interiors: vec![None; carts.len()],
             hearted: vec![false; carts.len()],
             heart: None,
@@ -97,6 +107,7 @@ impl Shelf {
             .flatten()
             .collect();
         self.faces = vec![None; carts.len()];
+        self.wrapped = vec![None; carts.len()];
         self.interiors = vec![None; carts.len()];
         self.hearted = vec![false; carts.len()];
         self.carts = carts;
@@ -151,6 +162,16 @@ impl Shelf {
 
     pub fn face(&self, i: usize) -> Option<TexId> {
         self.faces.get(i).copied().flatten()
+    }
+
+    pub fn set_wrapped(&mut self, i: usize, tex: Option<TexId>) {
+        if let Some(slot) = self.wrapped.get_mut(i) {
+            *slot = tex;
+        }
+    }
+
+    pub fn wrapped(&self, i: usize) -> Option<TexId> {
+        self.wrapped.get(i).copied().flatten()
     }
 
     pub fn set_face(&mut self, i: usize, tex: TexId) -> Option<TexId> {
@@ -416,6 +437,80 @@ impl Shelf {
         draw_empty_slot(canvas, slot, out);
     }
 
+    fn layers(&self, i: usize, rect: [f32; 4], alpha: f32, out: &mut Vec<Draw>) {
+        let [x, y, w, h] = rect;
+        if self.clear(i) && self.face(i).is_some() {
+            let board = match self.shell(i) {
+                None => self.backing,
+                Some(GbShell::Notched) => self.gb_backing,
+                Some(GbShell::Rounded) => self.gbc_backing,
+            };
+            let gba = self.shell(i).is_none();
+            // A GBA cart's board and back shell fill the cart's box, exactly where the
+            // picker lifts them from; a Game Boy pak's backing fills its box.
+            let Placed {
+                x: bx,
+                y: by,
+                w: bw,
+                h: bh,
+            } = if gba {
+                board_in(Placed { x, y, w, h })
+            } else {
+                Placed { x, y, w, h }
+            };
+            // Back plastic, then the board, then the front shell.
+            if let Some(tex) = self.interiors.get(i).copied().flatten() {
+                out.push(Draw::Tex {
+                    x: bx,
+                    y: by,
+                    w: bw,
+                    h: bh,
+                    tex,
+                    alpha,
+                });
+            }
+            if let Some(tex) = board {
+                out.push(Draw::Tex {
+                    x: bx,
+                    y: by,
+                    w: bw,
+                    h: bh,
+                    tex,
+                    alpha,
+                });
+            }
+        }
+        out.push(match self.face(i) {
+            Some(tex) => Draw::Tex {
+                x,
+                y,
+                w,
+                h,
+                tex,
+                alpha,
+            },
+            None => {
+                let c = label_colour(&label_text(&self.carts[i]));
+                Draw::Rect {
+                    x,
+                    y,
+                    w,
+                    h,
+                    colour: [
+                        c[0] as f32 / 255.0,
+                        c[1] as f32 / 255.0,
+                        c[2] as f32 / 255.0,
+                        alpha,
+                    ],
+                }
+            }
+        });
+    }
+
+    pub fn draw_cart_at(&self, i: usize, rect: [f32; 4], out: &mut Vec<Draw>) {
+        self.layers(i, rect, 1.0, out);
+    }
+
     pub fn draw_row(
         &self,
         canvas: Canvas,
@@ -449,6 +544,19 @@ impl Shelf {
             }
             let x = x + shake;
             let y = foot_y(ch as f32) - h;
+            if let Some(tex) = self.wrapped(i) {
+                let (bw, bh) = box_size(cart.platform);
+                let (bw, bh) = (bw as f32 * scale, bh as f32 * scale);
+                out.push(Draw::Tex {
+                    x: x + (w - bw) / 2.0,
+                    y: y + h - bh,
+                    w: bw,
+                    h: bh,
+                    tex,
+                    alpha: alpha * dim,
+                });
+                continue;
+            }
             if alpha < 1.0 {
                 let backing = match self.shell(i) {
                     None => self.shadow,
@@ -466,72 +574,7 @@ impl Shelf {
                     });
                 }
             }
-            if self.clear(i) && self.face(i).is_some() {
-                let board = match self.shell(i) {
-                    None => self.backing,
-                    Some(GbShell::Notched) => self.gb_backing,
-                    Some(GbShell::Rounded) => self.gbc_backing,
-                };
-                let gba = self.shell(i).is_none();
-                // A GBA cart's board and back shell fill the cart's box, exactly where the
-                // picker lifts them from; a Game Boy pak's backing fills its box.
-                let Placed {
-                    x: bx,
-                    y: by,
-                    w: bw,
-                    h: bh,
-                } = if gba {
-                    board_in(Placed { x, y, w, h })
-                } else {
-                    Placed { x, y, w, h }
-                };
-                // Back plastic, then the board, then the front shell.
-                if let Some(tex) = self.interiors.get(i).copied().flatten() {
-                    out.push(Draw::Tex {
-                        x: bx,
-                        y: by,
-                        w: bw,
-                        h: bh,
-                        tex,
-                        alpha: alpha * dim,
-                    });
-                }
-                if let Some(tex) = board {
-                    out.push(Draw::Tex {
-                        x: bx,
-                        y: by,
-                        w: bw,
-                        h: bh,
-                        tex,
-                        alpha: alpha * dim,
-                    });
-                }
-            }
-            out.push(match self.face(i) {
-                Some(tex) => Draw::Tex {
-                    x,
-                    y,
-                    w,
-                    h,
-                    tex,
-                    alpha: alpha * dim,
-                },
-                None => {
-                    let c = label_colour(&label_text(cart));
-                    Draw::Rect {
-                        x,
-                        y,
-                        w,
-                        h,
-                        colour: [
-                            c[0] as f32 / 255.0,
-                            c[1] as f32 / 255.0,
-                            c[2] as f32 / 255.0,
-                            alpha * dim,
-                        ],
-                    }
-                }
-            });
+            self.layers(i, [x, y, w, h], alpha * dim, out);
             if let (Some(true), Some((tex, sw, sh))) = (self.hearted.get(i), self.heart) {
                 let (lx, ly, lw, _) = label_rect(self.shell(i));
                 out.push(Draw::Tex {

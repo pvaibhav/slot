@@ -1276,3 +1276,40 @@ fn letter_jumps_held_through_slow_frames_keep_the_row_on_screen() {
         }
     }
 }
+
+#[test]
+fn a_wrapped_cart_stands_on_the_cart_foot_with_no_cart_parts_around_it() {
+    let mut s = shelf_with(1);
+    s.select(0);
+    s.set_face(0, TexId::from_raw(3));
+    s.set_interior(0, TexId::from_raw(4));
+    s.set_wrapped(0, Some(TexId::from_raw(7)));
+    let mut d = Vec::new();
+    s.draw_row(Canvas::FRAMED, None, 0.0, 0.0, 1.0, &mut d);
+    let [Draw::Tex { x, y, w, h, tex, .. }] = d[..] else {
+        panic!("{d:?}");
+    };
+    let (bw, bh) = slot_ui::box_size(Platform::Gba);
+    assert_eq!(tex, TexId::from_raw(7));
+    assert_eq!((w, h), (bw as f32, bh as f32));
+    assert_eq!(x + w / 2.0, Canvas::FRAMED.w / 2.0);
+    assert_eq!(y + h, slot_ui::foot_y(CART_H as f32));
+}
+
+#[test]
+fn a_wrapped_cart_draws_its_box_and_an_unwrapped_one_draws_its_cart() {
+    let mut s = shelf_with(1);
+    s.select(0);
+    let mut plain = Vec::new();
+    s.draw_row(Canvas::FRAMED, None, 0.0, 0.0, 1.0, &mut plain);
+    assert!(plain.iter().all(|d| matches!(d, Draw::Rect { .. })));
+    s.set_wrapped(0, Some(TexId::from_raw(7)));
+    let mut boxed = Vec::new();
+    s.draw_row(Canvas::FRAMED, None, 0.0, 0.0, 1.0, &mut boxed);
+    assert!(boxed.iter().any(|d| matches!(d, Draw::Tex { tex, .. } if *tex == TexId::from_raw(7))));
+    s.set_wrapped(0, None);
+    let mut after = Vec::new();
+    s.draw_row(Canvas::FRAMED, None, 0.0, 0.0, 1.0, &mut after);
+    assert_eq!(after.len(), plain.len());
+    assert!(after.iter().all(|d| matches!(d, Draw::Rect { .. })));
+}

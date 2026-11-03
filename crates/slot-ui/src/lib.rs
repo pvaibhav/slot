@@ -1,5 +1,5 @@
 mod art;
-pub use art::{cover, cover_bytes};
+pub use art::{cover, cover_bytes, decode_png_bytes};
 mod bitmaps;
 pub use bitmaps::{
     link_port, link_port_light, slot_back, slot_back_light, slot_front, slot_front_light,
@@ -80,8 +80,8 @@ pub use keyboard::{
     KeyboardFaces, KeyboardTex, Layout, Shortcut, Special, Typed, KEYBOARD_HELP_TITLE,
 };
 pub use network_menu::{
-    bars_rect, lock_rect, net_bars_face, net_lock_face, net_row_top, net_window, wifi_face, NetFace,
-    NetIcons, NetLine, NetworkList,
+    bars_rect, lock_rect, net_bars_face, net_lock_face, net_row_top, net_window, pair_face,
+    pair_text_width, wifi_face, PAIR_QR, NetFace, NetIcons, NetLine, NetworkList, PairScreen, PairSlot,
 };
 pub use hud::{
     badge_at, ff_badge, footer_ink, FfState, Hud, HudKind, LinkBadge, Millis, ALARM_BAND_H,
@@ -117,7 +117,7 @@ pub use quick_menu::{
 };
 pub use rebuild::{headline_face, rebuild_count_face, rebuild_title_face, RebuildScreen};
 pub use refusal::Refusal;
-pub use shelf::{foot_y, repeat_gap, rest_y, Shelf, HEART_INK, HEART_SCALE, REPEAT_DELAY_MS};
+pub use shelf::{box_size, foot_y, repeat_gap, rest_y, Shelf, HEART_INK, HEART_SCALE, REPEAT_DELAY_MS};
 pub use shell::{
     gb_plastics, gb_table_shells, gba_plastics, gba_shell_for,
     indexed_shell, lookup_order_is_exact_then_family_then_default, shell_for, shell_presets, table_keys, Finish,

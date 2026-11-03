@@ -63,10 +63,12 @@ pub struct Frontend {
     fetch_sync: FetchSync,
     studio_sync: StudioSync,
     print_tex: Option<crate::print_scene::PrintTextures>,
+    gift_boxes: crate::unwrap_scene::GiftBoxes,
     print_stage: Option<std::sync::mpsc::Receiver<Option<crate::print_scene::StageArt>>>,
     print_stage_asked: bool,
     quick_clock: QuickClock,
     quick_network: QuickClock,
+    quick_romm: [QuickClock; 4],
     networks: crate::network_faces::NetworkSync,
     quick_palette: QuickPalette,
     wallpaper: WallpaperSync,
@@ -503,6 +505,10 @@ impl Frontend {
         session
             .app_mut()
             .set_art_jobs(crate::art::jobs::art_jobs(platform.root().to_path_buf()));
+        #[cfg(feature = "romm")]
+        session
+            .app_mut()
+            .set_romm_jobs(crate::romm::romm_jobs(platform.root().to_path_buf(), crate::romm::http_api));
         session.app_mut().set_wifi(wifi_worker(platform.root()));
         #[cfg(feature = "device")]
         session
@@ -549,10 +555,12 @@ impl Frontend {
             fetch_sync: FetchSync::new(),
             studio_sync: StudioSync::new(),
             print_tex: None,
+            gift_boxes: Default::default(),
             print_stage: None,
             print_stage_asked: false,
             quick_clock: QuickClock::default(),
             quick_network: QuickClock::default(),
+            quick_romm: Default::default(),
             networks: Default::default(),
             quick_palette: QuickPalette::default(),
             wallpaper: WallpaperSync::default(),
@@ -1025,6 +1033,7 @@ impl Frontend {
         sync_studio(self.session.app_mut(), compositor, &mut self.studio_sync);
         self.step_print_stage(compositor);
         sync_server(self.session.app_mut(), compositor, self.print_tex);
+        self.gift_boxes.sync(self.session.app_mut(), compositor);
         let stale = self.session.app_mut().take_stale_labels();
         if !stale.is_empty() {
             if let Some(root) = self.session.app().root().map(|r| r.to_path_buf()) {
@@ -1043,6 +1052,7 @@ impl Frontend {
         }
         sync_quick_clock(self.session.app_mut(), compositor, &mut self.quick_clock);
         sync_quick_network(self.session.app_mut(), compositor, &mut self.quick_network);
+        sync_quick_romm(self.session.app_mut(), compositor, &mut self.quick_romm);
         self.networks.sync(self.session.app_mut(), compositor);
         sync_quick_palette(self.session.app_mut(), compositor, &mut self.quick_palette);
         sync_wallpaper(self.session.app_mut(), compositor, &mut self.wallpaper);
@@ -1247,6 +1257,10 @@ impl Frontend {
 
     pub fn set_art_jobs(&mut self, jobs: Box<dyn crate::art::jobs::ArtJobs>) {
         self.session.app_mut().set_art_jobs(jobs);
+    }
+
+    pub fn set_romm_jobs(&mut self, jobs: Box<dyn crate::romm::RommJobs>) {
+        self.session.app_mut().set_romm_jobs(jobs);
     }
 
     pub fn set_left_stick(&mut self, present: bool) {
@@ -2003,6 +2017,36 @@ fn sync_quick_network(app: &mut App, compositor: &mut Compositor, state: &mut Qu
     let lit = upload(compositor, &mut state.lit, lit);
     app.set_quick_network_faces((dim, dim_size.0, dim_size.1), (lit, lit_size.0, lit_size.1));
     state.shown = text;
+}
+
+fn sync_quick_romm(app: &mut App, compositor: &mut Compositor, state: &mut [QuickClock; 4]) {
+    if app.quick_menu().is_none() {
+        return;
+    }
+    let texts = app.romm_texts();
+    if texts.iter().zip(state.iter()).all(|(t, s)| *t == s.shown) {
+        return;
+    }
+    let mut faces = [None; 4];
+    for ((text, slot), face) in texts.into_iter().zip(state.iter_mut()).zip(faces.iter_mut()) {
+        if text.is_empty() {
+            slot.shown = text;
+            continue;
+        }
+        let (dim, lit) = (
+            quick_value_face(&text, false),
+            quick_value_face(&text, true),
+        );
+        let (dim_size, lit_size) = ((dim.w, dim.h), (lit.w, lit.h));
+        let dim = upload(compositor, &mut slot.dim, dim);
+        let lit = upload(compositor, &mut slot.lit, lit);
+        *face = Some([
+            (dim, dim_size.0, dim_size.1),
+            (lit, lit_size.0, lit_size.1),
+        ]);
+        slot.shown = text;
+    }
+    app.set_quick_romm_faces(faces);
 }
 
 fn sync_quick_palette(app: &mut App, compositor: &mut Compositor, state: &mut QuickPalette) {

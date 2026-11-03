@@ -58,7 +58,7 @@ fn logged(log: &Log, line: &str) -> bool {
 
 fn open_networks(a: &mut App) {
     a.apply(Action::QuickMenu);
-    for row in [QuickRow::Network, QuickRow::Networks] {
+    for row in [QuickRow::General, QuickRow::Wifi, QuickRow::Networks] {
         for _ in 0..12 {
             if a.quick_menu() == Some(row) {
                 break;
@@ -66,7 +66,7 @@ fn open_networks(a: &mut App) {
             press(a, Btn::Down);
         }
         assert_eq!(a.quick_menu(), Some(row), "{:?}", a.phase());
-        if row == QuickRow::Network {
+        if row != QuickRow::Networks {
             press(a, Btn::A);
         }
     }
@@ -647,10 +647,9 @@ fn networks_holds_the_radio_without_a_wifi_conf() {
     open_scan(&mut a);
     assert!(a.wifi().held);
     assert!(labels(&a).contains(&"Home".to_string()));
-    press(&mut a, Btn::B);
-    press(&mut a, Btn::B);
-    press(&mut a, Btn::B);
-    press(&mut a, Btn::B);
+    for _ in 0..5 {
+        press(&mut a, Btn::B);
+    }
     assert!(matches!(a.phase(), Phase::Shelf));
     settle(&mut a);
     assert!(!a.wifi().held);
@@ -683,7 +682,7 @@ fn leaving_networks_with_nothing_saved_releases_the_radio() {
     open_networks(&mut a);
     assert!(a.wifi().held);
     std::fs::write(d.path().join("Config/wifi.conf"), b"update_config=1\n").unwrap();
-    for _ in 0..3 {
+    for _ in 0..4 {
         press(&mut a, Btn::B);
     }
     assert!(matches!(a.phase(), Phase::Shelf));
@@ -703,7 +702,7 @@ fn forgetting_the_only_network_releases_the_radio_on_the_shelf() {
     press(&mut a, Btn::A);
     settle(&mut a);
     assert!(a.wifi().saved.is_empty());
-    for _ in 0..3 {
+    for _ in 0..4 {
         press(&mut a, Btn::B);
     }
     assert!(matches!(a.phase(), Phase::Shelf));
@@ -712,20 +711,27 @@ fn forgetting_the_only_network_releases_the_radio_on_the_shelf() {
     assert!(!a.wifi().held);
 }
 
-const TOOLS: [QuickRow; 3] = [QuickRow::Server, QuickRow::CheckUpdates, QuickRow::FetchArt];
-
 #[test]
-fn the_network_tools_show_only_while_connected() {
+fn the_tools_page_opens_only_while_connected() {
     let _g = serial();
     let (_d, mut a, _log) = booted(Fake::demo());
     assert!(!a.wifi_up());
-    let hidden = a.hidden_rows();
-    assert!(TOOLS.iter().all(|r| hidden.contains(r)), "{hidden:?}");
-    assert!(!hidden.contains(&QuickRow::Networks));
+    assert!(!a.hidden_rows().contains(&QuickRow::Networks));
+    a.apply(Action::QuickMenu);
+    for _ in 0..12 {
+        if a.quick_menu() == Some(QuickRow::Network) {
+            break;
+        }
+        press(&mut a, Btn::Down);
+    }
+    press(&mut a, Btn::A);
+    assert_eq!(a.quick_menu(), Some(QuickRow::Network));
+    assert!(a.update_text().is_some());
+    press(&mut a, Btn::B);
     join(&mut a, "CoffeeShop Guest", "");
     assert!(a.wifi_up());
-    let hidden = a.hidden_rows();
-    assert!(TOOLS.iter().all(|r| !hidden.contains(r)), "{hidden:?}");
+    press(&mut a, Btn::A);
+    assert_eq!(a.quick_menu(), Some(QuickRow::Server));
 }
 
 #[test]
@@ -756,7 +762,7 @@ fn losing_the_connection_moves_the_pointer_off_a_tool() {
     a.wifi_send(Cmd::Disconnect);
     settle(&mut a);
     assert!(!a.wifi_up());
-    assert_eq!(a.quick_menu(), Some(QuickRow::Networks));
+    assert_eq!(a.quick_menu(), Some(QuickRow::Network));
 }
 
 fn open_scan(a: &mut App) {

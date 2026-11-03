@@ -590,44 +590,95 @@ fn network_sits_between_controls_and_about() {
     let at = |row| QuickRow::MAIN.iter().position(|r| *r == row);
     assert_eq!(at(QuickRow::Network), at(QuickRow::Controls).map(|i| i + 1));
     assert_eq!(at(QuickRow::About), at(QuickRow::Network).map(|i| i + 1));
-    assert_eq!(QuickRow::Network.label(), "Wireless");
+    assert_eq!(QuickRow::Network.label(), "Tools");
+    assert_eq!(
+        QuickRow::NETWORK,
+        [
+            QuickRow::Server,
+            QuickRow::Romm,
+            QuickRow::FetchArt,
+            QuickRow::CheckUpdates
+        ]
+    );
+    assert_eq!(QuickRow::WIFI, [QuickRow::WifiPower, QuickRow::Networks]);
+    assert_eq!(QuickRow::GENERAL.last(), Some(&QuickRow::Wifi));
     let (_d, mut a, _) = on_carousel();
+    common::connect(&mut a);
     open_at(&mut a, QuickRow::Network);
     press(&mut a, Btn::A);
-    assert_eq!(a.quick_menu(), Some(QuickRow::WifiPower));
+    assert_eq!(a.quick_menu(), Some(QuickRow::Server));
     press(&mut a, Btn::B);
     assert_eq!(a.quick_menu(), Some(QuickRow::Network));
 }
 
 #[test]
-fn fetch_missing_art_moved_to_network() {
+fn tools_holds_the_network_tools() {
     assert_eq!(
         QuickRow::NETWORK,
         [
-            QuickRow::WifiPower,
-            QuickRow::Networks,
             QuickRow::Server,
+            QuickRow::Romm,
             QuickRow::FetchArt,
-            QuickRow::CheckUpdates,
+            QuickRow::CheckUpdates
         ]
     );
     assert_eq!(
         QuickRow::NETWORK.map(QuickRow::label),
-        [
-            "Wi-Fi",
-            "Network",
-            "Gamebit",
-            "Fetch Missing Art",
-            "Check for Updates"
-        ]
+        ["Gamebit", "RomM", "Fetch Missing Art", "Check for Updates"]
     );
+    assert_eq!(QuickRow::WIFI.map(QuickRow::label), ["Wi-Fi", "Network"]);
+    assert_eq!(QuickRow::Wifi.label(), "Wi-Fi");
     assert!(!QuickRow::GENERAL.contains(&QuickRow::FetchArt));
     assert_eq!(QuickRow::FetchArt.parent(), Some(QuickRow::Network));
+    assert_eq!(QuickRow::WifiPower.parent(), Some(QuickRow::Wifi));
     let (_d, mut a, _) = on_carousel();
     common::connect(&mut a);
     for row in QuickRow::NETWORK {
-        assert!(!a.hidden_rows().contains(&row), "{row:?} is hidden");
+        let shown = row != QuickRow::Romm || cfg!(feature = "romm");
+        assert_eq!(!a.hidden_rows().contains(&row), shown, "{row:?}");
     }
+}
+
+const NO_NETWORK: &str = "You must be connected to a network to use tools";
+
+#[test]
+fn tools_shows_the_message_when_not_connected() {
+    let (_d, mut a, _) = on_carousel();
+    open_at(&mut a, QuickRow::Network);
+    press(&mut a, Btn::A);
+    assert_eq!(a.quick_menu(), Some(QuickRow::Network));
+    assert_eq!(a.update_text().map(|t| t.0), Some(NO_NETWORK.to_string()));
+    assert!(QuickRow::NETWORK
+        .iter()
+        .all(|r| QuickRow::Network.shown(&a.hidden_rows()).iter().all(|s| s != r)));
+}
+
+#[test]
+fn tools_falls_to_the_message_when_wifi_drops() {
+    let (_d, mut a, _) = on_carousel();
+    common::connect(&mut a);
+    open_at(&mut a, QuickRow::FetchArt);
+    assert_eq!(a.quick_menu(), Some(QuickRow::FetchArt));
+    assert!(a.update_text().is_none());
+    a.wifi_send(slot::wifi::Cmd::Disconnect);
+    for _ in 0..3 {
+        a.tick_ms(a.now() + 1_000);
+    }
+    assert!(!a.wifi_up());
+    assert_eq!(a.quick_menu(), Some(QuickRow::Network));
+    assert_eq!(a.update_text().map(|t| t.0), Some(NO_NETWORK.to_string()));
+    assert!(!QuickRow::Network.shown(&a.hidden_rows()).is_empty());
+}
+
+#[test]
+fn no_wifi_hardware_hides_tools_and_wifi() {
+    let (d, mut a, _) = on_carousel();
+    a.set_wifi_probe(d.path().join("net/wlan0"));
+    a.tick_ms(a.now() + 1);
+    let hidden = a.hidden_rows();
+    assert!(hidden.contains(&QuickRow::Network));
+    assert!(hidden.contains(&QuickRow::Wifi));
+    assert!(!QuickRow::MAIN.iter().any(|r| *r != QuickRow::Network && hidden.contains(r)));
 }
 
 #[test]
@@ -659,7 +710,7 @@ fn wifi_row_toggles_with_a_and_left_right() {
 }
 
 #[test]
-fn wifi_off_leaves_only_the_wifi_row_on_the_network_page() {
+fn wifi_off_leaves_only_the_wifi_row_on_the_wifi_page() {
     let (_d, mut a, _) = on_carousel();
     open_at(&mut a, QuickRow::WifiPower);
     press(&mut a, Btn::A);
@@ -702,7 +753,6 @@ fn the_networks_row_says_off_or_not_connected() {
 #[test]
 fn fetch_missing_art_waits_for_a_connection() {
     let (_d, mut a, _) = on_carousel();
-    assert!(a.hidden_rows().contains(&QuickRow::FetchArt));
     common::connect(&mut a);
     open_at(&mut a, QuickRow::FetchArt);
     press(&mut a, Btn::A);

@@ -82,7 +82,7 @@ fn the_fast_forward_row_offers_off_a_slow_speed_and_the_four_ceilings() {
 fn the_rows_run_in_the_order_the_user_chose() {
     assert_eq!(
         QuickRow::MAIN.map(QuickRow::label),
-        ["General", "Screen", "Gameplay", "Controls", "Wireless", "About"]
+        ["General", "Screen", "Gameplay", "Controls", "Tools", "About"]
     );
     assert_eq!(
         QuickRow::GENERAL.map(QuickRow::label),
@@ -93,18 +93,13 @@ fn the_rows_run_in_the_order_the_user_chose() {
             "Recents",
             "Game Titles",
             "Lid Power Off",
-            "Date & Time"
+            "Date & Time",
+            "Wi-Fi"
         ]
     );
     assert_eq!(
         QuickRow::NETWORK.map(QuickRow::label),
-        [
-            "Wi-Fi",
-            "Network",
-            "Gamebit",
-            "Fetch Missing Art",
-            "Check for Updates"
-        ]
+        ["Gamebit", "RomM", "Fetch Missing Art", "Check for Updates"]
     );
     assert_eq!(
         QuickRow::CONTROL_PAGES.map(QuickRow::label),
@@ -199,9 +194,15 @@ fn the_rows_run_in_the_order_the_user_chose() {
             QuickRow::UndoLoad,
             QuickRow::Guide,
             QuickRow::Network,
+            QuickRow::Wifi,
             QuickRow::Networks,
             QuickRow::CheckUpdates,
-            QuickRow::Server
+            QuickRow::Server,
+            QuickRow::Romm,
+            QuickRow::RommServer,
+            QuickRow::RommPort,
+            QuickRow::RommPair,
+            QuickRow::RommDisconnect
         ]
     );
     for page in [
@@ -211,6 +212,7 @@ fn the_rows_run_in_the_order_the_user_chose() {
         &QuickRow::GAME[..],
         &QuickRow::GENERAL[..],
         &QuickRow::NETWORK[..],
+        &QuickRow::ROMM[..],
         &QuickRow::PLAY[..],
         &QuickRow::SETTINGS[..],
         &QuickRow::PLAY_SCREEN[..],
@@ -229,7 +231,7 @@ fn a_hidden_row_is_stepped_over_and_takes_no_place() {
     let hidden = [QuickRow::WallpaperTint, QuickRow::DateTime];
     assert_eq!(QuickRow::Wallpaper.down(&hidden), QuickRow::Recents);
     assert_eq!(QuickRow::Recents.up(&hidden), QuickRow::Wallpaper);
-    assert_eq!(QuickRow::Theme.up(&hidden), QuickRow::LidOff);
+    assert_eq!(QuickRow::Theme.up(&hidden), QuickRow::Wifi);
     assert_eq!(QuickRow::Recents.position(&hidden), 2);
     assert_eq!(QuickRow::Wallpaper.down(&[]), QuickRow::WallpaperTint);
     assert_eq!(QuickRow::Recents.position(&[]), 3);
@@ -287,6 +289,8 @@ fn the_values_read_as_the_menu_prints_them() {
             "Full Screen",
             "Mix",
             "Ghosting",
+            "HTTPS",
+            "HTTP",
         ]
     );
     assert_eq!(QuickValue::flag(true), QuickValue::On);
@@ -605,7 +609,7 @@ fn fetch_art_sits_above_check_for_updates_on_the_network_page() {
         slot_ui::QuickRow::NETWORK.last(),
         Some(&slot_ui::QuickRow::CheckUpdates)
     );
-    assert_eq!(slot_ui::QuickRow::NETWORK[3], slot_ui::QuickRow::FetchArt);
+    assert_eq!(slot_ui::QuickRow::NETWORK[2], slot_ui::QuickRow::FetchArt);
     assert_eq!(slot_ui::QuickRow::FetchArt.label(), "Fetch Missing Art");
     assert!(slot_ui::QuickRow::FetchArt.opens());
 }
@@ -618,12 +622,12 @@ fn skip_keeps_its_button_on_the_outer_edge() {
 }
 
 #[test]
-fn server_sits_last_on_the_network_page() {
-    assert_eq!(QuickRow::NETWORK[2], QuickRow::Server);
+fn server_sits_first_on_the_tools_page() {
+    assert_eq!(QuickRow::NETWORK[0], QuickRow::Server);
     assert!(!QuickRow::MAIN.contains(&QuickRow::Server));
     assert_eq!(QuickRow::Server.parent(), Some(QuickRow::Network));
     assert_eq!(QuickRow::MAIN.len(), 6);
-    assert_eq!(QuickRow::NETWORK.len(), 5);
+    assert_eq!(QuickRow::NETWORK.len(), 4);
     assert_eq!(QuickRow::Server.label(), "Gamebit");
     assert!(QuickRow::Server.opens());
     assert!(QuickRow::Server.page() == QuickRow::NETWORK);
@@ -640,4 +644,16 @@ fn the_wifi_row_holds_its_place_when_the_rest_of_the_network_page_hides() {
         slot_ui::quick_row_top(QuickRow::WifiPower, &[QuickRow::Server]),
         all
     );
+}
+
+#[test]
+fn the_romm_page_holds_both_sets_in_row_order() {
+    assert_eq!(QuickRow::ROMM[..5], QuickRow::ROMM_SETUP);
+    assert_eq!(QuickRow::ROMM[5..], QuickRow::ROMM_PAIRED);
+    assert_eq!(QuickRow::RommProtocol.parent(), Some(QuickRow::Romm));
+    for row in QuickRow::ROMM {
+        assert!(row.page() == QuickRow::ROMM);
+        assert_eq!(QuickRow::ALL[row.index()], row);
+    }
+    assert_eq!(QuickRow::ALL[QuickRow::Romm.index()], QuickRow::Romm);
 }

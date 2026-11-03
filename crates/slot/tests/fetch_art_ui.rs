@@ -23,17 +23,25 @@ fn booted(wifi: bool) -> (TempDir, App) {
     (d, a)
 }
 
+fn open_tools(a: &mut App) {
+    a.apply(Action::QuickMenu);
+    while a.quick_menu() != Some(QuickRow::Network) {
+        press(a, Btn::Down);
+    }
+    press(a, Btn::A);
+}
+
 #[test]
 fn row_shown_only_while_connected() {
     for wifi in [false, true] {
-        let (_d, a) = booted(wifi);
-        assert!(
-            a.hidden_rows().contains(&QuickRow::FetchArt),
-            "wifi.conf {wifi}"
-        );
+        let (_d, mut a) = booted(wifi);
+        open_tools(&mut a);
+        assert_eq!(a.quick_menu(), Some(QuickRow::Network), "wifi.conf {wifi}");
     }
     let (_d, mut a) = booted(true);
     common::connect(&mut a);
+    open_tools(&mut a);
+    assert_eq!(a.quick_menu(), Some(QuickRow::Server));
     assert!(!a.hidden_rows().contains(&QuickRow::FetchArt));
 }
 

@@ -118,14 +118,24 @@ pub enum QuickRow {
     Guide,
     ScGuide,
     Network,
+    Wifi,
     WifiPower,
     Networks,
     CheckUpdates,
     Server,
+    Romm,
+    RommProtocol,
+    RommServer,
+    RommPort,
+    RommSelfSigned,
+    RommPair,
+    RommStatus,
+    RommPairedServer,
+    RommDisconnect,
 }
 
 impl QuickRow {
-    pub const ALL: [QuickRow; 113] = [
+    pub const ALL: [QuickRow; 123] = [
         QuickRow::FastForward,
         QuickRow::FastForwardSound,
         QuickRow::Screen,
@@ -235,10 +245,20 @@ impl QuickRow {
         QuickRow::Guide,
         QuickRow::ScGuide,
         QuickRow::Network,
+        QuickRow::Wifi,
         QuickRow::WifiPower,
         QuickRow::Networks,
         QuickRow::CheckUpdates,
         QuickRow::Server,
+        QuickRow::Romm,
+        QuickRow::RommProtocol,
+        QuickRow::RommServer,
+        QuickRow::RommPort,
+        QuickRow::RommSelfSigned,
+        QuickRow::RommPair,
+        QuickRow::RommStatus,
+        QuickRow::RommPairedServer,
+        QuickRow::RommDisconnect,
     ];
 
     pub const MAIN: [QuickRow; 6] = [
@@ -250,7 +270,7 @@ impl QuickRow {
         QuickRow::About,
     ];
 
-    pub const GENERAL: [QuickRow; 7] = [
+    pub const GENERAL: [QuickRow; 8] = [
         QuickRow::Theme,
         QuickRow::Wallpaper,
         QuickRow::WallpaperTint,
@@ -258,14 +278,41 @@ impl QuickRow {
         QuickRow::ShowTitles,
         QuickRow::LidOff,
         QuickRow::DateTime,
+        QuickRow::Wifi,
     ];
 
-    pub const NETWORK: [QuickRow; 5] = [
-        QuickRow::WifiPower,
-        QuickRow::Networks,
+    pub const WIFI: [QuickRow; 2] = [QuickRow::WifiPower, QuickRow::Networks];
+
+    pub const NETWORK: [QuickRow; 4] = [
         QuickRow::Server,
+        QuickRow::Romm,
         QuickRow::FetchArt,
         QuickRow::CheckUpdates,
+    ];
+
+    pub const ROMM: [QuickRow; 8] = [
+        QuickRow::RommProtocol,
+        QuickRow::RommServer,
+        QuickRow::RommPort,
+        QuickRow::RommSelfSigned,
+        QuickRow::RommPair,
+        QuickRow::RommStatus,
+        QuickRow::RommPairedServer,
+        QuickRow::RommDisconnect,
+    ];
+
+    pub const ROMM_SETUP: [QuickRow; 5] = [
+        QuickRow::RommProtocol,
+        QuickRow::RommServer,
+        QuickRow::RommPort,
+        QuickRow::RommSelfSigned,
+        QuickRow::RommPair,
+    ];
+
+    pub const ROMM_PAIRED: [QuickRow; 3] = [
+        QuickRow::RommStatus,
+        QuickRow::RommPairedServer,
+        QuickRow::RommDisconnect,
     ];
 
     pub const CONTROL_PAGES: [QuickRow; 3] = [
@@ -452,12 +499,21 @@ impl QuickRow {
             | QuickRow::Theme
             | QuickRow::Recents
             | QuickRow::ShowTitles
-            | QuickRow::LidOff => &QuickRow::GENERAL,
-            QuickRow::WifiPower
-            | QuickRow::Networks
-            | QuickRow::CheckUpdates
+            | QuickRow::LidOff
+            | QuickRow::Wifi => &QuickRow::GENERAL,
+            QuickRow::WifiPower | QuickRow::Networks => &QuickRow::WIFI,
+            QuickRow::CheckUpdates
             | QuickRow::FetchArt
+            | QuickRow::Romm
             | QuickRow::Server => &QuickRow::NETWORK,
+            QuickRow::RommProtocol
+            | QuickRow::RommServer
+            | QuickRow::RommPort
+            | QuickRow::RommSelfSigned
+            | QuickRow::RommPair
+            | QuickRow::RommStatus
+            | QuickRow::RommPairedServer
+            | QuickRow::RommDisconnect => &QuickRow::ROMM,
             QuickRow::ControlsShelf | QuickRow::Shortcuts | QuickRow::ControlsInGame => {
                 &QuickRow::CONTROL_PAGES
             }
@@ -500,7 +556,9 @@ impl QuickRow {
             QuickRow::GameUp => Some(QuickRow::ControlsInGame),
             QuickRow::ScSave => Some(QuickRow::Shortcuts),
             QuickRow::Theme => Some(QuickRow::General),
-            QuickRow::WifiPower => Some(QuickRow::Network),
+            QuickRow::Server => Some(QuickRow::Network),
+            QuickRow::RommProtocol => Some(QuickRow::Romm),
+            QuickRow::WifiPower => Some(QuickRow::Wifi),
             QuickRow::ControlsShelf => Some(QuickRow::Controls),
             QuickRow::ShelfPrev => Some(QuickRow::ControlsShelf),
             _ => None,
@@ -537,6 +595,8 @@ impl QuickRow {
             QuickRow::Shortcuts => Some(QuickRow::SHORTCUTS[0]),
             QuickRow::General => Some(QuickRow::GENERAL[0]),
             QuickRow::Network => Some(QuickRow::NETWORK[0]),
+            QuickRow::Romm => Some(QuickRow::ROMM[0]),
+            QuickRow::Wifi => Some(QuickRow::WIFI[0]),
             QuickRow::Controls => Some(QuickRow::CONTROL_PAGES[0]),
             QuickRow::ControlsShelf => Some(QuickRow::SHELF_KEYS[0]),
             QuickRow::ControlsInGame => Some(QuickRow::CONTROLS[0]),
@@ -606,11 +666,19 @@ impl QuickRow {
             QuickRow::General => "General",
             QuickRow::LidOff => "Lid Power Off",
             QuickRow::FetchArt => "Fetch Missing Art",
-            QuickRow::Network => "Wireless",
-            QuickRow::WifiPower => "Wi-Fi",
+            QuickRow::Network => "Tools",
+            QuickRow::Wifi | QuickRow::WifiPower => "Wi-Fi",
             QuickRow::Networks => "Network",
             QuickRow::CheckUpdates => "Check for Updates",
             QuickRow::Server => "Gamebit",
+            QuickRow::Romm => "RomM",
+            QuickRow::RommProtocol => "Protocol",
+            QuickRow::RommServer | QuickRow::RommPairedServer => "Server",
+            QuickRow::RommPort => "Port",
+            QuickRow::RommSelfSigned => "Accept Self-Signed",
+            QuickRow::RommPair => "Pair",
+            QuickRow::RommStatus => "Status",
+            QuickRow::RommDisconnect => "Disconnect",
             QuickRow::Controls => "Controls",
             QuickRow::ControlsShelf => "Shelf",
             QuickRow::ControlsInGame => "In-Game",
@@ -704,9 +772,15 @@ impl QuickRow {
                 | QuickRow::ScreenGb
                 | QuickRow::ScreenGeneral
                 | QuickRow::Network
+                | QuickRow::Wifi
                 | QuickRow::Networks
                 | QuickRow::CheckUpdates
                 | QuickRow::Server
+                | QuickRow::Romm
+                | QuickRow::RommServer
+                | QuickRow::RommPort
+                | QuickRow::RommPair
+                | QuickRow::RommDisconnect
         )
     }
 
@@ -824,10 +898,12 @@ pub enum QuickValue {
     FullScreen,
     Mix,
     Ghosting,
+    Https,
+    Http,
 }
 
 impl QuickValue {
-    pub const ALL: [QuickValue; 42] = [
+    pub const ALL: [QuickValue; 44] = [
         QuickValue::Speed1_5,
         QuickValue::Speed2,
         QuickValue::Speed3,
@@ -870,6 +946,8 @@ impl QuickValue {
         QuickValue::FullScreen,
         QuickValue::Mix,
         QuickValue::Ghosting,
+        QuickValue::Https,
+        QuickValue::Http,
     ];
 
     pub const LEVELS: [QuickValue; 10] = [
@@ -942,6 +1020,8 @@ impl QuickValue {
             QuickValue::FullScreen => "Full Screen",
             QuickValue::Mix => "Mix",
             QuickValue::Ghosting => "Ghosting",
+            QuickValue::Https => "HTTPS",
+            QuickValue::Http => "HTTP",
         }
     }
 
@@ -1438,6 +1518,7 @@ pub struct QuickMenu<'a> {
     pub clock: Option<[(TexId, u32, u32); 2]>,
     pub wallpaper: Option<[(TexId, u32, u32); 2]>,
     pub networks: Option<[(TexId, u32, u32); 2]>,
+    pub romm: [Option<[(TexId, u32, u32); 2]>; 4],
     pub faces: Option<&'a QuickMenuFaces>,
     pub ground: Option<(TexId, u32)>,
     pub palette: Option<[(TexId, u32, u32); 2]>,
@@ -1506,7 +1587,13 @@ impl QuickMenu<'_> {
             let value = match row {
                 QuickRow::DateTime => self.clock.map(|c| c[lit as usize]),
                 QuickRow::Wallpaper => self.wallpaper.map(|c| c[lit as usize]),
-                QuickRow::Networks => self.networks.map(|c| c[lit as usize]),
+                QuickRow::Wifi | QuickRow::Networks => self.networks.map(|c| c[lit as usize]),
+                QuickRow::Romm => self.romm[0].map(|c| c[lit as usize]),
+                QuickRow::RommServer | QuickRow::RommPairedServer => {
+                    self.romm[1].map(|c| c[lit as usize])
+                }
+                QuickRow::RommPort => self.romm[2].map(|c| c[lit as usize]),
+                QuickRow::RommStatus => self.romm[3].map(|c| c[lit as usize]),
                 QuickRow::Palette | QuickRow::GbPalette => self.palette.map(|c| c[lit as usize]),
                 QuickRow::GbaBezel => self.gba_bezel.map(|c| c[lit as usize]),
                 QuickRow::GbBezel => self.gb_bezel.map(|c| c[lit as usize]),
@@ -1656,8 +1743,8 @@ pub fn quick_scroll(selected: QuickRow, hidden: &[QuickRow]) -> Option<QuickScro
 
 pub fn quick_row_top_at(row: QuickRow, selected: QuickRow, hidden: &[QuickRow]) -> f32 {
     let (start, len) = quick_window(selected, hidden);
-    let held = match row.page() == QuickRow::NETWORK {
-        true => QuickRow::NETWORK.len(),
+    let held = match row.page() == QuickRow::WIFI {
+        true => QuickRow::WIFI.len(),
         false => len,
     };
     let rows = QUICK_PITCH * held as f32;

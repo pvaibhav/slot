@@ -335,3 +335,61 @@ fn the_help_lists_only_the_shortcuts_in_two_columns() {
         [vec!["Delete", "Cursor"], vec!["Cancel", "Done"]]
     );
 }
+
+#[test]
+fn host_layout_types_dots_and_dashes_without_the_symbols_page() {
+    let mut kb = Keyboard::new(Layout::Host, "T", None, "");
+    press(&mut kb, &[Btn::Select]);
+    let first: Vec<String> = kb.rows()[0][..10].iter().map(|c| kb.label(*c)).collect();
+    assert_eq!(first.concat(), ".-_:/~@+=,");
+    select(&mut kb, ".");
+    press(&mut kb, &[Btn::A]);
+    assert_eq!(text(&kb), ".");
+}
+
+#[test]
+fn numeric_keeps_starting_text() {
+    let kb = Keyboard::new(Layout::Numeric, "T", None, "443");
+    assert_eq!(text(&kb), "443");
+    assert_eq!(kb.cursor(), 3);
+}
+
+fn alpha_columns(face: &slot_ui::UndoFace, upto: usize) -> Vec<Vec<u8>> {
+    (0..upto)
+        .map(|x| {
+            (0..face.h as usize)
+                .map(|y| face.rgba[(y * face.w as usize + x) * 4 + 3])
+                .collect()
+        })
+        .collect()
+}
+
+#[test]
+fn the_readout_keeps_earlier_letters_in_place_as_more_are_typed() {
+    let words = [
+        "romm",
+        "romm.example",
+        "romm.example.com",
+        "hello world",
+        "https://romm.local:8080",
+    ];
+    for word in words {
+        let chars: Vec<char> = word.chars().collect();
+        for keep in 2..chars.len() {
+            let prefix: String = chars[..keep].iter().collect();
+            let (short, short_stops) = slot_ui::keyboard_text_face(&general(&prefix));
+            let (long, _) = slot_ui::keyboard_text_face(&general(word));
+            let upto = short_stops[keep - 1].floor() as usize;
+            let (a, b) = (alpha_columns(&short, upto), alpha_columns(&long, upto));
+            assert!(a == b, "{prefix:?} moved inside {word:?}");
+        }
+    }
+}
+
+#[test]
+fn the_caret_stops_follow_the_pen_from_the_left_edge() {
+    let (_, stops) = slot_ui::keyboard_text_face(&general("romm"));
+    assert_eq!(stops.len(), 5);
+    assert!(stops[0] >= 0.0 && stops[0] < 2.0);
+    assert!(stops.windows(2).all(|p| p[1] > p[0]));
+}
