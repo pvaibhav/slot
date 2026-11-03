@@ -13,8 +13,8 @@ hide:
 | Device | Supported | Since Version |
 | --- | --- | --- |
 | Anbernic RG&nbsp;SP | **Yes** | Always |
-| Anbernic RG34XX | Yes (untested) | 1.4.0 |
-| Anbernic RG34XXSP | Yes (untested) | 1.4.0 |
+| Anbernic RG34XX | **Yes** | 1.4.0 |
+| Anbernic RG34XXSP | **Yes** | 1.4.0 |
 | Anbernic RG35XXSP | **Yes** | 1.5.0 |
 | Anbernic RG35XX Plus | **Yes** | 1.5.0 |
 | Anbernic RG28XX | **Yes** | 1.6.0 |
@@ -22,7 +22,7 @@ hide:
 
 </div>
 
-If you have one of the untested devices, or have tried slot on a device not listed, please [open an issue on GitHub](https://github.com/BrandonKowalski/slot/issues) and let me know how it went.
+If you have tried slot on a device not listed, please [open an issue on GitHub](https://github.com/BrandonKowalski/slot/issues) and let me know how it went.
 
 ### Will slot run anything other than GBA?
 
