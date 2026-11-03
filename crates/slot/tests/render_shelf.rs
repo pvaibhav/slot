@@ -102,6 +102,9 @@ fn upload_faces(app: &mut App, c: &mut Compositor) {
     else {
         return;
     };
+    let interior = slot_ui::cart_interior(&cart);
+    let interior = tex(c, interior.w, interior.h, &interior.rgba);
+    app.set_core_interior_face(interior);
     let board = board_face(&cart);
     let board = tex(c, board.w, board.h, &board.rgba);
     let lid = padded(&cart_face(&cart), TURN_PAD);
