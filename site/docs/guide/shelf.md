@@ -8,6 +8,7 @@
 | <kbd>Up</kbd> / <kbd>Down</kbd> | Jump to the previous or next letter |
 | <kbd>L1</kbd> / <kbd>R1</kbd> | Switch shelves |
 | <kbd>Y</kbd> | Favorite / unfavorite the cart you're on |
+| <kbd>X</kbd> | Take the cart you're on off Recents |
 | <kbd>A</kbd> | Insert the cart |
 | <kbd>Hold A</kbd> | Insert the cart and don't auto load the save state |
 | <kbd>START</kbd> | Choose the emulator (GBA only) |
@@ -39,6 +40,8 @@ Press <kbd>Y</kbd> to heart a cart. It shows up on the Favorites shelf alongside
 ## Recents
 
 Turn on Recents in Settings → General to get a shelf of the last 10 games you played.
+
+Press <kbd>X</kbd> on the Recents shelf to remove the selected game.
 
 ## Game titles
 
