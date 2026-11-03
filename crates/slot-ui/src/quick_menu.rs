@@ -579,6 +579,7 @@ impl QuickRow {
             &QuickRow::PLAY,
             &QuickRow::SETTINGS,
             &QuickRow::SCREEN,
+            &QuickRow::NETWORK,
             &QuickRow::CONTROL_PAGES,
         ]
         .contains(&self.page())

@@ -615,6 +615,14 @@ fn fetch_art_sits_above_check_for_updates_on_the_network_page() {
 }
 
 #[test]
+fn the_tools_page_is_centred_like_the_screen_page() {
+    for row in slot_ui::QuickRow::NETWORK {
+        assert!(row.centred(), "{row:?}");
+    }
+    assert!(!slot_ui::QuickRow::RommProtocol.centred());
+}
+
+#[test]
 fn skip_keeps_its_button_on_the_outer_edge() {
     let ink = [240, 240, 232];
     let [_, want] = slot_ui::prompt_legends(ink, "No", "Skip");

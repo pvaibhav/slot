@@ -654,6 +654,42 @@ fn open_check_for_updates(f: &mut Frontend, input: &mut Script) {
     tap(f, input, Btn::A);
 }
 
+#[test]
+fn the_tools_page_renders_centred() {
+    let Ok(surface) = HeadlessSurface::new() else {
+        return;
+    };
+    let Ok(mut c) = Compositor::new(&surface) else {
+        return;
+    };
+    let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
+    clocked(d.path());
+    std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
+    let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+    common::connect(f.app_mut());
+    f.upload_faces(&mut c);
+    let mut input = Script(VecDeque::new());
+    open_network(&mut f, &mut input);
+    let px = composed(&mut f, &mut c, "tools");
+    let hidden = f.app().hidden_rows();
+    let spans: Vec<(usize, usize)> = QuickRow::NETWORK
+        .into_iter()
+        .filter(|r| !hidden.contains(r))
+        .map(|row| {
+            let top = quick_row_top(row, &hidden) as usize;
+            let ink = inked(&px, 170..OUT_W as usize - 40, top);
+            (*ink.first().expect("a row with no label"), *ink.last().unwrap())
+        })
+        .collect();
+    let left = spans.iter().map(|s| s.0).min().unwrap();
+    let right = spans.iter().map(|s| s.1).max().unwrap();
+    for (first, _) in &spans {
+        assert!(first - left <= 3, "a label starts at x {first}, not {left}");
+    }
+    let off = (left + right) as f32 / 2.0 - OUT_W as f32 / 2.0;
+    assert!(off.abs() <= 4.0, "the column sits {off} px off centre");
+}
+
 fn ink_at(px: &[u8], xs: std::ops::Range<usize>, top: usize) -> bool {
     !inked(px, xs, top).is_empty()
 }
