@@ -1,9 +1,12 @@
 use slot_gfx::Canvas;
 use slot_store::{Cart, Core};
 
-use crate::bitmaps;
-use crate::cart::{clean_label, CartFace, CART_H, CART_W};
+use crate::bitmaps::{self, GB_CHIP_H, GB_CHIP_W};
+use crate::cart::{
+    clean_label, gb_backing, gb_shell_of, CartFace, CART_H, CART_W, GB_CART_H, GB_CART_W,
+};
 use crate::shelf::foot_y;
+use crate::silhouette::GbShell;
 use crate::slot_chrome::ease;
 use crate::text;
 
@@ -78,6 +81,9 @@ fn marking_face(title: &[String]) -> CartFace {
 }
 
 pub fn board_face(cart: &Cart) -> CartFace {
+    if let Some(shell) = gb_shell_of(cart) {
+        return gb_backing(bitmaps::gb_board_empty(), shell);
+    }
     let mut face = CartFace {
         rgba: bitmaps::board().to_vec(),
         w: BOARD_W,
@@ -102,6 +108,27 @@ fn ink_band(
             continue;
         }
         let at = ((top * face.w) as usize + i) * 4;
+        let (a, d_a) = (a as f32 / 255.0, face.rgba[at + 3] as f32 / 255.0);
+        let out_a = a + d_a * (1.0 - a);
+        for (k, &c) in ink.iter().enumerate() {
+            let d_rgb = face.rgba[at + k] as f32 / 255.0;
+            let out_rgb = (c as f32 / 255.0 * a + d_rgb * d_a * (1.0 - a)) / out_a;
+            face.rgba[at + k] = (out_rgb * 255.0).round() as u8;
+        }
+        face.rgba[at + 3] = (out_a * 255.0).round() as u8;
+    }
+}
+
+fn ink_turned(face: &mut CartFace, layout: &text::Layout, ink: [u8; 3], strength: f32) {
+    let band = face.w;
+    let cov = text::coverage(face.h, band, layout);
+    for (i, a) in cov.into_iter().enumerate() {
+        let a = (a as f32 * strength).round() as u8;
+        if a == 0 {
+            continue;
+        }
+        let (along, across) = (i as u32 % face.h, i as u32 / face.h);
+        let at = (((face.h - 1 - along) * face.w + across) * 4) as usize;
         let (a, d_a) = (a as f32 / 255.0, face.rgba[at + 3] as f32 / 255.0);
         let out_a = a + d_a * (1.0 - a);
         for (k, &c) in ink.iter().enumerate() {
@@ -251,6 +278,133 @@ pub fn shelf_cart_at(x: f32, scale: f32) -> Placed {
     }
 }
 
+pub fn shelf_cart_shaped(shell: Option<GbShell>, x: f32, scale: f32) -> Placed {
+    if shell.is_none() {
+        return shelf_cart_at(x, scale);
+    }
+    let (w, h) = (GB_CART_W as f32 * scale, GB_CART_H as f32 * scale);
+    Placed {
+        x,
+        y: foot_y(GB_CART_H as f32) - h,
+        w,
+        h,
+    }
+}
+
+const GB_BOARD_Y: f32 = 128.0;
+const GB_BOARD_REST_H: f32 = 284.0;
+const GB_LID_REST_H: f32 = 92.0;
+const GB_LID_REST_Y: f32 = 56.0;
+const GB_SLIDE_UP: f32 = 36.0;
+
+pub fn board_from_shaped(
+    canvas: Canvas,
+    shell: Option<GbShell>,
+    shelf: Placed,
+    progress: f32,
+) -> Placed {
+    if shell.is_none() {
+        return board_from(canvas, shelf, progress);
+    }
+    let w = GB_BOARD_REST_H * GB_CART_W as f32 / GB_CART_H as f32;
+    let rest = Placed {
+        x: canvas.centred(w),
+        y: GB_BOARD_Y,
+        w,
+        h: GB_BOARD_REST_H,
+    };
+    lerp(board_in(shelf), rest, lift_of(progress))
+}
+
+pub fn lid_from_shaped(
+    canvas: Canvas,
+    shell: Option<GbShell>,
+    shelf: Placed,
+    progress: f32,
+) -> (Placed, f32) {
+    if shell.is_none() {
+        return lid_from(canvas, shelf, progress);
+    }
+    let slid = Placed {
+        y: shelf.y - GB_SLIDE_UP * slide_of(progress),
+        ..shelf
+    };
+    let w = GB_LID_REST_H * GB_CART_W as f32 / GB_CART_H as f32;
+    let rest = Placed {
+        x: canvas.centred(w),
+        y: GB_LID_REST_Y - GB_LID_REST_H / 2.0,
+        w,
+        h: GB_LID_REST_H,
+    };
+    let lift = lift_of(progress);
+    (lerp(slid, rest, lift), LID_TURN * lift)
+}
+
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct Seats {
+    pub socket_u: [f32; 2],
+    pub socket_v: f32,
+    pub chip_u: [f32; 2],
+    pub chip_v: f32,
+    pub socket_size: (f32, f32),
+    pub chip_size: (f32, f32),
+    pub shadow_uv: (f32, f32),
+    units_w: f32,
+    units_h: f32,
+    bitmap_w: f32,
+}
+
+pub const GBA_SEATS: Seats = Seats {
+    socket_u: SOCKET_U,
+    socket_v: SOCKET_V,
+    chip_u: CHIP_U,
+    chip_v: CHIP_V,
+    socket_size: (SOCKET_W as f32, SOCKET_H as f32),
+    chip_size: (CHIP_W as f32, CHIP_H as f32),
+    shadow_uv: (19.0, 29.4),
+    units_w: UNITS_W,
+    units_h: UNITS_H,
+    bitmap_w: BOARD_W as f32,
+};
+
+const GB_UNIT: f32 = BOARD_W as f32 / UNITS_W;
+
+const GB_FOOT_U: [f32; 2] = [70.0 / GB_UNIT, 189.0 / GB_UNIT];
+const GB_FOOT_V: f32 = 169.0 / GB_UNIT;
+
+pub const GB_SEATS: Seats = Seats {
+    socket_u: GB_FOOT_U,
+    socket_v: GB_FOOT_V,
+    chip_u: GB_FOOT_U,
+    chip_v: GB_FOOT_V,
+    socket_size: (GB_CHIP_W as f32, GB_CHIP_H as f32),
+    chip_size: (GB_CHIP_W as f32, GB_CHIP_H as f32),
+    shadow_uv: (GB_CHIP_W as f32 / 2.0 / GB_UNIT, GB_CHIP_H as f32 / GB_UNIT + 2.0),
+    units_w: GB_CART_W as f32 / GB_UNIT,
+    units_h: GB_CART_H as f32 / GB_UNIT,
+    bitmap_w: GB_CART_W as f32,
+};
+
+pub fn seats(shell: Option<GbShell>) -> Seats {
+    match shell {
+        None => GBA_SEATS,
+        Some(_) => GB_SEATS,
+    }
+}
+
+impl Seats {
+    pub fn at(&self, board: Placed, u: f32, v: f32) -> (f32, f32) {
+        (
+            board.x + u * board.w / self.units_w,
+            board.y + v * board.h / self.units_h,
+        )
+    }
+
+    pub fn zoom(&self, board: Placed) -> f32 {
+        board.w / self.bitmap_w
+    }
+}
+
 pub fn board_at(canvas: Canvas, progress: f32) -> Placed {
     board_from(canvas, shelf_cart(canvas), progress)
 }
@@ -351,6 +505,26 @@ pub fn chip_face_text(name: &str) -> CartFace {
     let mut face = bitmap_face(bitmaps::chip(), CHIP_W, CHIP_H);
     if let Some(layout) = name_layout(name, (CHIP_W - 8) as f32) {
         ink_band(&mut face, 4, 34, &layout, CHIP_INK, 1.0);
+    }
+    padded(&face, TURN_PAD)
+}
+
+pub fn gb_socket_face(core: Core) -> CartFace {
+    let mut face = CartFace {
+        rgba: vec![0; (GB_CHIP_W * GB_CHIP_H * 4) as usize],
+        w: GB_CHIP_W,
+        h: GB_CHIP_H,
+    };
+    if let Some(layout) = name_layout(core.text(), (GB_CHIP_H - 12) as f32) {
+        ink_turned(&mut face, &layout, SOCKET_INK, 0.5);
+    }
+    face
+}
+
+pub fn gb_chip_face(core: Option<Core>) -> CartFace {
+    let mut face = bitmap_face(bitmaps::gb_chip(), GB_CHIP_W, GB_CHIP_H);
+    if let Some(layout) = core.and_then(|c| name_layout(c.text(), (GB_CHIP_H - 12) as f32)) {
+        ink_turned(&mut face, &layout, CHIP_INK, 1.0);
     }
     padded(&face, TURN_PAD)
 }

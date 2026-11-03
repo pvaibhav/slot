@@ -43,11 +43,12 @@ pub struct StickerFields<'a> {
     pub model: &'a str,
 }
 
-pub const CREDITS: [&str; 11] = [
+pub const CREDITS: [&str; 12] = [
     "THE EXQUISITE SKEUOMORPHIC",
     "ARTWORK MADE BY MARKUS.",
-    "EMULATION POWERED BY MGBA",
-    "AND GPSP. UNDERLYING OS IS",
+    "EMULATION POWERED BY MGBA,",
+    "GPSP AND GAMBATTE.",
+    "UNDERLYING OS IS",
     "BASEOS BY PVAIBHAV. TYPE IS",
     "OPEN SANS AND NERD FONTS",
     "SYMBOLS BY RYAN L MCINTYRE.",

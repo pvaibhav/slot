@@ -264,8 +264,12 @@ pub fn cart_backing(shell: Option<GbShell>) -> CartFace {
             h: BOARD_H,
         };
     };
+    gb_backing(bitmaps::gb_board(), shell)
+}
+
+pub fn gb_backing(board: &[u8], shell: GbShell) -> CartFace {
     let s = spec(Shape::Gb(shell));
-    let mut rgba = bitmaps::gb_board().to_vec();
+    let mut rgba = board.to_vec();
     for (px, cover) in rgba.chunks_exact_mut(4).zip(s.mask) {
         px[3] = ((px[3] as u32 * *cover as u32 + 127) / 255) as u8;
     }

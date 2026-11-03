@@ -170,3 +170,32 @@ fn symlinked_stem_dir_is_not_followed() {
     assert!(outside.path().join("resume.state").exists());
     server.stop();
 }
+
+fn lists_for(platform: Platform, tag: &str, file: &str) -> Vec<String> {
+    let (d, server) = start();
+    std::fs::create_dir_all(d.path().join("Games").join(tag)).unwrap();
+    std::fs::write(d.path().join("Games").join(tag).join(file), b"rom").unwrap();
+    for core in Core::ALL {
+        StateRing::new(d.path(), platform, core, "Alpha").push(b"s", b"png", A).unwrap();
+    }
+    let (status, body) = call(server.port(), "GET", &format!("/api/games/{tag}/0/states"));
+    assert_eq!(status, 200, "{body}");
+    let ids = json(&body)["cores"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["id"].as_str().unwrap().to_string())
+        .collect();
+    server.stop();
+    ids
+}
+
+#[test]
+fn a_gb_game_lists_mgba_and_gambatte_only() {
+    assert_eq!(lists_for(Platform::Gb, "GB", "Alpha.gb"), ["mgba", "gambatte"]);
+}
+
+#[test]
+fn a_gba_game_lists_mgba_and_gpsp_only() {
+    assert_eq!(lists_for(Platform::Gba, "GBA", "Alpha.gba"), ["mgba", "gpsp"]);
+}

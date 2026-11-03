@@ -356,6 +356,10 @@ impl Shelf {
         Some((self.index as i32 + off).rem_euclid(n) as usize)
     }
 
+    pub fn selected_shell(&self) -> Option<GbShell> {
+        self.shell(self.index)
+    }
+
     pub fn selected_at(&self, canvas: Canvas) -> (f32, f32) {
         let (w, _) = self.slot_width(0);
         let scale = shrink(self.scroll_target() - self.scroll);

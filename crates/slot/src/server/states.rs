@@ -38,7 +38,7 @@ fn core_entry(root: &Path, cart: &Cart, core: Core) -> Option<Value> {
 }
 
 fn listing(root: &Path, cart: &Cart) -> Reply {
-    let cores: Vec<Value> = Core::ALL.into_iter().filter_map(|c| core_entry(root, cart, c)).collect();
+    let cores: Vec<Value> = Core::ALL.into_iter().filter(|c| c.runs(cart.platform)).filter_map(|c| core_entry(root, cart, c)).collect();
     Reply::json(json!({ "cores": cores }))
 }
 

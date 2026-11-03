@@ -37,12 +37,19 @@ jobs:
           file "$out/System/slot" | grep -q aarch64
           file "$out/System/mgba_libretro.so" | grep -q aarch64
           file "$out/System/gpsp_libretro.so" | grep -q aarch64
+          file "$out/System/gambatte_libretro.so" | grep -q aarch64
           test -x "$out/System/slot"
           gpsp_src_sha="$(cat vendor/gpsp-src.sha)"
           test -f "$out/System/licenses/gpsp-${gpsp_src_sha}.tar.gz"
           test -f "$out/System/licenses/gpsp-${gpsp_src_sha}.meta"
           for p in cores/gpsp/*.patch; do
             test -f "$out/System/licenses/gpsp-$(basename "$p")"
+          done
+          gambatte_src_sha="$(cat vendor/gambatte-src.sha)"
+          test -f "$out/System/licenses/gambatte-${gambatte_src_sha}.tar.gz"
+          test -f "$out/System/licenses/gambatte-${gambatte_src_sha}.meta"
+          for p in cores/gambatte/*.patch; do
+            test -f "$out/System/licenses/gambatte-$(basename "$p")"
           done
           mgba_src_commit="$(grep '^commit=' vendor/mgba_libretro.so.meta | cut -d= -f2)"
           test -f "$out/System/licenses/mgba-${mgba_src_commit}.meta"

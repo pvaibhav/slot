@@ -21,6 +21,8 @@ pub const SOCKET_W: u32 = 64;
 pub const SOCKET_H: u32 = 46;
 pub const CHIP_W: u32 = 59;
 pub const CHIP_H: u32 = 41;
+pub const GB_CHIP_W: u32 = 59;
+pub const GB_CHIP_H: u32 = 92;
 pub const SLOT_W: u32 = OUT_W;
 pub const SLOT_H: u32 = 58;
 pub const PORT_W: u32 = OUT_W;
@@ -39,6 +41,8 @@ const GBA_INTERIOR_PNG: &[u8] = include_bytes!("../../../assets/gba_interior.png
 const GB_INTERIOR_PNG: &[u8] = include_bytes!("../../../assets/gb_interior.png");
 const GBC_INTERIOR_PNG: &[u8] = include_bytes!("../../../assets/gbc_interior.png");
 const GB_BOARD_PNG: &[u8] = include_bytes!("../../../assets/gb_board.png");
+const GB_BOARD_EMPTY_PNG: &[u8] = include_bytes!("../../../assets/gb_board_empty.png");
+const GB_CHIP_PNG: &[u8] = include_bytes!("../../../assets/gb_chip.png");
 const BOARD_PNG: &[u8] = include_bytes!("../../../assets/board.png");
 const UPDATE_CART_PNG: &[u8] = include_bytes!("../../../assets/update_cart.png");
 const BASEOS_CART_PNG: &[u8] = include_bytes!("../../../assets/baseos_cart.png");
@@ -160,6 +164,16 @@ pub fn gbc_interior() -> &'static [u8] {
 pub fn gb_board() -> &'static [u8] {
     static P: OnceLock<Vec<u8>> = OnceLock::new();
     load(GB_BOARD_PNG, GB_CART_W, GB_CART_H, &P)
+}
+
+pub fn gb_board_empty() -> &'static [u8] {
+    static P: OnceLock<Vec<u8>> = OnceLock::new();
+    load(GB_BOARD_EMPTY_PNG, GB_CART_W, GB_CART_H, &P)
+}
+
+pub fn gb_chip() -> &'static [u8] {
+    static P: OnceLock<Vec<u8>> = OnceLock::new();
+    load(GB_CHIP_PNG, GB_CHIP_W, GB_CHIP_H, &P)
 }
 
 pub fn update_cart() -> &'static [u8] {

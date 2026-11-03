@@ -48,13 +48,14 @@ pub use backdrop::{
 pub use barcode::{code39, CODE39_NARROW, CODE39_WIDE};
 pub use battery::{draw_gauge, BOLT_PX, GAUGE_H, GAUGE_W, WALL};
 pub use board::{
-    bare_board_face, baseos_cart_face, board_at, board_face, board_from, board_in, board_x,
-    board_zoom, chip_face, chip_face_text, chip_shadow_face, grown, lid_at, lid_from, lift_of,
-    on_board, padded, rom_marking, rom_marking_face, shelf_cart, shelf_cart_at, slide_of,
-    socket_face, socket_face_text, update_cart_face, Placed, BOARD_H, BOARD_W, BOARD_Y, CHIP_H,
-    CHIP_TIP, CHIP_U, CHIP_V, CHIP_W, FINGERS, FINGER_H, FINGER_Y, HOP_LIFT, LID_TURN, ROM_H,
-    ROM_W, ROM_X, ROM_Y, SHADOW_H, SHADOW_W, SLIDE_SHARE, SLIDE_UP, SOCKET_H, SOCKET_U, SOCKET_V,
-    SOCKET_W, TURN_PAD,
+    bare_board_face, baseos_cart_face, board_at, board_face, board_from, board_from_shaped,
+    board_in, board_x, board_zoom, chip_face, chip_face_text, chip_shadow_face, gb_chip_face,
+    gb_socket_face, grown, lid_at,
+    lid_from, lid_from_shaped, lift_of, on_board, padded, rom_marking, rom_marking_face, seats,
+    shelf_cart, shelf_cart_at, shelf_cart_shaped, slide_of, socket_face, socket_face_text,
+    update_cart_face, Placed, Seats, BOARD_H, BOARD_W, BOARD_Y, CHIP_H, CHIP_TIP, CHIP_U, CHIP_V,
+    CHIP_W, FINGERS, FINGER_H, FINGER_Y, GBA_SEATS, HOP_LIFT, LID_TURN, ROM_H, ROM_W, ROM_X, ROM_Y,
+    SHADOW_H, SHADOW_W, SLIDE_SHARE, SLIDE_UP, SOCKET_H, SOCKET_U, SOCKET_V, SOCKET_W, TURN_PAD,
 };
 pub use cart::{
     bare_face, cart_backing, cart_box, cart_face, cart_face_with, cart_interior, cart_shadow, clean_label,

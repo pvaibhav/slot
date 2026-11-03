@@ -1556,6 +1556,15 @@ fn a_wireless_adapter_cart_on_mgba_still_says_to_switch_to_gpsp() {
 }
 
 #[test]
+fn the_link_overlay_on_gambatte_says_to_switch_to_mgba() {
+    let d = common::tmp_root_with_gb_carts(&["Pokemon Red", "Zzz"]);
+    let mut app = seated_on_platform(&d, Core::Gambatte, Platform::Gb);
+    app.apply(Action::GameMenu);
+    assert!(!app.game_menu_open(), "Gambatte opened the link overlay");
+    assert_eq!(app.toast(), Some(Toast::NeedsMgba));
+}
+
+#[test]
 fn a_game_boy_cart_links_on_mgba_and_is_refused_on_gpsp() {
     for (core, open) in [(Core::Mgba, true), (Core::Gpsp, false)] {
         let d = common::tmp_root_with_gb_carts(&["Pokemon Red", "Zzz"]);

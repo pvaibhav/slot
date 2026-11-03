@@ -99,6 +99,7 @@ impl Index {
             .collect();
         let states = Core::ALL
             .iter()
+            .filter(|c| c.runs(platform))
             .map(|c| {
                 let dirs = at(root, &["States", tag, c.as_str()])
                     .ok()
@@ -135,6 +136,7 @@ impl Index {
 fn resume_cores(root: &Path, cart: &Cart) -> Vec<&'static str> {
     Core::ALL
         .iter()
+        .filter(|c| c.runs(cart.platform))
         .filter(|c| StateRing::new(root, cart.platform, **c, &cart.stem).has_resume())
         .map(|c| c.text())
         .collect()

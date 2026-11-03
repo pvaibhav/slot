@@ -64,6 +64,23 @@ fn upload_faces(app: &mut App, c: &mut Compositor) {
     let chip_shadow = chip_shadow_face();
     let chip_shadow = tex(c, chip_shadow.w, chip_shadow.h, &chip_shadow.rgba);
     app.set_core_part_faces(sockets, chips, blank, chip_shadow);
+    let gb_sockets = Core::ALL
+        .iter()
+        .map(|k| {
+            let f = slot_ui::gb_socket_face(*k);
+            tex(c, f.w, f.h, &f.rgba)
+        })
+        .collect();
+    let gb_chips = Core::ALL
+        .iter()
+        .map(|k| {
+            let f = slot_ui::gb_chip_face(Some(*k));
+            tex(c, f.w, f.h, &f.rgba)
+        })
+        .collect();
+    let gb_blank = slot_ui::gb_chip_face(None);
+    let gb_blank = tex(c, gb_blank.w, gb_blank.h, &gb_blank.rgba);
+    app.set_core_gb_part_faces(gb_sockets, gb_chips, gb_blank);
 
     let legend = slot_ui::core_button_legends(slot_ui::footer_ink(app.light()))
         .into_iter()
@@ -137,52 +154,99 @@ fn let_it_hop(app: &mut App) {
 }
 
 #[test]
-fn start_draws_the_plain_shelf_on_a_game_boy_cart() {
+fn start_opens_the_picker_on_a_game_boy_cart() {
     let Some((_g, _s, mut c)) = compositor() else {
         eprintln!("no GL on this host, skipping");
         return;
     };
 
-    let d = common::tmp_root_with_gb_carts(&["Tetris", "Zzz"]);
-    let twin = common::tmp_root_with_gb_carts(&["Tetris", "Zzz"]);
-    let mut pressed = shelf(&d, &mut c);
-    let mut untouched = shelf(&twin, &mut c);
-    pressed.apply(Action::GbaDown(Btn::Start));
-    let_it_hop(&mut pressed);
-    let_it_hop(&mut untouched);
-    let plain = shot(&untouched, &mut c, "gb-plain");
-    let after = shot(&pressed, &mut c, "gb-after-start");
-    assert_eq!(
-        pressed.core_picker(),
-        None,
-        "a Game Boy cart opened the GBA picker"
-    );
-    assert!(
-        after == plain,
-        "START put something on screen over a Game Boy cart"
-    );
+    for (d, twin, name, core) in [
+        (
+            common::tmp_root_with_gb_carts(&["Tetris", "Zzz"]),
+            common::tmp_root_with_gb_carts(&["Tetris", "Zzz"]),
+            "gb",
+            Core::Gambatte,
+        ),
+        (
+            common::tmp_root_with_carts(&["Emerald", "Zzz"]),
+            common::tmp_root_with_carts(&["Emerald", "Zzz"]),
+            "gba",
+            Core::Mgba,
+        ),
+    ] {
+        let mut pressed = shelf(&d, &mut c);
+        let mut untouched = shelf(&twin, &mut c);
+        pressed.apply(Action::GbaDown(Btn::Start));
+        let_it_hop(&mut pressed);
+        let_it_hop(&mut untouched);
+        let plain = shot(&untouched, &mut c, &format!("{name}-plain"));
+        let after = shot(&pressed, &mut c, &format!("{name}-after-start"));
+        assert_eq!(
+            pressed.core_picker(),
+            Some(core),
+            "START opened no picker on the {name} cart"
+        );
+        assert_eq!(
+            pressed.shelf_shake(),
+            0.0,
+            "START on the {name} cart shook the shelf"
+        );
+        assert!(
+            after != plain,
+            "the picker opened and the panel showed the same shelf"
+        );
+        let_it_hop(&mut pressed);
+        let open = shot(&pressed, &mut c, &format!("{name}-open"));
+        assert!(open != after, "the picker did not finish opening");
+    }
+}
 
-    let d = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
-    let twin = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
-    let mut pressed = shelf(&d, &mut c);
-    let mut untouched = shelf(&twin, &mut c);
-    pressed.apply(Action::GbaDown(Btn::Start));
-    let_it_hop(&mut pressed);
-    let_it_hop(&mut untouched);
-    let plain = shot(&untouched, &mut c, "gba-plain");
-    let after = shot(&pressed, &mut c, "gba-after-start");
-    assert_eq!(
-        pressed.core_picker(),
-        Some(Core::Mgba),
-        "START stopped opening the picker"
-    );
-    assert!(
-        after != plain,
-        "the picker opened and the panel showed the same shelf"
-    );
-    let_it_hop(&mut pressed);
-    let open = shot(&pressed, &mut c, "gba-open");
-    assert!(open != after, "the picker did not finish opening");
+fn colour_only_root(stem: &str) -> TempDir {
+    let d = common::tmp_root_with_gb_carts(&["Zzz"]);
+    let mut rom = vec![0u8; 0x150];
+    let title = stem.to_uppercase();
+    rom[0x134..0x134 + title.len()].copy_from_slice(title.as_bytes());
+    rom[0x143] = 0xc0;
+    std::fs::write(d.path().join("Games/GBC").join(format!("{stem}.gbc")), rom).expect("write rom");
+    d
+}
+
+#[test]
+fn render_core_picker_gb() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        eprintln!("no GL on this host, skipping");
+        return;
+    };
+    for (d, shell) in [
+        (
+            common::tmp_root_with_gb_carts(&["Tetris", "Zzz"]),
+            "notched",
+        ),
+        (colour_only_root("Crystal"), "rounded"),
+    ] {
+        for panel in [(640, 480), (720, 480)] {
+            let mut app = shelf(&d, &mut c);
+            app.set_panel(panel);
+            app.apply(Action::GbaDown(Btn::Start));
+            let_it_hop(&mut app);
+            let_it_hop(&mut app);
+            let name = format!("picker-{shell}-{}", panel.0);
+            let gambatte = shot(&app, &mut c, &format!("{name}-gambatte"));
+            assert_eq!(app.core_picker_chip().unwrap().seated, Some(Core::Gambatte));
+            app.apply(Action::GbaDown(Btn::Left));
+            let_it_hop(&mut app);
+            let mgba = shot(&app, &mut c, &format!("{name}-mgba"));
+            assert_eq!(
+                app.core_picker_chip().unwrap().seated,
+                Some(Core::Mgba),
+                "the chip did not land in the mGBA socket"
+            );
+            assert!(
+                mgba != gambatte,
+                "the chip moved and the panel did not change"
+            );
+        }
+    }
 }
 
 #[test]

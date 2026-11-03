@@ -681,6 +681,13 @@ impl RetroCore for LibretroCore {
         ram[..n].copy_from_slice(&data[..n]);
         let rest = &data[n..];
         if let Some(rtc) = self.memory_mut(MEMORY_RTC) {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs());
+            let converted = (rest.len() != rtc.len())
+                .then(|| crate::rtc::convert(rest, rtc.len(), now))
+                .flatten();
+            let rest = converted.as_deref().unwrap_or(rest);
             let m = rtc.len().min(rest.len());
             rtc[..m].copy_from_slice(&rest[..m]);
         }

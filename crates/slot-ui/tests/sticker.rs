@@ -48,6 +48,7 @@ fn the_compliance_block_is_the_credits() {
     for owed in [
         "MGBA",
         "GPSP",
+        "GAMBATTE",
         "BASEOS BY PVAIBHAV",
         "OPEN SANS",
         "NERD",

@@ -3,19 +3,21 @@ version: '3'
 vars:
   CORE: vendor/mgba_libretro.dylib
   GPSP_HOST: vendor/gpsp_libretro.dylib
+  GAMBATTE_HOST: vendor/gambatte_libretro.dylib
   MGBA_COMMIT: e31759b24e7a4e3899285ff720d7b573ac328ae7
   GPSP_COMMIT: 7b2dd37394e2822110cacef321e9bb291a305b77
+  GAMBATTE_COMMIT: 77f2567d718b8973d02caa2daa8dce4953faf811
   EXFATPROGS_VERSION: 1.4.3
   EXFATPROGS_SHA256: 4b5052cba6ff9f6dcb1c63eeeac328620472c5b0b3caf3d38e4ada50e75469d3
   SLOT_IN_PROCESS: >-
-    --test bios --test core --test core_options --test e2e --test emu --test gb_palette_recolour --test gpsp
+    --test bios --test core --test core_options --test e2e --test emu --test gb_palette_recolour --test gpsp --test gambatte_save
     --test link_ui --test mgba_gb_link --test mgba_link --test render_colour_correction
     --test render_gb_palette --test render_picture_modes --test render
     --test render_in_game_menu --test render_power_wake --test render_quick_menu
     --test render_shelf --test render_shelves --test render_screenshot --test render_gallery_stress --test render_clock
   IN_PROCESS: >-
     (package(slot) & (binary(bios) | binary(core) | binary(core_options) | binary(e2e) | binary(emu)
-    | binary(gb_palette_recolour) | binary(gpsp) | binary(link_ui) | binary(mgba_gb_link)
+    | binary(gb_palette_recolour) | binary(gpsp) | binary(gambatte_save) | binary(link_ui) | binary(mgba_gb_link)
     | binary(mgba_link) | binary(render_colour_correction) | binary(render_gb_palette)
     | binary(render_picture_modes) | binary(render) | binary(render_in_game_menu)
     | binary(render_power_wake) | binary(render_quick_menu) | binary(render_shelf)
@@ -101,11 +103,12 @@ tasks:
 
   core:
     desc: >-
-      Build mGBA and fetch gpSP for this host. A missing core silently runs the mock (a test
+      Build mGBA and fetch gpSP and Gambatte for this host. A missing core silently runs the mock (a test
       pattern and a sine tone) instead
     cmds:
       - task: core:mgba:host
       - task: core:gpsp:host
+      - task: core:gambatte:host
 
   core:mgba:host:
     desc: Build mgba_libretro for this host from the pinned libretro/mgba commit and cores/mgba's patches
@@ -137,10 +140,30 @@ tasks:
         file {{.GPSP_HOST}} | grep -q Mach-O
         echo "fetched {{.GPSP_HOST}}"
 
-  core:update:
-    desc: Rebuild mGBA and re-fetch gpSP for this host even if they are already vendored
+  core:gambatte:host:
+    desc: Fetch the host Gambatte core from the libretro buildbot
+    status:
+      - test -f {{.GAMBATTE_HOST}}
     cmds:
-      - rm -f {{.CORE}} {{.CORE}}.meta {{.GPSP_HOST}}
+      - |
+        set -euo pipefail
+        case "$(uname -m)" in
+          arm64)  arch=arm64 ;;
+          x86_64) arch=x86_64 ;;
+          *) echo "unsupported arch $(uname -m)" >&2; exit 1 ;;
+        esac
+        mkdir -p vendor
+        curl -fsSL -o vendor/gambatte-host.zip \
+          "https://buildbot.libretro.com/nightly/apple/osx/${arch}/latest/gambatte_libretro.dylib.zip"
+        unzip -o -q vendor/gambatte-host.zip -d vendor
+        rm -f vendor/gambatte-host.zip
+        file {{.GAMBATTE_HOST}} | grep -q Mach-O
+        echo "fetched {{.GAMBATTE_HOST}}"
+
+  core:update:
+    desc: Rebuild mGBA and re-fetch gpSP and Gambatte for this host even if they are already vendored
+    cmds:
+      - rm -f {{.CORE}} {{.CORE}}.meta {{.GPSP_HOST}} {{.GAMBATTE_HOST}}
       - task: core
 
   icons:
@@ -246,7 +269,7 @@ tasks:
       - rm -rf {{.OUT}}
       - ./target/release/slot --init-root {{.OUT}}
       - cp target/release/slot {{.OUT}}/System/slot
-      - cp {{.CORE}} {{.GPSP_HOST}} {{.OUT}}/System/
+      - cp {{.CORE}} {{.GPSP_HOST}} {{.GAMBATTE_HOST}} {{.OUT}}/System/
       - cp -R web/dist {{.OUT}}/System/web
       - 'echo "dist ready at {{.OUT}}, copy its contents to SD2"'
 
@@ -298,6 +321,43 @@ tasks:
         rm -f vendor/gpsp_libretro.so vendor/gpsp_libretro.so.meta vendor/gpsp-src.tar.gz
         vendor/gpsp-src.sha vendor/gpsp-src.meta
       - task: core:gpsp
+
+  core:gambatte:
+    desc: >-
+      Build the aarch64 linux Gambatte core from its pinned source archive, which ships beside it
+      as its GPL-2.0 section 3(a) corresponding source
+    status:
+      - test -f vendor/gambatte_libretro.so
+      - test -f vendor/gambatte-src.tar.gz
+      - test "$(cat vendor/gambatte-src.sha 2>/dev/null)" = "{{.GAMBATTE_COMMIT}}"
+      - test "$(cat vendor/gambatte_libretro.so.meta 2>/dev/null)" = "$(sh cores/gambatte/build.sh stamp {{.GAMBATTE_COMMIT}})"
+      - test "$(cat vendor/gambatte-src.meta 2>/dev/null)" = "$(sh cores/gambatte/build.sh stamp {{.GAMBATTE_COMMIT}})"
+    cmds:
+      - |
+        set -euo pipefail
+        mkdir -p vendor
+        rm -f vendor/gambatte_libretro.so vendor/gambatte_libretro.so.meta \
+              vendor/gambatte-src.tar.gz vendor/gambatte-src.sha vendor/gambatte-src.meta
+        curl -fsSL -o vendor/gambatte-src.tar.gz \
+          "https://github.com/libretro/gambatte-libretro/archive/{{.GAMBATTE_COMMIT}}.tar.gz"
+        tar -tzf vendor/gambatte-src.tar.gz | grep "^gambatte-libretro-{{.GAMBATTE_COMMIT}}/Makefile$" > /dev/null
+      - task: device:sh
+        vars:
+          CMD: >-
+            sh cores/gambatte/build.sh build {{.GAMBATTE_COMMIT}} vendor/gambatte-src.tar.gz
+            target-device/gambatte vendor/gambatte_libretro.so
+      - file vendor/gambatte_libretro.so | grep -q aarch64
+      - echo "{{.GAMBATTE_COMMIT}}" > vendor/gambatte-src.sha
+      - cp vendor/gambatte_libretro.so.meta vendor/gambatte-src.meta
+      - 'echo "built vendor/gambatte_libretro.so from vendor/gambatte-src.tar.gz @ {{.GAMBATTE_COMMIT}}"'
+
+  core:gambatte:update:
+    desc: Refetch Gambatte's source archive and rebuild the core from it, even if the set is current
+    cmds:
+      - >-
+        rm -f vendor/gambatte_libretro.so vendor/gambatte_libretro.so.meta vendor/gambatte-src.tar.gz
+        vendor/gambatte-src.sha vendor/gambatte-src.meta
+      - task: core:gambatte
 
   core:gpsp:test:
     desc: Prove gpSP's Advance Wars session-flip patch still fixes what it was written for
@@ -369,7 +429,7 @@ tasks:
 
   dist:device:
     desc: Build the SD2 tree for an H700 device, OUT defaults to ./dist-device
-    deps: [ core:device, core:gpsp, fsck:exfat, build:device, web ]
+    deps: [ core:device, core:gpsp, core:gambatte, fsck:exfat, build:device, web ]
     vars:
       OUT: '{{.OUT | default "dist-device"}}'
     cmds:
@@ -383,8 +443,10 @@ tasks:
       - for d in Bezels Labels Wallpapers; do cp card/$d/README.txt {{.OUT}}/$d/; done
       - file vendor/mgba_libretro.so | grep -q aarch64
       - file vendor/gpsp_libretro.so | grep -q aarch64
+      - file vendor/gambatte_libretro.so | grep -q aarch64
       - cp vendor/mgba_libretro.so {{.OUT}}/System/
       - cp vendor/gpsp_libretro.so {{.OUT}}/System/
+      - cp vendor/gambatte_libretro.so {{.OUT}}/System/
       - cp vendor/fsck.exfat {{.OUT}}/System/
       - cp -r licenses {{.OUT}}/System/licenses
       - cp vendor/exfatprogs-{{.EXFATPROGS_VERSION}}.tar.gz {{.OUT}}/System/licenses/
@@ -398,6 +460,14 @@ tasks:
         done
       - |
         set -euo pipefail
+        sha="$(cat vendor/gambatte-src.sha)"
+        cp vendor/gambatte-src.tar.gz "{{.OUT}}/System/licenses/gambatte-${sha}.tar.gz"
+        cp vendor/gambatte-src.meta "{{.OUT}}/System/licenses/gambatte-${sha}.meta"
+        for p in cores/gambatte/*.patch; do
+          cp "$p" "{{.OUT}}/System/licenses/gambatte-$(basename "$p")"
+        done
+      - |
+        set -euo pipefail
         commit="$(grep '^commit=' vendor/mgba_libretro.so.meta | cut -d= -f2)"
         cp vendor/mgba_libretro.so.meta "{{.OUT}}/System/licenses/mgba-${commit}.meta"
         for p in cores/mgba/*.patch; do
@@ -407,14 +477,14 @@ tasks:
 
   deploy:device:
     desc: Build and push onto a device over adb, then restart it. SD defaults to /mnt/sdcard
-    deps: [ core:device, core:gpsp, fsck:exfat, build:device ]
+    deps: [ core:device, core:gpsp, core:gambatte, fsck:exfat, build:device ]
     cmds:
       - task: deploy:push
         vars: { SD: '{{.SD}}' }
 
   deploy:all:
     desc: Build and push onto every attached adb device, then restart each. SD defaults to /mnt/sdcard
-    deps: [ core:device, core:gpsp, fsck:exfat, build:device ]
+    deps: [ core:device, core:gpsp, core:gambatte, fsck:exfat, build:device ]
     vars:
       SERIALS:
         sh: adb devices | awk 'NR > 1 && $2 == "device" {print $1}'
@@ -435,10 +505,12 @@ tasks:
       - "{{.ADB}} wait-for-device"
       - file vendor/mgba_libretro.so | grep -q aarch64
       - file vendor/gpsp_libretro.so | grep -q aarch64
+      - file vendor/gambatte_libretro.so | grep -q aarch64
       - "{{.ADB}} push target-device/device/slot '{{.SD}}/System/slot'"
       - for f in card/System/*; do {{.ADB}} push "$f" '{{.SD}}/System/'; done
       - "{{.ADB}} push vendor/mgba_libretro.so '{{.SD}}/System/mgba_libretro.so'"
       - "{{.ADB}} push vendor/gpsp_libretro.so '{{.SD}}/System/gpsp_libretro.so'"
+      - "{{.ADB}} push vendor/gambatte_libretro.so '{{.SD}}/System/gambatte_libretro.so'"
       - "{{.ADB}} push vendor/fsck.exfat '{{.SD}}/System/fsck.exfat'"
       - "{{.ADB}} push licenses '{{.SD}}/System/'"
       - "{{.ADB}} push vendor/exfatprogs-{{.EXFATPROGS_VERSION}}.tar.gz '{{.SD}}/System/licenses/'"
@@ -449,6 +521,14 @@ tasks:
         {{.ADB}} push vendor/gpsp-src.meta "{{.SD}}/System/licenses/gpsp-${sha}.meta"
         for p in cores/gpsp/*.patch; do
           {{.ADB}} push "$p" "{{.SD}}/System/licenses/gpsp-$(basename "$p")"
+        done
+      - |
+        set -euo pipefail
+        sha="$(cat vendor/gambatte-src.sha)"
+        {{.ADB}} push vendor/gambatte-src.tar.gz "{{.SD}}/System/licenses/gambatte-${sha}.tar.gz"
+        {{.ADB}} push vendor/gambatte-src.meta "{{.SD}}/System/licenses/gambatte-${sha}.meta"
+        for p in cores/gambatte/*.patch; do
+          {{.ADB}} push "$p" "{{.SD}}/System/licenses/gambatte-$(basename "$p")"
         done
       - |
         set -euo pipefail

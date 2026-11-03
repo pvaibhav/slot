@@ -842,6 +842,9 @@ impl Frontend {
         let sockets = faces.sockets.into_iter().map(&mut cart).collect();
         let chips = faces.chips.into_iter().map(&mut cart).collect();
         let blank = cart(faces.blank_chip);
+        let gb_sockets = faces.gb_sockets.into_iter().map(&mut cart).collect();
+        let gb_chips = faces.gb_chips.into_iter().map(&mut cart).collect();
+        let gb_blank = cart(faces.gb_blank_chip);
         let shadow = cart(faces.chip_shadow);
         let mut up = |f: UndoFace| (compositor.create_texture(f.w, f.h, &f.rgba), f.w, f.h);
         let lines = faces.shutdown.into_iter().map(&mut up).collect();
@@ -910,6 +913,7 @@ impl Frontend {
             descriptions,
         });
         app.set_core_part_faces(sockets, chips, blank, shadow);
+        app.set_core_gb_part_faces(gb_sockets, gb_chips, gb_blank);
         app.set_core_legend_faces(core_legend, core_legend_light);
         app.set_link_menu_faces(roles);
         app.set_link_linked_face(linked);
@@ -1342,6 +1346,9 @@ struct UiFaces {
     sockets: Vec<CartFace>,
     chips: Vec<CartFace>,
     blank_chip: CartFace,
+    gb_sockets: Vec<CartFace>,
+    gb_chips: Vec<CartFace>,
+    gb_blank_chip: CartFace,
     chip_shadow: CartFace,
     core_legend: Vec<UndoFace>,
     core_legend_light: Vec<UndoFace>,
@@ -1406,6 +1413,15 @@ impl UiFaces {
                 .map(|c| chip_face(Some(*c)))
                 .collect(),
             blank_chip: chip_face(None),
+            gb_sockets: slot_store::Core::ALL
+                .iter()
+                .map(|c| slot_ui::gb_socket_face(*c))
+                .collect(),
+            gb_chips: slot_store::Core::ALL
+                .iter()
+                .map(|c| slot_ui::gb_chip_face(Some(*c)))
+                .collect(),
+            gb_blank_chip: slot_ui::gb_chip_face(None),
             chip_shadow: chip_shadow_face(),
             core_legend: core_button_legends(footer_ink(false)),
             core_legend_light: core_button_legends(footer_ink(true)),

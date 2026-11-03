@@ -9,7 +9,12 @@ use slot_input::{Btn, RawEvent};
 use slot_store::{core_for_platform, Core, Platform, StateRing};
 
 fn seated_core(root: &Path, stem: &str) -> Core {
-    core_for_platform(root, stem, Platform::Gb)
+    core_for_platform(
+        root,
+        stem,
+        Platform::Gb,
+        slot_store::read_slot_state(root).gb_core,
+    )
 }
 
 fn seat_and_autosave(root: &Path) {

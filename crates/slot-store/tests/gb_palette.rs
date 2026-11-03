@@ -100,3 +100,78 @@ fn palettes_off_reads_as_auto_and_auto_keeps_the_palette_underneath() {
     assert!(on.gb_palettes);
     assert_eq!(on.gb_palette, named("GB Pocket"));
 }
+
+const GAMBATTE_PALETTES: [&str; 47] = [
+    "GB - DMG",
+    "GB - Pocket",
+    "GB - Light",
+    "GBC - Blue",
+    "GBC - Brown",
+    "GBC - Dark Blue",
+    "GBC - Dark Brown",
+    "GBC - Dark Green",
+    "GBC - Grayscale",
+    "GBC - Green",
+    "GBC - Inverted",
+    "GBC - Orange",
+    "GBC - Pastel Mix",
+    "GBC - Red",
+    "GBC - Yellow",
+    "SGB - 1A",
+    "SGB - 1B",
+    "SGB - 1C",
+    "SGB - 1D",
+    "SGB - 1E",
+    "SGB - 1F",
+    "SGB - 1G",
+    "SGB - 1H",
+    "SGB - 2A",
+    "SGB - 2B",
+    "SGB - 2C",
+    "SGB - 2D",
+    "SGB - 2E",
+    "SGB - 2F",
+    "SGB - 2G",
+    "SGB - 2H",
+    "SGB - 3A",
+    "SGB - 3B",
+    "SGB - 3C",
+    "SGB - 3D",
+    "SGB - 3E",
+    "SGB - 3F",
+    "SGB - 3G",
+    "SGB - 3H",
+    "SGB - 4A",
+    "SGB - 4B",
+    "SGB - 4C",
+    "SGB - 4D",
+    "SGB - 4E",
+    "SGB - 4F",
+    "SGB - 4G",
+    "SGB - 4H",
+];
+
+#[test]
+fn gambatte_palette_names() {
+    for (slot, want) in [
+        ("Grayscale", "GBC - Grayscale"),
+        ("DMG Green", "GB - DMG"),
+        ("GB Pocket", "GB - Pocket"),
+        ("GB Light", "GB - Light"),
+        ("GBC Reverse →B", "GBC - Inverted"),
+        ("GBC Pale Yellow ↓", "GBC - Pastel Mix"),
+        ("GBC Dark Green →A", "GBC - Dark Green"),
+        ("SGB 1-A", "SGB - 1A"),
+        ("SGB 4-H", "SGB - 4H"),
+    ] {
+        assert_eq!(named(slot).gambatte_name(), want, "{slot}");
+    }
+    for p in GbPalette::all() {
+        assert!(
+            GAMBATTE_PALETTES.contains(&p.gambatte_name()),
+            "{} maps to {}, which the core does not declare",
+            p.core_name(),
+            p.gambatte_name()
+        );
+    }
+}

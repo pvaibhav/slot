@@ -10,6 +10,7 @@ mod ffi;
 mod libretro;
 mod link;
 mod mock;
+pub mod rtc;
 mod rumble;
 
 pub use core::{AvInfo, ButtonMask, CoreError, RetroCore, GBA_H, GBA_W};

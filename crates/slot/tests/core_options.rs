@@ -67,6 +67,7 @@ fn every_option_slot_sets_is_one_the_core_declares() {
                 for (colour, platform) in [false, true]
                     .into_iter()
                     .flat_map(|c| Platform::ALL.map(|p| (c, p)))
+                    .filter(|(_, p)| which.runs(*p))
                 {
                     for palette in
                         std::iter::once(None).chain(slot_store::GbColors::all().map(Some))
@@ -359,12 +360,13 @@ fn every_frame_blending_slot_sets_is_one_the_core_declares() {
             eprintln!("no {} dylib on this host, skipping", which.as_str());
             continue;
         }
+        let platform = test_platform(which);
         for blending in Blending::MGBA {
             let mut core = LibretroCore::open(&path).expect("open core");
             slot::core::apply_core_options(
                 &mut core,
                 which,
-                Platform::Gba,
+                platform,
                 "auto",
                 false,
                 false,
@@ -410,6 +412,40 @@ const PANEL: std::time::Duration = std::time::Duration::from_micros(16_742);
 const PRESENTS: usize = 40;
 const CHANGED_AT: usize = 30;
 
+fn probe_for(which: Core) -> impl Fn(&[u8]) -> [u8; 3] {
+    let at = if which.runs(Platform::Gba) {
+        0
+    } else {
+        (80 * 240 + 120) * 4
+    };
+    move |frame: &[u8]| [frame[at], frame[at + 1], frame[at + 2]]
+}
+
+fn test_platform(which: Core) -> Platform {
+    if which.runs(Platform::Gba) {
+        Platform::Gba
+    } else {
+        Platform::Gb
+    }
+}
+
+fn gb_flicker_rom() -> Vec<u8> {
+    let mut rom = vec![0u8; 0x8000];
+    rom[0x100..0x104].copy_from_slice(&[0x00, 0xc3, 0x50, 0x01]);
+    let code = [
+        0xf0, 0x44, 0xfe, 0x90, 0x20, 0xfa, 0xf0, 0x47, 0x2f, 0xe0, 0x47, 0xf0, 0x44, 0xfe, 0x90,
+        0x28, 0xfa, 0x18, 0xed,
+    ];
+    rom[0x150..0x150 + code.len()].copy_from_slice(&code);
+    rom[0x134..0x13b].copy_from_slice(b"FLICKER");
+    let mut sum = 0u8;
+    for b in &rom[0x134..=0x14c] {
+        sum = sum.wrapping_sub(*b).wrapping_sub(1);
+    }
+    rom[0x14d] = sum;
+    rom
+}
+
 fn flicker_rom() -> Vec<u8> {
     const MVN_R3_R3: u32 = 0xe1e0_3003;
     let mut rom = common::gba_rom();
@@ -423,10 +459,18 @@ fn frames_with_mix_set_at(which: Core, at: Option<usize>) -> Vec<Vec<u8>> {
     use std::time::{Duration, Instant};
 
     let d = tempfile::tempdir().expect("a temporary directory");
-    let rom = d.path().join("blend.gba");
-    std::fs::write(&rom, flicker_rom()).expect("write the test rom");
+    let platform = test_platform(which);
+    let (name, bytes) = if platform == Platform::Gba {
+        ("blend.gba", flicker_rom())
+    } else {
+        ("blend.gb", gb_flicker_rom())
+    };
+    let rom = d.path().join(name);
+    std::fs::write(&rom, bytes).expect("write the test rom");
     let mut core = LibretroCore::open(&dylib_for(which)).expect("open core");
-    slot::core::apply_core_options(&mut core, which, Platform::Gba, "auto", false, false, None);
+    let palette = (which == Core::Gambatte)
+        .then(|| slot_store::GbColors::Palette(slot_store::GbPalette::all().next().unwrap()));
+    slot::core::apply_core_options(&mut core, which, platform, "auto", false, false, palette);
     let ring = std::sync::Arc::new(Ring::new(1 << 16));
     let emu = EmuHandle::spawn(Box::new(core), rom, ring, None, None);
     let deadline = Instant::now() + Duration::from_secs(10);
@@ -471,6 +515,7 @@ fn a_frame_blending_change_reaches_a_running_core_without_a_reload() {
             eprintln!("no {} dylib on this host, skipping", which.as_str());
             continue;
         }
+        let probe = probe_for(which);
         let plain = frames_with_mix_set_at(which, None);
         let mixed = frames_with_mix_set_at(which, Some(CHANGED_AT));
         assert!(
@@ -481,11 +526,11 @@ fn a_frame_blending_change_reaches_a_running_core_without_a_reload() {
         assert!(
             plain[CHANGED_AT..]
                 .windows(2)
-                .all(|w| w[0][..3] != w[1][..3]),
+                .all(|w| probe(&w[0]) != probe(&w[1])),
             "{}: the test rom stopped flickering, so blending would have nothing to show",
             which.as_str()
         );
-        let px0 = |frame: &[u8]| [frame[0], frame[1], frame[2]];
+        let px0 = &probe;
         for i in CHANGED_AT + 3..PRESENTS {
             assert_eq!(
                 px0(&mixed[i]),

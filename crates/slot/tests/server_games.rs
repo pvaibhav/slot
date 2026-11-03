@@ -432,3 +432,25 @@ fn roms_list_and_download() {
     assert_eq!(status, 404);
     server.stop();
 }
+
+fn resume_names(platform: Platform, tag: &str, file: &str) -> serde_json::Value {
+    let (d, server) = start();
+    put(d.path(), &format!("Games/{tag}/{file}"), b"rom");
+    for core in Core::ALL {
+        StateRing::new(d.path(), platform, core, "Alpha").write_resume(b"r").unwrap();
+    }
+    let (status, body) = call(server.port(), "POST", &format!("/api/games/{tag}/0/saves?name=a.sav"), b"x");
+    assert_eq!(status, 200, "{body}");
+    server.stop();
+    json(&body)["resumeCores"].clone()
+}
+
+#[test]
+fn a_gb_game_lists_mgba_and_gambatte_only() {
+    assert_eq!(resume_names(Platform::Gb, "GB", "Alpha.gb"), serde_json::json!(["mGBA", "Gambatte"]));
+}
+
+#[test]
+fn a_gba_game_lists_mgba_and_gpsp_only() {
+    assert_eq!(resume_names(Platform::Gba, "GBA", "Alpha.gba"), serde_json::json!(["mGBA", "gpSP"]));
+}

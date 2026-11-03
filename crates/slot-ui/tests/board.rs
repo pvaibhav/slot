@@ -416,3 +416,42 @@ fn the_baseos_cart_is_black_with_a_white_wordmark() {
         .count();
     assert!(white > 100, "no white wordmark: {white}");
 }
+
+#[test]
+fn a_game_boy_cart_shows_its_own_board() {
+    let gb = Cart {
+        platform: Platform::Gb,
+        rom: "Games/GB/Tetris.gb".into(),
+        ..cart("Tetris", "")
+    };
+    let face = board_face(&gb);
+    let backing = slot_ui::cart_backing(slot_ui::gb_shell_of(&gb));
+    assert_eq!((face.w, face.h), (slot_ui::GB_CART_W, slot_ui::GB_CART_H));
+    let at = |f: &slot_ui::CartFace, x: u32, y: u32| {
+        let i = ((y * f.w + x) * 4) as usize;
+        [f.rgba[i], f.rgba[i + 1], f.rgba[i + 2]]
+    };
+    let navy = |p: [u8; 3]| p[2] > p[1] && p[0] < 45;
+    for (x, y) in [(100, 215), (218, 210)] {
+        assert!(navy(at(&backing, x, y)), "the pak board lost its chip at {x},{y}");
+        assert!(!navy(at(&face, x, y)), "a printed chip still fills the socket at {x},{y}");
+    }
+    assert_eq!(at(&face, 140, 60), at(&backing, 140, 60), "the pak opened on another board");
+}
+
+#[test]
+fn a_gba_cart_keeps_the_gba_picker_geometry() {
+    let canvas = Canvas { w: 720.0, h: 480.0 };
+    let shelf = shelf_cart(canvas);
+    for p in [0.0, 0.3, 0.7, 1.0] {
+        assert_eq!(
+            slot_ui::board_from_shaped(canvas, None, shelf, p),
+            slot_ui::board_from(canvas, shelf, p)
+        );
+        assert_eq!(
+            slot_ui::lid_from_shaped(canvas, None, shelf, p),
+            slot_ui::lid_from(canvas, shelf, p)
+        );
+    }
+    assert_eq!(slot_ui::seats(None), slot_ui::GBA_SEATS);
+}

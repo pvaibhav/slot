@@ -497,6 +497,44 @@ fn a_cart_gpsp_can_link_reads_please_switch_to_gpsp() {
 }
 
 #[test]
+fn a_gambatte_game_reads_please_switch_to_mgba_on_the_glass() {
+    let px = banner_pixels(Core::Gambatte, "POKEMON RED", "BPRE", "banner-gambatte");
+    assert_eq!(
+        ink(&px),
+        banner_ink(Toast::NeedsMgba),
+        "the banner is not the PLEASE SWITCH TO MGBA line"
+    );
+}
+
+#[test]
+fn the_switch_to_mgba_banner_sits_inside_both_panels() {
+    for (panel, name) in [
+        ((640, 480), "needs-mgba-640"),
+        ((720, 480), "needs-mgba-720"),
+    ] {
+        let canvas = Canvas::of(panel);
+        let f: Face = toast_face(Toast::NeedsMgba).into();
+        let (x, y, w, h) = slot_ui::toast_rect(canvas, Toast::NeedsMgba);
+        let tex = TexId::from_raw(1);
+        let draw = Draw::Tex {
+            x,
+            y,
+            w,
+            h,
+            tex,
+            alpha: 1.0,
+        };
+        let px = composite(&[draw], &[(tex, f)]);
+        assert!(ink(&px) > 0);
+        assert!(
+            x >= 0.0 && x + w <= canvas.w,
+            "{name}: the banner leaves the panel"
+        );
+        dump(&px, name);
+    }
+}
+
+#[test]
 fn the_legend_shows_select_mode_only_where_the_hardware_can_be_switched() {
     let switchable = legend_pixels("POKEMON EMER", "BPEE", "legend-switchable");
     let fixed = legend_pixels("MARIO GOLF", "BMGE", "legend-fixed");

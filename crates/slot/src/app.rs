@@ -13,13 +13,12 @@ use slot_store::{
     FF_SPEEDS, RING_MAX, SATURATION_MAX, SUNLIGHT_MAX, VOLUME_MAX,
 };
 use slot_ui::{
-    board_from, board_zoom, draw_empty_slot, draw_footer, draw_ground, draw_sticker, ease,
-    footer_ink, grown, lid_at, lid_from, lift_of, on_board, repeat_gap, shelf_cart_at, BezelArt,
+    board_from_shaped, draw_empty_slot, draw_footer, draw_ground, draw_sticker, ease, footer_ink,
+    grown, lid_at, lid_from_shaped, lift_of, repeat_gap, seats, shelf_cart_shaped, BezelArt,
     ClockFaces, ClockPicker, ClockRow, ClockScreen, Draw, FfState, GbShell, Guide, Hud, HudKind,
     Icon, LinkBadge, Millis, Placed, Polaroids, PowerChoice, QuickMenu, QuickMenuFaces, QuickRow,
-    QuickValue, Refusal, Shelf, ShotMode, ShotViewer, SlotChrome, TexId, Toast, CART_W, CHIP_H,
-    CHIP_U, CHIP_V, CHIP_W, HINT_EDGE, HOP_LIFT, MOUTH_H, REPEAT_DELAY_MS, SHADOW_H, SHADOW_W,
-    SOCKET_H, SOCKET_U, SOCKET_V, SOCKET_W, TURN_PAD,
+    QuickValue, Refusal, Seats, Shelf, ShotMode, ShotViewer, SlotChrome, TexId, Toast, CART_W,
+    GBA_SEATS, HINT_EDGE, HOP_LIFT, MOUTH_H, REPEAT_DELAY_MS, SHADOW_H, SHADOW_W, TURN_PAD,
 };
 
 use crate::audio::Sfx;
@@ -487,6 +486,9 @@ pub struct App {
     core_socket_faces: Vec<TexId>,
     core_chip_faces: Vec<TexId>,
     core_blank_chip_face: Option<TexId>,
+    core_gb_socket_faces: Vec<TexId>,
+    core_gb_chip_faces: Vec<TexId>,
+    core_gb_blank_chip_face: Option<TexId>,
     core_chip_shadow_face: Option<TexId>,
     core_legend_faces: [Vec<(TexId, u32)>; 2],
     game_menu: Option<GameMenu>,
@@ -888,6 +890,9 @@ impl App {
             core_socket_faces: Vec::new(),
             core_chip_faces: Vec::new(),
             core_blank_chip_face: None,
+            core_gb_socket_faces: Vec::new(),
+            core_gb_chip_faces: Vec::new(),
+            core_gb_blank_chip_face: None,
             core_chip_shadow_face: None,
             core_legend_faces: [Vec::new(), Vec::new()],
             game_menu: None,
@@ -1093,7 +1098,7 @@ impl App {
         let (Some(root), Some(platform)) = (&self.root, platform) else {
             return;
         };
-        let core = slot_store::core_for_platform(root, stem, platform);
+        let core = slot_store::core_for_platform(root, stem, platform, self.state.gb_core);
         let ring = StateRing::new(root, platform, core, stem);
         match ring.retire_resume(&format_stamp(self.wall_secs())) {
             Ok(Some(to)) => eprintln!("slot: resume: moved {stem}'s state to {}", to.display()),
@@ -5552,6 +5557,17 @@ impl App {
         self.core_chip_shadow_face = Some(shadow);
     }
 
+    pub fn set_core_gb_part_faces(
+        &mut self,
+        sockets: Vec<TexId>,
+        chips: Vec<TexId>,
+        blank: TexId,
+    ) {
+        self.core_gb_socket_faces = sockets;
+        self.core_gb_chip_faces = chips;
+        self.core_gb_blank_chip_face = Some(blank);
+    }
+
     pub fn set_core_legend_faces(
         &mut self,
         dark: Vec<(TexId, u32)>,
@@ -5602,12 +5618,18 @@ impl App {
         self.core_picker.filter(|p| !p.waiting())
     }
 
-    fn draw_lid_shadow(&self, shelf: Placed, progress: f32, out: &mut Vec<Draw>) {
+    fn draw_lid_shadow(
+        &self,
+        shell: Option<GbShell>,
+        shelf: Placed,
+        progress: f32,
+        out: &mut Vec<Draw>,
+    ) {
         let Some(tex) = self.core_chip_shadow_face else {
             return;
         };
         let lift = lift_of(progress);
-        let (lid, _) = lid_from(self.canvas(), shelf, progress);
+        let (lid, _) = lid_from_shaped(self.canvas(), shell, shelf, progress);
         let k = lid.w / lid_at(self.canvas(), 1.0).0.w;
         let (w, h) = (LID_SHADOW_W * k, LID_SHADOW_H * k);
         out.push(Draw::Tex {
@@ -5624,6 +5646,8 @@ impl App {
     fn draw_board_chip(
         &self,
         board: Placed,
+        seats: Seats,
+        pair: [Core; 2],
         sockets: &[TexId],
         chip: Chip,
         faces: &[TexId],
@@ -5631,22 +5655,26 @@ impl App {
         lift: f32,
         out: &mut Vec<Draw>,
     ) {
-        let zoom = board_zoom(board);
-        for (i, tex) in sockets.iter().copied().enumerate() {
-            let (x, y) = on_board(board, SOCKET_U[i], SOCKET_V);
+        let zoom = seats.zoom(board);
+        for (place, core) in pair.into_iter().enumerate() {
+            let Some(tex) = sockets.get(core.index()).copied() else {
+                continue;
+            };
+            let (x, y) = seats.at(board, seats.socket_u[place], seats.socket_v);
             out.push(Draw::Tex {
                 x: x.round(),
                 y: y.round(),
-                w: SOCKET_W as f32 * zoom,
-                h: SOCKET_H as f32 * zoom,
+                w: seats.socket_size.0 * zoom,
+                h: seats.socket_size.1 * zoom,
                 tex,
                 alpha: 1.0,
             });
         }
-        let u = CHIP_U[0] + (CHIP_U[1] - CHIP_U[0]) * chip.across;
+        let u = seats.chip_u[0] + (seats.chip_u[1] - seats.chip_u[0]) * chip.across;
         if chip.lift > 0.0 {
             if let Some(tex) = self.core_chip_shadow_face {
-                let (cx, cy) = on_board(board, u + 19.0, CHIP_V + 29.4);
+                let (du, dv) = seats.shadow_uv;
+                let (cx, cy) = seats.at(board, u + du, seats.chip_v + dv);
                 let (w, h) = (SHADOW_W as f32 * zoom, SHADOW_H as f32 * zoom);
                 out.push(Draw::Tex {
                     x: cx - w / 2.0,
@@ -5663,12 +5691,12 @@ impl App {
             None => blank,
         };
         if let Some(tex) = face {
-            let (x, y) = on_board(board, u, CHIP_V - HOP_LIFT * chip.lift);
+            let (x, y) = seats.at(board, u, seats.chip_v - HOP_LIFT * chip.lift);
             let body = Placed {
                 x: x + chip.shake,
                 y,
-                w: CHIP_W as f32 * zoom,
-                h: CHIP_H as f32 * zoom,
+                w: seats.chip_size.0 * zoom,
+                h: seats.chip_size.1 * zoom,
             };
             let at = grown(body, TURN_PAD as f32 * zoom);
             out.push(Draw::Turned {
@@ -5688,8 +5716,9 @@ impl App {
         let progress = picker.openness(now);
         let lift = lift_of(progress);
         let (rest, scale) = self.shelf().selected_at(self.canvas());
-        let shelf = shelf_cart_at(rest, scale);
-        let board = board_from(self.canvas(), shelf, progress);
+        let shell = self.shelf().selected_shell();
+        let shelf = shelf_cart_shaped(shell, rest, scale);
+        let board = board_from_shaped(self.canvas(), shell, shelf, progress);
         let ready = self.core_faces_ready();
 
         if ready {
@@ -5713,22 +5742,36 @@ impl App {
                     alpha: 1.0,
                 });
             }
+            let (sockets, chips, blank) = match shell {
+                Some(_) => (
+                    &self.core_gb_socket_faces,
+                    &self.core_gb_chip_faces,
+                    self.core_gb_blank_chip_face,
+                ),
+                None => (
+                    &self.core_socket_faces,
+                    &self.core_chip_faces,
+                    self.core_blank_chip_face,
+                ),
+            };
             self.draw_board_chip(
                 board,
-                &self.core_socket_faces,
+                seats(shell),
+                picker.pair(),
+                sockets,
                 picker.chip(now),
-                &self.core_chip_faces,
-                self.core_blank_chip_face,
+                chips,
+                blank,
                 lift,
                 out,
             );
         }
 
-        self.draw_lid_shadow(shelf, progress, out);
+        self.draw_lid_shadow(shell, shelf, progress, out);
 
         if ready {
             if let Some(tex) = self.core_lid_face {
-                let (lid, turn) = lid_from(self.canvas(), shelf, progress);
+                let (lid, turn) = lid_from_shaped(self.canvas(), shell, shelf, progress);
                 let at = grown(lid, TURN_PAD as f32 * lid.w / CART_W as f32);
                 out.push(Draw::Turned {
                     x: at.x,
@@ -5744,7 +5787,7 @@ impl App {
             .selected_stem()
             .and_then(|stem| self.shelf().find(stem))
         {
-            let (lid, turn) = lid_from(self.canvas(), shelf, progress);
+            let (lid, turn) = lid_from_shaped(self.canvas(), shell, shelf, progress);
             out.push(Draw::Turned {
                 x: lid.x,
                 y: lid.y,
@@ -6122,12 +6165,10 @@ impl App {
         let Some(cart) = self.shelf().carts.get(self.shelf().index) else {
             return;
         };
-        if cart.platform.hardware() != Platform::Gba {
-            return;
-        }
-        let seat = slot_store::core_for(&root, &cart.stem);
+        let seat =
+            slot_store::core_for_platform(&root, &cart.stem, cart.platform, self.state.gb_core);
         let now = self.now();
-        let mut picker = CorePicker::open(seat, now);
+        let mut picker = CorePicker::open(Core::pair(cart.platform), seat, now);
         if self.core_faces_ready() {
             picker.start(now);
         }
@@ -6169,6 +6210,10 @@ impl App {
         }
         if !self.has_wifi_hardware() {
             self.hud.toast(Toast::NoWifi, self.now());
+            return;
+        }
+        if self.core == Core::Gambatte {
+            self.hud.toast(Toast::NeedsMgba, self.now());
             return;
         }
         if self.core == Core::Mgba {
@@ -6388,6 +6433,10 @@ impl App {
                     self.phase,
                     Phase::Networks { .. } | Phase::NetworkScan { .. } | Phase::NetworkPage { .. }
                 ))
+    }
+
+    pub fn gb_core(&self) -> Core {
+        self.state.gb_core
     }
 
     pub fn wifi_is_off(&self) -> bool {
@@ -8685,7 +8734,7 @@ impl App {
         self.hold_wifi();
         self.update_jobs.ask(UpdateJob::Install(r.clone()));
         self.update_busy = true;
-        let mut picker = CorePicker::open(Core::Mgba, self.now());
+        let mut picker = CorePicker::open(Core::pair(Platform::Gba), Core::Mgba, self.now());
         picker.start(self.now());
         self.update_picker = Some(picker);
         self.update_seat_at = None;
@@ -9011,6 +9060,8 @@ impl App {
         if let Some(picker) = &self.update_picker {
             self.draw_board_chip(
                 board,
+                GBA_SEATS,
+                picker.pair(),
                 &self.update_sockets,
                 picker.chip(self.now()),
                 &self.update_chips,
@@ -9035,7 +9086,7 @@ impl App {
                 colour: [r, g, b, TARNISH_ALPHA * (1.0 - clean)],
             });
         }
-        self.draw_lid_shadow(slot_ui::shelf_cart(canvas), open, out);
+        self.draw_lid_shadow(None, slot_ui::shelf_cart(canvas), open, out);
         let (lid, turn) = lid_at(canvas, open);
         self.draw_update_cart(cart, lid, turn, 1.0, out);
     }

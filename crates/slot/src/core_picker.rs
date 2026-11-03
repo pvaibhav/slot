@@ -45,6 +45,7 @@ struct Close {
 
 #[derive(Copy, Clone)]
 pub struct CorePicker {
+    pair: [Core; 2],
     seat: Core,
     opened: Millis,
     started: Option<Millis>,
@@ -54,8 +55,9 @@ pub struct CorePicker {
 }
 
 impl CorePicker {
-    pub fn open(seat: Core, now: Millis) -> Self {
+    pub fn open(pair: [Core; 2], seat: Core, now: Millis) -> Self {
         CorePicker {
+            pair,
             seat,
             opened: now,
             started: None,
@@ -79,6 +81,10 @@ impl CorePicker {
 
     pub fn seat(&self) -> Core {
         self.seat
+    }
+
+    pub fn pair(&self) -> [Core; 2] {
+        self.pair
     }
 
     pub fn closing(&self) -> bool {
@@ -112,8 +118,8 @@ impl CorePicker {
                 self.begin_close(now);
                 return Outcome::Nothing;
             }
-            Press::Left => Core::Mgba,
-            Press::Right => Core::Gpsp,
+            Press::Left => self.pair[0],
+            Press::Right => self.pair[1],
         };
         if self.waiting() {
             return Outcome::Nothing;
@@ -148,7 +154,7 @@ impl CorePicker {
         let shake = self.refusal.map_or(0.0, |r| r.offset(now));
         match (self.hop, self.hop_progress(now)) {
             (Some(hop), Some(q)) => {
-                let rightward = hop.from == Core::Mgba;
+                let rightward = hop.from == self.pair[0];
                 let lean = if rightward { 1.0 } else { -1.0 };
                 let arc = (std::f32::consts::PI * q).sin();
                 Chip {
@@ -160,13 +166,17 @@ impl CorePicker {
                 }
             }
             _ => Chip {
-                across: self.seat.index() as f32,
+                across: self.place(self.seat) as f32,
                 lift: 0.0,
                 tip: 0.0,
                 seated: Some(self.seat),
                 shake,
             },
         }
+    }
+
+    fn place(&self, core: Core) -> usize {
+        usize::from(core == self.pair[1])
     }
 
     fn begin_close(&mut self, now: Millis) {

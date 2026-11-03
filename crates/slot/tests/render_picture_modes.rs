@@ -11,7 +11,7 @@ use slot::frontend::Frontend;
 use slot_gfx::{Compositor, HeadlessSurface, OUT_H, OUT_W};
 use slot_input::{Btn, InputSource, Millis, RawEvent};
 use slot_power::SimPlatform;
-use slot_store::{Core, Platform};
+use slot_store::Core;
 
 struct Script(VecDeque<Vec<RawEvent>>);
 
@@ -120,7 +120,7 @@ fn run_for(f: &mut Frontend, input: &mut Script, secs: f32) {
 #[test]
 fn l_widens_the_picture_like_a_gba_and_r_gives_back_the_centred_picture() {
     let _core = core_lock();
-    let core = Core::default_for(Platform::Gb);
+    let core = Core::Mgba;
     let file = format!(
         "{}_libretro.{}",
         core.as_str(),
@@ -145,6 +145,8 @@ fn l_widens_the_picture_like_a_gba_and_r_gives_back_the_centred_picture() {
     };
     std::fs::copy(&dylib, d.path().join("System").join(&file)).expect("plant the core");
     clocked(d.path());
+    slot_store::write_selected_core(d.path(), "Tetris Rosy Retrospection", Core::Mgba)
+        .expect("write core");
 
     let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
     f.upload_faces(&mut c);
