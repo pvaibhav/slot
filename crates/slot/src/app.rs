@@ -714,6 +714,11 @@ pub struct FaceWant {
     pub on_screen: bool,
 }
 
+fn retain_headers(carts: &[Cart]) {
+    let roms: Vec<std::path::PathBuf> = carts.iter().map(|c| c.rom.clone()).collect();
+    slot_store::header_index::retain(&roms);
+}
+
 fn shelves_of(carts: Vec<Cart>) -> Vec<(Rack, Shelf)> {
     let mut rows: Vec<(Rack, Vec<Cart>)> = [Rack::Recents, Rack::Favorites]
         .into_iter()
@@ -1020,6 +1025,7 @@ impl App {
         slot_store::header_index::load(root);
         crate::boot_time::mark("root");
         let carts = scan(root).unwrap_or_default();
+        retain_headers(&carts);
         crate::boot_time::mark("scan");
         let mut app = App::new(carts);
         app.root = Some(root.to_path_buf());
@@ -8051,6 +8057,7 @@ impl App {
     }
 
     fn adopt_rescan(&mut self, carts: Vec<Cart>) {
+        retain_headers(&carts);
         let seats: Vec<(usize, Option<(Platform, String)>)> = self
             .shelves
             .iter()

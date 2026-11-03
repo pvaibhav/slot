@@ -81,3 +81,38 @@ fn reading_a_new_rom_leaves_the_index_unsaved_until_it_is_saved() {
     save(d.path()).unwrap();
     assert!(!dirty());
 }
+
+#[test]
+fn entries_for_roms_no_longer_on_the_card_are_dropped() {
+    let d = tempfile::tempdir().unwrap();
+    let kept = gb_rom(d.path(), "Kept.gb", 0x00, 0x150);
+    let gone = gb_rom(d.path(), "Gone.gb", 0x80, 0x150);
+    gb_header(&kept);
+    gb_header(&gone);
+    save(d.path()).unwrap();
+    load(d.path());
+    slot_store::header_index::retain(&[kept.clone()]);
+    assert!(
+        dirty(),
+        "dropping an entry did not mark the index for saving"
+    );
+    assert!(peek_gb_header(&kept).is_some());
+    assert_eq!(peek_gb_header(&gone), None);
+    save(d.path()).unwrap();
+    load(d.path());
+    assert_eq!(
+        peek_gb_header(&gone),
+        None,
+        "the dropped entry came back from the file"
+    );
+}
+
+#[test]
+fn keeping_every_entry_leaves_the_index_saved() {
+    let d = tempfile::tempdir().unwrap();
+    let rom = gb_rom(d.path(), "Kept.gb", 0x00, 0x150);
+    gb_header(&rom);
+    save(d.path()).unwrap();
+    slot_store::header_index::retain(&[rom]);
+    assert!(!dirty());
+}

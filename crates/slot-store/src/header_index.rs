@@ -87,6 +87,16 @@ pub fn verify(rom: &Path) {
     }
 }
 
+pub fn retain(roms: &[PathBuf]) {
+    let keep: std::collections::HashSet<&PathBuf> = roms.iter().collect();
+    let mut map = entries().lock().unwrap_or_else(|e| e.into_inner());
+    let before = map.len();
+    map.retain(|rom, _| keep.contains(rom));
+    if map.len() != before {
+        DIRTY.store(true, Ordering::Release);
+    }
+}
+
 pub fn dirty() -> bool {
     DIRTY.load(Ordering::Acquire)
 }

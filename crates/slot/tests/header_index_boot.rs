@@ -23,3 +23,23 @@ fn boot_takes_game_boy_shapes_from_the_saved_index() {
         Some(slot_ui::GbShell::Rounded)
     );
 }
+
+#[test]
+fn boot_drops_index_entries_for_games_no_longer_on_the_card() {
+    let d = tempfile::tempdir().unwrap();
+    let rom = d.path().join("Games/GB/Here.gb");
+    std::fs::create_dir_all(rom.parent().unwrap()).unwrap();
+    std::fs::write(&rom, vec![0u8; 0x150]).unwrap();
+    std::fs::create_dir_all(d.path().join("Cache")).unwrap();
+    std::fs::write(
+        d.path().join("Cache/headers"),
+        "G\tGames/GB/Here.gb\t336\t0\t0\t0\t\tHERE\nG\tGames/GB/Gone.gb\t336\t0\t192\t0\t\tGONE\n",
+    )
+    .unwrap();
+    let _app = App::boot(d.path());
+    assert!(slot_store::header_index::peek_gb_header(&rom).is_some());
+    assert_eq!(
+        slot_store::header_index::peek_gb_header(&d.path().join("Games/GB/Gone.gb")),
+        None
+    );
+}
