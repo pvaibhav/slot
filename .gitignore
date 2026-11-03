@@ -24,3 +24,4 @@
 # Parallel implementation worktrees, never content.
 /.worktrees
 .superpowers/
+/.task/
