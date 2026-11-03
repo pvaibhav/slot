@@ -19,13 +19,14 @@ const router = useRouter()
 
 const crumbs = computed<Crumb[]>(() => [{ label: t('dashboard.bootLogo') }])
 const custom = ref<string | null>(null)
+const checked = ref(false)
 const width = ref<number | null>(null)
 const busy = ref(false)
 const dragOver = ref(false)
 const error = ref<string | null>(null)
 const input = ref<HTMLInputElement>()
 
-const shown = computed(() => custom.value ?? '/bootlogo.bmp')
+const shown = computed(() => (checked.value ? custom.value ?? '/bootlogo.bmp' : undefined))
 const shownWidth = computed(() =>
   width.value ? `${Math.min(100, (width.value / PANEL_WIDTH) * 100)}%` : undefined,
 )
@@ -36,9 +37,10 @@ function clearCustom() {
 }
 
 async function load() {
-  clearCustom()
   const found = (await listFiles('fs', ...FOLDER)).entries.some(e => e.name === FILE)
-  if (found) custom.value = await imageBlob(buildPath('fs', ...FOLDER, FILE), new AbortController().signal)
+  const next = found ? await imageBlob(buildPath('fs', ...FOLDER, FILE), new AbortController().signal) : null
+  clearCustom()
+  custom.value = next
 }
 
 async function run(job: () => Promise<unknown>, failed: string) {
@@ -50,6 +52,7 @@ async function run(job: () => Promise<unknown>, failed: string) {
   } catch {
     error.value = failed
   } finally {
+    checked.value = true
     busy.value = false
   }
 }
@@ -104,13 +107,13 @@ onUnmounted(clearCustom)
     <div class="mx-auto w-full max-w-2xl space-y-4">
       <div
         class="aspect-[3/2] flex items-center justify-center overflow-hidden rounded-xl ring-1 transition-all"
-        :style="{ background: custom ? '#000' : SLOT_GROUND }"
+        :style="{ background: custom || !checked ? '#000' : SLOT_GROUND }"
         :class="dragOver ? 'ring-2 ring-accent' : 'ring-border'"
         @dragover.prevent="dragOver = true"
         @dragleave="dragOver = false"
         @drop.prevent="dropped"
       >
-        <img :src="shown" :alt="$t('dashboard.bootLogo')" :style="{ width: shownWidth, imageRendering: 'pixelated' }" @load="measured" />
+        <img v-if="shown" :src="shown" :alt="$t('dashboard.bootLogo')" :style="{ width: shownWidth, imageRendering: 'pixelated' }" @load="measured" />
       </div>
       <div class="flex items-center justify-center gap-2">
         <Button v-if="custom" variant="ghost" size="sm" :disabled="busy" @click="restore">{{ $t('dashboard.bootLogoRestore') }}</Button>
