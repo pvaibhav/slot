@@ -39,7 +39,7 @@ fn nothing_shows_until_something_is_adjusted() {
 
 #[test]
 fn volume_reads_against_100_not_the_nine_step_scale() {
-    let full = fill(HudKind::Brightness, 9);
+    let full = fill(HudKind::Brightness, 15);
     assert!(
         fill(HudKind::Volume, 9) < full * 0.2,
         "volume 9 filled the bar, so it is being read against the brightness scale"
@@ -248,7 +248,7 @@ fn hushing_drops_the_toast_but_keeps_the_alarm() {
 fn the_sunlight_bar_has_its_own_icon_and_fills_to_ten() {
     assert_eq!(HudKind::Sunlight.icon(0, false, false), Icon::Sunlight);
     assert_ne!(Icon::Sunlight.glyph(), Icon::Brightness.glyph());
-    assert_eq!(fill(HudKind::Sunlight, 10), fill(HudKind::Brightness, 9));
+    assert_eq!(fill(HudKind::Sunlight, 10), fill(HudKind::Brightness, 15));
     assert_eq!(
         fill(HudKind::Sunlight, 5) * 2.0,
         fill(HudKind::Sunlight, 10)

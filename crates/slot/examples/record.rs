@@ -3,7 +3,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use slot::frontend::Frontend;
-use slot_gfx::{blue_light_gain, Compositor, HeadlessSurface, OUT_H, OUT_W};
+use slot_gfx::{blue_light_gain, dim_gain, Compositor, HeadlessSurface, OUT_H, OUT_W};
 use slot_input::{Btn, InputSource, Millis, RawEvent};
 use slot_power::SimPlatform;
 
@@ -113,7 +113,7 @@ fn parse(script: &str) -> Vec<Step> {
 }
 
 fn panel(pixels: &mut [u8], app: &slot::app::App, lit: u8) {
-    let light = f32::from(app.brightness()) / f32::from(lit);
+    let light = f32::from(app.brightness()) / f32::from(lit) * dim_gain(app.dim());
     let gain = blue_light_gain(app.blue_light()).map(|g| g * light);
     if gain == [1.0; 3] {
         return;

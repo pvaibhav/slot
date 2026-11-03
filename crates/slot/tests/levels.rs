@@ -23,6 +23,29 @@ fn levels_clamp_and_persist() {
 }
 
 #[test]
+fn brightness_down_past_the_bottom_dims_and_up_undims_first() {
+    let d = tmp_root_with_carts(&["Emerald"]);
+    let mut a = boot(d.path());
+    for _ in 0..20 {
+        a.apply(Action::BrightnessDown);
+    }
+    a.flush_state();
+    let s = read_slot_state(d.path());
+    assert_eq!((s.brightness, s.dim), (0, 6));
+    assert_eq!(a.brightness_level(), 0);
+    a.apply(Action::BrightnessUp);
+    assert_eq!((a.brightness(), a.dim()), (0, 5));
+    assert_eq!(a.brightness_level(), 1);
+    for _ in 0..5 {
+        a.apply(Action::BrightnessUp);
+    }
+    assert_eq!((a.brightness(), a.dim()), (0, 0));
+    a.apply(Action::BrightnessUp);
+    assert_eq!((a.brightness(), a.dim()), (1, 0));
+    assert_eq!(a.brightness_level(), 7);
+}
+
+#[test]
 fn volume_moves_five_per_press() {
     let d = tmp_root_with_carts(&["Emerald"]);
     let mut a = boot(d.path());

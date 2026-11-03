@@ -1156,7 +1156,7 @@ fn the_clock_offers_b_back_and_never_a_set() {
 }
 
 #[test]
-fn brightness_steps_from_zero_to_nine() {
+fn brightness_steps_from_zero_to_fifteen_through_the_dim_steps() {
     let (d, mut a, _) = on_carousel_with(SlotState {
         brightness: 3,
         ..SlotState::default()
@@ -1164,7 +1164,7 @@ fn brightness_steps_from_zero_to_nine() {
     open_at(&mut a, QuickRow::Brightness);
     assert_eq!(
         a.quick_value(QuickRow::Brightness),
-        Some(QuickValue::Level3)
+        Some(QuickValue::Level9)
     );
     for (btn, want) in [
         (Btn::Left, 2),
@@ -1175,7 +1175,18 @@ fn brightness_steps_from_zero_to_nine() {
         press(&mut a, btn);
         assert_eq!(a.brightness(), want, "{btn:?}");
     }
-    for _ in 0..12 {
+    assert_eq!(
+        a.quick_value(QuickRow::Brightness),
+        Some(QuickValue::Level5)
+    );
+    for _ in 0..5 {
+        press(&mut a, Btn::Left);
+    }
+    assert_eq!(
+        a.quick_value(QuickRow::Brightness),
+        Some(QuickValue::Level0)
+    );
+    for _ in 0..20 {
         press(&mut a, Btn::Right);
     }
     assert_eq!(a.brightness(), 9);

@@ -92,7 +92,8 @@ fn slot_state_round_trips_including_a_stem_with_an_equals_sign() {
     let d = tmp_root();
     let s = SlotState {
         cart: Some("Cheats = On".into()),
-        brightness: 3,
+        brightness: 0,
+        dim: 2,
         blue_light: 9,
         volume: 71,
         muted: true,
@@ -222,6 +223,7 @@ fn a_card_from_before_the_settings_keeps_all_its_values() {
             cart: Some("Emerald".into()),
             cart_platform: None,
             brightness: 3,
+            dim: 0,
             blue_light: 1,
             saturation: 0,
             contrast: 0,

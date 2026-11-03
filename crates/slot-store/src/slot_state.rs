@@ -7,6 +7,7 @@ use crate::platform::Platform;
 use crate::zone::Zone;
 
 pub const BRIGHTNESS_MAX: u8 = 9;
+pub const DIM_MAX: u8 = 6;
 pub const BLUE_LIGHT_MAX: u8 = 9;
 pub const SATURATION_MAX: u8 = 9;
 pub const CONTRAST_MAX: u8 = 9;
@@ -340,6 +341,7 @@ pub struct SlotState {
     pub cart: Option<String>,
     pub cart_platform: Option<Platform>,
     pub brightness: u8,
+    pub dim: u8,
     pub blue_light: u8,
     pub saturation: u8,
     pub contrast: u8,
@@ -516,6 +518,7 @@ impl Default for SlotState {
             cart: None,
             cart_platform: None,
             brightness: 5,
+            dim: 0,
             blue_light: 0,
             saturation: 0,
             contrast: 0,
@@ -651,6 +654,7 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
         s.colour_correction_gbc as u8
     ));
     text.push_str(&format!("shader_gbc={}\n", s.shader_gbc.name()));
+    text.push_str(&format!("dim={}\n", s.dim));
     text.push_str(&format!("saturation={}\n", s.saturation));
     text.push_str(&format!("contrast={}\n", s.contrast));
     text.push_str(&format!("wallpaper_tint={}\n", s.wallpaper_tint.key()));
@@ -695,6 +699,7 @@ fn parse(text: &str) -> Option<SlotState> {
     let mut cart_platform = None;
     let mut brightness = None;
     let mut blue_light = None;
+    let mut dim = None;
     let mut saturation = None;
     let mut contrast = None;
     let mut volume = None;
@@ -753,6 +758,7 @@ fn parse(text: &str) -> Option<SlotState> {
             "cart_platform" => cart_platform = platform_value(value),
             "brightness" => brightness = Some(level(value, BRIGHTNESS_MAX)?),
             "blue_light" => blue_light = Some(level(value, BLUE_LIGHT_MAX)?),
+            "dim" => dim = level(value, DIM_MAX),
             "saturation" => saturation = level(value, SATURATION_MAX),
             "contrast" => contrast = level(value, CONTRAST_MAX),
             "volume" => volume = Some(level(value, VOLUME_MAX)?),
@@ -811,6 +817,7 @@ fn parse(text: &str) -> Option<SlotState> {
         cart: (!cart.is_empty()).then_some(cart),
         cart_platform,
         brightness: brightness?,
+        dim: dim.unwrap_or(fallback.dim),
         blue_light: blue_light?,
         saturation: saturation.unwrap_or(fallback.saturation),
         contrast: contrast.unwrap_or(fallback.contrast),

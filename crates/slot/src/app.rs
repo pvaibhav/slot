@@ -10,7 +10,7 @@ use slot_store::{
     format_stamp, parse_stamp, read_slot_state, scan, write_slot_state, BezelPick, Blending, Cart,
     Core, GbColors, Platform, Recent, Scale, Shader, ShotDir, ShotEntry, SlotState, StateEntry,
     StateRing, Stretch, WallpaperPick, WallpaperTint, BLUE_LIGHT_MAX, BRIGHTNESS_MAX, CONTRAST_MAX,
-    FF_SPEEDS, RING_MAX, SATURATION_MAX, SUNLIGHT_MAX, VOLUME_MAX,
+    DIM_MAX, FF_SPEEDS, RING_MAX, SATURATION_MAX, SUNLIGHT_MAX, VOLUME_MAX,
 };
 use slot_ui::{
     board_from_shaped, draw_empty_slot, draw_footer, draw_ground, draw_sticker, ease, footer_ink,
@@ -1614,7 +1614,7 @@ impl App {
             QuickRow::GbcBlending => Some(blending_value(self.state.blending_gbc)),
             QuickRow::GbBlending => Some(blending_value(self.state.blending_gb)),
             QuickRow::Blending => Some(blending_value(self.blending_in_play())),
-            QuickRow::Brightness => Some(QuickValue::level(self.state.brightness)),
+            QuickRow::Brightness => Some(QuickValue::level(self.brightness_level())),
             QuickRow::BlueLight => Some(match self.state.blue_light {
                 0 => QuickValue::Off,
                 n => QuickValue::level(n),
@@ -3928,18 +3928,17 @@ impl App {
             self.persist_soon();
             return;
         }
-        if let QuickRow::Brightness | QuickRow::BlueLight = row {
-            let (kind, now, max) = match row {
-                QuickRow::Brightness => {
-                    (HudKind::Brightness, self.state.brightness, BRIGHTNESS_MAX)
-                }
-                _ => (HudKind::BlueLight, self.state.blue_light, BLUE_LIGHT_MAX),
-            };
+        if row == QuickRow::Brightness {
+            self.step_brightness(right);
+            return;
+        }
+        if row == QuickRow::BlueLight {
+            let now = self.state.blue_light;
             let to = match right {
-                true => up(now, 1, max),
+                true => up(now, 1, BLUE_LIGHT_MAX),
                 false => now.saturating_sub(1),
             };
-            self.set_level(kind, to);
+            self.set_level(HudKind::BlueLight, to);
             return;
         }
         if let QuickRow::Palette | QuickRow::GbPalette = row {
@@ -4265,10 +4264,16 @@ impl App {
             self.step_sunlight(action == Action::SunlightUp);
             return true;
         }
+        if let Action::BrightnessUp | Action::BrightnessDown = action {
+            self.step_brightness(action == Action::BrightnessUp);
+            let now = self.now();
+            let muted = self.muted();
+            self.hud
+                .show(HudKind::Brightness, self.brightness_level(), muted, now);
+            return true;
+        }
         let s = &self.state;
         let (kind, value) = match action {
-            Action::BrightnessUp => (HudKind::Brightness, up(s.brightness, 1, BRIGHTNESS_MAX)),
-            Action::BrightnessDown => (HudKind::Brightness, s.brightness.saturating_sub(1)),
             Action::BlueLightUp => (HudKind::BlueLight, up(s.blue_light, 1, BLUE_LIGHT_MAX)),
             Action::BlueLightDown => (HudKind::BlueLight, s.blue_light.saturating_sub(1)),
             Action::VolumeUp => (HudKind::Volume, up(self.level(), VOLUME_STEP, VOLUME_MAX)),
@@ -4286,6 +4291,25 @@ impl App {
             self.persist_soon();
         }
         true
+    }
+
+    fn step_brightness(&mut self, brighter: bool) {
+        let s = &self.state;
+        let dim = match brighter {
+            true => s.dim.saturating_sub(1),
+            false if s.brightness == 0 => up(s.dim, 1, DIM_MAX),
+            false => s.dim,
+        };
+        if dim != s.dim {
+            self.state.dim = dim;
+            self.persist_soon();
+            return;
+        }
+        let to = match brighter {
+            true => up(s.brightness, 1, BRIGHTNESS_MAX),
+            false => s.brightness.saturating_sub(1),
+        };
+        self.set_level(HudKind::Brightness, to);
     }
 
     fn set_level(&mut self, kind: HudKind, value: u8) -> bool {
@@ -4372,6 +4396,14 @@ impl App {
 
     pub fn brightness(&self) -> u8 {
         self.state.brightness
+    }
+
+    pub fn dim(&self) -> u8 {
+        self.state.dim
+    }
+
+    pub fn brightness_level(&self) -> u8 {
+        DIM_MAX - self.state.dim.min(DIM_MAX) + self.state.brightness
     }
 
     pub fn volume(&self) -> u8 {

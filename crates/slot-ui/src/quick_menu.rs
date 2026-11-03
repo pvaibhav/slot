@@ -892,6 +892,12 @@ pub enum QuickValue {
     Level7,
     Level8,
     Level9,
+    Level10,
+    Level11,
+    Level12,
+    Level13,
+    Level14,
+    Level15,
     SpFrame,
     Integer,
     Fit,
@@ -904,7 +910,7 @@ pub enum QuickValue {
 }
 
 impl QuickValue {
-    pub const ALL: [QuickValue; 44] = [
+    pub const ALL: [QuickValue; 50] = [
         QuickValue::Speed1_5,
         QuickValue::Speed2,
         QuickValue::Speed3,
@@ -940,6 +946,12 @@ impl QuickValue {
         QuickValue::Level7,
         QuickValue::Level8,
         QuickValue::Level9,
+        QuickValue::Level10,
+        QuickValue::Level11,
+        QuickValue::Level12,
+        QuickValue::Level13,
+        QuickValue::Level14,
+        QuickValue::Level15,
         QuickValue::SpFrame,
         QuickValue::Integer,
         QuickValue::Fit,
@@ -951,7 +963,7 @@ impl QuickValue {
         QuickValue::Http,
     ];
 
-    pub const LEVELS: [QuickValue; 10] = [
+    pub const LEVELS: [QuickValue; 16] = [
         QuickValue::Level0,
         QuickValue::Level1,
         QuickValue::Level2,
@@ -962,6 +974,12 @@ impl QuickValue {
         QuickValue::Level7,
         QuickValue::Level8,
         QuickValue::Level9,
+        QuickValue::Level10,
+        QuickValue::Level11,
+        QuickValue::Level12,
+        QuickValue::Level13,
+        QuickValue::Level14,
+        QuickValue::Level15,
     ];
 
     pub const LID_OFF: [QuickValue; 6] = [
@@ -1014,6 +1032,12 @@ impl QuickValue {
             QuickValue::Level7 => "7",
             QuickValue::Level8 => "8",
             QuickValue::Level9 => "9",
+            QuickValue::Level10 => "10",
+            QuickValue::Level11 => "11",
+            QuickValue::Level12 => "12",
+            QuickValue::Level13 => "13",
+            QuickValue::Level14 => "14",
+            QuickValue::Level15 => "15",
             QuickValue::SpFrame => "SP Screen",
             QuickValue::Integer => "Integer",
             QuickValue::Fit => "Fit",
