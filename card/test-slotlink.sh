@@ -51,7 +51,7 @@ run() {
 		AGS_CTRL_DIR="$TMP/ctrl" AGS_PROC_MODULES="$TMP/proc-modules" \
 		AGS_WPA_SUPPLICANT="$TMP/bin/wpa_supplicant" AGS_WPA_CLI="$TMP/bin/wpa_cli" \
 		AGS_IP="$TMP/bin/ip" AGS_INSMOD="$TMP/bin/insmod" AGS_UDHCPC="$TMP/bin/udhcpc" \
-		AGS_RFKILL="$TMP/bin/rfkill" \
+		AGS_RFKILL="$TMP/bin/rfkill" AGS_LINK_TRACE="$TMP/trace.log" \
 		AGS_LINK_WAIT_S="${WAIT_S:-1}" AGS_LINK_PIN_WAIT_S="${WAIT_S:-1}" \
 		sh "$SCRIPT" "$@"
 }
@@ -71,6 +71,37 @@ run absent link host && rc=0 || rc=$?
 unset FAKE_STATE
 [ "$rc" = 1 ] || fail "dead AP exited $rc, want 1"
 grep -q 'addr add' "$TMP/ip.log" 2>/dev/null && fail "dead AP was addressed"
+
+grep -q 'host: wlan1 never came up' "$TMP/trace.log" || fail "dead AP left no reason in the trace"
+
+reset yes
+rm -rf "$TMP/net/wlan1"
+run absent link host && rc=0 || rc=$?
+[ "$rc" = 1 ] || fail "host with no wlan1 exited $rc, want 1"
+grep -q 'host: no wlan1, interfaces: wlan0' "$TMP/trace.log" || fail "a missing wlan1 left no reason in the trace"
+
+reset yes
+make_fake wpa_supplicant "$TMP/sup.log" 'echo "nl80211: AP mode not supported" >&2' 'exit 1'
+run absent link host && rc=0 || rc=$?
+[ "$rc" = 1 ] || fail "host with a failing supplicant exited $rc, want 1"
+grep -q 'host: wpa_supplicant failed: nl80211: AP mode not supported' "$TMP/trace.log" \
+	|| fail "a failing supplicant left no reason in the trace"
+
+reset yes
+echo 'slotlink: 1.00 join: asked' > "$TMP/trace.log"
+echo 'the first attempt' >> "$TMP/trace.log"
+for n in 1 2 3 4; do run absent link host >/dev/null; done
+grep -q 'the first attempt' "$TMP/trace.log" || fail "four new links dropped the first of five attempts"
+run absent link host >/dev/null
+grep -q 'the first attempt' "$TMP/trace.log" && fail "a sixth link kept the oldest attempt"
+[ "$(grep -c 'host: asked' "$TMP/trace.log")" = 5 ] || fail "the trace does not hold the last five attempts"
+[ "$(grep -c 'host: addressed' "$TMP/trace.log")" = 5 ] || fail "a kept attempt lost its lines"
+
+reset yes
+rm -rf "$TMP/net/wlan0"
+run absent link join && rc=0 || rc=$?
+[ "$rc" = 1 ] || fail "join with no wlan0 exited $rc, want 1"
+grep -q 'join: no wlan0' "$TMP/trace.log" || fail "a missing wlan0 left no reason in the trace"
 
 reset yes
 run absent link join && rc=0 || rc=$?
