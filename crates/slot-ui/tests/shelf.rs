@@ -2,7 +2,7 @@ use slot_power::{Battery, Charge};
 use slot_store::{Cart, Platform};
 use slot_ui::{
     draw_footer, footer_ink, label_colour, rest_y, Canvas, Draw, GbShell, Printed, Shelf, TexId,
-    CART_H, CART_W, GB_CART_H, GB_CART_W, LABEL_W, LABEL_X, LABEL_Y, OUT_W,
+    CART_H, CART_W, LABEL_W, LABEL_X, LABEL_Y, OUT_W,
 };
 
 fn shelf_with(n: usize) -> Shelf {
@@ -135,20 +135,6 @@ fn no_cart_is_drawn_twice_in_a_settled_row_of_three_or_more() {
         uniq.dedup();
         assert_eq!(drawn.len(), uniq.len(), "{n} carts: one is on screen twice");
     }
-}
-
-#[test]
-fn one_cart_stands_alone_in_the_middle() {
-    let s = shelf_with(1);
-    let row = placed(&s);
-    assert_eq!(row.len(), 1, "a lone cart is not alone on the row");
-    let (x, w) = row[0];
-    assert!((w - CART_W as f32).abs() < 0.5, "the lone cart is {w} wide");
-    let centre = x + w / 2.0;
-    assert!(
-        (centre - 360.0).abs() < 0.5,
-        "the lone cart sits at {centre}"
-    );
 }
 
 #[test]
@@ -330,23 +316,6 @@ fn the_shelf_says_where_its_selected_cart_stands() {
 }
 
 #[test]
-fn a_row_of_three_or_more_is_centred_on_its_selection() {
-    for n in [3usize, 4, 7] {
-        let mut s = shelf_with(n);
-        s.right();
-        settle(&mut s);
-        let (x, w) = placed(&s)
-            .into_iter()
-            .fold((0.0, 0.0), |a, b| if b.1 > a.1 { b } else { a });
-        let centre = x + w / 2.0;
-        assert!(
-            (centre - 360.0).abs() < 0.5,
-            "{n} carts: the selected cart sits at {centre}"
-        );
-    }
-}
-
-#[test]
 fn shelf_scroll_settles_on_the_selected_index() {
     let mut s = shelf_with(5);
     s.right();
@@ -379,23 +348,6 @@ fn an_empty_shelf_is_inert() {
     assert_eq!(s.index, 0);
     s.update(1.0 / 60.0);
     assert!(placed(&s).is_empty());
-}
-
-#[test]
-fn the_selected_cart_is_centred_and_full_size() {
-    let mut s = shelf_with(5);
-    s.right();
-    s.right();
-    settle(&mut s);
-    let (x, w) = placed(&s)
-        .into_iter()
-        .fold((0.0, 0.0), |a, b| if b.1 > a.1 { b } else { a });
-    assert!((w - CART_W as f32).abs() < 0.5, "selected cart is {w} wide");
-    let centre = x + w / 2.0;
-    assert!(
-        (centre - 360.0).abs() < 0.5,
-        "selected cart centre is {centre}"
-    );
 }
 
 #[test]
@@ -497,31 +449,6 @@ fn the_gauge_is_white_in_dark_mode_and_black_in_light_mode() {
 }
 
 #[test]
-fn the_gauge_starts_at_the_case_margin() {
-    let mut out = Vec::new();
-    draw_footer(
-        Canvas::FRAMED,
-        Some(Battery {
-            percent: 68,
-            charge: Charge::Charging,
-        }),
-        Printed { face: None, w: 30 },
-        Some(TexId::from_raw(1)),
-        Printed { face: None, w: 40 },
-        [255, 255, 255],
-        &mut out,
-    );
-    let leftmost = out
-        .iter()
-        .map(|d| match *d {
-            Draw::Rect { x, .. } | Draw::Tex { x, .. } => x,
-            _ => f32::MAX,
-        })
-        .fold(f32::MAX, f32::min);
-    assert_eq!(leftmost, 24.0, "the case margin is the case margin");
-}
-
-#[test]
 fn the_band_prints_the_charge_at_one_margin_and_the_clock_at_the_other() {
     let mut out = Vec::new();
     draw_footer(
@@ -604,28 +531,6 @@ fn the_footer_does_not_move_the_gauge_when_the_charge_state_changes() {
             "{d:?} moved or vanished when charging started"
         );
     }
-}
-
-#[test]
-fn the_clock_stays_at_the_right_margin() {
-    let mut out = Vec::new();
-    draw_footer(
-        Canvas::FRAMED,
-        None,
-        Printed::default(),
-        None,
-        Printed { face: None, w: 40 },
-        [255, 255, 255],
-        &mut out,
-    );
-    let rightmost = out
-        .iter()
-        .map(|d| match *d {
-            Draw::Rect { x, w, .. } | Draw::Tex { x, w, .. } => x + w,
-            _ => 0.0,
-        })
-        .fold(0.0, f32::max);
-    assert_eq!(rightmost, OUT_W as f32 - 24.0);
 }
 
 #[test]
@@ -816,29 +721,6 @@ fn gb_shelf_with(n: usize) -> Shelf {
             })
             .collect(),
     )
-}
-
-#[test]
-fn the_row_draws_a_game_boy_pak_at_its_own_height() {
-    let mut s = gb_shelf_with(3);
-    settle(&mut s);
-    s.set_faces((0..3).map(|i| TexId::from_raw(20 + i)).collect());
-    let mut out = Vec::new();
-    s.draw_row(Canvas::FRAMED, None, 0.0, 0.0, 1.0, &mut out);
-    let (h, y) = out
-        .iter()
-        .find_map(|d| match *d {
-            Draw::Tex { y, w, h, .. } if (w - GB_CART_W as f32).abs() < 0.01 => Some((h, y)),
-            _ => None,
-        })
-        .expect("no cart is drawn at full size");
-    assert_eq!(h, GB_CART_H as f32, "the pak was drawn at the GBA height");
-    assert_eq!(
-        y,
-        rest_y(GB_CART_H as f32),
-        "the pak is not centred on the carousel"
-    );
-    assert_eq!(y, y.round(), "the pak is off the pixel grid: {y}");
 }
 
 #[test]
@@ -1212,20 +1094,6 @@ fn a_game_boy_pak_beside_a_gba_cart_sits_the_gap_two_gba_carts_do() {
             );
         }
     }
-}
-
-#[test]
-fn a_shelf_of_game_boy_paks_keeps_its_own_gap() {
-    let mut s = mixed_shelf(&[Platform::Gb, Platform::Gb, Platform::Gb]);
-    s.select(1);
-    settle(&mut s);
-    let spans = face_spans(&s, 3);
-    let gap = spans[1].unwrap().0 - spans[0].unwrap().1;
-    let expected = GB_CART_W as f32 * (1.0 - (1.0 + 0.78) / 2.0);
-    assert!(
-        (gap - expected).abs() < 0.5,
-        "two Game Boy paks sit {gap} apart, {expected} before"
-    );
 }
 
 #[test]

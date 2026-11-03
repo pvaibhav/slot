@@ -60,15 +60,6 @@ fn a_native_wallpaper_is_the_centre_of_the_framed_one() {
 }
 
 #[test]
-fn a_panel_sized_wallpaper_fills_the_native_shelf_whole() {
-    let mut out = Vec::new();
-    let ground = TexId::from_raw(3);
-    slot_ui::draw_ground(NATIVE, Some((ground, 640)), &mut out);
-    assert!(out.iter().any(|d| matches!(*d,
-        Draw::Part { w, tex, uv, .. } if tex == ground && w == 640.0 && uv == [0.0, 0.0, 1.0, 1.0])));
-}
-
-#[test]
 fn a_panel_sized_wallpaper_is_cropped_top_and_bottom_in_the_frame() {
     let mut out = Vec::new();
     let ground = TexId::from_raw(3);

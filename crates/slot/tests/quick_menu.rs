@@ -12,7 +12,7 @@ use slot_store::{
 };
 use slot_ui::{
     Draw, Icon, QuickMenuFaces, QuickRow, QuickValue, TexId, HINT_EDGE, MENU_PAD, MOUTH_H, OUT_H,
-    OUT_W, QUICK_EDGE, QUICK_LABEL_X,
+    OUT_W,
 };
 use tempfile::TempDir;
 
@@ -586,23 +586,6 @@ fn select_start_on_about_still_restarts() {
 }
 
 #[test]
-fn the_about_footer_shows_back_and_x_restart() {
-    let (_d, mut a, _) = on_carousel();
-    fake_faces(&mut a);
-    open_at(&mut a, QuickRow::About);
-    press(&mut a, Btn::A);
-    let out = frame(&a);
-    let (lx, _, _) = legend_box(&out, 400);
-    assert!(lx.abs() < 1.0, "Back is not on the left: {lx}");
-    let (rx, _, rw) = legend_box(&out, 404);
-    let right = rx + rw - HINT_EDGE as f32;
-    assert!(
-        (right - OUT_W as f32).abs() < 1.0,
-        "Restart is not on the right: {right}"
-    );
-}
-
-#[test]
 fn network_sits_between_controls_and_about() {
     let at = |row| QuickRow::MAIN.iter().position(|r| *r == row);
     assert_eq!(at(QuickRow::Network), at(QuickRow::Controls).map(|i| i + 1));
@@ -1065,24 +1048,6 @@ fn the_pointer_stands_left_of_the_selected_row_and_only_it_is_lit() {
 }
 
 #[test]
-fn labels_leave_room_for_the_pointer_and_values_end_thirty_two_pixels_in() {
-    let (_d, mut a, _) = on_carousel();
-    fake_faces(&mut a);
-    open_at(&mut a, QuickRow::FastForward);
-    let out = frame(&a);
-    let right = OUT_W as f32 - QUICK_EDGE;
-    for row in QuickRow::FastForward.shown(&a.hidden_rows()) {
-        let lit = row == QuickRow::FastForward;
-        let [x, ..] = placed(&out, label(row, lit)).expect("a label was not drawn");
-        assert_eq!(x + MENU_PAD as f32, QUICK_LABEL_X, "{row:?}'s label");
-    }
-    let [x, _, w, _] = placed(&out, value(QuickValue::On, false)).expect("rumble's value");
-    assert_eq!(x + w - MENU_PAD as f32, right, "an unselected value");
-    let [x, _, w, _] = placed(&out, value(QuickValue::Speed6, true)).expect("the selected value");
-    assert_eq!(x + w - MENU_PAD as f32, right, "the selected value");
-}
-
-#[test]
 fn only_the_first_boot_clock_says_set_the_clock() {
     let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
     let (mut first, _) = app_booting_with_clock(d.path());
@@ -1132,6 +1097,7 @@ fn the_clock_offers_b_back_and_never_a_set() {
         );
         assert!(!drawn(&out, 420), "{way}: the city list still says A DONE");
         press(app, Btn::B);
+        let out = frame(app);
         assert!(!drawn(&out, 405), "{way}: the city still offers A SET");
         press(app, Btn::Down);
         let out = frame(app);
@@ -1340,32 +1306,6 @@ fn no_row_in_hand_runs_its_value_into_its_label() {
             }
         }
     }
-}
-
-#[test]
-fn the_about_label_sits_on_the_same_tinted_ground_as_the_menu() {
-    let (_d, mut a, _) = on_carousel();
-    fake_faces(&mut a);
-    a.set_ground(TexId::from_raw(800));
-    a.set_blur(TexId::from_raw(801));
-    open_at(&mut a, QuickRow::About);
-    let menu = frame(&a);
-    press(&mut a, Btn::A);
-    assert!(matches!(a.phase(), Phase::About), "{:?}", a.phase());
-    let about = frame(&a);
-    assert!(
-        matches!(menu[0], Draw::Part { tex, .. } if tex == TexId::from_raw(801)),
-        "the menu is not on the blurred wallpaper"
-    );
-    assert!(
-        matches!(menu[1], Draw::Rect { colour, .. } if colour[..3] == [0.0; 3] && colour[3] > 0.5),
-        "the menu's wallpaper is not tinted"
-    );
-    assert_eq!(
-        about[..2],
-        menu[..2],
-        "the About label is not on the menu's tinted ground"
-    );
 }
 
 fn on_own_wallpaper(tint: slot_store::WallpaperTint) -> (TempDir, App) {

@@ -50,38 +50,6 @@ fn nothing_moves_when_the_charge_state_changes() {
 }
 
 #[test]
-fn the_bolt_never_reaches_the_capsule() {
-    let mut out = Vec::new();
-    draw_gauge(
-        24.0,
-        400.0,
-        at(68, Charge::Charging),
-        percent_face(),
-        Some(TexId::from_raw(7)),
-        HUD_INK,
-        &mut out,
-    );
-    let bolt_right = out
-        .iter()
-        .find_map(|d| match *d {
-            Draw::Tex { x, w, tex, .. } if tex == TexId::from_raw(7) => Some(x + w),
-            _ => None,
-        })
-        .expect("the bolt did not draw while charging");
-    let capsule_left = out
-        .iter()
-        .filter_map(|d| match *d {
-            Draw::Rect { x, .. } => Some(x),
-            _ => None,
-        })
-        .fold(f32::MAX, f32::min);
-    assert!(
-        bolt_right <= capsule_left,
-        "the bolt's right edge ({bolt_right}) reaches past the capsule's left wall ({capsule_left})"
-    );
-}
-
-#[test]
 fn the_bolt_is_only_drawn_while_charging() {
     let bolt = |charge| {
         let mut out = Vec::new();

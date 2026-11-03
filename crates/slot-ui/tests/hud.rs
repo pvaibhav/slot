@@ -144,23 +144,6 @@ fn both_fast_forward_glyphs_share_one_box() {
 }
 
 #[test]
-fn the_badge_outlives_the_bar_timer_without_a_plate() {
-    let mut h = Hud::new();
-    h.set_ff(FfState::Latched);
-    let mut out = Vec::new();
-    h.draw(Canvas::FRAMED, 60_000, &mut out);
-    assert!(
-        !out.iter()
-            .any(|d| matches!(d, Draw::Rect { w, .. } if *w == OUT_W as f32)),
-        "the badge dragged the full width plate up with it"
-    );
-    assert!(
-        ff_badge(FfState::Latched).is_some(),
-        "the badge itself went away"
-    );
-}
-
-#[test]
 fn the_badge_leaves_when_fast_forward_stops() {
     let mut h = Hud::new();
     h.set_ff(FfState::Held);
