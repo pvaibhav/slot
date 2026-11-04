@@ -1395,11 +1395,13 @@ impl App {
         };
         let (zone, clock_24h, from_menu) = (picker.zone(), picker.clock_24h(), *from_menu);
         let utc = self.utc_secs() + moved;
-        let network_changed = network_time.is_some_and(|on| on != self.state.network_time);
         if let Some(power) = &mut self.power {
             power.set_clock(utc);
-            if network_changed {
-                power.set_network_time(network_time == Some(true));
+            if let Some(on) = network_time {
+                // Asks BaseOS, not the saved choice, which may be older than BaseOS's.
+                if power.network_time().unwrap_or(self.state.network_time) != on {
+                    power.set_network_time(on);
+                }
             }
         }
         self.state.zone = zone;
