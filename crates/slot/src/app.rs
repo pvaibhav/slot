@@ -1971,11 +1971,19 @@ impl App {
             return None;
         }
         let gba = self.playing_platform().hardware() == Platform::Gba;
+        let authentic = self.authentic(self.playing_platform());
         // Authentic draws the lit panel around a Game Boy or GBC picture, which the SP Frame
-        // and Integer bezels would cover; the Fit bezels' wider window shows it.
-        let margin = !gba && self.authentic(self.playing_platform());
+        // and Integer bezels would cover. Around a whole-scale picture it has its own bezel,
+        // cut from Harlequin's: the Game Boy's grey lens, or the Pocket's black one for the
+        // Pocket, Light and GBC. Elsewhere the Fit bezels' wider window shows the panel.
+        let margin = !gba && authentic;
+        let pocket = self.playing_platform() == Platform::Gbc || self.gb_model() != GbModel::Dmg;
         match (self.picture().0, self.framed_panel()) {
-            (Sizing::Band | Sizing::Integer, false) if margin => Some(BezelArt::Fit3x2),
+            (Sizing::Band | Sizing::Integer, false) if margin => {
+                Some(BezelArt::AuthenticGb { pocket })
+            }
+            (Sizing::Integer, true) if margin => Some(BezelArt::AuthenticGb { pocket }),
+            (Sizing::Integer, true) if gba && authentic => Some(BezelArt::AuthenticGba),
             (Sizing::Band | Sizing::Integer, true) if margin => Some(BezelArt::Fit4x3),
             (Sizing::Band, _) => Some(BezelArt::Default),
             _ if gba => None,

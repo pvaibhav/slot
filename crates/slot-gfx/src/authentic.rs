@@ -20,9 +20,9 @@
 //!   power for each channel, and a matrix to within about 5 levels of 255.
 //! - GBA colour response: Pokefan531's 2026 spectrophotometer measurements
 //!   (github.com/Pokefan531/Handheld-Colorspace-Shaders), per-code ramps and matrices.
-//! - GBA panel white tint: the Handheld Color Space Project's reflectance readings. Its
-//!   contrast, 5-6:1, is a 45/0 instrument reading; photographs of the screen show more, so
-//!   black here is a fourteenth of white.
+//! - GBA panel white tint: the Handheld Color Space Project's reflectance readings. Drawn
+//!   at the GBC's brightness and contrast, since the measured 5-6:1 (a 45/0 instrument
+//!   reading) reads as fog on a lit screen: white as bright as the GBC's, black a 35th of it.
 
 /// The screen an Authentic picture is drawn on.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -180,9 +180,15 @@ impl Dots {
     }
 }
 
-/// How bright the GBA's white is drawn, in sRGB: dimmer than the device's white, as an
-/// unlit screen is, but not so dim that the game is hard to see.
-const LIT: f32 = 0.82;
+/// The relative luminance of a linear colour.
+fn luminance(c: [f32; 3]) -> f32 {
+    0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+}
+
+/// The GBC's white, in linear light: BGB's GBC reality white.
+fn gbc_white() -> [f32; 3] {
+    linear(rgb(0x868c7a))
+}
 
 impl Screen {
     pub(crate) fn look(self) -> Look {
@@ -195,7 +201,7 @@ impl Screen {
             // BGB's GBC reality white and black. Its blue lies outside sRGB, and BGB draws
             // the red in it darker than the black level, as the screen's own red is.
             Screen::Gbc => {
-                let (white, dark) = (linear(rgb(0x868c7a)), linear(rgb(0x0e191c)));
+                let (white, dark) = (gbc_white(), linear(rgb(0x0e191c)));
                 Look {
                     light: white,
                     dark,
@@ -213,17 +219,19 @@ impl Screen {
                     ghost: [keep(16.0), keep(8.0)],
                 }
             }
-            // White is the panel's tint at LIT; black is a fourteenth of white's light, a
-            // little tinted the way the panel's black measured.
+            // White is the panel's tint at the GBC white's luminance; black is a 35th of
+            // white's light, a little tinted the way the panel's black measured.
             Screen::Gba => {
-                let white = linear(rgb(0xdef6ff).map(|c| c * LIT));
+                let tint_white = linear(rgb(0xdef6ff));
+                let gain = luminance(gbc_white()) / luminance(tint_white);
+                let white = tint_white.map(|c| c * gain);
                 let tint = [1.02, 0.97, 1.06];
                 let response = [
                     0.8988, 0.1163, 0.1831, 0.2229, 0.6217, 0.2438, -0.1217, 0.2620, 0.5731,
                 ];
                 Look {
                     light: white,
-                    dark: [0, 1, 2].map(|i| white[i] * 0.07 * tint[i]),
+                    dark: [0, 1, 2].map(|i| white[i] / 35.0 * tint[i]),
                     response: response.map(|v| v * 0.8915),
                     gamma: [2.2; 3],
                     least: [0.0; 3],
