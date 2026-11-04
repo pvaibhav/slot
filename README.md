@@ -43,28 +43,28 @@ notes are in the [changelog](CHANGELOG.md).
 - ~~Holding POWER **shuts down** directly, without showing a menu.~~
   Included upstream since **v1.8.0**. Restart is available from Settings > About with X.
 - ~~**Home Wi-Fi.**~~ Included upstream since **v1.13.0** as the **Network** menu. Join your
-  network there. The old `Config/wifi.toml` is removed on first start.
-- **Wi-Fi stays connected while you play**, if it was connected when you put the cart in, so
-  RetroAchievements stay online. slot never starts a connection in a game, because a scan can
-  stall frames.
+  network there. slot deletes the old `Config/wifi.toml` on first start.
+- **Wi-Fi stays connected while you play.** If Wi-Fi is connected when you put a cart in, it
+  stays connected, so RetroAchievements stay online. slot never starts a connection during a
+  game, because a scan can stall frames.
 - ~~**Online cart label scraping.**~~ Included upstream since **v1.13.0** as **Fetch Missing
   Art** under Network. No Wi-Fi? Put `Artwork.pack` from the release page in your card's
   `Labels` folder and slot labels your carts from that instead.
 - **RetroAchievements.** You can earn softcore GB, GBC, and GBA achievements, online or offline.
-  Put your account in `Config/retroachievements.toml` for this to work. All your games' achievements
-  are cached while Wi-Fi is connected, so once the sync is done, you can go out and play without
-  losing your achievements. They sync automatically when Wi-Fi connects again. When you play
+  Put your account in `Config/retroachievements.toml` for this to work. slot caches all your
+  games' achievements while Wi-Fi is connected. Once that sync is done, you can play away from
+  Wi-Fi and keep what you earn. It syncs when Wi-Fi connects again. When you play
   with Wi-Fi connected, your achievements sync in real time with rich presence.
   A holographic trophy seal on a cart's label shows it's ready to earn achievements offline.
 - ~~**Linking over home Wi-Fi.**~~ Removed. Links use upstream's direct link, which needs no
-  network. Wi-Fi is off during a link, and achievements earned then sync afterwards.
+  network. Wi-Fi is off during a link, and achievements you earn then sync after it ends.
 - **Cheats.** Put `Cheats.pack` from the release page in `Cheats/`, and a game's cheats from the
   libretro database appear under **Cheats** in its in-game menu, each with an On/Off switch.
   slot remembers which are on for each game. To use your own, add a RetroArch `.cht` file named
   after the ROM to `Cheats/GBA`, `Cheats/GB` or `Cheats/GBC`. Cheats need the mGBA core.
   Gambatte, the default Game Boy core on new cards since v1.14.0, has no cheats yet.
 - **Network time from BaseOS.** **Set Automatically** in Date & Time turns BaseOS's `ntpd` on
-  or off, instead of slot asking a time server itself.
+  or off. slot no longer asks a time server itself.
 - **`slot.local` beside the device's own name.** Gamebit answers at `slot.local`, and BaseOS
   still answers at `<hostname>.local`. If another device already has `slot.local`, slot takes
   `slot-2.local`. `mdns=false` in BaseOS's settings turns both off.

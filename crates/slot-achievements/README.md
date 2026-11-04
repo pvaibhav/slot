@@ -29,9 +29,9 @@ for example, single quotes preserve backslashes in a password without escaping t
 
 Join a network from **Network** in the shelf menu. RA login and library preparation then run
 whenever Wi-Fi is connected. A connection made on the shelf stays up through a game, so unlocks
-and rich presence go out as you play. When Wi-Fi connects, RA retries immediately instead of
-waiting for its normal network backoff. Releases and deployment copy only the example files;
-existing credentials and caches are preserved.
+and rich presence reach RetroAchievements while you play. When Wi-Fi connects, RA retries at
+once instead of waiting for its network backoff. Releases and deployment copy only the example
+files and keep existing credentials and caches.
 
 Treat the config and cached login token as credentials. slot does not print them in logs.
 It uses verified HTTPS with bundled trusted roots; it needs neither curl nor a system CA
