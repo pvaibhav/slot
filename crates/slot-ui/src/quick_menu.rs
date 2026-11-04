@@ -1,9 +1,7 @@
 use crate::bitmaps::{button_legend, ButtonLegend};
 use crate::draw::{Canvas, Draw, TexId, OUT_H, OUT_W};
 use crate::icon::{Icon, WARNING_INK};
-use crate::plate::{
-    blit, centred_hints, word_face, word_ink, UndoFace, CAP_GAP, HINT_EDGE, HINT_H, LEGEND_GAP,
-};
+use crate::plate::{blit, word_face, word_ink, UndoFace, CAP_GAP, HINT_EDGE};
 use crate::power_menu::{MENU_H, MENU_INK, MENU_PAD, MENU_PX};
 use crate::slot_chrome::{opening, MOUTH_H};
 use crate::text;
@@ -55,6 +53,7 @@ pub enum QuickRow {
     ShelfPrev,
     ShelfNext,
     ShelfFavorite,
+    ShelfForget,
     PlayControls,
     Shortcuts,
     GameUp,
@@ -88,6 +87,7 @@ pub enum QuickRow {
     ScSunlightDown,
     ScReset,
     LidOff,
+    FetchArt,
     Controls,
     ControlsShelf,
     ControlsInGame,
@@ -121,10 +121,25 @@ pub enum QuickRow {
     Model,
     Guide,
     ScGuide,
+    Network,
+    Wifi,
+    WifiPower,
+    Networks,
+    CheckUpdates,
+    Server,
+    Romm,
+    RommProtocol,
+    RommServer,
+    RommPort,
+    RommSelfSigned,
+    RommPair,
+    RommStatus,
+    RommPairedServer,
+    RommDisconnect,
 }
 
 impl QuickRow {
-    pub const ALL: [QuickRow; 110] = [
+    pub const ALL: [QuickRow; 127] = [
         QuickRow::FastForward,
         QuickRow::FastForwardSound,
         QuickRow::Screen,
@@ -169,6 +184,7 @@ impl QuickRow {
         QuickRow::ShelfPrev,
         QuickRow::ShelfNext,
         QuickRow::ShelfFavorite,
+        QuickRow::ShelfForget,
         QuickRow::PlayControls,
         QuickRow::Shortcuts,
         QuickRow::GameUp,
@@ -202,6 +218,7 @@ impl QuickRow {
         QuickRow::ScSunlightDown,
         QuickRow::ScReset,
         QuickRow::LidOff,
+        QuickRow::FetchArt,
         QuickRow::Controls,
         QuickRow::ControlsShelf,
         QuickRow::ControlsInGame,
@@ -235,17 +252,33 @@ impl QuickRow {
         QuickRow::Model,
         QuickRow::Guide,
         QuickRow::ScGuide,
+        QuickRow::Network,
+        QuickRow::Wifi,
+        QuickRow::WifiPower,
+        QuickRow::Networks,
+        QuickRow::CheckUpdates,
+        QuickRow::Server,
+        QuickRow::Romm,
+        QuickRow::RommProtocol,
+        QuickRow::RommServer,
+        QuickRow::RommPort,
+        QuickRow::RommSelfSigned,
+        QuickRow::RommPair,
+        QuickRow::RommStatus,
+        QuickRow::RommPairedServer,
+        QuickRow::RommDisconnect,
     ];
 
-    pub const MAIN: [QuickRow; 5] = [
+    pub const MAIN: [QuickRow; 6] = [
         QuickRow::General,
         QuickRow::Screen,
         QuickRow::Game,
         QuickRow::Controls,
+        QuickRow::Network,
         QuickRow::About,
     ];
 
-    pub const GENERAL: [QuickRow; 7] = [
+    pub const GENERAL: [QuickRow; 8] = [
         QuickRow::Theme,
         QuickRow::Wallpaper,
         QuickRow::WallpaperTint,
@@ -253,6 +286,41 @@ impl QuickRow {
         QuickRow::ShowTitles,
         QuickRow::LidOff,
         QuickRow::DateTime,
+        QuickRow::Wifi,
+    ];
+
+    pub const WIFI: [QuickRow; 2] = [QuickRow::WifiPower, QuickRow::Networks];
+
+    pub const NETWORK: [QuickRow; 4] = [
+        QuickRow::Server,
+        QuickRow::Romm,
+        QuickRow::FetchArt,
+        QuickRow::CheckUpdates,
+    ];
+
+    pub const ROMM: [QuickRow; 8] = [
+        QuickRow::RommProtocol,
+        QuickRow::RommServer,
+        QuickRow::RommPort,
+        QuickRow::RommSelfSigned,
+        QuickRow::RommPair,
+        QuickRow::RommStatus,
+        QuickRow::RommPairedServer,
+        QuickRow::RommDisconnect,
+    ];
+
+    pub const ROMM_SETUP: [QuickRow; 5] = [
+        QuickRow::RommProtocol,
+        QuickRow::RommServer,
+        QuickRow::RommPort,
+        QuickRow::RommSelfSigned,
+        QuickRow::RommPair,
+    ];
+
+    pub const ROMM_PAIRED: [QuickRow; 3] = [
+        QuickRow::RommStatus,
+        QuickRow::RommPairedServer,
+        QuickRow::RommDisconnect,
     ];
 
     pub const CONTROL_PAGES: [QuickRow; 3] = [
@@ -261,10 +329,11 @@ impl QuickRow {
         QuickRow::ControlsInGame,
     ];
 
-    pub const SHELF_KEYS: [QuickRow; 3] = [
+    pub const SHELF_KEYS: [QuickRow; 4] = [
         QuickRow::ShelfPrev,
         QuickRow::ShelfNext,
         QuickRow::ShelfFavorite,
+        QuickRow::ShelfForget,
     ];
 
     pub const CONTROLS: [QuickRow; 12] = [
@@ -444,7 +513,21 @@ impl QuickRow {
             | QuickRow::Theme
             | QuickRow::Recents
             | QuickRow::ShowTitles
-            | QuickRow::LidOff => &QuickRow::GENERAL,
+            | QuickRow::LidOff
+            | QuickRow::Wifi => &QuickRow::GENERAL,
+            QuickRow::WifiPower | QuickRow::Networks => &QuickRow::WIFI,
+            QuickRow::CheckUpdates
+            | QuickRow::FetchArt
+            | QuickRow::Romm
+            | QuickRow::Server => &QuickRow::NETWORK,
+            QuickRow::RommProtocol
+            | QuickRow::RommServer
+            | QuickRow::RommPort
+            | QuickRow::RommSelfSigned
+            | QuickRow::RommPair
+            | QuickRow::RommStatus
+            | QuickRow::RommPairedServer
+            | QuickRow::RommDisconnect => &QuickRow::ROMM,
             QuickRow::ControlsShelf | QuickRow::Shortcuts | QuickRow::ControlsInGame => {
                 &QuickRow::CONTROL_PAGES
             }
@@ -490,6 +573,9 @@ impl QuickRow {
             QuickRow::GameUp => Some(QuickRow::ControlsInGame),
             QuickRow::ScSave => Some(QuickRow::Shortcuts),
             QuickRow::Theme => Some(QuickRow::General),
+            QuickRow::Server => Some(QuickRow::Network),
+            QuickRow::RommProtocol => Some(QuickRow::Romm),
+            QuickRow::WifiPower => Some(QuickRow::Wifi),
             QuickRow::ControlsShelf => Some(QuickRow::Controls),
             QuickRow::ShelfPrev => Some(QuickRow::ControlsShelf),
             QuickRow::CheatList => Some(QuickRow::Cheats),
@@ -511,6 +597,7 @@ impl QuickRow {
             &QuickRow::PLAY,
             &QuickRow::SETTINGS,
             &QuickRow::SCREEN,
+            &QuickRow::NETWORK,
             &QuickRow::CONTROL_PAGES,
         ]
         .contains(&self.page())
@@ -526,6 +613,9 @@ impl QuickRow {
             QuickRow::PlayControls => Some(QuickRow::CONTROLS[0]),
             QuickRow::Shortcuts => Some(QuickRow::SHORTCUTS[0]),
             QuickRow::General => Some(QuickRow::GENERAL[0]),
+            QuickRow::Network => Some(QuickRow::NETWORK[0]),
+            QuickRow::Romm => Some(QuickRow::ROMM[0]),
+            QuickRow::Wifi => Some(QuickRow::WIFI[0]),
             QuickRow::Controls => Some(QuickRow::CONTROL_PAGES[0]),
             QuickRow::ControlsShelf => Some(QuickRow::SHELF_KEYS[0]),
             QuickRow::ControlsInGame => Some(QuickRow::CONTROLS[0]),
@@ -595,6 +685,20 @@ impl QuickRow {
             QuickRow::ExitGame => "Exit Game",
             QuickRow::General => "General",
             QuickRow::LidOff => "Lid Power Off",
+            QuickRow::FetchArt => "Fetch Missing Art",
+            QuickRow::Network => "Tools",
+            QuickRow::Wifi | QuickRow::WifiPower => "Wi-Fi",
+            QuickRow::Networks => "Network",
+            QuickRow::CheckUpdates => "Check for Updates",
+            QuickRow::Server => "Gamebit",
+            QuickRow::Romm => "RomM",
+            QuickRow::RommProtocol => "Protocol",
+            QuickRow::RommServer | QuickRow::RommPairedServer => "Server",
+            QuickRow::RommPort => "Port",
+            QuickRow::RommSelfSigned => "Accept Self-Signed",
+            QuickRow::RommPair => "Pair",
+            QuickRow::RommStatus => "Status",
+            QuickRow::RommDisconnect => "Disconnect",
             QuickRow::Controls => "Controls",
             QuickRow::ControlsShelf => "Shelf",
             QuickRow::ControlsInGame => "In-Game",
@@ -631,9 +735,10 @@ impl QuickRow {
             | QuickRow::ScSunlightDown
             | QuickRow::ScReset
             | QuickRow::ScGuide => self.shortcut().map_or("", Shortcut::label),
-            QuickRow::ShelfPrev | QuickRow::ShelfNext | QuickRow::ShelfFavorite => {
-                self.carousel_action().map_or("", CarouselAction::label)
-            }
+            QuickRow::ShelfPrev
+            | QuickRow::ShelfNext
+            | QuickRow::ShelfFavorite
+            | QuickRow::ShelfForget => self.carousel_action().map_or("", CarouselAction::label),
             QuickRow::PlayScreen => "Screen",
             QuickRow::PlayGameplay => "Gameplay",
             QuickRow::Shader => "Shader",
@@ -662,6 +767,7 @@ impl QuickRow {
         matches!(
             self,
             QuickRow::DateTime
+                | QuickRow::FetchArt
                 | QuickRow::About
                 | QuickRow::Screen
                 | QuickRow::Game
@@ -687,6 +793,16 @@ impl QuickRow {
                 | QuickRow::ScreenGbc
                 | QuickRow::ScreenGb
                 | QuickRow::ScreenGeneral
+                | QuickRow::Network
+                | QuickRow::Wifi
+                | QuickRow::Networks
+                | QuickRow::CheckUpdates
+                | QuickRow::Server
+                | QuickRow::Romm
+                | QuickRow::RommServer
+                | QuickRow::RommPort
+                | QuickRow::RommPair
+                | QuickRow::RommDisconnect
         )
     }
 
@@ -738,6 +854,7 @@ impl QuickRow {
             QuickRow::ShelfPrev => CarouselAction::PreviousShelf,
             QuickRow::ShelfNext => CarouselAction::NextShelf,
             QuickRow::ShelfFavorite => CarouselAction::Favorite,
+            QuickRow::ShelfForget => CarouselAction::ForgetRecent,
             _ => return None,
         })
     }
@@ -799,6 +916,12 @@ pub enum QuickValue {
     Level7,
     Level8,
     Level9,
+    Level10,
+    Level11,
+    Level12,
+    Level13,
+    Level14,
+    Level15,
     SpFrame,
     Integer,
     Fit,
@@ -806,10 +929,12 @@ pub enum QuickValue {
     FullScreen,
     Mix,
     Ghosting,
+    Https,
+    Http,
 }
 
 impl QuickValue {
-    pub const ALL: [QuickValue; 45] = [
+    pub const ALL: [QuickValue; 53] = [
         QuickValue::Speed1_5,
         QuickValue::Speed2,
         QuickValue::Speed3,
@@ -848,6 +973,12 @@ impl QuickValue {
         QuickValue::Level7,
         QuickValue::Level8,
         QuickValue::Level9,
+        QuickValue::Level10,
+        QuickValue::Level11,
+        QuickValue::Level12,
+        QuickValue::Level13,
+        QuickValue::Level14,
+        QuickValue::Level15,
         QuickValue::SpFrame,
         QuickValue::Integer,
         QuickValue::Fit,
@@ -855,9 +986,11 @@ impl QuickValue {
         QuickValue::FullScreen,
         QuickValue::Mix,
         QuickValue::Ghosting,
+        QuickValue::Https,
+        QuickValue::Http,
     ];
 
-    pub const LEVELS: [QuickValue; 10] = [
+    pub const LEVELS: [QuickValue; 16] = [
         QuickValue::Level0,
         QuickValue::Level1,
         QuickValue::Level2,
@@ -868,6 +1001,12 @@ impl QuickValue {
         QuickValue::Level7,
         QuickValue::Level8,
         QuickValue::Level9,
+        QuickValue::Level10,
+        QuickValue::Level11,
+        QuickValue::Level12,
+        QuickValue::Level13,
+        QuickValue::Level14,
+        QuickValue::Level15,
     ];
 
     pub const LID_OFF: [QuickValue; 6] = [
@@ -923,6 +1062,12 @@ impl QuickValue {
             QuickValue::Level7 => "7",
             QuickValue::Level8 => "8",
             QuickValue::Level9 => "9",
+            QuickValue::Level10 => "10",
+            QuickValue::Level11 => "11",
+            QuickValue::Level12 => "12",
+            QuickValue::Level13 => "13",
+            QuickValue::Level14 => "14",
+            QuickValue::Level15 => "15",
             QuickValue::SpFrame => "SP Screen",
             QuickValue::Integer => "Integer",
             QuickValue::Fit => "Fit",
@@ -930,6 +1075,8 @@ impl QuickValue {
             QuickValue::FullScreen => "Full Screen",
             QuickValue::Mix => "Mix",
             QuickValue::Ghosting => "Ghosting",
+            QuickValue::Https => "HTTPS",
+            QuickValue::Http => "HTTP",
         }
     }
 
@@ -974,7 +1121,7 @@ pub const QUICK_PITCH: f32 = 52.0;
 pub const QUICK_EDGE: f32 = 32.0;
 pub const QUICK_LABEL_X: f32 = 53.0;
 pub const QUICK_VALUE_GAP: f32 = 24.0;
-const VALUE_MIN_SCALE: f32 = 0.6;
+pub(crate) const VALUE_MIN_SCALE: f32 = 0.6;
 pub(crate) const POINTER_GAP: f32 = 17.0;
 const POINTER_SCALE: usize = 3;
 const POINTER: [&str; 11] = [
@@ -1154,16 +1301,17 @@ pub fn quick_description_face(lines: &[&str]) -> UndoFace {
 }
 
 /// Cancel, Swap, Choose. Swap keeps the button before the word, the way the old arrows did.
-pub fn core_button_legends() -> Vec<UndoFace> {
+pub fn core_button_legends(ink: [u8; 3]) -> Vec<UndoFace> {
+    let hint = Some(ink);
     vec![
-        with_hint(button_face(ButtonLegend::B), "Cancel", None, true),
+        with_hint(button_face(ButtonLegend::B), "Cancel", hint, true),
         with_hint(
             button_pair(ButtonLegend::Left, ButtonLegend::Right),
             "Swap",
-            None,
+            hint,
             true,
         ),
-        with_hint(button_face(ButtonLegend::A), "Choose", None, false),
+        with_hint(button_face(ButtonLegend::A), "Choose", hint, false),
     ]
 }
 
@@ -1207,12 +1355,74 @@ pub fn repair_legends(ink: [u8; 3]) -> [UndoFace; 2] {
     prompt_legends(ink, "Not now", "Repair")
 }
 
+pub fn update_legends(ink: [u8; 3]) -> [UndoFace; 3] {
+    let [cancel, install] = prompt_legends(ink, "Cancel", "Install");
+    [
+        cancel,
+        install,
+        with_hint(button_face(ButtonLegend::B), "Back", Some(ink), true),
+    ]
+}
+
 pub fn delete_legends(ink: [u8; 3]) -> [UndoFace; 2] {
     let hint = Some(ink);
     [
         with_hint(button_face(ButtonLegend::B), "Keep", hint, true),
         with_hint(button_face(ButtonLegend::X), "Delete", hint, false),
     ]
+}
+
+pub fn fetch_choice_legends(ink: [u8; 3]) -> [UndoFace; 2] {
+    let hint = Some(ink);
+    [
+        with_hint(button_face(ButtonLegend::B), "Cancel", hint, true),
+        with_hint(
+            button_pair(ButtonLegend::Left, ButtonLegend::Right),
+            "Pick",
+            hint,
+            false,
+        ),
+    ]
+}
+
+pub fn fetch_legends(ink: [u8; 3]) -> UndoFace {
+    with_hint(button_face(ButtonLegend::B), "Stop", Some(ink), true)
+}
+
+pub fn print_stop_legend(ink: [u8; 3]) -> UndoFace {
+    let (src, w, h) = button_legend(ButtonLegend::B);
+    let side = PRINT_STOP_BUTTON;
+    let rgba = crate::art::cover_rgba(src, w, h, side, side).unwrap_or_default();
+    let button = UndoFace { rgba, w: side, h: side };
+    with_hint(button, "Stop", Some(ink), true)
+}
+
+pub fn fetch_skip_legend(ink: [u8; 3]) -> UndoFace {
+    with_hint(button_face(ButtonLegend::X), "Skip", Some(ink), false)
+}
+
+const PRINT_STOP_BUTTON: u32 = 24;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StudioGlyph {
+    A,
+    B,
+    X,
+    Y,
+    LeftRight,
+    UpDown,
+}
+
+pub fn studio_legend(glyph: StudioGlyph, word: &str, ink: [u8; 3], hint_on_right: bool) -> UndoFace {
+    let button = match glyph {
+        StudioGlyph::A => button_face(ButtonLegend::A),
+        StudioGlyph::B => button_face(ButtonLegend::B),
+        StudioGlyph::X => button_face(ButtonLegend::X),
+        StudioGlyph::Y => button_face(ButtonLegend::Y),
+        StudioGlyph::LeftRight => button_pair(ButtonLegend::Left, ButtonLegend::Right),
+        StudioGlyph::UpDown => up_down_pair(),
+    };
+    with_hint(button, word, Some(ink), hint_on_right)
 }
 
 pub fn prompt_legends(ink: [u8; 3], no: &str, yes: &str) -> [UndoFace; 2] {
@@ -1362,6 +1572,8 @@ pub struct QuickMenu<'a> {
     pub values: [Option<QuickValue>; QuickRow::ALL.len()],
     pub clock: Option<[(TexId, u32, u32); 2]>,
     pub wallpaper: Option<[(TexId, u32, u32); 2]>,
+    pub networks: Option<[(TexId, u32, u32); 2]>,
+    pub romm: [Option<[(TexId, u32, u32); 2]>; 4],
     pub faces: Option<&'a QuickMenuFaces>,
     pub ground: Option<(TexId, u32)>,
     pub palette: Option<[(TexId, u32, u32); 2]>,
@@ -1372,8 +1584,6 @@ pub struct QuickMenu<'a> {
     pub bound: Option<&'a [Option<FacePair>]>,
     pub description: Option<(TexId, u32, u32)>,
     pub over_game: bool,
-    /// The carousel footer carries the legends, so the centred pair is not drawn.
-    pub footer_legends: bool,
     /// Where the sliding footer starts. The scrim stops there so it does not darken the strip.
     pub footer_top: f32,
     pub canvas: Canvas,
@@ -1427,6 +1637,13 @@ impl QuickMenu<'_> {
             let value = match row {
                 QuickRow::DateTime => self.clock.map(|c| c[lit as usize]),
                 QuickRow::Wallpaper => self.wallpaper.map(|c| c[lit as usize]),
+                QuickRow::Wifi | QuickRow::Networks => self.networks.map(|c| c[lit as usize]),
+                QuickRow::Romm => self.romm[0].map(|c| c[lit as usize]),
+                QuickRow::RommServer | QuickRow::RommPairedServer => {
+                    self.romm[1].map(|c| c[lit as usize])
+                }
+                QuickRow::RommPort => self.romm[2].map(|c| c[lit as usize]),
+                QuickRow::RommStatus => self.romm[3].map(|c| c[lit as usize]),
                 QuickRow::Palette | QuickRow::GbPalette => self.palette.map(|c| c[lit as usize]),
                 QuickRow::GbaBezel => self.gba_bezel.map(|c| c[lit as usize]),
                 QuickRow::GbBezel => self.gb_bezel.map(|c| c[lit as usize]),
@@ -1461,18 +1678,6 @@ impl QuickMenu<'_> {
         if let Some((tex, w, h)) = self.description {
             let y = OUT_H as f32 - MOUTH_H - h as f32 - DESCRIPTION_GAP;
             push(out, tex, self.canvas.centred(w as f32), y, w, h);
-        }
-        if self.over_game || self.footer_legends {
-            return;
-        }
-        let [back, change, open, resume, ..] = faces.legend;
-        let back = match self.row.page() == QuickRow::PLAY {
-            true => resume,
-            false => back,
-        };
-        let other = if self.row.opens() { open } else { change };
-        for (tex, w, x) in centred_hints(self.canvas, &[back, other], LEGEND_GAP) {
-            push(out, tex, x, LEGEND_Y, w, HINT_H);
         }
     }
 }
@@ -1636,9 +1841,9 @@ pub const QUICK_VISIBLE: usize = 6;
 
 const PANEL_VISIBLE: usize = 3;
 
-const SCROLL_INSET: f32 = 12.0;
+pub(crate) const SCROLL_INSET: f32 = 12.0;
 
-const SCROLL_W: f32 = 4.0;
+pub(crate) const SCROLL_W: f32 = 4.0;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct QuickScroll {
@@ -1707,7 +1912,11 @@ pub fn quick_scroll(selected: QuickRow, hidden: &[QuickRow]) -> Option<QuickScro
 
 pub fn quick_row_top_at(row: QuickRow, selected: QuickRow, hidden: &[QuickRow]) -> f32 {
     let (start, len) = quick_window(selected, hidden);
-    let rows = QUICK_PITCH * len as f32;
+    let held = match row.page() == QuickRow::WIFI {
+        true => QuickRow::WIFI.len(),
+        false => len,
+    };
+    let rows = QUICK_PITCH * held as f32;
     let top = match row.page() == QuickRow::PLAY_SCREEN {
         true => OUT_H as f32 - MOUTH_H - PANEL_GAP - rows,
         false => (LEGEND_Y - rows) / 2.0,

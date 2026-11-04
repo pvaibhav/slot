@@ -204,7 +204,11 @@ fn no_pack_a_pack_without_the_rom_or_a_damaged_pack_leaves_the_cart_unlabelled()
             }
             _ => {}
         }
-        assert_eq!(from_pack(dir.path(), &rom_on_gbc_shelf(dir.path())).unwrap(), None, "{case}");
+        assert_eq!(
+            from_pack(dir.path(), &rom_on_gbc_shelf(dir.path())).unwrap(),
+            None,
+            "{case}"
+        );
         assert!(!dir.path().join("Labels/GBC").exists(), "{case}");
     }
 }

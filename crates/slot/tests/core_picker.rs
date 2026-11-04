@@ -1,9 +1,16 @@
 use slot::core_picker::{CorePicker, Outcome, Press, CLOSE_MS, HOP_MS, LIFT_MS, OPEN_MS, SLIDE_MS};
-use slot_store::Core;
+use slot_store::{Core, Platform};
 use slot_ui::Millis;
 
+const GBA: [Core; 2] = [Core::Mgba, Core::Gpsp];
+const GB: [Core; 2] = [Core::Mgba, Core::Gambatte];
+
 fn opened(seat: Core, at: Millis) -> CorePicker {
-    let mut p = CorePicker::open(seat, at);
+    opened_on(GBA, seat, at)
+}
+
+fn opened_on(pair: [Core; 2], seat: Core, at: Millis) -> CorePicker {
+    let mut p = CorePicker::open(pair, seat, at);
     p.start(at);
     p
 }
@@ -136,7 +143,7 @@ fn the_open_is_a_slide_then_a_lift_and_the_board_agrees() {
 
 #[test]
 fn a_picker_waits_until_it_is_started() {
-    let mut p = CorePicker::open(Core::Mgba, 100);
+    let mut p = CorePicker::open(GBA, Core::Mgba, 100);
     assert!(p.waiting());
     assert_eq!(p.openness(5_000), 0.0);
     assert_eq!(p.waited(350), 250);
@@ -148,7 +155,7 @@ fn a_picker_waits_until_it_is_started() {
 
 #[test]
 fn a_second_start_keeps_the_first() {
-    let mut p = CorePicker::open(Core::Mgba, 0);
+    let mut p = CorePicker::open(GBA, Core::Mgba, 0);
     p.start(300);
     p.start(500);
     assert_eq!(p.openness(300 + OPEN_MS), 1.0);
@@ -156,7 +163,7 @@ fn a_second_start_keeps_the_first() {
 
 #[test]
 fn backing_out_while_waiting_finishes_at_once() {
-    let mut p = CorePicker::open(Core::Mgba, 0);
+    let mut p = CorePicker::open(GBA, Core::Mgba, 0);
     p.press(Press::Back, 50);
     assert!(p.finished(50));
 }
@@ -171,7 +178,7 @@ fn a_close_from_rest_takes_the_close_time() {
 
 #[test]
 fn the_arrows_do_nothing_while_the_picker_waits() {
-    let mut p = CorePicker::open(Core::Mgba, 0);
+    let mut p = CorePicker::open(GBA, Core::Mgba, 0);
     assert_eq!(p.press(Press::Right, 100), Outcome::Nothing);
     assert_eq!(p.seat(), Core::Mgba, "a hop started while the cart waited");
     let chip = p.chip(100);
@@ -195,4 +202,60 @@ fn the_arrows_do_nothing_while_the_picker_waits() {
         None,
         "no hop once the cart had opened"
     );
+}
+
+#[test]
+fn a_game_boy_pair_hops_right_to_gambatte() {
+    let mut p = opened_on(Core::pair(Platform::Gb), Core::Mgba, 0);
+    assert_eq!(p.press(Press::Right, 400), Outcome::Nothing);
+    assert_eq!(p.seat(), Core::Gambatte);
+    let mid = p.chip(400 + HOP_MS / 2);
+    assert_eq!(mid.seated, None);
+    assert!(mid.tip > 0.0, "a chip moving right should lean right");
+    let landed = p.chip(400 + HOP_MS);
+    assert_eq!(landed.seated, Some(Core::Gambatte));
+    assert_eq!((landed.across, landed.lift), (1.0, 0.0));
+    assert_eq!(
+        p.press(Press::Keep, 400 + HOP_MS),
+        Outcome::Write(Core::Gambatte)
+    );
+}
+
+#[test]
+fn a_game_boy_pair_refuses_left_from_mgba() {
+    let mut p = opened_on(Core::pair(Platform::Gbc), Core::Mgba, 0);
+    assert_eq!(p.press(Press::Left, 400), Outcome::Refused);
+    assert_eq!(p.seat(), Core::Mgba);
+    assert_ne!(p.chip(400).shake, 0.0);
+}
+
+#[test]
+fn a_gba_pair_never_seats_gambatte() {
+    let mut p = opened_on(Core::pair(Platform::Gba), Core::Mgba, 0);
+    p.press(Press::Right, 400);
+    assert_eq!(p.seat(), Core::Gpsp);
+    p.press(Press::Left, 400 + HOP_MS);
+    assert_eq!(p.seat(), Core::Mgba);
+    p.press(Press::Right, 400 + 2 * HOP_MS);
+    assert_eq!(p.seat(), Core::Gpsp);
+    assert_eq!(p.chip(400 + 3 * HOP_MS).seated, Some(Core::Gpsp));
+}
+
+#[test]
+fn the_chip_rests_by_place_in_the_pair() {
+    let gambatte = opened_on(GB, Core::Gambatte, 0).chip(0);
+    assert_eq!(gambatte.seated, Some(Core::Gambatte));
+    assert_eq!(gambatte.across, 1.0);
+    assert_eq!(opened_on(GB, Core::Mgba, 0).chip(0).across, 0.0);
+    assert_eq!(opened_on(GBA, Core::Gpsp, 0).chip(0).across, 1.0);
+}
+
+#[test]
+fn back_mid_hop_on_a_game_boy_pair_turns_back_to_mgba() {
+    let mut p = opened_on(GB, Core::Gambatte, 0);
+    p.press(Press::Left, 400);
+    let mid = p.chip(400 + HOP_MS / 2);
+    assert!(mid.tip < 0.0, "a chip moving left should lean left");
+    assert_eq!(p.chip(400 + HOP_MS).seated, Some(Core::Mgba));
+    assert_eq!(p.chip(400 + HOP_MS).across, 0.0);
 }

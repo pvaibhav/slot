@@ -17,6 +17,12 @@ slot will cache labels on the next boot after adding labels.
 You don't have to make these by hand and can use the [Cart Studio](https://studio.slot-cfw.fyi) to fetch and apply
 labels.
 
+## Cart Studio on the device
+
+Press <kbd>SELECT</kbd> on the shelf to open Cart Studio for the cart that is currently selected.
+
+You can print a new label (requires Wi-Fi) and change shell color / finish.
+
 ## Cart shells
 
 You can also customize the color and appearance of the cart shell.
@@ -41,6 +47,19 @@ Keep all three options lowercase. A line slot can't read is skipped.
 Drop a `.png` into `Wallpapers/` and pick it under Wallpaper in Settings → General.
 
 Random picks one at boot.
+
+Shelf changes the wallpaper as you move between shelves. Name a file after each shelf:
+
+| Shelf                  | File                                |
+|------------------------|-------------------------------------|
+| Game Boy               | `GB.png`                            |
+| Game Boy Color         | `GBC.png`                           |
+| Game Boy Advance       | `GBA.png`                           |
+| Game Boy Advance Video | `GBAV.png`, otherwise `GBA.png`     |
+| Favorites              | `Favorites.png`                     |
+| Recents                | `Recents.png`                       |
+
+A shelf without a file shows the default wallpaper.
 
 | Device                                  | Suggested Size |
 |-----------------------------------------|----------------|
@@ -86,11 +105,11 @@ Each template is the screen in grey with a hole where the game goes. Paint over 
 
 ## Boot logo
 
-Put a `.bmp` at `Config/bootlogo.bmp`. slot hands it to the device when it boots, so you'll see it the next time you
-power on.
+Put a `.bmp` at `Config/bootlogo.bmp`, or upload one on Gamebit's Boot Logo page.
 
-slot copies the file as it is, without resizing it, so make it the same size and format as the logo your device already
-shows.
+slot will install it on the next boot, so you'll see it on the second power-on after adding it.
+
+slot copies the file as it is, without resizing it.
 
 Delete `Config/bootlogo.bmp` to go back to the slot logo.
 

@@ -3,7 +3,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use slot::frontend::Frontend;
-use slot_gfx::{blue_light_gain, Compositor, HeadlessSurface, OUT_H, OUT_W};
+use slot_gfx::{blue_light_gain, dim_gain, Compositor, HeadlessSurface, OUT_H, OUT_W};
 use slot_input::{Btn, InputSource, Millis, RawEvent};
 use slot_power::SimPlatform;
 
@@ -113,7 +113,7 @@ fn parse(script: &str) -> Vec<Step> {
 }
 
 fn panel(pixels: &mut [u8], app: &slot::app::App, lit: u8) {
-    let light = f32::from(app.brightness()) / f32::from(lit);
+    let light = f32::from(app.brightness()) / f32::from(lit) * dim_gain(app.dim());
     let gain = blue_light_gain(app.blue_light()).map(|g| g * light);
     if gain == [1.0; 3] {
         return;
@@ -123,6 +123,32 @@ fn panel(pixels: &mut [u8], app: &slot::app::App, lit: u8) {
             *c = (f32::from(*c) * g).round().min(255.0) as u8;
         }
     }
+}
+
+fn connect(app: &mut slot::app::App) {
+    use slot::wifi::Backend;
+    let mut fake = slot::wifi::Fake::demo();
+    fake.add("Home", "password", false);
+    app.set_wifi(slot::wifi::Wifi::inline(Box::new(fake)));
+    let tick = |app: &mut slot::app::App| {
+        let now = app.now();
+        app.tick_ms(now + 1_000);
+    };
+    for _ in 0..10 {
+        if app.wifi().held {
+            break;
+        }
+        tick(app);
+    }
+    app.wifi_send(slot::wifi::Cmd::Join {
+        ssid: "Home".into(),
+        password: "password".into(),
+        hidden: false,
+    });
+    for _ in 0..4 {
+        tick(app);
+    }
+    assert!(app.wifi_up(), "the fake network did not connect");
 }
 
 #[derive(Default)]
@@ -140,13 +166,17 @@ fn main() {
         eprintln!("usage: record ROOT SCRIPT OUT");
         std::process::exit(2);
     };
-    let steps = parse(&std::fs::read_to_string(script).expect("read the script"));
+    let script = std::fs::read_to_string(script).expect("read the script");
+    let steps = parse(&script);
 
     let surface = HeadlessSurface::new().expect("headless GL");
     let mut compositor = Compositor::new(&surface).expect("compositor");
     let mut frontend = Frontend::boot(Box::new(SimPlatform::at(root.into()).stopped_at(CLOCK)));
     frontend.upload_faces(&mut compositor);
     frontend.drive_emulator();
+    if script.lines().any(|line| line.trim() == "# wifi") {
+        connect(frontend.app_mut());
+    }
 
     let mut input = Scripted::default();
     let lit = frontend.app().brightness().max(1);

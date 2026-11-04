@@ -1,4 +1,4 @@
-use slot_ui::{badge_at, centred_hints, sticker_rect, toast_rect, Canvas, TexId, Toast, STICKER_W};
+use slot_ui::{badge_at, sticker_rect, toast_rect, Canvas, Toast, STICKER_W};
 
 const NATIVE: Canvas = Canvas { w: 640.0, h: 480.0 };
 
@@ -11,16 +11,6 @@ fn the_about_sticker_fits_a_native_canvas_with_its_margin() {
         x + w
     );
     assert_eq!(sticker_rect(Canvas::FRAMED).2, STICKER_W as f32);
-}
-
-#[test]
-fn a_lone_hint_centres_on_a_native_canvas() {
-    let hints = centred_hints(NATIVE, &[(TexId::from_raw(1), 100)], 0.0);
-    let (_, w, x) = hints[0];
-    assert!(
-        (x + w as f32 / 2.0 - 320.0).abs() <= 8.0,
-        "a lone hint sits at {x}"
-    );
 }
 
 #[test]

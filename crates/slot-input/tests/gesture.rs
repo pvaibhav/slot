@@ -1,6 +1,6 @@
 use slot_input::RawEvent::{Down, Up};
 use slot_input::{
-    Action::*, Btn, Btn::*, Chord, Gestures, Mod, RawEvent, MENU_HOLD_MS, POWER_HOLD_MS,
+    Action::*, Btn, Btn::*, Chord, Context, Gestures, Mod, RawEvent, MENU_HOLD_MS, POWER_HOLD_MS,
     SELECT_CHORD_MS, SELECT_TAP_MS, VOLUME_REPEAT_DELAY_MS, VOLUME_REPEAT_MS,
 };
 
@@ -1012,4 +1012,40 @@ fn a_press_seen_during_a_capture_leaves_nothing_behind() {
         vec![GbaDown(R1)],
         "a stale L1 completed the pair"
     );
+}
+
+#[test]
+fn select_tap_on_the_shelf() {
+    let mut g = gestures();
+    g.set_context(Context::Shelf);
+    assert!(g.feed(Down(Select), 0).is_empty());
+    assert_eq!(g.feed(Up(Select), 80), vec![GbaDown(Select), SelectTap]);
+}
+
+#[test]
+fn no_select_tap_in_game() {
+    let mut g = gestures();
+    assert!(g.feed(Down(Select), 0).is_empty());
+    assert!(!g.feed(Up(Select), 80).contains(&SelectTap));
+}
+
+#[test]
+fn a_select_combo_is_no_tap() {
+    let mut g = gestures();
+    g.set_context(Context::Shelf);
+    let mut log = g.feed(Down(Select), 0);
+    log.extend(g.feed(Down(Btn::X), 40));
+    log.extend(g.feed(Up(Btn::X), 80));
+    log.extend(g.feed(Up(Select), 120));
+    assert!(!log.contains(&SelectTap), "{log:?}");
+}
+
+#[test]
+fn a_select_hold_is_no_tap() {
+    let mut g = gestures();
+    g.set_context(Context::Shelf);
+    let mut log = g.feed(Down(Select), 0);
+    log.extend(g.tick(700));
+    log.extend(g.feed(Up(Select), 800));
+    assert!(!log.contains(&SelectTap), "{log:?}");
 }

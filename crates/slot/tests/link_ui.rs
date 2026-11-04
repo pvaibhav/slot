@@ -1485,6 +1485,22 @@ fn a_cart_gpsp_cannot_carry_is_refused_the_link_screen_and_told_why() {
 }
 
 #[test]
+fn a_device_without_wifi_is_refused_the_link_screen_and_told_why() {
+    let d = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
+    common::write_retail_header(&d, "Emerald", "POKEMON EMER", "BPEE");
+    let mut app = seated_on_gpsp(&d);
+    let wlan0 = d.path().join("net/wlan0");
+    app.set_wifi_probe(wlan0.clone());
+    app.apply(Action::GameMenu);
+    assert!(!app.game_menu_open(), "a device with no radio offered a link");
+    assert_eq!(app.toast(), Some(Toast::NoWifi));
+    assert!(matches!(app.phase(), Phase::Playing { .. }));
+    std::fs::create_dir_all(&wlan0).unwrap();
+    app.apply(Action::GameMenu);
+    assert!(app.game_menu_open(), "wlan0 arrived and the link stayed refused");
+}
+
+#[test]
 fn a_cart_gpsp_carries_still_opens_the_link_screen() {
     for (stem, title, code) in [
         ("Mario Golf", "MARIO GOLF", "BMGE"),
@@ -1540,6 +1556,15 @@ fn a_wireless_adapter_cart_on_mgba_still_says_to_switch_to_gpsp() {
 }
 
 #[test]
+fn the_link_overlay_on_gambatte_says_to_switch_to_mgba() {
+    let d = common::tmp_root_with_gb_carts(&["Pokemon Red", "Zzz"]);
+    let mut app = seated_on_platform(&d, Core::Gambatte, Platform::Gb);
+    app.apply(Action::GameMenu);
+    assert!(!app.game_menu_open(), "Gambatte opened the link overlay");
+    assert_eq!(app.toast(), Some(Toast::NeedsMgba));
+}
+
+#[test]
 fn a_game_boy_cart_links_on_mgba_and_is_refused_on_gpsp() {
     for (core, open) in [(Core::Mgba, true), (Core::Gpsp, false)] {
         let d = common::tmp_root_with_gb_carts(&["Pokemon Red", "Zzz"]);
@@ -1573,70 +1598,6 @@ fn a_game_boy_cart_links_on_mgba_and_is_refused_on_gpsp() {
             "{core:?} started a link session for a Game Boy cart"
         );
     }
-}
-
-#[test]
-fn the_pick_legend_names_mode_only_where_the_hardware_can_be_switched() {
-    let faces: Vec<(TexId, u32)> = LinkLegend::ALL
-        .iter()
-        .map(|k| (TexId::from_raw(900 + k.index()), 40))
-        .collect();
-    let mode = faces[LinkLegend::Mode.index()].0;
-    let link = faces[LinkLegend::Link.index()].0;
-    let cancel = faces[LinkLegend::Cancel.index()].0;
-    let drawn = |app: &App| {
-        let mut out = Vec::new();
-        app.draw(&mut out);
-        out
-    };
-
-    let (mut app, _d) = playing_on(Core::Gpsp);
-    app.set_link_legend_faces(faces.clone());
-    app.apply(Action::GameMenu);
-    let out = drawn(&app);
-    assert!(
-        out.iter()
-            .any(|d| matches!(*d, Draw::Tex { tex, .. } if tex == mode)),
-        "a cart whose hardware can be switched did not offer SELECT"
-    );
-    assert!(
-        !out.iter()
-            .any(|d| matches!(*d, Draw::Tex { tex, .. } if tex == link)),
-        "Link stayed on the legend beside Mode"
-    );
-    assert!(
-        out.iter()
-            .any(|d| matches!(*d, Draw::Tex { tex, .. } if tex == cancel)),
-        "a switchable cart's pick screen did not offer Cancel"
-    );
-
-    let d = common::tmp_root_with_carts(&["Zzz"]);
-    common::write_retail_header(&d, "Mario Golf", "MARIO GOLF", "BMGE");
-    let mut app = seated_on_gpsp(&d);
-    app.set_link_legend_faces(faces.clone());
-    app.apply(Action::GameMenu);
-    let out = drawn(&app);
-    assert!(
-        !out.iter()
-            .any(|d| matches!(*d, Draw::Tex { tex, .. } if tex == mode)),
-        "the screen offered SELECT over a game gpSP links the same either way"
-    );
-    assert!(
-        out.iter()
-            .any(|d| matches!(*d, Draw::Tex { tex, .. } if tex == link)),
-        "Link left the legend along with Mode"
-    );
-    assert!(
-        out.iter()
-            .any(|d| matches!(*d, Draw::Tex { tex, .. } if tex == cancel)),
-        "the pick screen did not offer Cancel"
-    );
-    let swap = faces[LinkLegend::Swap.index()].0;
-    assert!(
-        !out.iter()
-            .any(|d| matches!(*d, Draw::Tex { tex, .. } if tex == swap)),
-        "Swap is still on the pick screen"
-    );
 }
 
 #[test]

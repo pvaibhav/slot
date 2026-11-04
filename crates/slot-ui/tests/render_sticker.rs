@@ -18,6 +18,7 @@ fn render_sticker() {
         battery: Some(87),
         serial: "04738857",
         version: "0.1.0",
+        baseos: Some("1.5.2"),
         model: &model,
     });
     let (w, h) = (STICKER_W as usize, STICKER_H as usize);

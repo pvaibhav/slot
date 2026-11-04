@@ -1,0 +1,94 @@
+--- a/src/gb/audio.c
++++ b/src/gb/audio.c
+@@ -767,10 +767,91 @@
+ 			}
+ 		}
+ 		break;
++	}
++}
++
++static const int _squareChannelHigh[4] = { 1, 2, 4, 6 };
++
++static int _waveShift(int volume) {
++	switch (volume) {
++	case 0:
++		return 4;
++	case 1:
++		return 0;
++	case 2:
++		return 1;
++	default:
++		return 2;
+ 	}
+ }
++
++static void _sampleCentredPSG(struct GBAudio* audio, int16_t* left, int16_t* right) {
++	int sampleLeft = 0;
++	int sampleRight = 0;
++
++	if (!audio->forceDisableCh[0] && audio->playingCh1) {
++		int sample = (audio->ch1.sample << 3) - audio->ch1.envelope.currentVolume * _squareChannelHigh[audio->ch1.envelope.duty & 3];
++		if (audio->ch1Left) {
++			sampleLeft += sample;
++		}
++		if (audio->ch1Right) {
++			sampleRight += sample;
++		}
++	}
+ 
++	if (!audio->forceDisableCh[1] && audio->playingCh2) {
++		int sample = (audio->ch2.sample << 3) - audio->ch2.envelope.currentVolume * _squareChannelHigh[audio->ch2.envelope.duty & 3];
++		if (audio->ch2Left) {
++			sampleLeft += sample;
++		}
++		if (audio->ch2Right) {
++			sampleRight += sample;
++		}
++	}
++
++	if (!audio->forceDisableCh[2] && audio->playingCh3) {
++		int shift = _waveShift(audio->ch3.volume);
++		int sum = 0;
++		int i;
++		for (i = 0; i < 16; ++i) {
++			sum += (audio->ch3.wavedata8[i] >> 4 >> shift) + ((audio->ch3.wavedata8[i] & 0xF) >> shift);
++		}
++		int sample = (audio->ch3.sample << 3) - (sum >> 2);
++		if (sample > 120) {
++			sample = 120;
++		} else if (sample < -120) {
++			sample = -120;
++		}
++		if (audio->ch3Left) {
++			sampleLeft += sample;
++		}
++		if (audio->ch3Right) {
++			sampleRight += sample;
++		}
++	}
++
++	if (!audio->forceDisableCh[3]) {
++		int sample = _coalesceNoiseChannel(&audio->ch4);
++		if (audio->playingCh4) {
++			sample -= audio->ch4.envelope.currentVolume * 4;
++			if (audio->ch4Left) {
++				sampleLeft += sample;
++			}
++			if (audio->ch4Right) {
++				sampleRight += sample;
++			}
++		}
++	}
++
++	*left = sampleLeft * (1 + audio->volumeLeft);
++	*right = sampleRight * (1 + audio->volumeRight);
++}
++
+ void GBAudioSamplePSG(struct GBAudio* audio, int16_t* left, int16_t* right) {
++	if (audio->style != GB_AUDIO_GBA) {
++		_sampleCentredPSG(audio, left, right);
++		return;
++	}
+ 	int dcOffset = audio->style == GB_AUDIO_GBA ? 0 : -0x8;
+ 	int sampleLeft = dcOffset;
+ 	int sampleRight = dcOffset;

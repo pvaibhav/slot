@@ -5,6 +5,7 @@ use std::process::Command;
 
 pub const CARD_LOGO: &str = "System/bootlogo.bmp";
 pub const USER_LOGO: &str = "Config/bootlogo.bmp";
+pub const INSTALLED_COPY: &str = "Cache/bootlogo.installed";
 const LOGO: &str = "bootlogo.bmp";
 const ORIGINAL: &str = "bootlogo.baseos.bmp";
 const PARTITION: &str = "boot-resource";
@@ -212,6 +213,21 @@ pub fn chosen(card: &Path) -> Option<Logo> {
         return None;
     }
     Some(Logo::Wordmark(shipped))
+}
+
+pub fn remember(card: &Path) {
+    let user = card.join(USER_LOGO);
+    let source = if user.is_file() { user } else { card.join(CARD_LOGO) };
+    let Ok(logo) = fs::read(source) else {
+        return;
+    };
+    let copy = card.join(INSTALLED_COPY);
+    let (Some(dir), Some(name)) = (copy.parent(), copy.file_name().and_then(|n| n.to_str())) else {
+        return;
+    };
+    if let Err(e) = fs::create_dir_all(dir).and_then(|_| replace(dir, name, &logo)) {
+        eprintln!("slot: bootlogo: could not keep the installed copy: {e}");
+    }
 }
 
 pub fn refresh(card: &Path) {

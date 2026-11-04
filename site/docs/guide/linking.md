@@ -53,6 +53,7 @@ If slot says "Please switch to gpSP", the game needs the wireless adapter. Chang
 
 | Message | What happened |
 | --- | --- |
+| This device has no Wi-Fi | Wi-Fi hardware could not be detected. Ensure your device has Wi-Fi. |
 | The radio did not come up | Wi-Fi didn't start on this device. Try again. |
 | Nobody arrived | The host waited and nobody joined. |
 | The other player vanished | The two devices found each other, then lost each other. |

@@ -13,8 +13,8 @@ hide:
 | Device | Supported | Since Version |
 | --- | --- | --- |
 | Anbernic RG&nbsp;SP | **Yes** | Always |
-| Anbernic RG34XX | Yes (untested) | 1.4.0 |
-| Anbernic RG34XXSP | Yes (untested) | 1.4.0 |
+| Anbernic RG34XX | **Yes** | 1.4.0 |
+| Anbernic RG34XXSP | **Yes** | 1.4.0 |
 | Anbernic RG35XXSP | **Yes** | 1.5.0 |
 | Anbernic RG35XX Plus | **Yes** | 1.5.0 |
 | Anbernic RG28XX | **Yes** | 1.6.0 |
@@ -22,7 +22,7 @@ hide:
 
 </div>
 
-If you have one of the untested devices, or have tried slot on a device not listed, please [open an issue on GitHub](https://github.com/BrandonKowalski/slot/issues) and let me know how it went.
+If you have tried slot on a device not listed, please [open an issue on GitHub](https://github.com/BrandonKowalski/slot/issues) and let me know how it went.
 
 ### Will slot run anything other than GBA?
 
@@ -36,9 +36,15 @@ Your own legally obtained backups.
 
 No. I want to recreate the feeling I had playing my GBA SP as a child.
 
-### RetroAchievements and cheats would make this perfect. Will you add them?
+### RetroAchievements and cheats are the only thing keeping me from switching. Will you add them?
 
-No. These are two features I do not want to support. If they matter to you, a few of the forks have added them.
+No. These are two features I do not want to support.
+
+If they matter to you, a few of the forks have added them.
+
+### The carousel sucks with a large collection. Will a list view be added?
+
+No, and that is the whole point of the carousel! Curate your games or use a different frontend.
 
 ### Does slot allow you to pair Bluetooth headphones?
 

@@ -62,7 +62,7 @@ pub fn decode(path: &Path) -> Option<(Vec<u8>, u32, u32)> {
     decode_png_bytes(&bytes)
 }
 
-pub(crate) fn decode_png_bytes(bytes: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
+pub fn decode_png_bytes(bytes: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
     let orientation = exif_chunk(bytes).and_then(exif_orientation).unwrap_or(1);
     let mut dec = png::Decoder::new(bytes);
     dec.set_transformations(png::Transformations::normalize_to_color8());

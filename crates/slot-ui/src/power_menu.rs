@@ -42,6 +42,23 @@ pub fn menu_face(label: &str) -> UndoFace {
     UndoFace { rgba, w, h: MENU_H }
 }
 
+pub fn heading_face(label: &str) -> UndoFace {
+    let Some(font) = text::label_font() else {
+        return UndoFace {
+            rgba: Vec::new(),
+            w: 0,
+            h: 0,
+        };
+    };
+    let shown = label.to_uppercase();
+    let ink = text::line_width(font, &shown, MENU_PX, text::tracking_for(MENU_PX)).ceil() as u32;
+    let w = ink + 2 * MENU_PAD;
+    let mut rgba = vec![0u8; (w * MENU_H * 4) as usize];
+    let layout = text::fit(font, label, w as f32, 1, MENU_PX, MENU_PX);
+    text::draw_centred(&mut rgba, w, MENU_H, &layout, MENU_INK);
+    UndoFace { rgba, w, h: MENU_H }
+}
+
 const DETAIL_PX: f32 = 20.0;
 const DETAIL_H: u32 = 28;
 

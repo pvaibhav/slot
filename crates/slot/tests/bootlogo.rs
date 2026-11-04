@@ -1,3 +1,4 @@
+use slot::bootlogo;
 use slot::bootlogo::{
     chosen, compose, decode, encode, install, pending, size, Bmp, Logo, Outcome, CARD_LOGO,
     USER_LOGO,
@@ -182,4 +183,25 @@ fn a_config_logo_is_installed_byte_for_byte() {
         screen(64, 48, 1)
     );
     assert_eq!(pending(&Logo::Exact(user), d.path()), Some(Outcome::Same));
+}
+
+#[test]
+fn the_installed_copy_follows_the_logo_in_config() {
+    let d = card_with(&[(USER_LOGO, b"mine"), (CARD_LOGO, b"shipped")]);
+    bootlogo::remember(d.path());
+    assert_eq!(std::fs::read(d.path().join(bootlogo::INSTALLED_COPY)).unwrap(), b"mine");
+}
+
+#[test]
+fn the_installed_copy_falls_back_to_the_shipped_logo() {
+    let d = card_with(&[(CARD_LOGO, b"shipped")]);
+    bootlogo::remember(d.path());
+    assert_eq!(std::fs::read(d.path().join(bootlogo::INSTALLED_COPY)).unwrap(), b"shipped");
+}
+
+#[test]
+fn no_logo_on_the_card_leaves_no_installed_copy() {
+    let d = tempfile::tempdir().unwrap();
+    bootlogo::remember(d.path());
+    assert!(!d.path().join(bootlogo::INSTALLED_COPY).exists());
 }

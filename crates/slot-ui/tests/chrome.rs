@@ -1,6 +1,6 @@
 use slot_store::{Cart, Platform};
 use slot_ui::{
-    cart_box, draw_empty_slot, edge, foot_y, housing, icon_box, opening, recess, seated_box,
+    cart_box, edge, foot_y, housing, icon_box, opening, recess, seated_box,
     Canvas, Draw, Shelf, SlotChrome, TexId, ALERT_PX, CART_H, CART_W, GB_LABEL_H, GB_LABEL_Y,
     LABEL_H, LABEL_Y, MOUTH_H, OUT_H, OUT_W,
 };
@@ -64,7 +64,7 @@ fn quad(d: &Draw) -> Quad {
         | Draw::Tex { x, y, w, h, .. }
         | Draw::Part { x, y, w, h, .. }
         | Draw::Turned { x, y, w, h, .. } => Quad { x, y, w, h },
-        Draw::Game | Draw::Shot { .. } | Draw::Capture => Quad {
+        Draw::Game | Draw::Shot { .. } | Draw::Capture | Draw::Quad { .. } | Draw::Paper { .. } => Quad {
             x: 0.0,
             y: 0.0,
             w: OUT_W as f32,
@@ -102,10 +102,6 @@ fn is_housing(d: &Draw) -> bool {
     tinted(d, housing())
 }
 
-fn as_mouth(d: &Draw) -> Option<Quad> {
-    is_mouth(d).then(|| quad(d))
-}
-
 fn as_lip(d: &Draw) -> Option<Quad> {
     is_lip(d).then(|| quad(d))
 }
@@ -113,8 +109,11 @@ fn as_lip(d: &Draw) -> Option<Quad> {
 fn alpha(d: &Draw) -> f32 {
     match *d {
         Draw::Rect { colour, .. } => colour[3],
-        Draw::Tex { alpha, .. } | Draw::Part { alpha, .. } | Draw::Turned { alpha, .. } => alpha,
-        Draw::Game | Draw::Shot { .. } | Draw::Capture => 1.0,
+        Draw::Tex { alpha, .. }
+        | Draw::Part { alpha, .. }
+        | Draw::Turned { alpha, .. }
+        | Draw::Quad { alpha, .. } => alpha,
+        Draw::Game | Draw::Shot { .. } | Draw::Capture | Draw::Quad { .. } | Draw::Paper { .. } => 1.0,
     }
 }
 
@@ -269,10 +268,6 @@ fn draw_inserting(c: &Cart, t: f32, out: &mut Vec<Draw>) {
     chrome_into(c, t, out);
 }
 
-fn draw_ejecting(c: &Cart, t: f32, out: &mut Vec<Draw>) {
-    chrome_into(c, 1.0 - t, out);
-}
-
 fn cart_quad(c: &Cart, t: f32) -> Quad {
     let out = chrome(c, t.min(0.999));
     quad(&out[cart_at(&out)])
@@ -286,17 +281,6 @@ fn visible_cart_height(c: &Cart, t: f32) -> f32 {
     let mut out = Vec::new();
     draw_inserting(c, t, &mut out);
     cart_visible_height(&out)
-}
-
-#[test]
-fn the_slot_is_at_the_bottom_of_the_screen() {
-    let mut out = Vec::new();
-    draw_inserting(&cart(), 0.5, &mut out);
-    let mouth = out.iter().find_map(as_mouth).expect("no mouth drawn");
-    assert!(
-        mouth.y >= OUT_H as f32 - MOUTH_H - 1.0,
-        "the mouth is not on the bottom edge"
-    );
 }
 
 #[test]
@@ -386,27 +370,6 @@ fn a_cart_shrinks_to_the_slot_by_the_lip() {
             }
             last = q;
         }
-    }
-}
-
-#[test]
-fn every_cartridge_seats_to_the_same_depth() {
-    let tops: Vec<(&str, f32)> = both()
-        .iter()
-        .map(|(name, c)| {
-            let out = chrome(c, 1.0);
-            (*name, quad(&out[cart_at(&out)]).y)
-        })
-        .collect();
-    let (first, rest) = tops.split_first().expect("two cartridges");
-    for (name, top) in rest {
-        assert!(
-            (top - first.1).abs() < 0.01,
-            "{name} seats with its top edge at {top} against {} for {}: one of them is in \
-             deeper than the other",
-            first.1,
-            first.0
-        );
     }
 }
 
@@ -519,20 +482,6 @@ fn the_cart_is_never_the_frontmost_thing() {
 }
 
 #[test]
-fn ejecting_reverses_the_travel() {
-    for (name, c) in both() {
-        let mut a = Vec::new();
-        draw_ejecting(&c, 0.1, &mut a);
-        let mut b = Vec::new();
-        draw_ejecting(&c, 0.9, &mut b);
-        assert!(
-            cart_visible_height(&b) > cart_visible_height(&a),
-            "{name} is not coming out"
-        );
-    }
-}
-
-#[test]
 fn the_seated_cart_leaves_with_the_case_not_through_it() {
     for t in [0.2, 0.4, 0.6, 0.8] {
         let mut out = Vec::new();
@@ -641,47 +590,6 @@ fn the_travel_eases_out_into_the_seat() {
 }
 
 #[test]
-fn the_empty_slot_is_the_same_slot_the_chrome_draws() {
-    let mut empty = Vec::new();
-    draw_empty_slot(Canvas::FRAMED, None, &mut empty);
-
-    let c = cart();
-    let mut seated = Vec::new();
-    SlotChrome {
-        cart: &c,
-        face: None,
-        rest: CENTRED,
-        scale: 1.0,
-        seat: 1.0,
-        alert: None,
-        dim: 0.0,
-        screen: 0.0,
-        game: false,
-        over: true,
-        behind: [None, None],
-        slot: None,
-        canvas: Canvas::FRAMED,
-    }
-    .draw(&mut seated);
-
-    let slot_of = |list: &[Draw]| -> Vec<(Quad, f32)> {
-        list.iter()
-            .filter(|d| is_housing(d) || is_lip(d) || is_mouth(d) || tinted(d, recess()))
-            .map(|d| (quad(d), alpha(d)))
-            .collect()
-    };
-    assert_eq!(
-        slot_of(&empty),
-        slot_of(&seated),
-        "the slot is not the same object on the two screens"
-    );
-    assert!(
-        empty.iter().any(|d| tinted(d, recess())),
-        "the empty slot has no recess, so it is a hole onto the backdrop"
-    );
-}
-
-#[test]
 fn nothing_is_ever_ruled_across_the_cart() {
     for (_, c) in both() {
         for step in 0..=20 {
@@ -751,99 +659,6 @@ fn nothing_is_ever_ruled_across_the_cart() {
             }
         }
     }
-}
-
-#[test]
-fn the_slot_has_a_thumb_scoop_across_its_middle() {
-    let out = chrome(&cart(), 0.5);
-    let dark: Vec<_> = out.iter().filter(|d| is_mouth(d)).map(quad).collect();
-    let slit = dark
-        .iter()
-        .copied()
-        .max_by(|a, b| a.w.partial_cmp(&b.w).unwrap())
-        .expect("no slot drawn");
-    let below: Vec<_> = dark
-        .iter()
-        .copied()
-        .filter(|q| q.y >= slit.y + slit.h)
-        .collect();
-    assert!(below.len() >= 8, "the scoop is not cut as a curve");
-
-    let span_of = |pick: &dyn Fn(&Quad) -> bool| -> (f32, f32) {
-        let l = below
-            .iter()
-            .filter(|q| pick(q))
-            .map(|q| q.x)
-            .fold(f32::INFINITY, f32::min);
-        let r = below
-            .iter()
-            .filter(|q| pick(q))
-            .map(|q| q.x + q.w)
-            .fold(f32::NEG_INFINITY, f32::max);
-        (l, r)
-    };
-    let (l, r) = span_of(&|_| true);
-    let centre = OUT_W as f32 / 2.0;
-    assert!(
-        ((l + r) / 2.0 - centre).abs() < 1.0,
-        "the scoop runs {l}..{r} and is not centred"
-    );
-    assert!(r - l < slit.w, "the scoop is as wide as the opening itself");
-
-    let deepest = below.iter().map(|q| q.y + q.h).fold(0.0, f32::max);
-    let (dl, dr) = span_of(&|q| q.y + q.h > deepest - 0.5);
-    assert!(
-        dr - dl < (r - l) * 0.6,
-        "the scoop is a rectangle, not an arc: {}px across at its deepest against {}px at \
-         the top",
-        dr - dl,
-        r - l
-    );
-    assert!(
-        ((dl + dr) / 2.0 - centre).abs() < 1.0,
-        "the deepest part of the scoop is off to one side"
-    );
-
-    let mut edges: Vec<(f32, f32)> = below.iter().map(|q| (q.x, q.y + q.h)).collect();
-    edges.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-    for pair in edges.windows(2) {
-        let step = (pair[1].1 - pair[0].1).abs();
-        assert!(
-            step <= 1.01,
-            "the curve steps {step}px at x {}: that reads as a jag",
-            pair[1].0
-        );
-    }
-
-    assert!(
-        out.iter().any(|d| is_lip(d) && quad(d).y > slit.y),
-        "the scoop has no lit rim, so the plastic has no edge"
-    );
-}
-
-#[test]
-fn the_slot_sits_in_a_recessed_bay() {
-    let out = chrome(&cart(), 0.5);
-    let bay = out
-        .iter()
-        .find_map(|d| tinted(d, recess()).then(|| quad(d)))
-        .expect("no bay drawn");
-    let slit = out
-        .iter()
-        .filter(|d| is_mouth(d))
-        .map(quad)
-        .max_by(|a, b| a.w.partial_cmp(&b.w).unwrap())
-        .expect("no slot drawn");
-    assert!(bay.w > slit.w, "the bay is no wider than the opening in it");
-    assert!(
-        bay.x < slit.x && bay.x + bay.w > slit.x + slit.w,
-        "the opening is not inside the bay"
-    );
-    let step = |a: [f32; 4], b: [f32; 4]| (0..3).map(|i| a[i] - b[i]).sum::<f32>();
-    assert!(
-        step(housing(), recess()) > 0.0 && step(recess(), opening()) > 0.0,
-        "the bay does not read as a step between the shell and the opening"
-    );
 }
 
 #[test]

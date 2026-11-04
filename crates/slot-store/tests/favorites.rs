@@ -18,14 +18,14 @@ fn clocked() -> SlotState {
 }
 
 #[test]
-fn nothing_is_a_favorite_until_it_is_starred() {
+fn nothing_is_a_favorite_until_it_is_hearted() {
     let s = SlotState::default();
     assert!(s.favorites.is_empty());
     assert!(!s.is_favorite(Platform::Gba, "Emerald"));
 }
 
 #[test]
-fn starring_twice_takes_the_star_back_off() {
+fn hearting_twice_takes_the_heart_back_off() {
     let mut s = clocked();
     assert!(s.toggle_favorite(Platform::Gba, "Emerald"));
     assert!(s.is_favorite(Platform::Gba, "Emerald"));
@@ -107,7 +107,7 @@ fn recents_and_favorites_live_in_their_own_files_one_cart_a_line() {
 }
 
 #[test]
-fn nothing_starred_writes_no_favorites_file() {
+fn nothing_hearted_writes_no_favorites_file() {
     let d = tmp_root();
     write_slot_state(d.path(), &clocked()).unwrap();
     assert!(!d.path().join("Config/favorites.txt").exists());

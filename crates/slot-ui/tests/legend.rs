@@ -1,29 +1,7 @@
 use slot_ui::{
-    centred_hints, core_button_legends, footer_ink, link_button_legends, quick_legend_faces,
-    Canvas, TexId, UndoFace, HINT_EDGE, LEGEND_GAP, MOUTH_H, OUT_W,
+    core_button_legends, footer_ink, link_button_legends, quick_legend_faces, UndoFace, HINT_EDGE,
+    MOUTH_H,
 };
-
-#[test]
-fn a_row_of_hints_is_centred_by_what_shows_of_each() {
-    let (a, b) = (TexId::from_raw(1), TexId::from_raw(2));
-    let (aw, bw) = (71 + HINT_EDGE, 110 + HINT_EDGE);
-    let placed = centred_hints(Canvas::FRAMED, &[(a, aw), (b, bw)], LEGEND_GAP);
-    let x = ((OUT_W as f32 - (71.0 + LEGEND_GAP + 110.0)) / 2.0).round();
-    assert_eq!(
-        placed,
-        vec![(a, aw, x), (b, bw, (x + 71.0 + LEGEND_GAP).round())]
-    );
-}
-
-#[test]
-fn a_lone_hint_is_centred_by_what_shows_of_it() {
-    let a = TexId::from_raw(1);
-    let aw = 150 + HINT_EDGE;
-    assert_eq!(
-        centred_hints(Canvas::FRAMED, &[(a, aw)], LEGEND_GAP),
-        vec![(a, aw, ((OUT_W as f32 - 150.0) / 2.0).round())]
-    );
-}
 
 #[test]
 fn footer_legends_keep_the_hint_on_the_inner_side() {
@@ -57,7 +35,7 @@ fn footer_legends_keep_the_hint_on_the_inner_side() {
         hint_is_beside(&link[2], false),
         "Swap sits to the left of the d-pad"
     );
-    let core = core_button_legends();
+    let core = core_button_legends(footer_ink(false));
     assert!(core.iter().all(|f| f.h == MOUTH_H as u32));
     assert!(
         hint_is_beside(&core[0], true),

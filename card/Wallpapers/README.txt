@@ -14,3 +14,10 @@ Make it your screen size:
   RG28XX         640 x 480
 
 Other sizes are scaled to fill the screen and cropped from the centre.
+
+Pick Shelf to change wallpaper with the shelf. Name the files:
+
+  GB.png, GBC.png, GBA.png, GBAV.png, Favorites.png, Recents.png
+
+Game Boy Advance Video uses GBA.png if there is no GBAV.png. A shelf
+without a file shows the default wallpaper.

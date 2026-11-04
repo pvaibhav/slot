@@ -7,6 +7,7 @@ use crate::platform::Platform;
 use crate::zone::Zone;
 
 pub const BRIGHTNESS_MAX: u8 = 9;
+pub const DIM_MAX: u8 = 6;
 pub const BLUE_LIGHT_MAX: u8 = 9;
 pub const SATURATION_MAX: u8 = 9;
 pub const CONTRAST_MAX: u8 = 9;
@@ -115,6 +116,7 @@ impl WallpaperTint {
 pub enum WallpaperPick {
     None,
     Random,
+    Shelf,
     #[default]
     Default,
     Blur,
@@ -126,6 +128,7 @@ impl WallpaperPick {
         match self {
             WallpaperPick::None => "none".to_string(),
             WallpaperPick::Random => "random".to_string(),
+            WallpaperPick::Shelf => "shelf".to_string(),
             WallpaperPick::Default => "default".to_string(),
             WallpaperPick::Blur => "default_blur".to_string(),
             WallpaperPick::File(name) => name.clone(),
@@ -136,6 +139,7 @@ impl WallpaperPick {
         match self {
             WallpaperPick::None => "None".to_string(),
             WallpaperPick::Random => "Random".to_string(),
+            WallpaperPick::Shelf => "Shelf".to_string(),
             WallpaperPick::Default => "Default".to_string(),
             WallpaperPick::Blur => "DEFAULT BLUR".to_string(),
             WallpaperPick::File(name) => name
@@ -150,6 +154,7 @@ impl WallpaperPick {
         match value {
             "none" => WallpaperPick::None,
             "random" => WallpaperPick::Random,
+            "shelf" => WallpaperPick::Shelf,
             "" | "default" => WallpaperPick::Default,
             "default_blur" => WallpaperPick::Blur,
             other => WallpaperPick::File(other.to_string()),
@@ -327,6 +332,7 @@ impl Blending {
         match core {
             Core::Mgba => &Blending::MGBA,
             Core::Gpsp => &Blending::GPSP,
+            Core::Gambatte => &Blending::MGBA,
         }
     }
 
@@ -365,6 +371,7 @@ pub struct SlotState {
     pub cart: Option<String>,
     pub cart_platform: Option<Platform>,
     pub brightness: u8,
+    pub dim: u8,
     pub blue_light: u8,
     pub saturation: u8,
     pub contrast: u8,
@@ -375,6 +382,7 @@ pub struct SlotState {
     pub clock_set: bool,
     pub zone: Zone,
     pub clock_24h: bool,
+    pub network_time: bool,
     pub rumble: bool,
     pub ff_speed: u8,
     pub ff_sound: bool,
@@ -396,6 +404,8 @@ pub struct SlotState {
     pub wallpaper_tint: WallpaperTint,
     pub show_recents: bool,
     pub show_titles: bool,
+    pub wifi_off: bool,
+    pub gb_core: Core,
     pub left_stick_dpad: bool,
     pub lid_off_min: Option<u8>,
     pub bezel_gba: BezelPick,
@@ -447,6 +457,11 @@ impl SlotState {
         self.recents.truncate(RECENTS_MAX);
     }
 
+    pub fn forget(&mut self, platform: Platform, stem: &str) {
+        self.recents
+            .retain(|r| !(r.platform == platform && r.stem == stem));
+    }
+
     pub fn is_favorite(&self, platform: Platform, stem: &str) -> bool {
         self.favorites
             .iter()
@@ -485,6 +500,13 @@ impl Shader {
         Shader::Grid,
         Shader::Dot,
         Shader::Shimmerless,
+        Shader::Authentic,
+    ];
+    pub const GBA_3_2: [Shader; 5] = [
+        Shader::Off,
+        Shader::Lcd3x,
+        Shader::Grid,
+        Shader::Dot,
         Shader::Authentic,
     ];
     pub const GB: [Shader; 6] = [
@@ -541,6 +563,7 @@ impl Default for SlotState {
             cart: None,
             cart_platform: None,
             brightness: 5,
+            dim: 0,
             blue_light: 0,
             saturation: 0,
             contrast: 0,
@@ -551,6 +574,7 @@ impl Default for SlotState {
             clock_set: false,
             zone: Zone::default(),
             clock_24h: true,
+            network_time: false,
             rumble: true,
             ff_speed: FF_SPEED_DEFAULT,
             ff_sound: false,
@@ -572,6 +596,8 @@ impl Default for SlotState {
             wallpaper_tint: WallpaperTint::Off,
             show_recents: false,
             show_titles: false,
+            wifi_off: false,
+            gb_core: Core::Gambatte,
             left_stick_dpad: true,
             lid_off_min: None,
             bezel_gba: BezelPick::Ags102,
@@ -642,7 +668,7 @@ fn write_list(root: &Path, name: &str, list: &[Recent]) -> std::io::Result<()> {
 
 pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
     let mut text = format!(
-        "cart={}\ncart_platform={}\nbrightness={}\nblue_light={}\nvolume={}\nvolume_hp={}\nmuted={}\nmuted_hp={}\nclock_set={}\nzone={}\nclock_24h={}\nrumble={}\nff_speed={}\nff_sound={}\ncolour_correction_gba={}\ncolour_correction_gb={}\nshader_gba={}\nshader_gb={}\neject_save={}\nturbo={}\nrewind={}\nhigh_refresh={}\ngb_palettes={}\ngb_palette={}\nappearance={}\nwallpaper={}\n",
+        "cart={}\ncart_platform={}\nbrightness={}\nblue_light={}\nvolume={}\nvolume_hp={}\nmuted={}\nmuted_hp={}\nclock_set={}\nzone={}\nclock_24h={}\nnetwork_time={}\nrumble={}\nff_speed={}\nff_sound={}\ncolour_correction_gba={}\ncolour_correction_gb={}\nshader_gba={}\nshader_gb={}\neject_save={}\nturbo={}\nrewind={}\nhigh_refresh={}\ngb_palettes={}\ngb_palette={}\nappearance={}\nwallpaper={}\n",
         s.cart.as_deref().unwrap_or(""),
         s.cart_platform.map_or(String::new(), platform_key),
         s.brightness,
@@ -654,6 +680,7 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
         s.clock_set as u8,
         s.zone.id(),
         s.clock_24h as u8,
+        s.network_time as u8,
         s.rumble as u8,
         ff_speed_text(s.ff_speed),
         s.ff_sound as u8,
@@ -675,11 +702,16 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
         s.colour_correction_gbc as u8
     ));
     text.push_str(&format!("shader_gbc={}\n", s.shader_gbc.name()));
+    text.push_str(&format!("dim={}\n", s.dim));
     text.push_str(&format!("saturation={}\n", s.saturation));
     text.push_str(&format!("contrast={}\n", s.contrast));
     text.push_str(&format!("wallpaper_tint={}\n", s.wallpaper_tint.key()));
     text.push_str(&format!("show_recents={}\n", s.show_recents as u8));
     text.push_str(&format!("show_titles={}\n", s.show_titles as u8));
+    if s.wifi_off {
+        text.push_str("wifi_off=1\n");
+    }
+    text.push_str(&format!("gb_core={}\n", s.gb_core.as_str()));
     text.push_str(&format!("left_stick_dpad={}\n", s.left_stick_dpad as u8));
     text.push_str(&format!("auto_load={}\n", s.auto_load as u8));
     if let Some(min) = s.lid_off_min {
@@ -716,6 +748,7 @@ fn parse(text: &str) -> Option<SlotState> {
     let mut cart_platform = None;
     let mut brightness = None;
     let mut blue_light = None;
+    let mut dim = None;
     let mut saturation = None;
     let mut contrast = None;
     let mut volume = None;
@@ -726,6 +759,7 @@ fn parse(text: &str) -> Option<SlotState> {
     let mut utc_offset_min = None;
     let mut zone = None;
     let mut clock_24h = None;
+    let mut network_time = None;
     let mut rumble = None;
     let mut ff_speed = None;
     let mut ff_sound = None;
@@ -751,6 +785,8 @@ fn parse(text: &str) -> Option<SlotState> {
     let mut wallpaper_tint = None;
     let mut show_recents = None;
     let mut show_titles = None;
+    let mut wifi_off = None;
+    let mut gb_core = None;
     let mut left_stick_dpad = None;
     let mut lid_off_min = None;
     let mut bezel_gba = None;
@@ -776,6 +812,7 @@ fn parse(text: &str) -> Option<SlotState> {
             "cart_platform" => cart_platform = platform_value(value),
             "brightness" => brightness = Some(level(value, BRIGHTNESS_MAX)?),
             "blue_light" => blue_light = Some(level(value, BLUE_LIGHT_MAX)?),
+            "dim" => dim = level(value, DIM_MAX),
             "saturation" => saturation = level(value, SATURATION_MAX),
             "contrast" => contrast = level(value, CONTRAST_MAX),
             "volume" => volume = Some(level(value, VOLUME_MAX)?),
@@ -786,6 +823,7 @@ fn parse(text: &str) -> Option<SlotState> {
             "utc_offset_min" => utc_offset_min = Some(offset(value)?),
             "zone" => zone = Zone::parse(value),
             "clock_24h" => clock_24h = flag(value),
+            "network_time" => network_time = flag(value),
             "rumble" => rumble = flag(value),
             "ff_speed" => ff_speed = ff_speed_value(value),
             "ff_sound" => ff_sound = flag(value),
@@ -809,6 +847,8 @@ fn parse(text: &str) -> Option<SlotState> {
             "wallpaper_tint" => wallpaper_tint = WallpaperTint::parse(value),
             "show_recents" => show_recents = flag(value),
             "show_titles" => show_titles = flag(value),
+            "wifi_off" => wifi_off = flag(value),
+            "gb_core" => gb_core = Core::parse(value).filter(|c| c.runs(Platform::Gb)),
             "left_stick_dpad" => left_stick_dpad = flag(value),
             "lid_off_min" => lid_off_min = value.parse().ok().filter(|m| LID_OFF_MIN.contains(m)),
             "bezel_gba" => bezel_gba = Some(BezelPick::parse(value)),
@@ -840,6 +880,7 @@ fn parse(text: &str) -> Option<SlotState> {
         cart: (!cart.is_empty()).then_some(cart),
         cart_platform,
         brightness: brightness?,
+        dim: dim.unwrap_or(fallback.dim),
         blue_light: blue_light?,
         saturation: saturation.unwrap_or(fallback.saturation),
         contrast: contrast.unwrap_or(fallback.contrast),
@@ -850,6 +891,7 @@ fn parse(text: &str) -> Option<SlotState> {
         clock_set: clock_set?,
         zone: zone.or_else(|| utc_offset_min.map(|m| Zone::for_offset(i64::from(m), now())))?,
         clock_24h: clock_24h.unwrap_or(fallback.clock_24h),
+        network_time: network_time.unwrap_or(fallback.network_time),
         rumble: rumble.unwrap_or(fallback.rumble),
         ff_speed: ff_speed.unwrap_or(fallback.ff_speed),
         ff_sound: ff_sound.unwrap_or(fallback.ff_sound),
@@ -878,6 +920,8 @@ fn parse(text: &str) -> Option<SlotState> {
         wallpaper_tint: wallpaper_tint.unwrap_or(fallback.wallpaper_tint),
         show_recents: show_recents.unwrap_or(fallback.show_recents),
         show_titles: show_titles.unwrap_or(fallback.show_titles),
+        wifi_off: wifi_off.unwrap_or(fallback.wifi_off),
+        gb_core: gb_core.unwrap_or(Core::Mgba),
         left_stick_dpad: left_stick_dpad.unwrap_or(fallback.left_stick_dpad),
         lid_off_min,
         bezel_gba: bezel_gba.unwrap_or(fallback.bezel_gba),

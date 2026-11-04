@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.14.0](https://github.com/BrandonKowalski/slot/releases/tag/v1.14.0)
+
+- Gambatte is a new core for Game Boy and Game Boy Color, and the default on new cards. Existing cards stay on mGBA. Press START on a Game Boy cart to switch cores. Saves and the clock carry over between them. ([#184](https://github.com/BrandonKowalski/slot/issues/184))
+- Game Boy and Game Boy Color audio no longer pops going into and out of silence, on both Gambatte and mGBA. Potentially fixes ([#184](https://github.com/BrandonKowalski/slot/issues/184))
+- Brightness has six new software steps below the lowest backlight level. ([#189](https://github.com/BrandonKowalski/slot/issues/189))
+- Press X on the shelf to take a game off Recents. It can be rebound under Settings → Controls → Shelf as Remove Recent. ([#185](https://github.com/BrandonKowalski/slot/issues/185))
+- Large shelves scroll more smoothly. slot keeps an index of ROM headers and a faster label cache, so moving along the shelf no longer reads ROMs or source labels. Existing label caches are converted, not redrawn.
+- slot keeps a log of the last five link attempts in `Logs/slotlink.log`.
+
+## [1.13.0](https://github.com/BrandonKowalski/slot/releases/tag/v1.13.0)
+
+- OTA Updater: Open the menu on the shelf and pick Network → Check for Updates. It checks if there is a new release of slot or BaseOS.
+- Network is a new menu for Wi-Fi. It lists your saved networks, with Scan for Networks at the bottom to join a new one. A network that rejects your password offers to try another, and isn't saved.
+- Gamebit is a web UI for managing the card over Wi-Fi. Start it from Network, then go to `slot.local` and enter the pin or scan the QR code. You can add and remove games, saves, labels, guides, BIOS files and the boot logo, and browse the card's files.
+- On device Cart Studio where art can be fetched over Wi-Fi. Fetch Missing Art on the Network page gets labels for every game without one.
+- Set Automatically is a new row in Date & Time when Wi-Fi is set up. It keeps the clock right from network time.
+- `Shelf` is a new Wallpaper option that follows the shelf you're on.
+- slot now loads RetroArch's compressed saves. ([#165](https://github.com/BrandonKowalski/slot/issues/165))
+- Guides can wrap to the screen. Press X to turn it on, and each guide remembers its place, size and wrap setting. ([#176](https://github.com/BrandonKowalski/slot/issues/176))
+- Shimmerless shader is hidden for GBA on 3:2 screens as it has no effect.
+
 ## [1.12.0](https://github.com/BrandonKowalski/slot/releases/tag/v1.12.0)
 
 - Boktai's solar sensor works on mGBA. The sun follows the clock: none at night, brightest at noon. Sunlight Up and Sunlight Down are new shortcuts to set it by hand for the current session. ([#42](https://github.com/BrandonKowalski/slot/issues/42))

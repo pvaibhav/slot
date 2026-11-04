@@ -30,6 +30,10 @@ for f in os.listdir(sys.argv[2]):
 		echo "$key=$value" >> "$work/state"
 		mv "$work/state" "$work/card/Config/slot.state"
 	done
+	sed -n 's/^# bare: *//p' "$here/clips/$name.txt" | while IFS= read -r stem; do
+		find "$work/card/Labels" -name "$stem.*" -delete
+	done
+	sed -n 's/^# shell: *//p' "$here/clips/$name.txt" >> "$work/card/Labels/cart_shell.txt"
 	core=$(sed -n 's/^# core: *//p' "$here/clips/$name.txt")
 	[ -n "$core" ] && echo "$cart = $core" >> "$work/card/Config/selected_core.txt"
 	clips=$(sed -n 's/^rec \([a-z0-9-]*\)$/\1/p' "$here/clips/$name.txt")

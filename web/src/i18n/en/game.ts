@@ -1,0 +1,55 @@
+export default {
+  loadFailed: 'Failed to load game',
+  retry: 'Retry',
+
+  tabGameFiles: 'Game Files',
+  tabSaves: 'Saves',
+  tabSaveStates: 'Save States',
+  tabGuides: 'Guides',
+
+  customLabel: 'Custom Label',
+  fetchLabel: 'Fetch Label',
+  fetchReplaceTitle: 'Replace the current label?',
+  fetchReplace: 'Replace',
+  fetchingLabel: 'Fetching label...',
+  fetchedLabel: 'Label fetched',
+  fetchNoLabel: 'No label found for this game',
+  fetchFailed: 'Could not reach the art server',
+  replace: 'Replace',
+  removeArt: 'Remove label',
+  artUploadFailed: 'Label upload failed',
+  artDeleteFailed: 'Label delete failed',
+  deleteBoxArtTitle: 'Delete label?',
+
+  deleteGameFailed: 'Failed to delete game',
+  staleList: 'The game list changed on the device, so nothing was deleted. Go back to the list and try again.',
+  renameGameFailed: 'Failed to rename game',
+
+  deleteGameTitle: 'Delete game?',
+  deleteGameBody: '{name} will be removed from the library.',
+  deleteGamePurgeLabel: 'Also delete saves, save states, label, and guide',
+  deleting: 'Deleting...',
+
+  loadRomsFailed: 'Failed to load ROM files',
+  noRoms: 'No ROM files yet.',
+  downloadFailed: 'Download failed',
+
+  loadSavesFailed: 'Failed to load saves',
+  uploadFailed: 'Upload failed',
+  deleteFailed: 'Delete failed',
+  noSaves: 'No saves yet.',
+  deleteFileTitle: 'Delete {name}?',
+
+  loadStatesFailed: 'Failed to load save states',
+  noStates: 'No save states yet.',
+  noPreview: 'No preview',
+  resumeState: 'Resume state',
+  deleteStateTitle: 'Delete this save state?',
+  deleteResumeTitle: 'Delete the resume state?',
+  deleteResumeBody: 'The game will start fresh next time.',
+  stateDeleteFailed: 'Delete failed',
+
+  loadGuidesFailed: 'Failed to load guides',
+  noGuides: 'No guide yet. Upload a .txt file.',
+  guidesTxtOnly: 'Guides are .txt files.',
+}

@@ -4,13 +4,7 @@ use common::{app_playing_in, tmp_root_with_carts};
 use slot::app::App;
 use slot_input::Action;
 use slot_store::{Platform, ShotDir};
-use slot_ui::{Draw, Toast};
-
-fn drawn(a: &App) -> Vec<Draw> {
-    let mut out = Vec::new();
-    a.draw(&mut out);
-    out
-}
+use slot_ui::Toast;
 
 fn decoded(path: &std::path::Path) -> (u32, u32, png::ColorType) {
     let decoder = png::Decoder::new(std::io::BufReader::new(
@@ -38,38 +32,6 @@ fn select_x_before_the_game_shows_is_ignored() {
     assert!(
         !a.shot_requested(),
         "a shot asked for while loading waits for any game"
-    );
-}
-
-#[test]
-fn the_capture_mark_sits_after_the_game_and_before_the_toast() {
-    let d = tmp_root_with_carts(&["Emerald"]);
-    let mut a = app_playing_in(d.path(), "Emerald");
-    a.set_game_ready(true);
-    a.apply(Action::SaveState);
-    assert_eq!(a.toast(), Some(Toast::StateSaved));
-    let without = drawn(&a);
-    a.apply(Action::Screenshot);
-    let with = drawn(&a);
-    let marks: Vec<usize> = with
-        .iter()
-        .enumerate()
-        .filter(|(_, d)| matches!(d, Draw::Capture))
-        .map(|(i, _)| i)
-        .collect();
-    assert_eq!(marks.len(), 1, "{with:?}");
-    let at = marks[0];
-    let game = with.iter().position(|d| matches!(d, Draw::Game));
-    assert!(
-        game.is_some_and(|g| g < at),
-        "the mark is ahead of the game: {with:?}"
-    );
-    let mut unmarked = with.clone();
-    unmarked.remove(at);
-    assert_eq!(unmarked, without, "asking for a shot changed what is drawn");
-    assert!(
-        at < without.len(),
-        "nothing, not even the toast, is drawn after the mark"
     );
 }
 

@@ -1,5 +1,5 @@
 use slot_gfx::{
-    blue_light_gain, canvas_size, contrast_boost, game_layout, lcd3x_factors, lcd3x_mask,
+    blue_light_gain, canvas_size, contrast_boost, dim_gain, game_layout, lcd3x_factors, lcd3x_mask,
     saturation_boost, Compositor, Draw, GameLayout, HeadlessSurface, Screen, ScreenEffect, Sizing,
     OUT_H, OUT_W, SRC_H, SRC_W,
 };
@@ -877,6 +877,33 @@ fn graded(c: &mut Compositor, rgb: [u8; 3], saturation: u8, contrast: u8) -> [u8
     c.draw_game();
     let frame = c.read_window((OUT_W, OUT_H));
     px(&frame, OUT_W as usize / 2, OUT_H as usize / 2)
+}
+
+#[test]
+fn each_dim_step_darkens_the_whole_screen_and_zero_leaves_it_alone() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    let rgb = [200, 160, 120];
+    let mut last = None;
+    for step in 0..=6 {
+        c.set_dim(step);
+        let got = graded(&mut c, rgb, 0, 0);
+        let want = rgb.map(|v| (f32::from(v) * dim_gain(step)).round() as u8);
+        assert!(
+            got.iter().zip(want).all(|(g, w)| g.abs_diff(w) <= 1),
+            "step {step}: {got:?}, want {want:?}"
+        );
+        if let Some(prev) = last {
+            assert!(
+                got.iter().zip(prev).all(|(g, p)| *g < p),
+                "step {step} did not darken: {got:?} after {prev:?}"
+            );
+        }
+        last = Some(got);
+    }
+    assert_eq!(dim_gain(0), 1.0);
+    assert_eq!(dim_gain(200), dim_gain(6), "step must clamp, not wrap");
 }
 
 #[test]

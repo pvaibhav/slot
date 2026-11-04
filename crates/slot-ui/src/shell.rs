@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
+use std::path::Path;
 
 use slot_store::gb::Class;
 use slot_store::{Cart, Platform, ShellFinish};
@@ -30,7 +28,7 @@ const fn shell(colour: [u8; 3], finish: Finish) -> Shell {
 const EXACT: &[(&str, Shell)] = &[
     ("AXV", shell([0xc2, 0x33, 0x2e], Finish::Translucent)),
     ("AXP", shell([0x2f, 0x5c, 0xc0], Finish::Translucent)),
-    ("BPE", shell([0x24, 0x9c, 0x60], Finish::Translucent)),
+    ("BPE", shell([0x39, 0x9c, 0x3c], Finish::Translucent)),
     ("BPR", shell([0xd8, 0x52, 0x24], Finish::Solid)),
     ("BPG", shell([0x63, 0xb0, 0x44], Finish::Solid)),
     ("U3I", CLEAR),
@@ -79,13 +77,8 @@ const CRYSTAL: Shell = shell([0x86, 0xb9, 0xbf], Finish::Glitter);
 const KIRBY: Shell = shell([0xec, 0x94, 0xb4], Finish::Translucent);
 
 pub fn shell_for(cart: &Cart) -> Shell {
-    if let Some(choice) = cart.shell {
-        let finish = match choice.finish {
-            ShellFinish::Solid => Finish::Solid,
-            ShellFinish::Clear => Finish::Translucent,
-            ShellFinish::Glitter => Finish::Glitter,
-        };
-        return shell(choice.colour, finish);
+    if let Some(shell) = chosen_shell(cart) {
+        return shell;
     }
     match cart.platform {
         Platform::Gba | Platform::Gbav => gba_shell_for(&gba_code(cart)),
@@ -93,19 +86,35 @@ pub fn shell_for(cart: &Cart) -> Shell {
     }
 }
 
-fn gba_code(cart: &Cart) -> String {
-    if !cart.code.is_empty() {
-        return cart.code.clone();
+pub fn indexed_shell(cart: &Cart) -> Option<Shell> {
+    if let Some(shell) = chosen_shell(cart) {
+        return Some(shell);
     }
-    static CODES: OnceLock<Mutex<HashMap<PathBuf, String>>> = OnceLock::new();
-    let mut codes = CODES
-        .get_or_init(Mutex::default)
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    codes
-        .entry(cart.rom.clone())
-        .or_insert_with(|| slot_store::header_code(&cart.rom).unwrap_or_default())
-        .clone()
+    match cart.platform {
+        Platform::Gba | Platform::Gbav => match cart.code.is_empty() {
+            false => Some(gba_shell_for(&cart.code)),
+            true => slot_store::header_index::peek_gba_code(&cart.rom).map(|c| gba_shell_for(&c)),
+        },
+        Platform::Gb | Platform::Gbc => slot_store::header_index::peek_gb_header(&cart.rom)
+            .map(|h| gb_shell_from(h.as_ref(), &cart.rom)),
+    }
+}
+
+fn gba_code(cart: &Cart) -> String {
+    match cart.code.is_empty() {
+        false => cart.code.clone(),
+        true => slot_store::header_index::gba_code(&cart.rom),
+    }
+}
+
+fn chosen_shell(cart: &Cart) -> Option<Shell> {
+    let choice = cart.shell?;
+    let finish = match choice.finish {
+        ShellFinish::Solid => Finish::Solid,
+        ShellFinish::Clear => Finish::Translucent,
+        ShellFinish::Glitter => Finish::Glitter,
+    };
+    Some(shell(choice.colour, finish))
 }
 
 pub fn gba_shell_for(code: &str) -> Shell {
@@ -113,7 +122,11 @@ pub fn gba_shell_for(code: &str) -> Shell {
 }
 
 fn gb_shell_for(rom: &Path) -> Shell {
-    let Some(h) = slot_store::gb::cached_header(rom) else {
+    gb_shell_from(slot_store::gb::cached_header(rom).as_ref(), rom)
+}
+
+fn gb_shell_from(h: Option<&slot_store::gb::Header>, rom: &Path) -> Shell {
+    let Some(h) = h else {
         return flag_shell(slot_store::gb::class(rom));
     };
     let by_title = || {

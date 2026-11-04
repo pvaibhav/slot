@@ -13,6 +13,8 @@
 *.dylib
 *.so
 
+.r2*
+
 .DS_Store
 /.idea/
 /target-device
@@ -24,3 +26,4 @@
 # Parallel implementation worktrees, never content.
 /.worktrees
 .superpowers/
+/.task/

@@ -14,13 +14,68 @@ setup() {
 }
 
 launch() {
-	SLOT_ROOT="$TMP/card" AGS_RUN="$TMP/run" sh "$SCRIPT" 2>/dev/null || true
+	SLOT_ROOT="$TMP/card" AGS_RUN="$TMP/run" AGS_SPLASH="$TMP/splash" AGS_HOLD=0 \
+		AGS_MV="${MV_FAKE:-mv}" AGS_SYNC="$TMP/sync" sh "$SCRIPT" 2>/dev/null || true
+}
+
+printf '#!/bin/sh\necho "$*" >> "%s"\n' "$TMP/splash.log" > "$TMP/splash"
+chmod 755 "$TMP/splash"
+printf '#!/bin/sh\necho sync >> "%s"\n' "$TMP/sync.log" > "$TMP/sync"
+chmod 755 "$TMP/sync"
+
+stage() {
+	rm -f "$TMP/splash.log"
+	mkdir -p "$TMP/card/System.new"
+	cp "$SCRIPT" "$TMP/card/System/launch_frontend.sh"
+	echo old > "$TMP/card/System/slot"
+	cp "$SCRIPT" "$TMP/card/System.new/launch_frontend.sh"
+	echo new > "$TMP/card/System.new/slot"
+	: > "$TMP/card/System.new/led.sh"
+	: > "$TMP/card/System.new/lid.sh"
+}
+
+manifest() {
+	printf '%s\n' launch_frontend.sh slot led.sh lid.sh "$@" > "$TMP/card/System.new/.manifest"
 }
 
 fail() {
 	echo "launch: $*" >&2
 	exit 1
 }
+
+printf '#!/bin/sh\necho "$*" >> "%s"\n' "$TMP/slot.log" > "$TMP/loader"
+chmod 755 "$TMP/loader"
+
+logo_boot() {
+	rm -f "$TMP/splash.log" "$TMP/slot.log"
+	: > "$TMP/splash.log"
+	: > "$TMP/slot.log"
+	SLOT_ROOT="$TMP/card" AGS_RUN="$TMP/run" AGS_SPLASH="$TMP/splash" AGS_HOLD=0 \
+		AGS_LOADER="$TMP/loader" AGS_SYNC="$TMP/sync" sh "$SCRIPT" 2>/dev/null || true
+}
+
+setup
+mkdir -p "$TMP/card/Config" "$TMP/card/Cache"
+echo mine > "$TMP/card/Config/bootlogo.bmp"
+logo_boot
+grep -q 'INSTALLING BOOT LOGO' "$TMP/splash.log" || fail "a new logo showed no pill"
+grep -q -- '--install-bootlogo' "$TMP/slot.log" || fail "a new logo was not installed"
+[ "$(grep -n -- '--install-bootlogo' "$TMP/slot.log" | cut -d: -f1)" = 1 ] || fail "slot started before the logo installed"
+
+cp "$TMP/card/Config/bootlogo.bmp" "$TMP/card/Cache/bootlogo.installed"
+logo_boot
+[ ! -s "$TMP/splash.log" ] || fail "an installed logo showed a pill: $(cat "$TMP/splash.log")"
+! grep -q -- '--install-bootlogo' "$TMP/slot.log" || fail "an installed logo was installed again"
+
+rm "$TMP/card/Config/bootlogo.bmp"
+echo shipped > "$TMP/card/System/bootlogo.bmp"
+logo_boot
+grep -q 'INSTALLING BOOT LOGO' "$TMP/splash.log" || fail "going back to the slot logo showed no pill"
+
+setup
+logo_boot
+[ ! -s "$TMP/splash.log" ] || fail "a card with no logo showed a pill"
+! grep -q -- '--install-bootlogo' "$TMP/slot.log" || fail "a card with no logo ran the install"
 
 setup
 echo "old run" > "$TMP/card/slot.log"
@@ -73,5 +128,77 @@ launch
 : > "$TMP/run/slotlink.session"
 launch
 [ "$(cat "$TMP/link.log" 2>/dev/null)" = "link down" ] || fail "a link left up by a crashed run was not torn down"
+
+setup
+stage
+echo stale > "$TMP/card/System/stale.txt"
+mkdir -p "$TMP/card/System.new/bezels"
+echo png > "$TMP/card/System.new/bezels/640x480.png"
+manifest bezels/640x480.png
+launch
+[ "$(cat "$TMP/card/System/slot")" = new ] || fail "a complete staging folder did not replace slot"
+[ -f "$TMP/card/System/bezels/640x480.png" ] || fail "a nested file was not moved into System"
+[ ! -e "$TMP/card/System/stale.txt" ] || fail "a file the release does not ship was kept"
+[ ! -e "$TMP/card/System.new" ] || fail "System.new was left behind"
+grep -q "UPDATING SLOT" "$TMP/splash.log" 2>/dev/null || fail "no UPDATING SLOT toast"
+grep -q "UPDATE COMPLETE" "$TMP/splash.log" 2>/dev/null || fail "no UPDATE COMPLETE toast"
+[ "$(grep -c sync "$TMP/sync.log" 2>/dev/null)" -ge 2 ] || fail "the swap did not sync before and after clearing System.new"
+
+setup
+stage
+launch
+[ "$(cat "$TMP/card/System/slot")" = old ] || fail "a staging folder without a manifest was applied"
+[ ! -e "$TMP/card/System.new" ] || fail "a staging folder without a manifest was kept"
+[ ! -s "$TMP/splash.log" ] || fail "a discarded staging folder showed a toast"
+
+setup
+stage
+echo new > "$TMP/card/System/a.txt"
+echo new > "$TMP/card/System.new/b.txt"
+echo old > "$TMP/card/System/b.txt"
+manifest a.txt b.txt
+launch
+[ "$(cat "$TMP/card/System/a.txt")" = new ] || fail "a file moved before the power cut was lost"
+[ "$(cat "$TMP/card/System/b.txt")" = new ] || fail "a half-applied swap did not finish"
+[ "$(cat "$TMP/card/System/slot")" = new ] || fail "a half-applied swap did not replace slot"
+[ ! -e "$TMP/card/System.new" ] || fail "System.new was left after finishing a swap"
+
+setup
+stage
+manifest
+{
+	echo '#!/bin/sh'
+	echo "[ -f \"\$SLOT_ROOT/System/launch_frontend.sh\" ] || echo missing >> \"$TMP/mv.log\""
+	echo 'exec mv "$@"'
+} > "$TMP/mv"
+chmod 755 "$TMP/mv"
+MV_FAKE="$TMP/mv" launch
+[ ! -s "$TMP/mv.log" ] || fail "System/launch_frontend.sh was missing during the swap"
+[ "$(cat "$TMP/card/System/slot")" = new ] || fail "the swap through a logging mv did not finish"
+
+setup
+stage
+manifest
+{
+	echo '#!/bin/sh'
+	echo 'case "$*" in *System.new/slot*) exit 1 ;; esac'
+	echo 'exec mv "$@"'
+} > "$TMP/mv"
+chmod 755 "$TMP/mv"
+MV_FAKE="$TMP/mv" launch
+grep -q "UPDATE FAILED" "$TMP/splash.log" 2>/dev/null || fail "a failed move showed no UPDATE FAILED toast"
+[ -f "$TMP/card/System.new/.manifest" ] || fail "a failed swap threw the staging folder away"
+[ "$(cat "$TMP/card/System/slot")" = old ] || fail "a failed swap changed slot"
+tail -1 "$TMP/card/Logs/slot-session.log" | grep -q "exec $TMP/card/System/slot" \
+	|| fail "a failed swap did not go on to start slot"
+
+setup
+rm -f "$TMP/link.log"
+printf 'echo "$*" >> "%s"\n' "$TMP/link.log" > "$TMP/card/System/slotlink.sh"
+launch
+[ ! -e "$TMP/link.log" ] || fail "tore down WiFi no earlier run left up"
+: > "$TMP/run/slotwifi.on"
+launch
+grep -qx "wifi stop" "$TMP/link.log" 2>/dev/null || fail "WiFi left up by a crashed run was not torn down"
 
 echo "launch: all passed"

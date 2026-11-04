@@ -1,8 +1,11 @@
+use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
 use slot_store::Cart;
-use slot_ui::{board_face, cart_face, cart_interior, gb_shell_of, padded, CartFace, TURN_PAD};
+use slot_ui::{board_face, cart_face_with, cart_interior, padded, CartFace, TURN_PAD};
+
+use crate::label_cache::label_art;
 
 pub struct BuiltFaces {
     pub label: Option<std::path::PathBuf>,
@@ -25,7 +28,7 @@ pub struct FaceBuilder {
 }
 
 impl FaceBuilder {
-    pub fn spawn() -> Self {
+    pub fn spawn(root: PathBuf) -> Self {
         let (requests, inbox) = mpsc::channel::<Cart>();
         let (outbox, built) = mpsc::channel();
         let spawned = thread::Builder::new()
@@ -39,17 +42,9 @@ impl FaceBuilder {
                         stem: cart.stem.clone(),
                         label: cart.label.clone(),
                         sealed: cart.sealed,
-                        interior: if gb_shell_of(&cart).is_none() {
-                            cart_interior(&cart)
-                        } else {
-                            CartFace {
-                                rgba: vec![0; 4],
-                                w: 1,
-                                h: 1,
-                            }
-                        },
+                        interior: cart_interior(&cart),
                         board: board_face(&cart),
-                        lid: padded(&cart_face(&cart), TURN_PAD),
+                        lid: padded(&cart_face_with(&cart, label_art(&root, &cart)), TURN_PAD),
                     };
                     if outbox.send(faces).is_err() {
                         return;

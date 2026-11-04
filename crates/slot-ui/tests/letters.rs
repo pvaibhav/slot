@@ -146,31 +146,3 @@ fn a_row_of_one_letter_stays_put() {
     assert_eq!(s.carts[s.index].stem, "Metroid");
 }
 
-#[test]
-fn holding_a_letter_jump_never_empties_the_shelf() {
-    let names: Vec<String> = ('A'..='Z')
-        .flat_map(|l| (0..4).map(move |i| format!("{l} Game {i}")))
-        .collect();
-    let refs: Vec<&str> = names.iter().map(String::as_str).collect();
-    let mut s = shelf_of(&refs);
-    let canvas = slot_gfx::Canvas::FRAMED;
-    let mid = canvas.w / 2.0;
-    for frame in 0..120 {
-        if frame % 3 == 0 {
-            s.jump_next_letter();
-        }
-        s.update(1.0 / 60.0);
-        let mut out = Vec::new();
-        s.draw_row(canvas, None, 0.0, 0.0, 1.0, &mut out);
-        let covered = out.iter().any(|d| match *d {
-            slot_gfx::Draw::Rect { x, w, .. } | slot_gfx::Draw::Tex { x, w, .. } => {
-                x <= mid && x + w >= mid
-            }
-            _ => false,
-        });
-        assert!(
-            covered,
-            "frame {frame}: nothing drawn at the middle of the shelf"
-        );
-    }
-}

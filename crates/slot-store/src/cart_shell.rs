@@ -91,3 +91,36 @@ pub fn layered(system: &str, labels: &str) -> HashMap<String, ShellChoice> {
     }
     out
 }
+
+pub fn write_choice(
+    root: &std::path::Path,
+    stem: &str,
+    choice: Option<&ShellChoice>,
+) -> std::io::Result<()> {
+    let path = root.join(LABELS_SHELL_FILE);
+    let mut text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(e),
+    };
+    let want = key(stem);
+    let others: Vec<String> = crate::ini::parse(&text)
+        .into_keys()
+        .filter(|k| key(k) == want && *k != want)
+        .collect();
+    for raw in others {
+        text = crate::ini::set(&text, &raw, None)?;
+    }
+    let system = std::fs::read_to_string(root.join(CART_SHELL_FILE)).unwrap_or_default();
+    let value = match choice {
+        Some(c) => Some(c.to_value()),
+        None => choices(&system)
+            .contains_key(&want)
+            .then(|| "auto".to_string()),
+    };
+    let out = crate::ini::set(&text, &want, value.as_deref())?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    crate::atomic::atomic_write(&path, out.as_bytes())
+}

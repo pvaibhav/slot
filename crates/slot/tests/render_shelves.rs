@@ -290,6 +290,77 @@ fn the_shoulders_ring_over_a_shelf_for_each_system() {
     );
 }
 
+fn solid_wallpaper(root: &Path, name: &str, rgb: [u8; 3]) {
+    let dir = root.join("Wallpapers");
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = std::fs::File::create(dir.join(name)).unwrap();
+    let mut e = png::Encoder::new(std::io::BufWriter::new(file), OUT_W, OUT_H);
+    e.set_color(png::ColorType::Rgb);
+    e.set_depth(png::BitDepth::Eight);
+    let px: Vec<u8> = rgb
+        .iter()
+        .copied()
+        .cycle()
+        .take((OUT_W * OUT_H * 3) as usize)
+        .collect();
+    e.write_header().unwrap().write_image_data(&px).unwrap();
+}
+
+#[test]
+fn the_shelf_wallpaper_changes_with_the_shelf_and_a_missing_file_shows_no_other_shelfs() {
+    let Ok(surface) = HeadlessSurface::new() else {
+        return;
+    };
+    let Ok(mut c) = Compositor::new(&surface) else {
+        return;
+    };
+    let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
+    put_game_boy_carts(d.path());
+    clocked(d.path());
+    let state = slot_store::read_slot_state(d.path());
+    slot_store::write_slot_state(
+        d.path(),
+        &slot_store::SlotState {
+            wallpaper: slot_store::WallpaperPick::Shelf,
+            ..state
+        },
+    )
+    .unwrap();
+    solid_wallpaper(d.path(), "GBA.png", [200, 0, 0]);
+    solid_wallpaper(d.path(), "GB.png", [0, 0, 200]);
+    let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+    f.upload_faces(&mut c);
+    let mut input = Script(VecDeque::new());
+    f.advance(&mut input);
+    let_the_name_in(&mut f, &mut c, &mut input);
+
+    let mut fields = Vec::new();
+    for _ in 0..60 {
+        f.compose(&mut c);
+        std::thread::sleep(std::time::Duration::from_millis(16));
+    }
+    for name in ["gba-wall", "gbc-wall", "gb-wall"] {
+        fields.push(field(&composed(&mut f, &mut c, name)));
+        tap(&mut f, &mut input, Btn::R1);
+        let_the_name_in(&mut f, &mut c, &mut input);
+    }
+    assert!(
+        fields[0][0] > 150 && fields[0][2] < 50,
+        "GBA: {:?}",
+        fields[0]
+    );
+    assert!(
+        !(fields[1][0] > 150 && fields[1][2] < 50),
+        "the GBC shelf kept the GBA wallpaper: {:?}",
+        fields[1]
+    );
+    assert!(
+        fields[2][2] > 150 && fields[2][0] < 50,
+        "GB: {:?}",
+        fields[2]
+    );
+}
+
 #[test]
 fn a_card_nobody_has_organised_comes_up_an_empty_shelf() {
     let Ok(surface) = HeadlessSurface::new() else {

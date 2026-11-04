@@ -223,6 +223,7 @@ fn both_cores_are_told_about_colour_correction_in_their_own_words() {
         let theirs = match which {
             Core::Mgba => "gpsp_color_correction",
             Core::Gpsp => "mgba_color_correction",
+            Core::Gambatte => "gambatte_gbc_color_correction",
         };
         assert_eq!(
             core.option(theirs),
@@ -681,7 +682,7 @@ fn open_core_reaches_a_gpsp_named_dylib_under_the_content_roots_system_directory
 
 #[test]
 fn a_game_boy_carts_gpsp_line_is_dropped_and_it_runs_on_the_platform_default() {
-    let default = Core::default_for(Platform::Gb);
+    let default = Core::Gambatte;
     use slot::app::Phase;
     use slot::persist;
     use slot::session::Session;

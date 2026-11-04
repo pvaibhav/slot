@@ -155,3 +155,81 @@ fn a_line_matches_its_cart_whichever_way_the_accent_is_spelled() {
         );
     }
 }
+
+mod writes {
+    use slot_store::cart_shell::{layered, write_choice};
+    use slot_store::{Outline, ShellChoice, ShellFinish};
+
+    const PINK: ShellChoice = ShellChoice {
+        outline: Outline::Notched,
+        colour: [0xec, 0x94, 0xb4],
+        finish: ShellFinish::Clear,
+    };
+
+    fn card() -> tempfile::TempDir {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join("Labels")).unwrap();
+        std::fs::create_dir_all(d.path().join("Config")).unwrap();
+        d
+    }
+
+    fn read(d: &tempfile::TempDir, file: &str) -> String {
+        std::fs::read_to_string(d.path().join(file)).unwrap_or_default()
+    }
+
+    fn seen(d: &tempfile::TempDir) -> std::collections::HashMap<String, ShellChoice> {
+        layered(&read(d, "Config/cart_shell.txt"), &read(d, "Labels/cart_shell.txt"))
+    }
+
+    #[test]
+    fn an_unreadable_file_is_left_alone() {
+        let d = tempfile::tempdir().unwrap();
+        let path = d.path().join(slot_store::LABELS_SHELL_FILE);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, b"Other = auto 112233 solid\n\xff\n").unwrap();
+        assert!(write_choice(d.path(), "Kirby", Some(&PINK)).is_err());
+        assert!(std::fs::read(&path).unwrap().starts_with(b"Other"));
+    }
+
+    #[test]
+    fn writes_a_line_the_reader_parses() {
+        let d = card();
+        write_choice(d.path(), "Kirby", Some(&PINK)).unwrap();
+        assert_eq!(seen(&d).get("Kirby"), Some(&PINK));
+    }
+
+    #[test]
+    fn other_lines_survive() {
+        let d = card();
+        std::fs::write(d.path().join("Labels/cart_shell.txt"), "Other = auto 112233 solid\n").unwrap();
+        write_choice(d.path(), "Kirby", Some(&PINK)).unwrap();
+        assert!(seen(&d).contains_key("Other"));
+        assert!(seen(&d).contains_key("Kirby"));
+    }
+
+    #[test]
+    fn auto_over_a_config_entry_writes_auto() {
+        let d = card();
+        std::fs::write(d.path().join("Config/cart_shell.txt"), "Kirby = auto 112233 solid\n").unwrap();
+        write_choice(d.path(), "Kirby", None).unwrap();
+        assert!(!seen(&d).contains_key("Kirby"));
+        assert!(read(&d, "Labels/cart_shell.txt").contains("auto"));
+    }
+
+    #[test]
+    fn auto_with_no_config_removes_the_line() {
+        let d = card();
+        write_choice(d.path(), "Kirby", Some(&PINK)).unwrap();
+        write_choice(d.path(), "Kirby", None).unwrap();
+        assert!(!read(&d, "Labels/cart_shell.txt").contains("Kirby"));
+    }
+
+    #[test]
+    fn an_nfd_stem_is_replaced_not_doubled() {
+        let d = card();
+        std::fs::write(d.path().join("Labels/cart_shell.txt"), "Poke\u{301}mon = auto 112233 solid\n").unwrap();
+        write_choice(d.path(), "Pok\u{e9}mon", Some(&PINK)).unwrap();
+        assert_eq!(read(&d, "Labels/cart_shell.txt").lines().filter(|l| l.contains('=')).count(), 1);
+        assert_eq!(seen(&d).get("Pok\u{e9}mon"), Some(&PINK));
+    }
+}

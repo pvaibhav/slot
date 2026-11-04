@@ -33,19 +33,10 @@ pub const LABEL_Y: u32 = label_panel(CART_W, CART_H).1;
 pub const LABEL_W: u32 = label_panel(CART_W, CART_H).2 - LABEL_X;
 pub const LABEL_H: u32 = label_panel(CART_W, CART_H).3 - LABEL_Y;
 
-pub const fn gb_label_panel(w: u32, h: u32) -> (u32, u32, u32, u32) {
-    (
-        (w * 147 + 500) / 1000,
-        (h * 291 + 500) / 1000,
-        (w * 854 + 500) / 1000,
-        (h * 868 + 500) / 1000,
-    )
-}
-
-pub const GB_LABEL_X: u32 = gb_label_panel(GB_CART_W, GB_CART_H).0;
-pub const GB_LABEL_Y: u32 = gb_label_panel(GB_CART_W, GB_CART_H).1;
-pub const GB_LABEL_W: u32 = gb_label_panel(GB_CART_W, GB_CART_H).2 - GB_LABEL_X;
-pub const GB_LABEL_H: u32 = gb_label_panel(GB_CART_W, GB_CART_H).3 - GB_LABEL_Y;
+pub const GB_LABEL_X: u32 = 44;
+pub const GB_LABEL_Y: u32 = 95;
+pub const GB_LABEL_W: u32 = 223;
+pub const GB_LABEL_H: u32 = 199;
 
 /// The Game Boy Color pak's label box: exactly the flat label well drawn in
 /// `assets/gbc_neutral.png`, x 45..267, y 110..308 of 312x337. It is the same 223x199
@@ -77,6 +68,43 @@ struct Spec {
 enum Shape {
     Gba,
     Gb(GbShell),
+}
+
+pub fn folder_gb_shell(cart: &Cart) -> Option<GbShell> {
+    match cart.platform {
+        Platform::Gba | Platform::Gbav => None,
+        Platform::Gb | Platform::Gbc => Some(match cart.shell.map(|c| c.outline) {
+            Some(Outline::Notched) => GbShell::Notched,
+            Some(Outline::Rounded) => GbShell::Rounded,
+            _ if cart.platform == Platform::Gbc => GbShell::Rounded,
+            _ => GbShell::Notched,
+        }),
+    }
+}
+
+pub fn folder_is_clear(cart: &Cart) -> bool {
+    cart.shell
+        .is_some_and(|c| c.finish != slot_store::ShellFinish::Solid)
+}
+
+pub fn shelf_shape(cart: &Cart) -> (Option<GbShell>, bool) {
+    let clear = |shell: Option<Shell>| match shell {
+        Some(s) => s.finish != Finish::Solid,
+        None => folder_is_clear(cart),
+    };
+    let shell = crate::shell::indexed_shell(cart);
+    let outline = cart.shell.map(|c| c.outline);
+    let shape = match (cart.platform, outline) {
+        (Platform::Gba | Platform::Gbav, _) => None,
+        (_, Some(Outline::Notched)) => Some(GbShell::Notched),
+        (_, Some(Outline::Rounded)) => Some(GbShell::Rounded),
+        _ => match slot_store::header_index::peek_gb_header(&cart.rom).flatten() {
+            Some(h) if h.class() == Class::ColourOnly => Some(GbShell::Rounded),
+            Some(_) => Some(GbShell::Notched),
+            None => folder_gb_shell(cart),
+        },
+    };
+    (shape, clear(shell))
 }
 
 pub fn gb_shell_of(cart: &Cart) -> Option<GbShell> {
@@ -251,8 +279,12 @@ pub fn cart_backing(shell: Option<GbShell>) -> CartFace {
             h: BOARD_H,
         };
     };
+    gb_backing(bitmaps::gb_board(), shell)
+}
+
+pub fn gb_backing(board: &[u8], shell: GbShell) -> CartFace {
     let s = spec(Shape::Gb(shell));
-    let mut rgba = bitmaps::gb_board().to_vec();
+    let mut rgba = board.to_vec();
     for (px, cover) in rgba.chunks_exact_mut(4).zip(s.mask) {
         px[3] = ((px[3] as u32 * *cover as u32 + 127) / 255) as u8;
     }
@@ -268,12 +300,26 @@ pub fn label_size(cart: &Cart) -> (u32, u32) {
     (lw, lh)
 }
 
+pub fn bare_face(cart: &Cart) -> CartFace {
+    let s = spec(shape_of(cart));
+    let mut face = shell_face_of(&s, &shell_for(cart), true);
+    clip_to_silhouette(&s, &mut face);
+    face
+}
+
+pub fn text_label(cart: &Cart, colour: [u8; 3]) -> Vec<u8> {
+    generated_label(&spec(shape_of(cart)), &label_text(cart), colour)
+}
+
 pub fn cart_face_with(cart: &Cart, art: Option<Vec<u8>>) -> CartFace {
     let s = spec(shape_of(cart));
     let mut face = shell_face(&s, &shell_for(cart));
     let label = match art {
         Some(rgba) => rgba,
-        None => generated_label(&s, &label_text(cart)),
+        None => {
+            let title = label_text(cart);
+            generated_label(&s, &title, label_colour(&title))
+        }
     };
     paste_label(&s, &mut face, &label);
     if cart.sealed {
@@ -537,6 +583,10 @@ fn overlay(base: u8, colour: u8) -> u8 {
 }
 
 fn shell_face(s: &Spec, shell: &Shell) -> CartFace {
+    shell_face_of(s, shell, false)
+}
+
+fn shell_face_of(s: &Spec, shell: &Shell, bare: bool) -> CartFace {
     let clear = shell.finish != Finish::Solid;
     let src = bitmaps::shell_asset(s.mould, clear);
     assert_eq!(
@@ -550,11 +600,10 @@ fn shell_face(s: &Spec, shell: &Shell) -> CartFace {
     // The neutral asset is blended with the game's colour everywhere but the label box, which
     // stays the grey of the asset. A clear shell is its own asset with real transparency: what the
     // compositor drew underneath (the board) shows through and stays put while the shell moves.
-    // The label box stays opaque.
     let (lx, ly, lw, lh) = s.label;
     for y in 0..s.h {
         for x in 0..s.w {
-            let on_label = (lx..lx + lw).contains(&x) && (ly..ly + lh).contains(&y);
+            let on_label = !bare && (lx..lx + lw).contains(&x) && (ly..ly + lh).contains(&y);
             let i = ((y * s.w + x) * 4) as usize;
             if !on_label {
                 for c in 0..3 {
@@ -612,9 +661,8 @@ fn lerp(a: [u8; 3], b: [u8; 3], num: u32, den: u32) -> [u8; 3] {
     out
 }
 
-fn generated_label(s: &Spec, title: &str) -> Vec<u8> {
+fn generated_label(s: &Spec, title: &str, bg: [u8; 3]) -> Vec<u8> {
     let (_, _, lw, lh) = s.label;
-    let bg = label_colour(title);
     let mut rgba = Vec::with_capacity((lw * lh * 4) as usize);
     for _ in 0..lw * lh {
         rgba.extend_from_slice(&[bg[0], bg[1], bg[2], 255]);

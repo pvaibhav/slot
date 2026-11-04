@@ -1,5 +1,5 @@
 use crate::draw::{Draw, Sprites, TexId};
-use crate::grade::{blue_light_gain, contrast_boost, saturation_boost};
+use crate::grade::{blue_light_gain, contrast_boost, dim_gain, saturation_boost};
 use crate::pipeline::GamePass;
 use crate::quad::Quad;
 use crate::shaders::{BLIT_FRAG, BLIT_VERT, TURN_VERT};
@@ -26,6 +26,7 @@ pub struct Compositor {
     u_contrast: gl::types::GLint,
     u_blit_uv: gl::types::GLint,
     gain: [f32; 3],
+    dim: f32,
     saturation: f32,
     contrast: f32,
     shake: f32,
@@ -83,6 +84,7 @@ impl Compositor {
                 u_contrast,
                 u_blit_uv,
                 gain: blue_light_gain(0),
+                dim: dim_gain(0),
                 saturation: saturation_boost(0),
                 contrast: contrast_boost(0),
                 shake: 0.0,
@@ -171,12 +173,20 @@ impl Compositor {
         self.sprites.create_texture_nearest(w, h, rgba)
     }
 
+    pub fn prepare_paper(&mut self) -> Result<(), GfxError> {
+        self.sprites.prepare_paper()
+    }
+
     pub fn update_texture(&mut self, id: TexId, w: u32, h: u32, rgba: &[u8]) {
         self.sprites.update_texture(id, w, h, rgba);
     }
 
     pub fn set_blue_light(&mut self, step: u8) {
         self.gain = blue_light_gain(step);
+    }
+
+    pub fn set_dim(&mut self, step: u8) {
+        self.dim = dim_gain(step);
     }
 
     pub fn set_saturation(&mut self, step: u8) {
@@ -436,7 +446,8 @@ impl Compositor {
             gl::Clear(gl::COLOR_BUFFER_BIT);
             gl::UseProgram(self.blit);
             gl::ActiveTexture(gl::TEXTURE0);
-            gl::Uniform3f(self.u_gain, self.gain[0], self.gain[1], self.gain[2]);
+            let [r, g, b] = self.gain.map(|g| g * self.dim);
+            gl::Uniform3f(self.u_gain, r, g, b);
             gl::Uniform1f(self.u_saturation, self.saturation);
             gl::Uniform1f(self.u_contrast, self.contrast);
             gl::BindTexture(gl::TEXTURE_2D, self.tex);

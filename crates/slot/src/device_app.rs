@@ -114,6 +114,10 @@ pub fn run() {
             cpu.restore();
             frontend.restart();
         }
+        if frontend.relaunching() {
+            frontend.relaunch();
+            return;
+        }
         if frontend.repairing() {
             cpu.restore();
             frontend.repair();

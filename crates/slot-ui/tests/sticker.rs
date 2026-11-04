@@ -5,6 +5,7 @@ fn fields() -> StickerFields<'static> {
         battery: Some(87),
         serial: "04738857",
         version: "0.1.0",
+        baseos: None,
         model: "RG SP",
     }
 }
@@ -47,6 +48,7 @@ fn the_compliance_block_is_the_credits() {
     for owed in [
         "MGBA",
         "GPSP",
+        "GAMBATTE",
         "BASEOS BY PVAIBHAV",
         "OPEN SANS",
         "NERD",
@@ -109,6 +111,16 @@ fn the_plate_says_where_it_was_seasoned_and_who_else_holds_it() {
     let seasoned = all.find("SEASONED IN BERLIN").expect("{all}");
     assert!(seasoned > made, "Berlin should sit below Ithaca: {all}");
     assert!(all.contains("PRASHANT VAIBHAV"), "{all}");
+}
+
+#[test]
+fn the_baseos_version_sits_under_slots() {
+    let lines = sticker_lines(&StickerFields {
+        baseos: Some("1.5.2"),
+        ..fields()
+    });
+    let home = lines.iter().position(|l| l == "SEE README.").unwrap();
+    assert_eq!(lines[home - 2..home], ["VERSION 0.1.0", "BASEOS 1.5.2"]);
 }
 
 fn wordmark_left_edge(model: &str) -> u32 {

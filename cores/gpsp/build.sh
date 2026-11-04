@@ -38,7 +38,7 @@ build() {
 	fi
 
 	for p in "$here"/*.patch; do
-		git -C "$src" apply -p1 "$p"
+		patch -p1 --batch --forward -d "$src" <"$p"
 	done
 
 	CFLAGS="$device_cflags" make -C "$src" platform=arm64 \

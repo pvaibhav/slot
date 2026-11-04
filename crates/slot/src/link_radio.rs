@@ -93,7 +93,8 @@ fn link_command(root: &Path, verb: &str) -> Command {
     let mut cmd = Command::new("/bin/sh");
     cmd.arg(root.join("System/slotlink.sh"))
         .arg("link")
-        .arg(verb);
+        .arg(verb)
+        .env("AGS_LINK_TRACE", root.join("Logs/slotlink.log"));
     cmd
 }
 
@@ -189,6 +190,17 @@ mod tests {
             argv(&link_command(d.path(), "host")),
             ["/bin/sh", script.to_str().unwrap(), "link", "host"]
         );
+    }
+
+    #[test]
+    fn a_link_traces_into_the_cards_logs() {
+        let d = tempfile::tempdir().unwrap();
+        let cmd = link_command(d.path(), "host");
+        let trace = cmd
+            .get_envs()
+            .find(|(k, _)| *k == "AGS_LINK_TRACE")
+            .and_then(|(_, v)| v);
+        assert_eq!(trace, Some(d.path().join("Logs/slotlink.log").as_os_str()));
     }
 
     #[cfg(not(feature = "device"))]

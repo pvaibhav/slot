@@ -16,6 +16,7 @@ nav = [
     { "Playing" = [
       "guide/shelf.md",
       "guide/playing.md",
+      "guide/game-guides.md",
       "guide/screenshots.md",
       "guide/save-states.md",
       "guide/fast-forward-rewind-turbo.md",
@@ -26,6 +27,7 @@ nav = [
       "guide/screen.md",
       "guide/controls.md",
       "guide/customizing.md",
+      "guide/gamebit.md",
     ] },
     { "Reference and Help" = [
       "guide/settings.md",

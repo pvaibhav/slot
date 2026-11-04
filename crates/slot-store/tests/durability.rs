@@ -3,8 +3,8 @@ mod common;
 use common::tmp_root;
 use slot_store::{
     atomic_write, read_slot_state, sweep_temps, write_slot_state, Appearance, BezelPick, Blending,
-    GbPalette, Platform, Recent, Scale, Shader, SlotState, Stretch, WallpaperPick, WallpaperTint,
-    Zone, FF_SPEEDS, FF_SPEED_DEFAULT,
+    Core, GbPalette, Platform, Recent, Scale, Shader, SlotState, Stretch, WallpaperPick,
+    WallpaperTint, Zone, FF_SPEEDS, FF_SPEED_DEFAULT,
 };
 use tempfile::tempdir;
 
@@ -151,7 +151,8 @@ fn slot_state_round_trips_including_a_stem_with_an_equals_sign() {
     let d = tmp_root();
     let s = SlotState {
         cart: Some("Cheats = On".into()),
-        brightness: 3,
+        brightness: 0,
+        dim: 2,
         blue_light: 9,
         volume: 71,
         muted: true,
@@ -295,6 +296,7 @@ fn a_card_from_before_the_settings_keeps_all_its_values() {
             cart: Some("Emerald".into()),
             cart_platform: None,
             brightness: 3,
+            dim: 0,
             blue_light: 1,
             saturation: 0,
             contrast: 0,
@@ -334,6 +336,8 @@ fn a_card_from_before_the_settings_keeps_all_its_values() {
             show_titles: false,
             left_stick_dpad: true,
             lid_off_min: None,
+            wifi_off: false,
+            network_time: false,
             bezel_gba: BezelPick::Ags102,
             bezel_gb: BezelPick::Ags102,
             bezel_gbc: BezelPick::Ags102,
@@ -346,6 +350,7 @@ fn a_card_from_before_the_settings_keeps_all_its_values() {
             blending_gb: Blending::Off,
             gb_model: slot_store::GbModel::Pocket,
             blending_gbc: Blending::Off,
+            gb_core: Core::Mgba,
             recents: Vec::new(),
             favorites: Vec::new(),
             shelf: None,

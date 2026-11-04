@@ -62,7 +62,7 @@ impl From<std::io::Error> for Error {
 pub fn label_size(platform: Platform) -> (u32, u32) {
     match platform {
         Platform::Gba | Platform::Gbav => (264, 136),
-        Platform::Gb => (220, 195),
+        Platform::Gb => (223, 199),
         Platform::Gbc => (223, 199),
     }
 }

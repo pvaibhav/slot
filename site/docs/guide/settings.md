@@ -9,14 +9,14 @@ All settings save as soon as you change an option.
 | Setting | Choices | Default | Does |
 | --- | --- | --- | --- |
 | Theme | Dark, Light | Dark | The look of the shelf and menus |
-| Wallpaper | None, Random, Default, Default Blur, your own | Default | What's behind the shelf |
-| Wallpaper Tint | Off, 25%, 45%, 65% | Off | Darkens your own wallpaper so carts stand out. Only shows for your own or Random |
+| Wallpaper | None, Random, Shelf, Default, Default Blur, your own | Default | What's behind the shelf |
+| Wallpaper Tint | Off, 25%, 45%, 65% | Off | Darkens your own wallpaper so carts stand out. Only shows for your own, Random or Shelf |
 | Recents | Show, Hide | Hide | A shelf of your last 10 games |
 | Game Titles | Show, Hide | Hide | Shows the name of the cart you're on |
 | Lid Power Off | 1, 3, 5, 10, 15, 30 min | 3 min | How long slot sleeps before powering off |
 | Date & Time | | | Sets the clock, your city and 12 or 24-hour time |
 
-Random picks a different wallpaper each boot.
+Random picks a different wallpaper each boot. Shelf gives each shelf its own wallpaper, see [Wallpapers](customizing.md#wallpapers).
 
 ## Screen
 
@@ -35,7 +35,7 @@ Each system has its own page.
 
 | Setting | Choices | Default |
 | --- | --- | --- |
-| Shader | GBA: Off, LCD3x, Grid, Dot, Shimmerless. GB and GBC: Off, LCD3x, Grid, Simpletex, Shimmerless | Grid on GBA, Simpletex on GB and GBC |
+| Shader | GBA: Off, LCD3x, Grid, Dot, Shimmerless (4:3 devices only). GB and GBC: Off, LCD3x, Grid, Simpletex, Shimmerless | Grid on GBA, Simpletex on GB and GBC |
 | Color Correction | On, Off | Off |
 | Palette | Game Boy only. Auto, then 48 palettes | Auto |
 | Scale | GBA: Fit, Integer, Full Screen. GB and GBC: SP Screen, Integer, Fit | Fit on GBA, SP Screen on GB and GBC |

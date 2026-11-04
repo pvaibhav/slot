@@ -94,6 +94,10 @@ impl StateRing {
         }
     }
 
+    pub fn has_resume(&self) -> bool {
+        self.path(RESUME, STATE_EXT).is_file()
+    }
+
     pub fn retire_resume(&self, stamp: &str) -> std::io::Result<Option<PathBuf>> {
         let from = self.path(RESUME, STATE_EXT);
         if !from.exists() {
@@ -140,7 +144,7 @@ impl StateRing {
     }
 }
 
-pub(crate) fn is_stamp(s: &str) -> bool {
+pub fn is_stamp(s: &str) -> bool {
     const SHAPE: &[u8] = b"0000-00-00_00-00-00";
     s.len() == SHAPE.len()
         && s.bytes().zip(SHAPE).all(|(c, shape)| match shape {

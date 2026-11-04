@@ -20,7 +20,8 @@ const MONO_TTF: &[u8] = include_bytes!("../assets/DejaVuSansMono.ttf");
 
 pub const GUIDE_HELP_TITLE: &str = "Guide Help";
 
-pub const GUIDE_HINTS: [(&str, &str); 2] = [("B", "Back"), ("MENU", "Help")];
+pub const GUIDE_HINTS: [(&str, &str); 2] = [("Y", "Close"), ("MENU", "Help")];
+pub const GUIDE_HELP_HINT: (&str, &str) = ("B", "Back");
 
 pub const GUIDE_ZOOMS: [f32; 8] = [10.0, 12.0, 14.0, 16.0, 18.0, 21.0, 24.0, 28.0];
 pub const GUIDE_COLUMNS: usize = 80;
@@ -75,17 +76,66 @@ pub struct GuideView {
     pub line: usize,
     pub col: usize,
     pub zoom: u8,
+    pub wrap: bool,
     pub w: u32,
     pub h: u32,
 }
 
+#[derive(Copy, Clone)]
+struct Row {
+    line: u32,
+    from: u32,
+    to: u32,
+    indent: u32,
+}
+
+fn wrap_line(text: &str, cols: usize) -> usize {
+    let Some((cut, ch)) = text.char_indices().nth(cols) else {
+        return text.len();
+    };
+    if ch == ' ' {
+        return cut;
+    }
+    match text[..cut].rfind(' ') {
+        Some(space) if !text[..space].trim_start().is_empty() => space,
+        _ => cut,
+    }
+}
+
+fn wrap_rows(lines: &[String], cols: usize) -> Vec<Row> {
+    let mut rows = Vec::with_capacity(lines.len());
+    for (line, text) in lines.iter().enumerate() {
+        let hang = (text.len() - text.trim_start().len()).min(cols / 2);
+        let mut indent = 0;
+        let mut from = 0;
+        loop {
+            let rest = &text[from..];
+            let to = from + wrap_line(rest, cols - indent);
+            rows.push(Row {
+                line: line as u32,
+                from: from as u32,
+                to: to as u32,
+                indent: indent as u32,
+            });
+            indent = hang;
+            let next = text[to..].trim_start();
+            if next.is_empty() {
+                break;
+            }
+            from = text.len() - next.len();
+        }
+    }
+    rows
+}
+
 pub struct Guide {
     lines: Vec<String>,
+    wrap: bool,
+    wrapped: Vec<Row>,
     widest: usize,
     line: usize,
     col: usize,
     zoom: u8,
-    title: Option<TexId>,
     page: Option<(TexId, GuideView)>,
     hint_faces: Vec<TexId>,
     help: bool,
@@ -100,30 +150,93 @@ impl Guide {
             line: 0,
             col: 0,
             zoom: fitting_zoom(canvas),
+            wrap: false,
         });
         let mut g = Guide {
             lines,
+            wrap: spot.wrap,
+            wrapped: Vec::new(),
             widest,
             line: spot.line as usize,
             col: spot.col as usize,
             zoom: spot.zoom.min(GUIDE_ZOOMS.len() as u8 - 1),
-            title: None,
             page: None,
             hint_faces: Vec::new(),
             help: false,
             help_face: None,
             help_title: None,
         };
+        if g.wrap {
+            g.reflow(spot.line, spot.col, canvas);
+        }
         g.clamp(canvas);
         g
     }
 
     pub fn spot(&self) -> GuideSpot {
+        let (line, col) = self.anchor();
         GuideSpot {
-            line: self.line as u32,
-            col: self.col as u32,
+            line,
+            col,
             zoom: self.zoom,
+            wrap: self.wrap,
         }
+    }
+
+    pub fn wrap(&self) -> bool {
+        self.wrap
+    }
+
+    pub fn toggle_wrap(&mut self, canvas: Canvas) {
+        let (line, col) = self.anchor();
+        self.wrap = !self.wrap;
+        if self.wrap {
+            self.reflow(line, col, canvas);
+        } else {
+            self.line = line as usize;
+            self.col = 0;
+        }
+        self.clamp(canvas);
+    }
+
+    fn anchor(&self) -> (u32, u32) {
+        match self.wrapped.get(self.line).filter(|_| self.wrap) {
+            Some(row) => (row.line, row.from),
+            None => (self.line as u32, self.col as u32),
+        }
+    }
+
+    fn reflow(&mut self, line: u32, from: u32, canvas: Canvas) {
+        self.wrapped = wrap_rows(&self.lines, self.cols(canvas));
+        self.col = 0;
+        self.line = self
+            .wrapped
+            .partition_point(|r| (r.line, r.from) <= (line, from))
+            .saturating_sub(1);
+    }
+
+    fn count(&self) -> usize {
+        match self.wrap {
+            true => self.wrapped.len(),
+            false => self.lines.len(),
+        }
+    }
+
+    pub fn visible_text(&self, row: usize) -> Option<&str> {
+        self.row_text(self.line + row).map(|(_, text)| text)
+    }
+
+    pub fn visible_indent(&self, row: usize) -> Option<usize> {
+        self.row_text(self.line + row).map(|(indent, _)| indent)
+    }
+
+    fn row_text(&self, at: usize) -> Option<(usize, &str)> {
+        if !self.wrap {
+            return self.lines.get(at).map(|l| (0, l.as_str()));
+        }
+        let row = self.wrapped.get(at)?;
+        let text = &self.lines[row.line as usize][row.from as usize..row.to as usize];
+        Some((row.indent as usize, text))
     }
 
     pub fn px(&self) -> f32 {
@@ -154,14 +267,18 @@ impl Guide {
             line: self.line,
             col: self.col,
             zoom: self.zoom,
+            wrap: self.wrap,
             w,
             h,
         }
     }
 
     fn clamp(&mut self, canvas: Canvas) {
-        let last_line = self.lines.len().saturating_sub(self.rows(canvas));
-        let last_col = self.widest.saturating_sub(self.cols(canvas));
+        let last_line = self.count().saturating_sub(self.rows(canvas));
+        let last_col = match self.wrap {
+            true => 0,
+            false => self.widest.saturating_sub(self.cols(canvas)),
+        };
         self.line = self.line.min(last_line);
         self.col = self.col.min(last_col);
     }
@@ -186,13 +303,13 @@ impl Guide {
         if to == self.zoom {
             return false;
         }
+        let (line, col) = self.anchor();
         self.zoom = to;
+        if self.wrap {
+            self.reflow(line, col, canvas);
+        }
         self.clamp(canvas);
         true
-    }
-
-    pub fn set_title_face(&mut self, face: Option<TexId>) {
-        self.title = face;
     }
 
     pub fn set_hint_faces(&mut self, faces: Vec<TexId>) {
@@ -234,20 +351,17 @@ impl Guide {
         let (adv, line_h) = cell(px);
         let ascent = font.horizontal_line_metrics(px).map_or(px, |m| m.ascent);
         let cols = self.cols(canvas);
-        for (row, line) in self
-            .lines
-            .iter()
-            .skip(self.line)
-            .take(self.rows(canvas))
-            .enumerate()
-        {
+        for row in 0..self.rows(canvas) {
+            let Some((indent, line)) = self.row_text(self.line + row) else {
+                break;
+            };
             let baseline = row as f32 * line_h + ascent;
             for (i, ch) in line.chars().skip(self.col).take(cols + 1).enumerate() {
                 if ch == ' ' {
                     continue;
                 }
                 let (m, cov) = glyphs.get(font, ch, px);
-                let x = (i as f32 * adv).round() as i32 + m.xmin;
+                let x = ((i + indent) as f32 * adv).round() as i32 + m.xmin;
                 let y = (baseline - (m.height as f32 + m.ymin as f32)).round() as i32;
                 ink(&mut rgba, w, h, x, y, cov, m.width as u32, m.height as u32);
             }
@@ -280,7 +394,7 @@ impl Guide {
         draw_album_chrome(
             canvas,
             AlbumChrome {
-                title: self.title,
+                title: None,
                 hints: &hints,
                 hint_faces: &self.hint_faces,
                 ways_out: WAYS_OUT,
@@ -310,42 +424,18 @@ impl Guide {
     }
 
     fn draw_help(&self, canvas: Canvas, out: &mut Vec<Draw>) {
-        out.push(plate(canvas, 0.0));
-        if let Some(tex) = self.help_title {
-            out.push(Draw::Tex {
-                x: canvas.centred(TITLE_W as f32),
-                y: (PLATE_H - TITLE_H as f32) / 2.0,
-                w: TITLE_W as f32,
-                h: TITLE_H as f32,
-                tex,
-                alpha: 1.0,
-            });
-        }
-        let top = canvas.h - PLATE_H;
-        out.push(plate(canvas, top));
-        let (key, label) = GUIDE_HINTS[0];
-        out.push(hint_quad(
-            EDGE,
-            top + (PLATE_H - HINT_H as f32) / 2.0,
-            hint_width(key, label) as f32,
-            self.hint_faces.first().copied(),
-        ));
-        let Some((tex, w, h)) = self.help_face else {
-            return;
-        };
-        out.push(Draw::Tex {
-            x: canvas.centred(w as f32).floor(),
-            y: ((canvas.h - h as f32) / 2.0).floor(),
-            w: w as f32,
-            h: h as f32,
-            tex,
-            alpha: 1.0,
-        });
+        draw_help_screen(
+            canvas,
+            self.help_title,
+            self.hint_faces.get(GUIDE_HINTS.len()).copied(),
+            self.help_face,
+            out,
+        );
     }
 
     fn draw_bar(&self, canvas: Canvas, out: &mut Vec<Draw>) {
         let rows = self.rows(canvas);
-        if self.lines.len() <= rows {
+        if self.count() <= rows {
             return;
         }
         let (_, y, _, h) = page_box(canvas);
@@ -357,9 +447,9 @@ impl Guide {
             h,
             colour: TRACK,
         });
-        let n = self.lines.len() as f32;
+        let n = self.count() as f32;
         let thumb = (h * rows as f32 / n).max(BAR_MIN);
-        let last = (self.lines.len() - rows) as f32;
+        let last = (self.count() - rows) as f32;
         out.push(Draw::Rect {
             x,
             y: y + (h - thumb) * self.line as f32 / last,
@@ -370,16 +460,61 @@ impl Guide {
     }
 }
 
+pub(crate) fn draw_help_screen(
+    canvas: Canvas,
+    title: Option<TexId>,
+    back: Option<TexId>,
+    face: Option<(TexId, u32, u32)>,
+    out: &mut Vec<Draw>,
+) {
+    out.push(plate(canvas, 0.0));
+    if let Some(tex) = title {
+        out.push(Draw::Tex {
+            x: canvas.centred(TITLE_W as f32),
+            y: (PLATE_H - TITLE_H as f32) / 2.0,
+            w: TITLE_W as f32,
+            h: TITLE_H as f32,
+            tex,
+            alpha: 1.0,
+        });
+    }
+    let top = canvas.h - PLATE_H;
+    out.push(plate(canvas, top));
+    let (key, label) = GUIDE_HELP_HINT;
+    out.push(hint_quad(
+        EDGE,
+        top + (PLATE_H - HINT_H as f32) / 2.0,
+        hint_width(key, label) as f32,
+        back,
+    ));
+    let Some((tex, w, h)) = face else {
+        return;
+    };
+    out.push(Draw::Tex {
+        x: canvas.centred(w as f32).floor(),
+        y: ((canvas.h - h as f32) / 2.0).floor(),
+        w: w as f32,
+        h: h as f32,
+        tex,
+        alpha: 1.0,
+    });
+}
+
 pub fn guide_help_face() -> UndoFace {
-    let rows = [
+    help_rows_face(vec![
         (up_down_pair(), "Scroll"),
+        (button_pair(ButtonLegend::L1, ButtonLegend::R1), "Page"),
         (button_pair(ButtonLegend::Left, ButtonLegend::Right), "Pan"),
-        (button_face(ButtonLegend::L1), "Previous"),
-        (button_face(ButtonLegend::R1), "Next"),
-        (button_face(ButtonLegend::A), "Zoom In"),
-        (button_face(ButtonLegend::Y), "Zoom Out"),
-    ]
-    .map(|(art, label)| (art, quick_text_face(label, MENU_INK)));
+        (button_pair(ButtonLegend::A, ButtonLegend::B), "Zoom"),
+        (button_face(ButtonLegend::X), "Wrap"),
+    ])
+}
+
+pub(crate) fn help_rows_face(rows: Vec<(UndoFace, &str)>) -> UndoFace {
+    let rows: Vec<(UndoFace, UndoFace)> = rows
+        .into_iter()
+        .map(|(art, label)| (art, quick_text_face(label, MENU_INK)))
+        .collect();
     let art_w = rows.iter().map(|(a, _)| a.w).max().unwrap_or(0);
     let label_w = rows.iter().map(|(_, l)| l.w - MENU_PAD).max().unwrap_or(0);
     let row_h = rows.iter().map(|(a, l)| a.h.max(l.h)).max().unwrap_or(0);

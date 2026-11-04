@@ -71,6 +71,11 @@ impl ApplicationHandler for Slot {
                 if self.frontend.restarting() {
                     self.frontend.restart();
                 }
+                if self.frontend.relaunching() {
+                    self.frontend.relaunch();
+                    events.exit();
+                    return;
+                }
                 if self.frontend.repairing() {
                     self.frontend.repair();
                 }

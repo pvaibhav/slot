@@ -11,6 +11,7 @@ pub mod cart_shell;
 mod config;
 mod core;
 pub mod gb;
+pub mod header_index;
 mod gb_palette;
 mod gba;
 mod guides;
@@ -32,7 +33,7 @@ pub use bindings::{
 pub use cart_shell::{Outline, ShellChoice, ShellFinish, CART_SHELL_FILE, LABELS_SHELL_FILE};
 pub use config::{move_config, CONFIG_DIR};
 pub use core::{
-    core_for, core_for_platform, read_selected_cores, write_selected_core, Core, SELECTED_CORE_FILE,
+    core_for_platform, read_selected_cores, write_selected_core, Core, SELECTED_CORE_FILE,
 };
 pub use gb_palette::{GbColors, GbPalette};
 pub use gba::{header_clean, header_code, header_title, header_title_code};
@@ -41,14 +42,14 @@ pub use guides::{
     GUIDE_SPOTS_FILE,
 };
 pub use platform::Platform;
-pub use ring::{StateEntry, StateRing, RING_MAX};
-pub use scan::{initial, is_hidden, listing, scan, sort_key, Cart, StoreError};
+pub use ring::{is_stamp, StateEntry, StateRing, RING_MAX};
+pub use scan::{initial, is_hidden, listing, scan, scan_platform, sort_key, Cart, StoreError};
 pub use shots::{shot_stamp, ShotDir, ShotEntry, SCREENSHOTS_DIR};
 pub use slot_state::{
     bezel_for_scale, bezel_scale, read_slot_state, write_slot_state, Appearance, BezelPick,
     Blending, GbModel, Recent, Scale, Shader, SlotState, Stretch, WallpaperPick, WallpaperTint,
-    BLUE_LIGHT_MAX, BRIGHTNESS_MAX, CONTRAST_MAX, FF_SPEEDS, FF_SPEED_DEFAULT, LID_OFF_MIN,
-    RECENTS_MAX, SATURATION_MAX, SUNLIGHT_MAX, VOLUME_MAX,
+    BLUE_LIGHT_MAX, BRIGHTNESS_MAX, CONTRAST_MAX, DIM_MAX, FF_SPEEDS, FF_SPEED_DEFAULT,
+    LID_OFF_MIN, RECENTS_MAX, SATURATION_MAX, SUNLIGHT_MAX, VOLUME_MAX,
 };
 pub use stamp::{
     civil_from_days, days_from_civil, days_in_month, format_stamp, parse_stamp, stamp_now,

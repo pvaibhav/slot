@@ -27,7 +27,11 @@ impl Labels {
         }
         if let Err(e) = thread::Builder::new()
             .name("slot-labels".into())
-            .spawn(move || run(carts, stopped, out, |cart| slot_labels::from_pack(&root, cart)))
+            .spawn(move || {
+                run(carts, stopped, out, |cart| {
+                    slot_labels::from_pack(&root, cart)
+                })
+            })
         {
             eprintln!("slot: labels: worker failed to start: {e}");
         }

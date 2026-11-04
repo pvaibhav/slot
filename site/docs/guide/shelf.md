@@ -8,6 +8,7 @@
 | <kbd>Up</kbd> / <kbd>Down</kbd> | Jump to the previous or next letter |
 | <kbd>L1</kbd> / <kbd>R1</kbd> | Switch shelves |
 | <kbd>Y</kbd> | Favorite / unfavorite the cart you're on |
+| <kbd>X</kbd> | Take the cart you're on off Recents |
 | <kbd>A</kbd> | Insert the cart |
 | <kbd>Hold A</kbd> | Insert the cart and don't auto load the save state |
 | <kbd>START</kbd> | Choose the emulator (GBA only) |
@@ -18,7 +19,7 @@
 There's one shelf per system, along with two special shelves, in this order:
 
 1. Recents, if enabled in settings
-2. Favorites, once you've starred something
+2. Favorites, once you've hearted something
 3. Game Boy Advance
 4. Game Boy Advance Video
 5. Game Boy Color
@@ -34,7 +35,7 @@ slot remembers which shelf and cart you were on when it gets powered off and wil
 
 ## Favorites
 
-Press <kbd>Y</kbd> to star a cart. It shows up on the Favorites shelf alongside any other favorites across all three platforms. Press <kbd>Y</kbd> again to take the star off.
+Press <kbd>Y</kbd> to heart a cart. It shows up on the Favorites shelf alongside any other favorites across all three platforms. Press <kbd>Y</kbd> again to take the heart off.
 
 ## Achievement seals
 
@@ -43,6 +44,8 @@ With RetroAchievements set up, a holographic trophy seal on a cart's bottom-left
 ## Recents
 
 Turn on Recents in Settings → General to get a shelf of the last 10 games you played.
+
+Press <kbd>X</kbd> on the Recents shelf to remove the selected game.
 
 ## Game titles
 

@@ -6,10 +6,14 @@ use std::collections::VecDeque;
 
 use common::tmp_root_with_carts;
 use slot::frontend::Frontend;
+use slot::wifi::{Fake, Wifi};
 use slot_gfx::{Compositor, HeadlessSurface, OUT_H, OUT_W};
-use slot_input::{Btn, InputSource, Millis, RawEvent};
+use slot_input::{Action, Btn, InputSource, Millis, RawEvent};
 use slot_power::SimPlatform;
-use slot_ui::{ClockRow, MOUTH_H, QUICK_LABEL_X, QUICK_PITCH};
+use slot_store::{write_slot_state, SlotState};
+use slot_ui::{ClockRow, QuickRow, MOUTH_H, QUICK_LABEL_X, QUICK_PITCH};
+
+const LEGEND_Y_FOR_TEST: f32 = 427.0;
 
 struct Script(VecDeque<Vec<RawEvent>>);
 
@@ -119,5 +123,56 @@ fn the_clock_is_a_list_of_four_rows_with_the_open_part_underlined() {
         rows.len(),
         1,
         "only the highlighted city is in full ink: {rows:?}"
+    );
+}
+
+#[test]
+fn network_time_on_draws_three_rows_with_the_pointer_on_the_first() {
+    let Ok(surface) = HeadlessSurface::new() else {
+        return;
+    };
+    let Ok(mut c) = Compositor::new(&surface) else {
+        return;
+    };
+    let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
+    write_slot_state(
+        d.path(),
+        &SlotState {
+            clock_set: true,
+            network_time: true,
+            ..SlotState::default()
+        },
+    )
+    .unwrap();
+    let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+    f.upload_faces(&mut c);
+    let mut input = Script(VecDeque::new());
+    f.advance(&mut input);
+    f.app_mut().set_wifi(Wifi::inline(Box::new(Fake::joined())));
+    f.app_mut().apply(Action::QuickMenu);
+    for _ in 0..QuickRow::General.position(&[]) {
+        f.app_mut().apply(Action::GbaDown(Btn::Down));
+    }
+    f.app_mut().apply(Action::GbaDown(Btn::A));
+    for _ in 0..QuickRow::DateTime.position(&f.app().hidden_rows()) {
+        f.app_mut().apply(Action::GbaDown(Btn::Down));
+    }
+    f.app_mut().apply(Action::GbaDown(Btn::A));
+    f.advance(&mut input);
+
+    assert_eq!(
+        f.app().picker().map(|p| p.rows().len()),
+        Some(3),
+        "{:?}",
+        f.app().phase()
+    );
+    let px = composed(&mut f, &mut c, "network");
+    let x = QUICK_LABEL_X as usize;
+    let lit = bands(&inked_rows(&px, x..x + 120));
+    let top = (LEGEND_Y_FOR_TEST - QUICK_PITCH * 3.0) / 2.0;
+    assert_eq!(lit.len(), 1, "{lit:?}");
+    assert!(
+        (lit[0].0 as f32 - top).abs() < QUICK_PITCH,
+        "the first row is not where three rows sit: {lit:?} vs {top}"
     );
 }

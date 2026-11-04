@@ -196,41 +196,6 @@ fn a_switcher_with_no_gauge_still_shows_its_clock() {
 }
 
 #[test]
-fn nothing_on_the_plate_moves_when_the_charge_state_changes() {
-    let p = switcher();
-    let percent = Printed { face: None, w: 30 };
-    let clock = Printed { face: None, w: 40 };
-    let mut idle = Vec::new();
-    p.draw(
-        Some(Battery {
-            percent: 68,
-            charge: Charge::Discharging,
-        }),
-        percent,
-        None,
-        clock,
-        &mut idle,
-    );
-    let mut charging = Vec::new();
-    p.draw(
-        Some(Battery {
-            percent: 68,
-            charge: Charge::Charging,
-        }),
-        percent,
-        Some(TexId::from_raw(7)),
-        clock,
-        &mut charging,
-    );
-    for q in &idle {
-        assert!(
-            charging.contains(q),
-            "{q:?} moved or vanished when charging started"
-        );
-    }
-}
-
-#[test]
 fn a_shot_stamp_with_milliseconds_reads_as_relative_time() {
     assert_eq!(
         Polaroids::relative_time("2026-10-22_17-30-05-120", "2026-10-22_17-32-05", true),

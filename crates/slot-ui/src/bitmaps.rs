@@ -21,6 +21,8 @@ pub const SOCKET_W: u32 = 64;
 pub const SOCKET_H: u32 = 46;
 pub const CHIP_W: u32 = 59;
 pub const CHIP_H: u32 = 41;
+pub const GB_CHIP_W: u32 = 59;
+pub const GB_CHIP_H: u32 = 92;
 pub const SLOT_W: u32 = OUT_W;
 pub const SLOT_H: u32 = 58;
 pub const PORT_W: u32 = OUT_W;
@@ -41,7 +43,11 @@ const GBA_INTERIOR_PNG: &[u8] = include_bytes!("../../../assets/gba_interior.png
 const GB_INTERIOR_PNG: &[u8] = include_bytes!("../../../assets/gb_interior.png");
 const GBC_INTERIOR_PNG: &[u8] = include_bytes!("../../../assets/gbc_interior.png");
 const GB_BOARD_PNG: &[u8] = include_bytes!("../../../assets/gb_board.png");
+const GB_BOARD_EMPTY_PNG: &[u8] = include_bytes!("../../../assets/gb_board_empty.png");
+const GB_CHIP_PNG: &[u8] = include_bytes!("../../../assets/gb_chip.png");
 const BOARD_PNG: &[u8] = include_bytes!("../../../assets/board.png");
+const UPDATE_CART_PNG: &[u8] = include_bytes!("../../../assets/update_cart.png");
+const BASEOS_CART_PNG: &[u8] = include_bytes!("../../../assets/baseos_cart.png");
 const SOCKET_PNG: &[u8] = include_bytes!("../../../assets/socket.png");
 const CHIP_PNG: &[u8] = include_bytes!("../../../assets/chip.png");
 const SLOT_BACK_DARK_PNG: &[u8] = include_bytes!("../../../assets/slot_back_dark.png");
@@ -169,6 +175,26 @@ pub fn gb_board() -> &'static [u8] {
     load(GB_BOARD_PNG, GB_CART_W, GB_CART_H, &P)
 }
 
+pub fn gb_board_empty() -> &'static [u8] {
+    static P: OnceLock<Vec<u8>> = OnceLock::new();
+    load(GB_BOARD_EMPTY_PNG, GB_CART_W, GB_CART_H, &P)
+}
+
+pub fn gb_chip() -> &'static [u8] {
+    static P: OnceLock<Vec<u8>> = OnceLock::new();
+    load(GB_CHIP_PNG, GB_CHIP_W, GB_CHIP_H, &P)
+}
+
+pub fn update_cart() -> &'static [u8] {
+    static P: OnceLock<Vec<u8>> = OnceLock::new();
+    load(UPDATE_CART_PNG, BOARD_W, BOARD_H, &P)
+}
+
+pub fn baseos_cart() -> &'static [u8] {
+    static P: OnceLock<Vec<u8>> = OnceLock::new();
+    load(BASEOS_CART_PNG, BOARD_W, BOARD_H, &P)
+}
+
 pub fn board() -> &'static [u8] {
     static P: OnceLock<Vec<u8>> = OnceLock::new();
     load(BOARD_PNG, BOARD_W, BOARD_H, &P)
@@ -285,9 +311,11 @@ pub(crate) enum ButtonLegend {
     Y,
     L1,
     R1,
+    Start,
+    Menu,
 }
 
-const BUTTON_LEGEND_PNG: [&[u8]; 9] = [
+const BUTTON_LEGEND_PNG: [&[u8]; 11] = [
     include_bytes!("../../../assets/buttonlegend_round_a.png"),
     include_bytes!("../../../assets/buttonlegend_round_b.png"),
     include_bytes!("../../../assets/buttonlegend_dpad_left.png"),
@@ -297,6 +325,8 @@ const BUTTON_LEGEND_PNG: [&[u8]; 9] = [
     include_bytes!("../../../assets/buttonlegend_round_y.png"),
     include_bytes!("../../../assets/buttonlegend_square_l1.png"),
     include_bytes!("../../../assets/buttonlegend_square_r1.png"),
+    include_bytes!("../../../assets/buttonlegend_long_start.png"),
+    include_bytes!("../../../assets/buttonlegend_round_menu.png"),
 ];
 
 pub(crate) fn button_legend(which: ButtonLegend) -> (&'static [u8], u32, u32) {

@@ -1,7 +1,7 @@
 use slot_gfx::{Canvas, Draw, TexId, OUT_H};
 use slot_power::Battery;
 
-use crate::battery::{draw_gauge, GAUGE_H};
+use crate::battery::{draw_gauge, GAUGE_H, GAUGE_ROW_W};
 use crate::hud::{HUD_INK, PLATE_H};
 use crate::plate::HINT_H;
 use crate::slot_chrome::MOUTH_H;
@@ -109,6 +109,24 @@ pub fn draw_footer(
     let y = FOOTER_Y + (HINT_H as f32 - GAUGE_H) / 2.0;
     draw_gauge(FOOTER_MARGIN, y, battery, percent, bolt, ink, out);
     printed(canvas.w - FOOTER_MARGIN - clock.w as f32, clock, out);
+}
+
+const WIFI_GAP: f32 = 12.0;
+
+pub fn draw_wifi_icon(percent: Printed, face: Option<(TexId, u32, u32)>, out: &mut Vec<Draw>) {
+    let Some((tex, w, h)) = face else {
+        return;
+    };
+    let x = FOOTER_MARGIN + GAUGE_ROW_W + percent.w as f32 + WIFI_GAP;
+    let y = FOOTER_Y + (HINT_H as f32 - h as f32) / 2.0;
+    out.push(Draw::Tex {
+        x: x.round(),
+        y: y.round(),
+        w: w as f32,
+        h: h as f32,
+        tex,
+        alpha: 1.0,
+    });
 }
 
 pub fn draw_corners(

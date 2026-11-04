@@ -98,6 +98,10 @@ impl Power {
     pub fn set_clock(&mut self, secs: i64) {
         self.platform.set_clock(secs);
     }
+
+    pub fn set_clock_in_background(&mut self, secs: i64) {
+        self.platform.set_clock_in_background(secs);
+    }
 }
 
 impl LidPolicy for Power {

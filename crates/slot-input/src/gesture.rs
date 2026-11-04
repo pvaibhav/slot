@@ -15,6 +15,7 @@ pub const VOLUME_REPEAT_MS: Millis = 120;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Action {
+    SelectTap,
     GbaDown(Btn),
     GbaUp(Btn),
     ShelfLeft,
@@ -59,9 +60,11 @@ pub enum Action {
     MenuChordDown(Btn),
     MenuChordUp(Btn),
     RepairCard,
+    Restart,
     PreviousShelf,
     NextShelf,
     Favorite,
+    ForgetRecent,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
@@ -547,7 +550,11 @@ impl Gestures {
             (None, true) => Vec::new(),
             (None, false) => {
                 self.select = Select::ReleaseDue(now + SELECT_TAP_MS);
-                vec![Action::GbaDown(Btn::Select)]
+                let mut out = vec![Action::GbaDown(Btn::Select)];
+                if self.context == Context::Shelf {
+                    out.push(Action::SelectTap);
+                }
+                out
             }
         }
     }

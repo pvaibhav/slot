@@ -73,6 +73,7 @@ pub fn date_time_text(secs: i64, clock_24h: bool) -> String {
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ClockRow {
+    NetworkTime,
     Date,
     Time,
     Zone,
@@ -80,7 +81,8 @@ pub enum ClockRow {
 }
 
 impl ClockRow {
-    pub const ALL: [ClockRow; 4] = [
+    pub const ALL: [ClockRow; 5] = [
+        ClockRow::NetworkTime,
         ClockRow::Date,
         ClockRow::Time,
         ClockRow::Zone,
@@ -89,6 +91,7 @@ impl ClockRow {
 
     pub fn label(self) -> &'static str {
         match self {
+            ClockRow::NetworkTime => "Set Automatically",
             ClockRow::Date => "Date",
             ClockRow::Time => "Time",
             ClockRow::Zone => "City",
@@ -116,6 +119,7 @@ pub struct ClockPicker {
     minute: i64,
     zone: Zone,
     clock_24h: bool,
+    network_time: Option<bool>,
     row: usize,
     part: Option<usize>,
     choosing: Option<usize>,
@@ -134,10 +138,16 @@ impl ClockPicker {
             minute: rem / 60 % 60,
             zone,
             clock_24h,
+            network_time: None,
             row: 0,
             part: None,
             choosing: None,
         }
+    }
+
+    pub fn with_network_time(mut self, network_time: Option<bool>) -> Self {
+        self.network_time = network_time;
+        self
     }
 
     pub fn from_ymd(year: i64, month: i64, day: i64) -> Self {
@@ -149,6 +159,7 @@ impl ClockPicker {
             minute: 0,
             zone: Zone::default(),
             clock_24h: true,
+            network_time: None,
             row: 0,
             part: None,
             choosing: None,
@@ -178,8 +189,29 @@ impl ClockPicker {
         self.day
     }
 
+    pub fn network_time(&self) -> Option<bool> {
+        self.network_time
+    }
+
+    pub fn rows(&self) -> &'static [ClockRow] {
+        match self.network_time {
+            None => &[
+                ClockRow::Date,
+                ClockRow::Time,
+                ClockRow::Zone,
+                ClockRow::Clock,
+            ],
+            Some(false) => &ClockRow::ALL,
+            Some(true) => &[ClockRow::NetworkTime, ClockRow::Zone, ClockRow::Clock],
+        }
+    }
+
     pub fn row(&self) -> ClockRow {
-        ClockRow::ALL[self.row]
+        self.rows()[self.row]
+    }
+
+    fn flip_network_time(&mut self) {
+        self.network_time = self.network_time.map(|on| !on);
     }
 
     pub fn part(&self) -> Option<Part> {
@@ -204,7 +236,7 @@ impl ClockPicker {
         match (self.choosing, self.part) {
             (Some(i), _) => self.choosing = Some((i + cities - 1) % cities),
             (None, Some(_)) => self.step(1),
-            (None, None) => self.row = (self.row + ClockRow::ALL.len() - 1) % ClockRow::ALL.len(),
+            (None, None) => self.row = (self.row + self.rows().len() - 1) % self.rows().len(),
         }
     }
 
@@ -212,7 +244,7 @@ impl ClockPicker {
         match (self.choosing, self.part) {
             (Some(i), _) => self.choosing = Some((i + 1) % Zone::ALL.len()),
             (None, Some(_)) => self.step(-1),
-            (None, None) => self.row = (self.row + 1) % ClockRow::ALL.len(),
+            (None, None) => self.row = (self.row + 1) % self.rows().len(),
         }
     }
 
@@ -221,6 +253,7 @@ impl ClockPicker {
             (Some(i), _, _) => self.choosing = Some(i.saturating_sub(CITY_PAGE)),
             (None, Some(i), _) => self.part = Some(i.saturating_sub(1)),
             (None, None, ClockRow::Clock) => self.clock_24h = !self.clock_24h,
+            (None, None, ClockRow::NetworkTime) => self.flip_network_time(),
             _ => {}
         }
     }
@@ -230,6 +263,7 @@ impl ClockPicker {
             (Some(i), _, _) => self.choosing = Some((i + CITY_PAGE).min(Zone::ALL.len() - 1)),
             (None, Some(i), _) => self.part = Some((i + 1).min(self.parts().len() - 1)),
             (None, None, ClockRow::Clock) => self.clock_24h = !self.clock_24h,
+            (None, None, ClockRow::NetworkTime) => self.flip_network_time(),
             _ => {}
         }
     }
@@ -237,6 +271,9 @@ impl ClockPicker {
     pub fn a(&mut self) {
         if self.b() {
             return;
+        }
+        if self.row() == ClockRow::NetworkTime {
+            return self.flip_network_time();
         }
         if self.row() == ClockRow::Zone {
             self.choosing = Zone::ALL.iter().position(|z| *z == self.zone);
@@ -273,7 +310,7 @@ impl ClockPicker {
                 let start = i.saturating_sub(len / 2).min(Zone::ALL.len() - len);
                 (start, len, i - start)
             }
-            None => (0, ClockRow::ALL.len(), self.row),
+            None => (0, self.rows().len(), self.row),
         }
     }
 
@@ -295,6 +332,14 @@ impl ClockPicker {
 
     fn pieces(&self, row: ClockRow) -> Vec<(Option<Part>, String)> {
         match row {
+            ClockRow::NetworkTime => vec![(
+                None,
+                match self.network_time {
+                    Some(true) => "On",
+                    _ => "Off",
+                }
+                .into(),
+            )],
             ClockRow::Date => vec![
                 (Some(Part::Month), month_name(self.month).into()),
                 (None, " ".into()),
@@ -349,9 +394,10 @@ impl ClockPicker {
                 .collect();
             return ClockFaceSet { rows, caret: None };
         }
-        let rows = ClockRow::ALL
-            .into_iter()
-            .map(|r| [pair(r.label()), pair(&self.value_text(r))])
+        let rows = self
+            .rows()
+            .iter()
+            .map(|&r| [pair(r.label()), pair(&self.value_text(r))])
             .collect();
         ClockFaceSet {
             rows,

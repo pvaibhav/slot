@@ -354,3 +354,105 @@ fn the_seated_chips_name_is_antialiased_against_the_body() {
         );
     }
 }
+
+#[test]
+fn a_versioned_chip_and_socket_keep_their_lowercase_v() {
+    let chip = slot_ui::chip_face_text("v1.12.0");
+    assert_eq!(
+        (chip.w, chip.h),
+        (CHIP_W + 2 * TURN_PAD, CHIP_H + 2 * TURN_PAD)
+    );
+    assert_ne!(
+        chip.rgba,
+        slot_ui::chip_face_text("V1.12.0").rgba,
+        "the chip's v was capitalised"
+    );
+    assert_ne!(
+        chip.rgba,
+        chip_face(None).rgba,
+        "the chip carries no version"
+    );
+    let socket = slot_ui::socket_face_text("v1.10.0");
+    assert_eq!((socket.w, socket.h), (SOCKET_W, SOCKET_H));
+    assert_ne!(
+        socket.rgba,
+        slot_ui::socket_face_text("V1.10.0").rgba,
+        "the socket's v was capitalised"
+    );
+}
+
+#[test]
+fn the_bare_board_is_the_board_art_unmarked() {
+    let bare = slot_ui::bare_board_face();
+    assert_eq!((bare.w, bare.h), (BOARD_W, BOARD_H));
+    let i = (((ROM_Y + ROM_H / 2) * BOARD_W + ROM_X + ROM_W / 2) * 4) as usize;
+    assert!(bare.rgba[i] < 60, "the ROM chip is not its own dark art");
+}
+
+#[test]
+fn the_update_cart_is_clear_purple_with_a_charcoal_label() {
+    let cart = slot_ui::update_cart_face();
+    assert_eq!((cart.w, cart.h), (360, 212));
+    let [r, g, b] = rgb(&cart, 20, 100);
+    assert!(b > r && r > g, "the shell is not purple: {r},{g},{b}");
+    let [r, g, b] = rgb(&cart, 75, 70);
+    assert!(
+        r.abs_diff(g) < 12 && b.abs_diff(g) < 12 && g < 90,
+        "the label is not charcoal: {r},{g},{b}"
+    );
+}
+
+#[test]
+fn the_baseos_cart_is_black_with_a_white_wordmark() {
+    let cart = slot_ui::baseos_cart_face();
+    assert_eq!((cart.w, cart.h), (360, 212));
+    let [r, g, b] = rgb(&cart, 20, 100);
+    assert!(
+        r < 60 && g < 60 && b < 60,
+        "the shell is not black: {r},{g},{b}"
+    );
+    let white = (60..300)
+        .flat_map(|x| (60..190).map(move |y| (x, y)))
+        .filter(|&(x, y)| rgb(&cart, x, y).iter().all(|&c| c > 220))
+        .count();
+    assert!(white > 100, "no white wordmark: {white}");
+}
+
+#[test]
+fn a_game_boy_cart_shows_its_own_board() {
+    let gb = Cart {
+        platform: Platform::Gb,
+        rom: "Games/GB/Tetris.gb".into(),
+        ..cart("Tetris", "")
+    };
+    let face = board_face(&gb);
+    let backing = slot_ui::cart_backing(slot_ui::gb_shell_of(&gb));
+    assert_eq!((face.w, face.h), (slot_ui::GB_CART_W, slot_ui::GB_CART_H));
+    let at = |f: &slot_ui::CartFace, x: u32, y: u32| {
+        let i = ((y * f.w + x) * 4) as usize;
+        [f.rgba[i], f.rgba[i + 1], f.rgba[i + 2]]
+    };
+    let navy = |p: [u8; 3]| p[2] > p[1] && p[0] < 45;
+    for (x, y) in [(100, 215), (218, 210)] {
+        assert!(navy(at(&backing, x, y)), "the pak board lost its chip at {x},{y}");
+        assert!(!navy(at(&face, x, y)), "a printed chip still fills the socket at {x},{y}");
+    }
+    assert_eq!(at(&face, 140, 60), at(&backing, 140, 60), "the pak opened on another board");
+}
+
+#[test]
+fn a_gba_cart_keeps_the_gba_picker_geometry() {
+    let canvas = Canvas { w: 720.0, h: 480.0 };
+    let shelf = shelf_cart(canvas);
+    for p in [0.0, 0.3, 0.7, 1.0] {
+        assert_eq!(
+            slot_ui::board_from_shaped(canvas, None, shelf, p),
+            slot_ui::board_from(canvas, shelf, p)
+        );
+        assert_eq!(
+            slot_ui::lid_from_shaped(canvas, None, shelf, p),
+            slot_ui::lid_from(canvas, shelf, p)
+        );
+    }
+    assert_eq!(slot_ui::seats(None), slot_ui::GBA_SEATS);
+}

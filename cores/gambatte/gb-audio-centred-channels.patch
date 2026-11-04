@@ -1,0 +1,128 @@
+diff --git a/libgambatte/src/sound/channel1.cpp b/libgambatte/src/sound/channel1.cpp
+index f0970b2..84bba31 100644
+--- a/libgambatte/src/sound/channel1.cpp
++++ b/libgambatte/src/sound/channel1.cpp
+@@ -216,13 +216,12 @@ void Channel1::loadState(SaveState const &state) {
+ 
+ void Channel1::update(uint_least32_t *buf, unsigned long const soBaseVol, unsigned long cycles) {
+ 	unsigned long const outBase = envelopeUnit_.dacIsOn() ? soBaseVol & soMask_ : 0;
+-	unsigned long const outLow = outBase * (0 - 15ul);
+ 	unsigned long const endCycles = cycleCounter_ + cycles;
+ 
+ 	for (;;) {
+-		unsigned long const outHigh = master_
+-		                            ? outBase * (envelopeUnit_.getVolume() * 2 - 15ul)
+-		                            : outLow;
++		unsigned long const level = master_ ? (outBase >> 4) * envelopeUnit_.getVolume() * 3 : 0;
++		unsigned long const outHigh = level * (8 - dutyUnit_.highEighths());
++		unsigned long const outLow = 0 - level * dutyUnit_.highEighths();
+ 		unsigned long const nextMajorEvent = std::min(nextEventUnit_->counter(), endCycles);
+ 		unsigned long out = dutyUnit_.isHighState() ? outHigh : outLow;
+ 
+diff --git a/libgambatte/src/sound/channel2.cpp b/libgambatte/src/sound/channel2.cpp
+index f894e89..9fd19b0 100644
+--- a/libgambatte/src/sound/channel2.cpp
++++ b/libgambatte/src/sound/channel2.cpp
+@@ -115,13 +115,12 @@ void Channel2::loadState(SaveState const &state) {
+ 
+ void Channel2::update(uint_least32_t *buf, unsigned long const soBaseVol, unsigned long cycles) {
+ 	unsigned long const outBase = envelopeUnit_.dacIsOn() ? soBaseVol & soMask_ : 0;
+-	unsigned long const outLow = outBase * (0 - 15ul);
+ 	unsigned long const endCycles = cycleCounter_ + cycles;
+ 
+ 	for (;;) {
+-		unsigned long const outHigh = master_
+-		                            ? outBase * (envelopeUnit_.getVolume() * 2 - 15ul)
+-		                            : outLow;
++		unsigned long const level = master_ ? (outBase >> 4) * envelopeUnit_.getVolume() * 3 : 0;
++		unsigned long const outHigh = level * (8 - dutyUnit_.highEighths());
++		unsigned long const outLow = 0 - level * dutyUnit_.highEighths();
+ 		unsigned long const nextMajorEvent = std::min(nextEventUnit->counter(), endCycles);
+ 		unsigned long out = dutyUnit_.isHighState() ? outHigh : outLow;
+ 
+diff --git a/libgambatte/src/sound/channel3.cpp b/libgambatte/src/sound/channel3.cpp
+index 4797482..efb2cd1 100644
+--- a/libgambatte/src/sound/channel3.cpp
++++ b/libgambatte/src/sound/channel3.cpp
+@@ -142,19 +142,28 @@ void Channel3::updateWaveCounter(unsigned long const cc) {
+ 	}
+ }
+ 
++static inline unsigned long centred(unsigned long level, unsigned long sum) {
++	long const v = static_cast<long>(level) - static_cast<long>(sum);
++	return static_cast<unsigned long>(std::max(-240l, std::min(240l, v)));
++}
++
+ void Channel3::update(uint_least32_t *buf, unsigned long const soBaseVol, unsigned long cycles) {
+ 	unsigned long const outBase = nr0_/* & 0x80*/ ? soBaseVol & soMask_ : 0;
+ 
+ 	if (outBase && rshift_ != 4) {
+ 		unsigned long const endCycles = cycleCounter_ + cycles;
++		unsigned long const scale = (outBase >> 6) * 3;
++		unsigned long sum = 0;
++		for (unsigned i = 0; i < 0x10; ++i)
++			sum += (waveRam_[i] >> 4 >> rshift_) + ((waveRam_[i] & 0xF) >> rshift_);
+ 
+ 		for (;;) {
+ 			unsigned long const nextMajorEvent =
+ 				std::min(lengthCounter_.counter(), endCycles);
+ 			unsigned long out = master_
+-				? ((sampleBuf_ >> (~wavePos_ << 2 & 4) & 0xF) >> rshift_) * 2 - 15ul
+-				: 0 - 15ul;
+-			out *= outBase;
++				? centred(((sampleBuf_ >> (~wavePos_ << 2 & 4) & 0xF) >> rshift_) * 32, sum)
++				: 0;
++			out *= scale;
+ 
+ 			while (waveCounter_ <= nextMajorEvent) {
+ 				*buf += out - prevOut_;
+@@ -167,8 +176,8 @@ void Channel3::update(uint_least32_t *buf, unsigned long const soBaseVol, unsign
+ 				++wavePos_;
+ 				wavePos_ &= 0x1F;
+ 				sampleBuf_ = waveRam_[wavePos_ >> 1];
+-				out = ((sampleBuf_ >> (~wavePos_ << 2 & 4) & 0xF) >> rshift_) * 2 - 15ul;
+-				out *= outBase;
++				out = centred(((sampleBuf_ >> (~wavePos_ << 2 & 4) & 0xF) >> rshift_) * 32, sum);
++				out *= scale;
+ 			}
+ 
+ 			if (cycleCounter_ < nextMajorEvent) {
+@@ -184,7 +193,7 @@ void Channel3::update(uint_least32_t *buf, unsigned long const soBaseVol, unsign
+ 				break;
+ 		}
+ 	} else {
+-		unsigned long const out = outBase * (0 - 15ul);
++		unsigned long const out = 0;
+ 		*buf += out - prevOut_;
+ 		prevOut_ = out;
+ 		cycleCounter_ += cycles;
+diff --git a/libgambatte/src/sound/channel4.cpp b/libgambatte/src/sound/channel4.cpp
+index 0fb15ac..f501793 100644
+--- a/libgambatte/src/sound/channel4.cpp
++++ b/libgambatte/src/sound/channel4.cpp
+@@ -218,11 +218,11 @@ void Channel4::loadState(SaveState const &state) {
+ 
+ void Channel4::update(uint_least32_t *buf, unsigned long const soBaseVol, unsigned long cycles) {
+ 	unsigned long const outBase = envelopeUnit_.dacIsOn() ? soBaseVol & soMask_ : 0;
+-	unsigned long const outLow = outBase * (0 - 15ul);
+ 	unsigned long const endCycles = cycleCounter_ + cycles;
+ 
+ 	for (;;) {
+-		unsigned long const outHigh = outBase * (envelopeUnit_.getVolume() * 2 - 15ul);
++		unsigned long const outHigh = master_ ? (outBase >> 2) * envelopeUnit_.getVolume() * 3 : 0;
++		unsigned long const outLow = 0 - outHigh;
+ 		unsigned long const nextMajorEvent = std::min(nextEventUnit_->counter(), endCycles);
+ 		unsigned long out = lfsr_.isHighState() ? outHigh : outLow;
+ 
+diff --git a/libgambatte/src/sound/duty_unit.h b/libgambatte/src/sound/duty_unit.h
+index 23acd1c..bc7607c 100644
+--- a/libgambatte/src/sound/duty_unit.h
++++ b/libgambatte/src/sound/duty_unit.h
+@@ -31,6 +31,7 @@ public:
+ 	virtual void event();
+ 	virtual void resetCounters(unsigned long oldCc);
+ 	bool isHighState() const { return high_; }
++	unsigned highEighths() const { return 0x6421 >> (duty_ * 4) & 0xF; }
+ 	void nr1Change(unsigned newNr1, unsigned long cc);
+ 	void nr3Change(unsigned newNr3, unsigned long cc);
+ 	void nr4Change(unsigned newNr4, unsigned long cc);

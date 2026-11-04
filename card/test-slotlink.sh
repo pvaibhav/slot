@@ -34,11 +34,14 @@ reset() {
 	else
 		: > "$TMP/proc-modules"
 	fi
-	make_fake wpa_cli "$TMP/cli.log" 'echo "wpa_state=${FAKE_STATE:-COMPLETED}"'
+	make_fake wpa_cli "$TMP/cli.log" 'case "$*" in *ping*) echo PONG; exit 0;; esac' 'echo "wpa_state=${FAKE_STATE:-COMPLETED}"'
 	make_fake wpa_supplicant "$TMP/sup.log"
 	make_fake ip "$TMP/ip.log"
+	make_fake rfkill "$TMP/rfkill.log"
 	make_fake insmod "$TMP/mod.log"
 	make_fake legacy "$TMP/legacy.log"
+	make_fake udhcpc "$TMP/dhcp.log"
+	printf 'network={\n\tssid="Home"\n\tpsk="hunter22"\n}\n' > "$TMP/wifi.conf"
 }
 
 run() {
@@ -47,7 +50,8 @@ run() {
 		AGS_MODULES="$TMP/modules" AGS_NET_SYS="$TMP/net" AGS_RUN="$TMP/run" \
 		AGS_CTRL_DIR="$TMP/ctrl" AGS_PROC_MODULES="$TMP/proc-modules" \
 		AGS_WPA_SUPPLICANT="$TMP/bin/wpa_supplicant" AGS_WPA_CLI="$TMP/bin/wpa_cli" \
-		AGS_IP="$TMP/bin/ip" AGS_INSMOD="$TMP/bin/insmod" \
+		AGS_IP="$TMP/bin/ip" AGS_INSMOD="$TMP/bin/insmod" AGS_UDHCPC="$TMP/bin/udhcpc" \
+		AGS_RFKILL="$TMP/bin/rfkill" AGS_LINK_TRACE="$TMP/trace.log" \
 		AGS_LINK_WAIT_S="${WAIT_S:-1}" AGS_LINK_PIN_WAIT_S="${WAIT_S:-1}" \
 		sh "$SCRIPT" "$@"
 }
@@ -67,6 +71,37 @@ run absent link host && rc=0 || rc=$?
 unset FAKE_STATE
 [ "$rc" = 1 ] || fail "dead AP exited $rc, want 1"
 grep -q 'addr add' "$TMP/ip.log" 2>/dev/null && fail "dead AP was addressed"
+
+grep -q 'host: wlan1 never came up' "$TMP/trace.log" || fail "dead AP left no reason in the trace"
+
+reset yes
+rm -rf "$TMP/net/wlan1"
+run absent link host && rc=0 || rc=$?
+[ "$rc" = 1 ] || fail "host with no wlan1 exited $rc, want 1"
+grep -q 'host: no wlan1, interfaces: wlan0' "$TMP/trace.log" || fail "a missing wlan1 left no reason in the trace"
+
+reset yes
+make_fake wpa_supplicant "$TMP/sup.log" 'echo "nl80211: AP mode not supported" >&2' 'exit 1'
+run absent link host && rc=0 || rc=$?
+[ "$rc" = 1 ] || fail "host with a failing supplicant exited $rc, want 1"
+grep -q 'host: wpa_supplicant failed: nl80211: AP mode not supported' "$TMP/trace.log" \
+	|| fail "a failing supplicant left no reason in the trace"
+
+reset yes
+echo 'slotlink: 1.00 join: asked' > "$TMP/trace.log"
+echo 'the first attempt' >> "$TMP/trace.log"
+for n in 1 2 3 4; do run absent link host >/dev/null; done
+grep -q 'the first attempt' "$TMP/trace.log" || fail "four new links dropped the first of five attempts"
+run absent link host >/dev/null
+grep -q 'the first attempt' "$TMP/trace.log" && fail "a sixth link kept the oldest attempt"
+[ "$(grep -c 'host: asked' "$TMP/trace.log")" = 5 ] || fail "the trace does not hold the last five attempts"
+[ "$(grep -c 'host: addressed' "$TMP/trace.log")" = 5 ] || fail "a kept attempt lost its lines"
+
+reset yes
+rm -rf "$TMP/net/wlan0"
+run absent link join && rc=0 || rc=$?
+[ "$rc" = 1 ] || fail "join with no wlan0 exited $rc, want 1"
+grep -q 'join: no wlan0' "$TMP/trace.log" || fail "a missing wlan0 left no reason in the trace"
 
 reset yes
 run absent link join && rc=0 || rc=$?
@@ -105,6 +140,62 @@ run absent link join >/dev/null && rc=0 || rc=$?
 t1=$(date +%s)
 [ "$rc" = 3 ] || fail "slow join exited $rc, want 3"
 [ $((t1 - t0)) -le 4 ] || fail "a 2 s join took $((t1 - t0)) s with a slow wpa_cli"
+
+reset yes
+run absent wifi start "$TMP/wifi.conf" >/dev/null
+: > "$TMP/cli.log"
+run absent link host >/dev/null || true
+grep -q terminate "$TMP/cli.log" || fail "a link left the wifi supplicant on wlan0"
+[ ! -e "$TMP/run/slotwifi.on" ] || fail "a link left the wifi mark"
+
+reset yes
+run absent wifi start "$TMP/wifi.conf" >/dev/null
+run absent link join >/dev/null
+: > "$TMP/cli.log"
+: > "$TMP/ip.log"
+run absent wifi stop && rc=0 || rc=$?
+[ "$rc" = 0 ] || fail "wifi stop during a link exited $rc"
+grep -q terminate "$TMP/cli.log" && fail "a late wifi stop took the link's supplicant down"
+grep -q 'addr flush dev wlan0' "$TMP/ip.log" && fail "a late wifi stop flushed the link's address"
+
+reset yes
+: > "$TMP/cli.log"
+run absent wifi stop && rc=0 || rc=$?
+[ "$rc" = 0 ] || fail "wifi stop with nothing up exited $rc"
+grep -q terminate "$TMP/cli.log" && fail "wifi stop with nothing up touched wlan0"
+
+reset yes
+run absent wifi start "$TMP/wifi.conf" && rc=0 || rc=$?
+[ "$rc" = 0 ] || fail "wifi start exited $rc"
+grep -q -- "-i wlan0 -c $TMP/wifi.conf" "$TMP/sup.log" || fail "wifi start did not start the supplicant on the conf"
+grep -q 'unblock wifi' "$TMP/rfkill.log" || fail "wifi start did not unblock wifi"
+grep -q 'link set wlan0 up' "$TMP/ip.log" || fail "wifi start did not raise wlan0"
+
+reset yes
+run absent wifi start "$TMP/no-such.conf" && rc=0 || rc=$?
+[ "$rc" = 3 ] || fail "wifi start with no conf exited $rc, want 3"
+[ ! -e "$TMP/sup.log" ] || fail "wifi start with no conf started the supplicant"
+
+reset yes
+rmdir "$TMP/net/wlan0"
+run absent wifi start "$TMP/wifi.conf" && rc=0 || rc=$?
+[ "$rc" = 3 ] || fail "wifi start with no wlan0 exited $rc, want 3"
+[ ! -e "$TMP/sup.log" ] || fail "wifi start with no wlan0 started the supplicant"
+
+reset yes
+run absent wifi start "$TMP/wifi.conf" >/dev/null
+run absent wifi stop && rc=0 || rc=$?
+[ "$rc" = 0 ] || fail "wifi stop exited $rc"
+grep -q terminate "$TMP/cli.log" || fail "wifi stop left the supplicant running"
+grep -q 'addr flush dev wlan0' "$TMP/ip.log" || fail "wifi stop kept wlan0's address"
+
+reset yes
+run absent wifi start "$TMP/wifi.conf" >/dev/null
+run absent wifi off && rc=0 || rc=$?
+[ "$rc" = 0 ] || fail "wifi off exited $rc"
+grep -q terminate "$TMP/cli.log" || fail "wifi off left the supplicant running"
+grep -q 'link set wlan0 down' "$TMP/ip.log" || fail "wifi off left wlan0 up"
+grep -q 'block wifi' "$TMP/rfkill.log" || fail "wifi off did not block wifi"
 
 reset yes
 run absent link sideways 2>/dev/null && rc=0 || rc=$?

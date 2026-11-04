@@ -589,7 +589,11 @@ fn a_cart_in_flight_is_not_also_left_standing_on_the_shelf() {
                     && w <= CART_W as f32 + 0.01
                     && (w / h - CART_W as f32 / CART_H as f32).abs() < 0.05
             }
-            Draw::Game | Draw::Shot { .. } | Draw::Capture => false,
+            Draw::Game
+            | Draw::Shot { .. }
+            | Draw::Capture
+            | Draw::Quad { .. }
+            | Draw::Paper { .. } => false,
         })
         .count();
     assert_eq!(
@@ -787,33 +791,34 @@ fn let_it_hop(app: &mut App) {
     app.update(0.25);
 }
 
-fn start_on(mut pressed: App, mut untouched: App) -> (Option<Core>, f32, bool) {
-    fake_picker_faces(&mut pressed);
-    fake_picker_faces(&mut untouched);
-    pressed.apply(Action::GbaDown(Btn::Start));
-    let_it_hop(&mut pressed);
-    let_it_hop(&mut untouched);
-    let moved = frame(&pressed) != frame(&untouched);
-    (pressed.core_picker(), pressed.shelf_shake(), moved)
-}
-
 #[test]
-fn start_opens_no_picker_on_a_game_boy_cart() {
-    let (_d, gb) = on_shelf_gb(&["Tetris", "Zzz"]);
-    let (_twin, gb_twin) = on_shelf_gb(&["Tetris", "Zzz"]);
-    let (picker, shake, moved) = start_on(gb, gb_twin);
-    assert_eq!(picker, None, "a Game Boy cart opened the GBA picker");
+fn choosing_mgba_on_a_game_boy_cart_writes_it() {
+    let (d, mut app) = on_shelf_gb(&["Tetris", "Zzz"]);
+    fake_picker_faces(&mut app);
+    app.apply(Action::GbaDown(Btn::Start));
+    let_it_hop(&mut app);
+    app.apply(Action::GbaDown(Btn::Right));
     assert_eq!(
-        shake, 0.0,
-        "START on a Game Boy cart was answered with a refusal shake"
+        app.core_picker(),
+        Some(Core::Gambatte),
+        "right from Gambatte wrapped round"
     );
-    assert!(!moved, "START changed what the shelf draws");
+    let_it_hop(&mut app);
+    app.apply(Action::GbaDown(Btn::Left));
+    assert_eq!(app.core_picker(), Some(Core::Mgba));
+    app.apply(Action::GbaDown(Btn::A));
+    assert_eq!(
+        slot_store::core_for_platform(d.path(), "Tetris", Platform::Gb, Core::Gambatte),
+        Core::Mgba
+    );
 
-    let (_d, gba) = on_shelf(&["Emerald", "Zzz"]);
-    let (_twin, gba_twin) = on_shelf(&["Emerald", "Zzz"]);
-    let (picker, _, moved) = start_on(gba, gba_twin);
-    assert_eq!(picker, Some(Core::Mgba), "START stopped opening the picker");
-    assert!(moved, "the picker opened and the shelf drew the same frame");
+    let_it_close(&mut app);
+    app.apply(Action::GbaDown(Btn::Start));
+    assert_eq!(
+        app.core_picker(),
+        Some(Core::Mgba),
+        "the chip should start in the core the cart already uses"
+    );
 }
 
 #[test]
@@ -847,9 +852,9 @@ fn choosing_a_core_writes_it_and_closes() {
     app.apply(Action::GbaDown(Btn::Right));
     app.apply(Action::GbaDown(Btn::A));
 
-    assert_eq!(slot_store::core_for(d.path(), "Emerald"), Core::Gpsp);
+    assert_eq!(slot_store::core_for_platform(d.path(), "Emerald", Platform::Gba, Core::Mgba), Core::Gpsp);
     assert_eq!(
-        slot_store::core_for(d.path(), "Zzz"),
+        slot_store::core_for_platform(d.path(), "Zzz", Platform::Gba, Core::Mgba),
         Core::Mgba,
         "the choice landed on a cart the shelf was not on"
     );
@@ -872,7 +877,7 @@ fn b_closes_the_picker_without_writing() {
 
     assert_eq!(app.core_picker(), None);
     assert_eq!(
-        slot_store::core_for(d.path(), "Emerald"),
+        slot_store::core_for_platform(d.path(), "Emerald", Platform::Gba, Core::Mgba),
         Core::Mgba,
         "backing out of the picker still changed the cart"
     );
@@ -956,7 +961,7 @@ fn a_mid_hop_writes_where_the_chip_is_heading() {
     app.apply(Action::GbaDown(Btn::Right));
     app.update(0.05);
     app.apply(Action::GbaDown(Btn::A));
-    assert_eq!(slot_store::core_for(d.path(), "Emerald"), Core::Gpsp);
+    assert_eq!(slot_store::core_for_platform(d.path(), "Emerald", Platform::Gba, Core::Mgba), Core::Gpsp);
 }
 
 #[test]
@@ -996,7 +1001,7 @@ fn presses_during_the_close_and_keys_the_picker_does_not_use_do_nothing() {
     let_it_close(&mut app);
     assert_eq!(app.core_picker(), None);
     assert_eq!(
-        slot_store::core_for(d.path(), "Emerald"),
+        slot_store::core_for_platform(d.path(), "Emerald", Platform::Gba, Core::Mgba),
         Core::Mgba,
         "a press during the close wrote a core"
     );
@@ -1010,7 +1015,7 @@ fn shutting_the_lid_closes_the_picker_without_writing() {
     app.apply(Action::GbaDown(Btn::Right));
     app.apply(Action::LidClose);
     assert_eq!(app.core_picker(), None, "the picker survived the lid");
-    assert_eq!(slot_store::core_for(d.path(), "Emerald"), Core::Mgba);
+    assert_eq!(slot_store::core_for_platform(d.path(), "Emerald", Platform::Gba, Core::Mgba), Core::Mgba);
 }
 
 #[test]
@@ -1094,7 +1099,7 @@ fn fake_boot_faces(app: &mut App) -> PickerFaces {
         legend: [(id(908), 60), (id(909), 90), (id(910), 80)],
     };
     app.set_core_part_faces(f.sockets.to_vec(), f.chips.to_vec(), f.blank, f.shadow);
-    app.set_core_legend_faces(f.legend.to_vec());
+    app.set_core_legend_faces(f.legend.to_vec(), f.legend.to_vec());
     f
 }
 
@@ -1341,24 +1346,69 @@ fn the_open_cart_rests_over_the_shelf_with_its_lid_turned() {
     let [cancel, swap, choose] = f.legend;
     let at = |tex| tex_at(&out, tex).expect("a legend hint is missing").1;
     let seen = |w: u32| (w - HINT_EDGE) as f32;
-    let y = OUT_H as f32 - MOUTH_H * 2.0;
-    assert_eq!(at(cancel.0), [234.0, y, cancel.1 as f32, MOUTH_H]);
+    let y = OUT_H as f32 - MOUTH_H;
+    assert_eq!((at(cancel.0)[1], at(swap.0)[1], at(choose.0)[1]), (y, y, y));
     assert_eq!(
-        at(swap.0)[0] + seen(swap.1) / 2.0,
-        OUT_W as f32 / 2.0,
-        "Swap is off the panel's centre"
+        at(choose.0)[0] + seen(choose.1),
+        OUT_W as f32 - at(cancel.0)[0],
+        "Cancel and Choose do not hold the footer's two edges"
     );
-    assert_eq!(
-        at(choose.0)[0],
-        at(swap.0)[0] + seen(swap.1) + 24.0,
-        "Choose is not beside Swap"
+    let left = at(swap.0)[0] - at(cancel.0)[0] - seen(cancel.1);
+    let right = at(choose.0)[0] - at(swap.0)[0] - seen(swap.1);
+    assert!((left - right).abs() <= 1.0, "Swap is not spread: {left} {right}");
+}
+
+#[test]
+fn the_core_picker_plugs_the_slot_over_the_footer() {
+    let (_d, mut app) = on_shelf(&["Emerald", "Zzz"]);
+    let f = fake_picker_faces(&mut app);
+    let plugged = TexId::from_raw(950);
+    app.set_plugged_face(plugged);
+    let plug = |out: &[Draw]| {
+        out.iter().find_map(|d| match *d {
+            Draw::Part { tex, alpha, .. } if tex == plugged => Some(alpha),
+            _ => None,
+        })
+    };
+    assert_eq!(plug(&frame(&app)), None, "the shelf's slot is plugged");
+    app.apply(Action::GbaDown(Btn::Start));
+    let_it_open(&mut app);
+    let out = frame(&app);
+    assert_eq!(plug(&out), Some(1.0), "the open picker left the slot empty");
+    let (legend, _) = tex_at(&out, f.legend[0].0).expect("no legend");
+    let strip = out
+        .iter()
+        .position(|d| matches!(*d, Draw::Part { tex, .. } if tex == plugged));
+    assert!(strip < Some(legend), "the plug is drawn over the legends");
+}
+
+#[test]
+fn a_game_boy_cart_seats_the_pak_chip_in_the_pak_footprints() {
+    let (_d, mut app) = on_shelf_gb(&["Tetris", "Zzz"]);
+    let f = fake_picker_faces(&mut app);
+    let id = TexId::from_raw;
+    let (gb_sockets, gb_chips) = ([id(920), id(921), id(922)], [id(923), id(924), id(925)]);
+    app.set_core_gb_part_faces(gb_sockets.to_vec(), gb_chips.to_vec(), id(926));
+    app.apply(Action::GbaDown(Btn::Start));
+    let_it_open(&mut app);
+    let out = frame(&app);
+
+    let gambatte = Core::Gambatte.index();
+    let mgba = Core::Mgba.index();
+    let (_, chip, _) = turned_at(&out, gb_chips[gambatte]).expect("the pak chip is not seated");
+    let (_, right) = tex_at(&out, gb_sockets[gambatte]).expect("the Gambatte footprint is missing");
+    let (_, left) = tex_at(&out, gb_sockets[mgba]).expect("the mGBA footprint is missing");
+    assert!(left[0] < right[0], "mGBA must keep the left footprint");
+    assert!(
+        (chip[0] - right[0]).abs() < 4.0 && (chip[1] - right[1]).abs() < 4.0,
+        "the chip at {chip:?} is not over the Gambatte footprint at {right:?}"
     );
-    assert_eq!(
-        at(cancel.0)[0] + seen(cancel.1) + 24.0,
-        at(swap.0)[0],
-        "Cancel is not beside Swap"
-    );
-    assert_eq!((at(swap.0)[1], at(choose.0)[1]), (y, y));
+    for t in f.sockets.iter().chain(f.chips.iter()) {
+        assert!(
+            tex_at(&out, *t).is_none() && turned_at(&out, *t).is_none(),
+            "a GBA part drew on the pak board"
+        );
+    }
 }
 
 #[test]

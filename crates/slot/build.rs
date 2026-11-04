@@ -12,6 +12,7 @@ fn main() {
     println!("cargo:rerun-if-changed=../../.git/HEAD");
     println!("cargo:rerun-if-changed=../../.git/logs/HEAD");
     println!("cargo:rerun-if-changed=../../.git/refs/tags");
+    println!("cargo:rerun-if-env-changed=SLOT_VERSION");
     if std::path::Path::new("../../.git/packed-refs").exists() {
         println!("cargo:rerun-if-changed=../../.git/packed-refs");
     }
@@ -30,7 +31,10 @@ fn main() {
             git(&["rev-parse", "--short=8", "HEAD"])
         })
         .unwrap_or_else(|| "unknown".into());
-    let version = git(&["describe", "--tags", "--abbrev=0"])
+    let version = std::env::var("SLOT_VERSION")
+        .ok()
+        .filter(|v| !v.is_empty())
+        .or_else(|| git(&["describe", "--tags", "--abbrev=0"]))
         .map(|t| t.trim_start_matches('v').to_string())
         .unwrap_or_else(|| env!("CARGO_PKG_VERSION").into());
     let date = Command::new("date")

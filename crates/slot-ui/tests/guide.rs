@@ -75,6 +75,7 @@ fn a_saved_spot_out_of_range_is_pulled_back() {
         line: 9999,
         col: 9999,
         zoom: 200,
+        wrap: false,
     };
     let g = Guide::new(lines(50, 100), Some(spot), WIDE);
     assert_eq!(g.spot().zoom as usize, GUIDE_ZOOMS.len() - 1);
@@ -132,6 +133,148 @@ fn the_legend_is_back_and_help_only() {
     let keys: Vec<(&str, String)> = g.hints().into_iter().map(|h| (h.key, h.label)).collect();
     assert_eq!(
         keys,
-        [("B", "Back".to_string()), ("MENU", "Help".to_string())]
+        [("Y", "Close".to_string()), ("MENU", "Help".to_string())]
     );
+}
+
+fn prose(words: usize) -> String {
+    vec!["word"; words].join(" ")
+}
+
+#[test]
+fn wrapping_fits_every_word_on_screen_and_stops_panning() {
+    let mut g = Guide::new(vec![prose(200)], None, WIDE);
+    g.zoom_by(7, WIDE);
+    assert_eq!(g.view(WIDE).col, 0);
+    g.toggle_wrap(WIDE);
+    g.pan(1, WIDE);
+    assert_eq!(g.view(WIDE).col, 0);
+    let cols = g.cols(WIDE);
+    let mut seen = 0;
+    let mut rows = 0;
+    while let Some(text) = g.visible_text(rows) {
+        assert!(text.chars().count() <= cols, "{text:?}");
+        assert!(!text.starts_with(' ') && !text.ends_with(' '), "{text:?}");
+        seen += text.split_whitespace().count();
+        assert!(text.split_whitespace().all(|w| w == "word"), "{text:?}");
+        rows += 1;
+    }
+    assert_eq!(seen, 200);
+}
+
+#[test]
+fn a_word_wider_than_the_screen_is_cut_and_blank_lines_stay() {
+    let long = "x".repeat(300);
+    let mut g = Guide::new(vec![long, String::new(), "end".into()], None, WIDE);
+    g.toggle_wrap(WIDE);
+    let cols = g.cols(WIDE);
+    assert_eq!(g.visible_text(0).unwrap().len(), cols);
+    let rows = 300usize.div_ceil(cols);
+    assert_eq!(g.visible_text(rows), Some(""));
+    assert_eq!(g.visible_text(rows + 1), Some("end"));
+}
+
+#[test]
+fn indentation_on_a_first_row_is_kept() {
+    let line = format!("    {}", prose(100));
+    let mut g = Guide::new(vec![line], None, WIDE);
+    g.toggle_wrap(WIDE);
+    assert!(g.visible_text(0).unwrap().starts_with("    word"));
+}
+
+#[test]
+fn toggling_and_zooming_keep_the_same_text_on_top() {
+    let lines: Vec<String> = (0..100).map(|i| format!("{i} {}", prose(60))).collect();
+    let mut g = Guide::new(lines, None, WIDE);
+    g.scroll(40, WIDE);
+    g.toggle_wrap(WIDE);
+    assert!(g.visible_text(0).unwrap().starts_with("40 "));
+    g.scroll(1, WIDE);
+    let top = g.spot();
+    assert_eq!(top.line, 40);
+    assert!(top.col > 0);
+    g.zoom_by(1, WIDE);
+    let moved = g.spot();
+    assert_eq!(moved.line, 40);
+    assert!(moved.col <= top.col);
+    g.toggle_wrap(WIDE);
+    assert_eq!(g.spot().line, 40);
+    assert!(!g.wrap());
+}
+
+#[test]
+fn a_saved_wrapped_spot_reopens_on_the_same_row() {
+    let lines: Vec<String> = (0..100).map(|i| format!("{i} {}", prose(60))).collect();
+    let mut g = Guide::new(lines.clone(), None, WIDE);
+    g.toggle_wrap(WIDE);
+    g.scroll(200, WIDE);
+    let spot = g.spot();
+    let top = g.visible_text(0).unwrap().to_string();
+    let back = Guide::new(lines, Some(spot), WIDE);
+    assert!(back.wrap());
+    assert_eq!(back.visible_text(0), Some(top.as_str()));
+    assert_eq!(back.spot(), spot);
+}
+
+#[test]
+fn a_spot_saved_before_wrapping_existed_stays_unwrapped() {
+    let spot = GuideSpot {
+        line: 3,
+        col: 0,
+        zoom: 2,
+        wrap: false,
+    };
+    let g = Guide::new(lines(20, 200), Some(spot), WIDE);
+    assert!(!g.wrap());
+}
+
+#[test]
+fn wrapped_text_is_drawn_and_changes_the_view() {
+    let mut g = Guide::new(vec![prose(400)], None, WIDE);
+    let before = g.view(WIDE);
+    let plain = inked_rows(&g.render(WIDE, &mut GuideGlyphs::default()));
+    g.toggle_wrap(WIDE);
+    assert_ne!(g.view(WIDE), before);
+    let wrapped = inked_rows(&g.render(WIDE, &mut GuideGlyphs::default()));
+    assert!(
+        wrapped.iter().filter(|r| **r).count() > plain.iter().filter(|r| **r).count() * 4,
+        "wrapped text should fill the page"
+    );
+}
+
+#[test]
+fn the_help_fits_between_the_plates() {
+    let face = slot_ui::guide_help_face();
+    assert!(
+        face.h as f32 <= 480.0 - 2.0 * slot_ui::PLATE_H,
+        "{}",
+        face.h
+    );
+}
+
+#[test]
+fn wrapped_rows_keep_the_indent_of_their_line() {
+    let line = format!("    {}", prose(100));
+    let mut g = Guide::new(vec![line], None, WIDE);
+    g.toggle_wrap(WIDE);
+    let cols = g.cols(WIDE);
+    assert_eq!(g.visible_indent(0), Some(0));
+    assert!(g.visible_text(0).unwrap().starts_with("    word"));
+    assert_eq!(g.visible_indent(1), Some(4));
+    assert!(g.visible_text(1).unwrap().starts_with("word"));
+    assert!(g.visible_text(1).unwrap().chars().count() + 4 <= cols);
+}
+
+#[test]
+fn a_line_indented_past_half_the_screen_still_wraps_in_what_is_left() {
+    let line = format!("{}{}", " ".repeat(70), prose(60));
+    let mut g = Guide::new(vec![line], None, WIDE);
+    g.toggle_wrap(WIDE);
+    let cols = g.cols(WIDE);
+    let mut row = 1;
+    while let Some(text) = g.visible_text(row) {
+        assert_eq!(g.visible_indent(row), Some(cols / 2));
+        assert!(text.chars().count() + cols / 2 <= cols, "{text:?}");
+        row += 1;
+    }
 }
