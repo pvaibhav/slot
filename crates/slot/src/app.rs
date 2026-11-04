@@ -589,7 +589,6 @@ pub struct App {
     game_bezel: Option<TexId>,
     bezel_column: Vec<u8>,
     in_game_menu: Option<QuickRow>,
-    /// 0 while the pause footer is off the bottom, 1 when it sits in the carousel's place.
     footer: f32,
     footer_row: Option<QuickRow>,
     states_from_menu: bool,
@@ -4591,7 +4590,6 @@ impl App {
     fn step_footer(&mut self, dt: f32) {
         let shown = match &self.phase {
             Phase::Playing { .. } => self.in_game_menu_shown(),
-            // The carousel already holds this strip, so the menu does not slide it.
             Phase::QuickMenu { row } => {
                 self.footer = 1.0;
                 self.footer_row = Some(*row);
@@ -4630,8 +4628,6 @@ impl App {
         (1.0 - ease(self.footer)) * MOUTH_H
     }
 
-    /// The carousel strip shares this canvas, so the picture scales in the space above it.
-    /// A 4:3 game frame is a different canvas; its close keeps the full-frame scale.
     fn footer_on_carousel_canvas(&self) -> bool {
         !self.framed_panel() || !self.shows_game()
     }
@@ -5472,8 +5468,6 @@ impl App {
                 }
                 row
             }
-            // The carousel menu is not a game, so the mouth stays empty, in the
-            // same place the shelf already had it.
             Phase::QuickMenu { row } if row.binds() => {
                 slot_ui::draw_plugged_slot(self.canvas(), self.plugged_face, 1.0, out);
                 Some(*row)
@@ -5503,8 +5497,6 @@ impl App {
             return;
         }
         let start = out.len();
-        // The framed power-off paints black and the picture, and never the slot. The other
-        // close already draws the seated cart through the chrome.
         if self.framed_panel() && self.screen > 0.0 {
             self.draw_seated_mouth(cart, out);
         }

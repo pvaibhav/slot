@@ -63,10 +63,6 @@ pub trait Platform: Send {
     fn now(&self) -> i64;
     fn set_clock(&mut self, secs: i64);
 
-    fn set_clock_in_background(&mut self, secs: i64) {
-        self.set_clock(secs);
-    }
-
     fn set_network_time(&mut self, _on: bool) {}
 
     fn set_rumble(&mut self, strength: u16);

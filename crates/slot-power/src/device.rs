@@ -630,10 +630,6 @@ impl Platform for DevicePlatform {
         write_clock(secs);
     }
 
-    fn set_clock_in_background(&mut self, secs: i64) {
-        std::thread::spawn(move || write_clock(secs));
-    }
-
     fn set_network_time(&mut self, on: bool) {
         std::thread::spawn(move || set_ntp(on));
     }

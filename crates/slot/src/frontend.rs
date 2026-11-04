@@ -2179,7 +2179,6 @@ fn sync_about(app: &mut App, compositor: &mut Compositor, state: &mut AboutFace)
     app.set_sticker_face(id);
 }
 
-/// The textures the core picker reuses from one cart to the next.
 #[derive(Default)]
 struct CoreTextures {
     interior: Option<TexId>,
