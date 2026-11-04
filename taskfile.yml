@@ -524,8 +524,6 @@ tasks:
       - cp vendor/fsck.exfat {{.OUT}}/System/
       - cp -r licenses {{.OUT}}/System/licenses
       - cp vendor/exfatprogs-{{.EXFATPROGS_VERSION}}.tar.gz {{.OUT}}/System/licenses/
-      - cp -r vendor/slot-net/licenses/. {{.OUT}}/System/licenses/
-      - cp vendor/slot-net/versions.txt {{.OUT}}/System/licenses/slot-net.meta
       - |
         set -euo pipefail
         sha="$(cat vendor/gpsp-src.sha)"
@@ -591,8 +589,6 @@ tasks:
       - "{{.ADB}} push licenses '{{.SD}}/System/'"
       - "{{.ADB}} push vendor/exfatprogs-{{.EXFATPROGS_VERSION}}.tar.gz '{{.SD}}/System/licenses/'"
       - "{{.ADB}} push crates/slot-achievements/retroachievements.toml.example '{{.SD}}/Config/'"
-      - "{{.ADB}} push vendor/slot-net/licenses/. '{{.SD}}/System/licenses/'"
-      - "{{.ADB}} push vendor/slot-net/versions.txt '{{.SD}}/System/licenses/slot-net.meta'"
       - |
         set -euo pipefail
         sha="$(cat vendor/gpsp-src.sha)"
