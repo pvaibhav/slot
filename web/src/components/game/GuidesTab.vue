@@ -37,18 +37,12 @@ async function load() {
   }
 }
 
-function pickFile(): Promise<File | null> {
-  return new Promise(resolve => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = '.txt,text/plain'
-    input.onchange = () => resolve(input.files?.[0] ?? null)
-    input.click()
-  })
-}
+const input = ref<HTMLInputElement | null>(null)
 
-async function onUpload() {
-  const file = await pickFile()
+async function picked(event: Event) {
+  const el = event.target as HTMLInputElement
+  const file = el.files?.[0]
+  el.value = ''
   if (!file) return
   busy.value = true
   error.value = null
@@ -87,8 +81,9 @@ onMounted(load)
 
 <template>
   <div class="space-y-3">
+    <input ref="input" type="file" class="hidden" @change="picked" />
     <Teleport v-if="isActive" to="#game-tab-actions">
-      <Button variant="outline" size="sm" :disabled="busy" @click="onUpload">
+      <Button variant="outline" size="sm" :disabled="busy" @click="input?.click()">
         <Upload class="h-4 w-4 mr-1.5" /> {{ $t('common.upload') }}
       </Button>
     </Teleport>
