@@ -303,6 +303,12 @@ impl ServerSession {
         }
     }
 
+    pub fn skip(&mut self, now: Millis) {
+        if let Some(scene) = self.scene.as_mut().filter(|_| self.paper_up) {
+            scene.skip(now);
+        }
+    }
+
     pub fn hurried(&self) -> bool {
         self.hurry.load(Ordering::SeqCst)
     }

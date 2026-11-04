@@ -8204,8 +8204,10 @@ impl App {
 
     fn server_input(&mut self, action: Action) {
         let now = self.now();
-        if let (Action::GbaDown(Btn::B), Some(server)) = (action, &mut self.server) {
-            server.stop(now);
+        match (action, &mut self.server) {
+            (Action::GbaDown(Btn::B), Some(server)) => server.stop(now),
+            (Action::GbaDown(Btn::A), Some(server)) => server.skip(now),
+            _ => {}
         }
     }
 

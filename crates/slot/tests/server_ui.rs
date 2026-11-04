@@ -743,6 +743,24 @@ mod screen {
     }
 
     #[test]
+    fn a_skips_the_print_and_leaves_the_paper_at_rest() {
+        let Some(mut r) = Rig::new(net(&[free_port()])) else {
+            return;
+        };
+        r.wait_scene();
+        r.run(1500);
+        let printing = r.shot("printing");
+        r.tap(Btn::A);
+        r.run(32);
+        let skipped = r.shot("skipped");
+        r.run(REST);
+        let rest = r.shot("rested");
+        assert!(paper_lit(&skipped) > paper_lit(&printing));
+        assert_eq!(skipped, rest);
+        assert!(r.f.app().server_open());
+    }
+
+    #[test]
     fn the_paper_rests_on_screen_and_b_brings_the_menu_back() {
         let port = free_port();
         let Some(mut r) = Rig::new(net(&[port])) else {

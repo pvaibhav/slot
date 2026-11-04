@@ -83,6 +83,8 @@ pub struct PrintScene {
     buzzed: bool,
     torn: bool,
     hushed: bool,
+    skipped: bool,
+    ahead: Millis,
 }
 
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
@@ -279,23 +281,43 @@ impl PrintScene {
             buzzed: false,
             torn: false,
             hushed: false,
+            skipped: false,
+            ahead: 0,
+        }
+    }
+
+    fn elapsed(&self, now: Millis) -> Millis {
+        now.saturating_sub(self.start) + self.ahead
+    }
+
+    pub fn skip(&mut self, now: Millis) {
+        let t = self.elapsed(now);
+        if self.stop.is_some() || t >= REST_AT {
+            return;
+        }
+        self.ahead += REST_AT - t;
+        self.skipped = true;
+        self.torn = true;
+        if !self.buzzed {
+            self.buzzed = true;
+            self.hushed = true;
         }
     }
 
     pub fn stop(&mut self, now: Millis) {
         if self.stop.is_none() {
-            self.stop = Some(now.saturating_sub(self.start));
+            self.stop = Some(self.elapsed(now));
         }
     }
 
     pub fn hold_print(&mut self, now: Millis) {
-        if self.stop.is_none() && now.saturating_sub(self.start) >= PRINT_AT {
+        if self.stop.is_none() && self.elapsed(now) >= PRINT_AT {
             self.start = now - (PRINT_AT - 1);
         }
     }
 
     pub fn frame(&self, now: Millis) -> PrintFrame {
-        let t = now.saturating_sub(self.start);
+        let t = self.elapsed(now);
         match self.stop.map(closes_from) {
             Some(from) if t >= from => closing(&opening(from), t - from),
             _ => opening(t),
@@ -303,14 +325,14 @@ impl PrintScene {
     }
 
     pub fn done(&self, now: Millis) -> bool {
-        let t = now.saturating_sub(self.start);
+        let t = self.elapsed(now);
         self.stop
             .map(closes_from)
             .is_some_and(|from| t >= from + closing_time(&opening(from)))
     }
 
     pub fn cues(&mut self, now: Millis) -> Vec<Cue> {
-        let t = now.saturating_sub(self.start);
+        let t = self.elapsed(now);
         let mut out = Vec::new();
         if !self.buzzed && self.stop.is_none() && t >= PRINT_AT {
             self.buzzed = true;
@@ -321,7 +343,7 @@ impl PrintScene {
             self.torn = true;
             out.push(Cue::Tear);
         }
-        if self.buzzed && self.stop.is_some() && !self.hushed {
+        if self.buzzed && (self.stop.is_some() || self.skipped) && !self.hushed {
             self.hushed = true;
             out.push(Cue::BuzzOff);
         }
