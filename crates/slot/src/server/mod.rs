@@ -11,7 +11,7 @@ mod states;
 pub use carts::render_once;
 pub use files::{move_path, rename_via_temp};
 pub use http::{generate_pin, parse_target, Body, Handler, Reply, Request, Server};
-pub use net::{answer, claims, model_name, probe, respond, rival, wifi_ip, Responder};
+pub use net::{local_host, mdns_host, model_name, wifi_ip};
 pub use paths::{card_name, resolve, Refused};
 pub use session::{ServerNet, ServerPaper, ServerSession, NO_WIFI, SERVER_FAILED};
 

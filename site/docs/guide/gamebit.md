@@ -10,11 +10,13 @@ Once you are connected to a Wi-Fi network:
 
 1. Open the menu on the shelf and pick Network → Gamebit.
 2. The device prints a receipt with a QR code and a PIN.
-3. Scan the QR code on the receipt, or go to slot.local and enter the PIN.
+3. Scan the QR code on the receipt, or go to the `.local` address printed on it and enter the PIN.
 
 The PIN changes every time you open Gamebit. If you close it and open it again, the page will ask for the new one.
 
-Some routers do not honor / support mDNS. If `slot.local` doesn't load, use the device IP shown instead.
+Some routers do not honor / support mDNS. If the `.local` address doesn't load, use the device IP shown instead.
+
+The address is your device's BaseOS hostname, such as `rgsp.local`. To pick your own, set `hostname=` in `baseos.conf` on the TF1 card.
 
 Press <kbd>B</kbd> on the device to stop Gamebit and go back to the menu.
 

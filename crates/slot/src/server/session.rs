@@ -11,7 +11,7 @@ use slot_input::Millis;
 use slot_store::{scan, Cart, Platform, ShellChoice};
 use slot_ui::ReceiptText;
 
-use super::{generate_pin, qr_modules, qr_url, shown_address, wifi_ip, Responder, Server, PORTS};
+use super::{generate_pin, local_host, qr_modules, qr_url, shown_address, wifi_ip, Server, PORTS};
 use crate::label_cache::fresh;
 use crate::print_scene::{Cue, PaperJob, PrintArtState, PrintArtWorker, PrintFrame, PrintScene, PrintTextures};
 
@@ -22,7 +22,7 @@ pub const SERVER_FAILED: &str = "GAMEBIT FAILED";
 pub struct ServerNet {
     pub ip: fn() -> Option<Ipv4Addr>,
     pub ports: Vec<u16>,
-    pub responder: fn(Ipv4Addr) -> Option<Responder>,
+    pub host: fn() -> Option<String>,
 }
 
 impl Default for ServerNet {
@@ -30,7 +30,7 @@ impl Default for ServerNet {
         ServerNet {
             ip: wifi_ip,
             ports: PORTS.to_vec(),
-            responder: Responder::start,
+            host: local_host,
         }
     }
 }
@@ -48,7 +48,6 @@ pub enum ServerPaper {
 
 struct Serving {
     server: Server,
-    responder: Option<Responder>,
     before: Seen,
 }
 
@@ -114,15 +113,10 @@ fn bring_up(root: PathBuf, net: ServerNet) -> Up {
         server.stop();
         return plain(SERVER_FAILED);
     };
-    let responder = (net.responder)(ip);
-    let host = responder.as_ref().map(|r| shown_address(&r.host(), port));
+    let host = (net.host)().map(|h| shown_address(&h, port));
     let shown = shown_address(&ip.to_string(), port);
     Up {
-        serving: Some(Serving {
-            server,
-            responder,
-            before,
-        }),
+        serving: Some(Serving { server, before }),
         paper: ServerPaper::Code {
             url,
             host: host.clone(),
@@ -142,9 +136,6 @@ pub struct Rescan {
 }
 
 fn tear_down(serving: Serving, root: &Path, hurry: &AtomicBool) -> Option<Rescan> {
-    if let Some(responder) = serving.responder {
-        responder.stop();
-    }
     serving.server.stop();
     let carts = scan(root).ok()?;
     let stale = carts

@@ -150,7 +150,6 @@ const ALERT_HOLD: f32 = 0.45;
 const ALERT_GONE: f32 = 0.9;
 
 const CLOCK_FLOOR: i64 = 1_577_836_800;
-const CLOCK_DRIFT_SECS: i64 = 2;
 
 pub enum PendingUndo {
     Save {
@@ -665,7 +664,6 @@ pub struct App {
     studio_hex: Option<(String, crate::studio_view::Style)>,
     wifi_wanted_at: Option<Millis>,
     wifi: Option<(crate::wifi::Wifi, std::time::Instant, Millis)>,
-    net_time: crate::net_time::NetTime,
     joined_hidden: Option<(String, bool)>,
     wifi_bars: u8,
     wifi_faces: Option<[[slot_ui::NetFace; 4]; 2]>,
@@ -852,7 +850,6 @@ impl App {
             studio_hex: None,
             wifi_wanted_at: None,
             wifi: None,
-            net_time: crate::net_time::NetTime::new(std::sync::Arc::new(crate::sntp::fetch)),
             joined_hidden: None,
             wifi_bars: 3,
             wifi_faces: None,
@@ -1398,12 +1395,16 @@ impl App {
         };
         let (zone, clock_24h, from_menu) = (picker.zone(), picker.clock_24h(), *from_menu);
         let utc = self.utc_secs() + moved;
+        let network_time = network_time.unwrap_or(self.state.network_time);
         if let Some(power) = &mut self.power {
             power.set_clock(utc);
+            if network_time != self.state.network_time {
+                power.set_network_time(network_time);
+            }
         }
         self.state.zone = zone;
         self.state.clock_24h = clock_24h;
-        self.state.network_time = network_time.unwrap_or(self.state.network_time);
+        self.state.network_time = network_time;
         self.state.clock_set = true;
         self.persist();
         if from_menu {
@@ -3044,6 +3045,7 @@ impl App {
             self.phase = clock_screen(secs, &self.state, self.has_saved(), false);
         }
         self.copy_card_log(&power);
+        power.set_network_time(self.state.network_time);
         if let Some(result) = power.take_repair_result() {
             let toast = match result {
                 RepairResult::Repaired | RepairResult::Clean => Toast::CardRepaired,
@@ -4775,26 +4777,8 @@ impl App {
         self.timers();
     }
 
-    pub fn set_net_time_source(&mut self, source: crate::net_time::Source) {
-        self.net_time = crate::net_time::NetTime::new(source);
-    }
-
-    fn step_net_time(&mut self) {
-        let ready = self.state.network_time && self.wifi_up();
-        let now = self.now();
-        let Some(utc) = self.net_time.step(ready, now) else {
-            return;
-        };
-        if let Some(power) = &mut self.power {
-            if (utc - power.now()).abs() >= CLOCK_DRIFT_SECS {
-                power.set_clock_in_background(utc);
-            }
-        }
-    }
-
     fn timers(&mut self) {
         self.step_server();
-        self.step_net_time();
         self.take_art_events();
         self.take_romm_events();
         self.romm_tick(self.now());

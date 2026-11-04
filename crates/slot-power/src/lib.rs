@@ -67,6 +67,8 @@ pub trait Platform: Send {
         self.set_clock(secs);
     }
 
+    fn set_network_time(&mut self, _on: bool) {}
+
     fn set_rumble(&mut self, strength: u16);
 
     fn relink_adb(&mut self) -> bool {

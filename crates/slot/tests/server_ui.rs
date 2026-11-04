@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use common::{app_booting_at, app_playing_in, tmp_root_with_carts, CLOCK_IS_SET};
 use slot::app::{App, Phase};
 use slot::audio::{ring_capacity, Ring, Sfx};
-use slot::server::{Responder, ServerNet, ServerPaper, NO_WIFI, SERVER_FAILED};
+use slot::server::{ServerNet, ServerPaper, NO_WIFI, SERVER_FAILED};
 use slot_input::{Action, Btn};
 use slot_store::{write_slot_state, Platform, Recent, SlotState};
 use slot_ui::QuickRow;
@@ -20,15 +20,19 @@ fn no_lan() -> Option<Ipv4Addr> {
     None
 }
 
-fn no_mdns(_: Ipv4Addr) -> Option<Responder> {
+fn no_mdns() -> Option<String> {
     None
+}
+
+fn handheld() -> Option<String> {
+    Some("RGSP.LOCAL".to_string())
 }
 
 fn net(ports: &[u16]) -> ServerNet {
     ServerNet {
         ip: lan,
         ports: ports.to_vec(),
-        responder: no_mdns,
+        host: no_mdns,
     }
 }
 
@@ -302,7 +306,7 @@ fn both_ports_taken_prints_a_plain_message() {
 }
 
 #[test]
-fn responder_failure_omits_host() {
+fn no_mdns_omits_host() {
     let (_d, mut a) = on_shelf();
     a.set_server_net(net(&[free_port()]));
     open(&mut a);
@@ -313,22 +317,18 @@ fn responder_failure_omits_host() {
 }
 
 #[test]
-fn a_started_responder_prints_the_host() {
-    let Some(probe) = Responder::start(Ipv4Addr::LOCALHOST) else {
-        return;
-    };
-    probe.stop();
+fn the_system_host_name_is_printed() {
     let (_d, mut a) = on_shelf();
     let port = free_port();
     a.set_server_net(ServerNet {
-        responder: Responder::start,
+        host: handheld,
         ..net(&[port])
     });
     open(&mut a);
     let ServerPaper::Code { host, .. } = paper(&mut a) else {
         panic!("plain paper");
     };
-    assert!(host.is_some_and(|h| h.ends_with(&format!(".LOCAL:{port}"))));
+    assert_eq!(host, Some(format!("RGSP.LOCAL:{port}")));
 }
 
 #[test]
@@ -1040,7 +1040,7 @@ mod screen {
         assert_ne!(r.f.app().quick_menu(), before);
     }
 
-    fn slow_mdns(_: std::net::Ipv4Addr) -> Option<slot::server::Responder> {
+    fn slow_mdns() -> Option<String> {
         std::thread::sleep(Duration::from_millis(1500));
         None
     }
@@ -1048,7 +1048,7 @@ mod screen {
     #[test]
     fn the_scene_starts_before_the_paper_is_ready() {
         let net = ServerNet {
-            responder: slow_mdns,
+            host: slow_mdns,
             ..net(&[free_port()])
         };
         let Some(mut r) = Rig::new(net) else {

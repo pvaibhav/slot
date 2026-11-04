@@ -282,11 +282,11 @@ impl Snapshot for CoreSnapshot {
 }
 
 #[derive(Clone, Default)]
-pub struct Clock(Arc<AtomicI64>);
+pub struct Clock(Arc<AtomicI64>, Arc<AtomicU8>);
 
 impl Clock {
     pub fn at(secs: i64) -> Self {
-        Clock(Arc::new(AtomicI64::new(secs)))
+        Clock(Arc::new(AtomicI64::new(secs)), Arc::new(AtomicU8::new(0)))
     }
 
     pub fn get(&self) -> i64 {
@@ -295,6 +295,14 @@ impl Clock {
 
     pub fn advance(&self, secs: i64) {
         self.0.fetch_add(secs, Ordering::Relaxed);
+    }
+
+    pub fn network_time(&self) -> Option<bool> {
+        match self.1.load(Ordering::Relaxed) {
+            1 => Some(false),
+            2 => Some(true),
+            _ => None,
+        }
     }
 }
 
@@ -466,6 +474,12 @@ impl Platform for StubPlatform {
 
     fn set_clock(&mut self, secs: i64) {
         self.clock.0.store(secs, Ordering::Relaxed);
+    }
+
+    fn set_network_time(&mut self, on: bool) {
+        self.clock
+            .1
+            .store(if on { 2 } else { 1 }, Ordering::Relaxed);
     }
 
     fn set_rumble(&mut self, _strength: u16) {}

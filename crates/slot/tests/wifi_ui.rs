@@ -447,8 +447,6 @@ fn the_studio_offers_the_label_printer_only_while_connected() {
     assert!(rows.contains(&slot::studio::Row::Label), "{rows:?}");
 }
 
-const NETWORK_NOW: i64 = 1_790_000_000;
-
 fn with_network_time(on: bool) -> (TempDir, App, common::Clock) {
     let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
     write_slot_state(
@@ -462,7 +460,6 @@ fn with_network_time(on: bool) -> (TempDir, App, common::Clock) {
     .unwrap();
     std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
     let (mut a, clock) = app_booting_at(d.path(), CLOCK_IS_SET);
-    a.set_net_time_source(Arc::new(|| Some(NETWORK_NOW)));
     a.set_wifi(Wifi::inline(Box::new(Fake::joined())));
     (d, a, clock)
 }
@@ -479,31 +476,16 @@ fn open_clock(a: &mut App) {
     a.apply(Action::GbaDown(Btn::A));
 }
 
-fn wait_for_clock(a: &mut App, clock: &common::Clock) {
-    for _ in 0..200 {
-        settle(a);
-        if clock.get() == NETWORK_NOW {
-            return;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(5));
-    }
+#[test]
+fn boot_hands_a_saved_network_time_to_the_system() {
+    let (_d, _a, clock) = with_network_time(true);
+    assert_eq!(clock.network_time(), Some(true));
 }
 
 #[test]
-fn network_time_sets_the_clock_once_online() {
-    let (_d, mut a, clock) = with_network_time(true);
-    wait_for_clock(&mut a, &clock);
-    assert_eq!(clock.get(), NETWORK_NOW);
-}
-
-#[test]
-fn network_time_left_off_never_touches_the_clock() {
-    let (_d, mut a, clock) = with_network_time(false);
-    for _ in 0..20 {
-        settle(&mut a);
-    }
-    assert!(a.wifi_up());
-    assert_eq!(clock.get(), CLOCK_IS_SET);
+fn boot_hands_network_time_off_to_the_system() {
+    let (_d, _a, clock) = with_network_time(false);
+    assert_eq!(clock.network_time(), Some(false));
 }
 
 #[test]
@@ -523,21 +505,19 @@ fn the_clock_screen_keeps_quiet_without_a_saved_network() {
 }
 
 #[test]
-fn confirming_network_time_saves_it_and_asks_at_once() {
+fn confirming_network_time_saves_it_and_turns_it_on() {
     let (d, mut a, clock) = with_network_time(false);
     settle(&mut a);
     open_clock(&mut a);
     a.apply(Action::GbaDown(Btn::A));
     a.confirm_clock();
     assert!(read_slot_state(d.path()).network_time);
-    wait_for_clock(&mut a, &clock);
-    assert_eq!(clock.get(), NETWORK_NOW);
+    assert_eq!(clock.network_time(), Some(true));
 }
 
 #[test]
 fn an_edit_left_behind_network_time_is_dropped() {
     let (_d, mut a, clock) = with_network_time(false);
-    a.set_net_time_source(Arc::new(|| None));
     settle(&mut a);
     open_clock(&mut a);
     a.apply(Action::GbaDown(Btn::Down));
