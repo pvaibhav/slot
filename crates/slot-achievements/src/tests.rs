@@ -486,10 +486,6 @@ fn game_boy_consoles_prepare_offline_caches_and_start_online_sessions() {
         wait_for(|| cache.exists() && service.sync_status() == SyncStatus::Ready);
         let (data, _): (Game, std::collections::BTreeSet<u32>) = storage::read(&cache).unwrap();
         assert_eq!(data.console, console);
-        assert_eq!(
-            artwork_title(root.path(), &rom).as_deref(),
-            Some("Test game")
-        );
         assert!(!requests.try_iter().any(|r| r == "startsession"));
         let mut core = service.wrap(Box::<TestCore>::default());
         core.load(&rom).unwrap();
@@ -845,31 +841,6 @@ fn null_rich_presence_from_the_service_is_an_empty_script() {
     assert_eq!(parsed.achievements.len(), 1);
     value["RichPresencePatch"] = json!(42);
     assert!(serde_json::from_value::<Game>(value).is_err());
-}
-
-#[test]
-fn artwork_identity_follows_rom_bytes_instead_of_its_filename() {
-    let root = configured();
-    let rom = root.path().join("Games/GBA/Completely renamed.gba");
-    std::fs::write(&rom, b"same rom bytes").unwrap();
-    let hash = library::content_hash(&rom).unwrap();
-    let store = Store::open(root.path(), "Player").unwrap();
-    let mut data = game();
-    data.title = "Tomb Raider: Legend".into();
-    let ids = std::collections::BTreeSet::<u32>::new();
-    storage::write(&store.dir.join(format!("{hash}.json")), &(&data, ids)).unwrap();
-    assert_eq!(
-        artwork_title(root.path(), &rom).as_deref(),
-        Some("Tomb Raider: Legend")
-    );
-    let moved = rom.with_file_name("Yet another name.gba");
-    std::fs::rename(&rom, &moved).unwrap();
-    assert_eq!(
-        artwork_title(root.path(), &moved).as_deref(),
-        Some("Tomb Raider: Legend")
-    );
-    std::fs::write(&moved, b"different rom bytes").unwrap();
-    assert!(artwork_title(root.path(), &moved).is_none());
 }
 
 #[test]

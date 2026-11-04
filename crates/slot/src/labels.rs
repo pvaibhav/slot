@@ -1,9 +1,8 @@
-//! Network, image decoding, SD writes and cartridge rasterization stay off the frame loop.
-use std::collections::VecDeque;
+//! Labels from `Labels/Artwork.pack`. Checksums, image decoding, SD writes and cartridge
+//! rasterization stay off the frame loop.
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
 use std::thread;
-use std::time::{Duration, Instant};
 
 use slot_store::Cart;
 use slot_ui::CartFace;
@@ -15,8 +14,7 @@ pub(crate) struct Ready {
 
 pub(crate) struct Labels {
     ready: Receiver<Ready>,
-    // Dropping the sender wakes an idle worker. In-flight HTTP is bounded by its timeout;
-    // shutdown never joins a network request. Dropping `ready` releases a blocked send.
+    // Dropping the sender stops the worker between carts. Dropping `ready` releases a blocked send.
     _stop: Sender<()>,
 }
 
@@ -24,18 +22,12 @@ impl Labels {
     pub fn spawn(root: PathBuf, carts: Vec<Cart>) -> Self {
         let (out, ready) = mpsc::sync_channel(1);
         let (stop, stopped) = mpsc::channel();
+        if !root.join("Labels").join(slot_labels::build::PACK).is_file() {
+            return Self { ready, _stop: stop };
+        }
         if let Err(e) = thread::Builder::new()
             .name("slot-labels".into())
-            .spawn(move || {
-                let mut downloader = slot_labels::Downloader::default();
-                let mut identities = std::collections::HashMap::new();
-                run(carts, stopped, out, |cart| {
-                    let title = identities
-                        .entry(cart.rom.clone())
-                        .or_insert_with(|| slot_achievements::artwork_title(&root, &cart.rom));
-                    downloader.prepare_identified(&root, cart, title.as_deref())
-                });
-            })
+            .spawn(move || run(carts, stopped, out, |cart| slot_labels::from_pack(&root, cart)))
         {
             eprintln!("slot: labels: worker failed to start: {e}");
         }
@@ -51,89 +43,25 @@ fn run(
     carts: Vec<Cart>,
     stop: Receiver<()>,
     out: SyncSender<Ready>,
-    prepare: impl FnMut(&Cart) -> Result<PathBuf, slot_labels::Error>,
+    mut prepare: impl FnMut(&Cart) -> Result<Option<PathBuf>, slot_labels::Error>,
 ) {
-    run_with_timing(
-        carts,
-        stop,
-        out,
-        prepare,
-        [Duration::from_secs(30), Duration::from_secs(120)],
-        Duration::from_secs(1),
-    );
-}
-
-fn run_with_timing(
-    carts: Vec<Cart>,
-    stop: Receiver<()>,
-    out: SyncSender<Ready>,
-    mut prepare: impl FnMut(&Cart) -> Result<PathBuf, slot_labels::Error>,
-    delays: [Duration; 2],
-    pace: Duration,
-) {
-    let now = Instant::now();
-    let mut jobs: VecDeque<_> = carts
-        .into_iter()
-        .filter(|c| c.label.is_none())
-        .map(|c| (c, now, 0u8))
-        .collect();
-    let mut network_retry = now;
-    let mut network_failures = 0u8;
-    while !jobs.is_empty() {
-        let now = Instant::now();
-        let Some(index) = jobs
-            .iter()
-            .position(|(_, due, _)| *due <= now && network_retry <= now)
-        else {
-            if stop.recv_timeout(pace) != Err(mpsc::RecvTimeoutError::Timeout) {
-                return;
-            }
-            continue;
-        };
+    for mut cart in carts.into_iter().filter(|c| c.label.is_none()) {
         if stop.try_recv() != Err(mpsc::TryRecvError::Empty) {
             return;
         }
-        let (mut cart, _, attempts) = jobs.remove(index).unwrap();
         if !cart.rom.is_file() {
             continue;
         }
         match prepare(&cart) {
-            Ok(path) => {
-                network_failures = 0;
-                if stop.try_recv() != Err(mpsc::TryRecvError::Empty) {
-                    return;
-                }
+            Ok(Some(path)) => {
                 cart.label = Some(path);
                 let face = slot_ui::cart_face(&cart);
                 if out.send(Ready { cart, face }).is_err() {
                     return;
                 }
             }
-            Err(e) => {
-                eprintln!("slot: labels: {}: {e}", cart.stem);
-                if matches!(e, slot_labels::Error::Network(_)) {
-                    network_failures += 1;
-                    if network_failures >= 3 {
-                        eprintln!("slot: labels: three network failures; deferring remaining labels until next launch");
-                        return;
-                    }
-                    network_retry = Instant::now() + delays[usize::from(network_failures - 1)];
-                } else {
-                    network_failures = 0;
-                }
-                if !matches!(
-                    e,
-                    slot_labels::Error::Unavailable(_) | slot_labels::Error::Image(_)
-                ) {
-                    if let Some(delay) = delays.get(usize::from(attempts)) {
-                        jobs.push_back((cart, Instant::now() + *delay, attempts + 1));
-                    }
-                }
-            }
-        }
-        // Pace successful transfers and unsupported games as well as failures.
-        if stop.recv_timeout(pace) != Err(mpsc::RecvTimeoutError::Timeout) {
-            return;
+            Ok(None) => {}
+            Err(e) => eprintln!("slot: labels: {}: {e}", cart.stem),
         }
     }
 }
@@ -142,6 +70,22 @@ fn run_with_timing(
 mod tests {
     use super::*;
     use slot_store::Platform;
+    use std::time::{Duration, Instant};
+
+    fn cart(dir: &std::path::Path, name: &str) -> Cart {
+        let rom = dir.join(format!("{name}.gba"));
+        std::fs::write(&rom, []).unwrap();
+        Cart {
+            platform: Platform::Gba,
+            stem: name.into(),
+            rom,
+            label: None,
+            title: "".into(),
+            code: "".into(),
+            shell: None,
+            sealed: false,
+        }
+    }
 
     #[test]
     fn labels_are_prepared_at_the_size_of_the_well_they_are_drawn_in() {
@@ -160,133 +104,30 @@ mod tests {
     }
 
     #[test]
-    fn offline_worker_exits_after_three_attempts_even_with_a_large_library() {
+    fn without_a_pack_no_worker_reads_the_card() {
         let dir = tempfile::tempdir().unwrap();
-        let rom = dir.path().join("Test.gba");
-        std::fs::write(&rom, []).unwrap();
-        let cart = Cart {
-            platform: Platform::Gba,
-            stem: "Test".into(),
-            rom,
-            label: None,
-            title: "".into(),
-            code: "".into(),
-            shell: None,
-            sealed: false,
-        };
-        let (_stop, stopped) = mpsc::channel();
-        let (out, _ready) = mpsc::sync_channel(1);
-        let mut calls = 0;
-        run_with_timing(
-            vec![cart; 1000],
-            stopped,
-            out,
-            |_| {
-                calls += 1;
-                assert!(calls <= 3, "network failure budget did not stop the worker");
-                Err(slot_labels::Error::Network("offline".into()))
-            },
-            [Duration::ZERO; 2],
-            Duration::ZERO,
-        );
-        assert_eq!(calls, 3);
-    }
-
-    #[test]
-    fn storage_failures_have_a_finite_budget_per_rom_and_skip_terminal_errors() {
-        let dir = tempfile::tempdir().unwrap();
-        let rom = dir.path().join("Test.gba");
-        std::fs::write(&rom, []).unwrap();
-        let cart = Cart {
-            platform: Platform::Gba,
-            stem: "Test".into(),
-            rom,
-            label: None,
-            title: "".into(),
-            code: "".into(),
-            shell: None,
-            sealed: false,
-        };
-        for terminal in [false, true] {
-            let (_stop, stopped) = mpsc::channel();
-            let (out, _ready) = mpsc::sync_channel(1);
-            let mut calls = 0;
-            run_with_timing(
-                vec![cart.clone()],
-                stopped,
-                out,
-                |_| {
-                    calls += 1;
-                    assert!(calls <= 3, "per-ROM budget did not stop the worker");
-                    if terminal {
-                        Err(slot_labels::Error::Unavailable("no match".into()))
-                    } else {
-                        Err(slot_labels::Error::Storage(std::io::Error::other(
-                            "read only",
-                        )))
-                    }
-                },
-                [Duration::ZERO; 2],
-                Duration::ZERO,
-            );
-            assert_eq!(calls, if terminal { 1 } else { 3 });
-        }
-    }
-
-    #[test]
-    fn dropping_the_owner_interrupts_a_retry_wait() {
-        let dir = tempfile::tempdir().unwrap();
-        let rom = dir.path().join("Test.gba");
-        std::fs::write(&rom, []).unwrap();
-        let cart = Cart {
-            platform: Platform::Gba,
-            stem: "Test".into(),
-            rom,
-            label: None,
-            title: "".into(),
-            code: "".into(),
-            shell: None,
-            sealed: false,
-        };
-        let (stop, stopped) = mpsc::channel();
-        let (out, _ready) = mpsc::sync_channel(1);
-        let (called, call) = mpsc::channel();
-        let worker = thread::spawn(move || {
-            run(vec![cart], stopped, out, |_| {
-                called.send(()).unwrap();
-                Err(slot_labels::Error::Network("offline".into()))
-            })
-        });
-        call.recv_timeout(Duration::from_secs(1)).unwrap();
-        let began = Instant::now();
-        drop(stop);
-        worker.join().unwrap();
-        assert!(began.elapsed() < Duration::from_secs(1));
+        let labels = Labels::spawn(dir.path().into(), vec![cart(dir.path(), "Test")]);
+        thread::sleep(Duration::from_millis(50));
+        assert!(labels.take().is_none());
+        assert!(!dir.path().join("Labels").exists());
     }
 
     #[test]
     fn missing_labels_are_built_but_custom_labels_are_not_requested() {
         let dir = tempfile::tempdir().unwrap();
-        let rom = dir.path().join("Test.gba");
-        std::fs::write(&rom, []).unwrap();
-        let cart = Cart {
-            platform: Platform::Gba,
-            stem: "Test".into(),
-            rom,
-            label: None,
-            title: "".into(),
-            code: "".into(),
-            shell: None,
-            sealed: false,
-        };
-        let mut existing = cart.clone();
+        let fresh = cart(dir.path(), "Test");
+        let mut existing = cart(dir.path(), "Custom");
         existing.label = Some(dir.path().join("Custom.png"));
         let (stop, stopped) = mpsc::channel();
         let (out, ready) = mpsc::sync_channel(1);
         let path = dir.path().join("Test.png");
         let expected = path.clone();
-        let worker =
-            thread::spawn(move || run(vec![existing, cart], stopped, out, |_| Ok(path.clone())));
+        let worker = thread::spawn(move || {
+            run(vec![existing, fresh], stopped, out, |c| {
+                assert_eq!(c.stem, "Test");
+                Ok(Some(path.clone()))
+            })
+        });
         let result = ready.recv_timeout(Duration::from_secs(10)).unwrap();
         assert_eq!(result.cart.label, Some(expected));
         assert_eq!(
@@ -299,44 +140,41 @@ mod tests {
     }
 
     #[test]
-    fn an_unavailable_game_does_not_block_other_games() {
+    fn carts_the_pack_does_not_know_or_cannot_read_do_not_block_others() {
         let dir = tempfile::tempdir().unwrap();
-        let carts: Vec<_> = ["Bad", "Good"]
+        let carts: Vec<_> = ["Unknown", "Broken", "Good"]
             .iter()
-            .map(|name| {
-                let rom = dir.path().join(format!("{name}.gba"));
-                std::fs::write(&rom, []).unwrap();
-                Cart {
-                    platform: Platform::Gba,
-                    stem: name.to_string(),
-                    rom,
-                    label: None,
-                    title: "".into(),
-                    code: "".into(),
-                    shell: None,
-                    sealed: false,
-                }
-            })
+            .map(|name| cart(dir.path(), name))
             .collect();
-        let (stop, stopped) = mpsc::channel();
+        let (_stop, stopped) = mpsc::channel();
         let (out, ready) = mpsc::sync_channel(1);
         let worker = thread::spawn(move || {
-            run(carts, stopped, out, |cart| {
-                if cart.stem == "Bad" {
-                    Err(slot_labels::Error::Unavailable("no artwork".into()))
-                } else {
-                    Ok(cart.rom.with_extension("png"))
-                }
+            run(carts, stopped, out, |c| match c.stem.as_str() {
+                "Unknown" => Ok(None),
+                "Broken" => Err(slot_labels::Error::Image("bad".into())),
+                _ => Ok(Some(c.rom.with_extension("png"))),
             })
         });
-        assert_eq!(
-            ready
-                .recv_timeout(Duration::from_secs(10))
-                .unwrap()
-                .cart
-                .stem,
-            "Good"
-        );
+        let got = ready.recv_timeout(Duration::from_secs(10)).unwrap();
+        assert_eq!(got.cart.stem, "Good");
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn dropping_the_owner_stops_the_worker_between_carts() {
+        let dir = tempfile::tempdir().unwrap();
+        let carts = vec![cart(dir.path(), "Test"); 1000];
+        let (stop, stopped) = mpsc::channel();
+        let (out, _ready) = mpsc::sync_channel(1);
+        let (called, call) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            run(carts, stopped, out, |_| {
+                let _ = called.send(());
+                thread::sleep(Duration::from_millis(5));
+                Ok(None)
+            })
+        });
+        call.recv_timeout(Duration::from_secs(1)).unwrap();
         let began = Instant::now();
         drop(stop);
         worker.join().unwrap();

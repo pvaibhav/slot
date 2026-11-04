@@ -7,8 +7,6 @@ license.workspace = true
 
 [dependencies]
 slot-store = { path = "../slot-store" }
-ureq = { version = "3", default-features = false, features = ["rustls"] }
-scraper = { version = "0.24", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 unicode-normalization = "0.1"
 tempfile.workspace = true
@@ -16,6 +14,7 @@ crc32fast = "1"
 
 [dev-dependencies]
 quick-xml = "0.41"
+ureq = { version = "3", default-features = false, features = ["rustls"] }
 
 [[example]]
 name = "launchbox-index"

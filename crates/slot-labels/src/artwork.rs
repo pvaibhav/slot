@@ -40,7 +40,8 @@ pub(crate) fn fit(bytes: &[u8], platform: Platform) -> Result<Vec<u8>, Error> {
     png(image.resize_exact(lw, lh, FilterType::Lanczos3).to_rgb8())
 }
 
-/// A straight-on photo of the whole cart, cropped to the label on it, as the device writes it.
+/// A straight-on photo of the whole cart, cropped to the label on it.
+#[cfg(test)]
 pub(crate) fn prepare(bytes: &[u8], platform: Platform) -> Result<Vec<u8>, Error> {
     png(cart_label(bytes, platform)?)
 }
