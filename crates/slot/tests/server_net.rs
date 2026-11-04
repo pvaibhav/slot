@@ -1,4 +1,8 @@
-use slot::server::{answer, claims, model_name, probe, respond, rival, wifi_ip, Responder};
+use slot::server::{
+    announcement, answer, baseos_mdns, claims, conflicts, heard, model_name, names, probe, respond, wifi_ip,
+    BaseosMdns, Heard, Responder,
+};
+use std::net::SocketAddr;
 use std::net::{Ipv4Addr, SocketAddrV4};
 
 const IP: Ipv4Addr = Ipv4Addr::new(192, 168, 4, 77);
@@ -140,47 +144,119 @@ fn every_baseos_model_makes_a_name() {
     assert_eq!(model_name("a.b"), None);
 }
 
+const OTHER: Ipv4Addr = Ipv4Addr::new(192, 168, 4, 20);
+
+fn from(ip: Ipv4Addr) -> SocketAddr {
+    SocketAddr::V4(SocketAddrV4::new(ip, 5353))
+}
+
+#[test]
+fn slot_numbers_its_name_like_avahi_and_never_takes_the_device_name() {
+    let all: Vec<String> = names().collect();
+    assert_eq!(all[..3], ["slot", "slot-2", "slot-3"]);
+    assert_eq!(all.len(), 9);
+}
+
+#[test]
+fn baseos_settings_turn_mdns_off_and_name_the_host() {
+    assert_eq!(baseos_mdns(""), BaseosMdns::default());
+    assert_eq!(
+        baseos_mdns("hostname=RG34XXSP\nmdns=true\n"),
+        BaseosMdns {
+            off: false,
+            hostname: Some("rg34xxsp".into())
+        }
+    );
+    assert!(baseos_mdns("hostname=rgsp\nmdns=false\n").off);
+}
+
+#[test]
+fn with_mdns_off_in_baseos_nothing_answers() {
+    let off = BaseosMdns {
+        off: true,
+        hostname: None,
+    };
+    assert!(Responder::start_with(IP, &off).is_none());
+}
+
+#[test]
+fn a_device_named_slot_leaves_the_name_to_avahi() {
+    let named = BaseosMdns {
+        off: false,
+        hostname: Some("slot".into()),
+    };
+    let r = Responder::start_with(IP, &named).unwrap();
+    assert_eq!(r.host(), "SLOT.LOCAL");
+}
+
 #[test]
 fn a_probe_draws_an_answer_that_claims_the_name() {
-    let reply = answer(&probe("rgsp"), IP, "rgsp").unwrap();
-    assert_eq!(claims(&reply, "rgsp"), Some(true));
-    assert_eq!(claims(&reply, "slot"), Some(false));
-    assert!(answer(&probe("slot"), IP, "rgsp").is_none());
+    let reply = answer(&probe("slot", IP), IP, "slot").unwrap();
+    assert_eq!(claims(&reply, "slot"), Some(true));
+    assert_eq!(claims(&reply, "slot-2"), Some(false));
+    assert!(answer(&probe("slot-2", IP), IP, "slot").is_none());
 }
 
 #[test]
 fn a_legacy_reply_claims_past_its_question() {
-    let (reply, _) = respond(&probe("rgsp"), IP, "rgsp", src(49152)).unwrap();
-    assert_eq!(claims(&reply, "rgsp"), Some(true));
+    let (reply, _) = respond(&probe("slot", IP), IP, "slot", src(49152)).unwrap();
+    assert_eq!(claims(&reply, "slot"), Some(true));
 }
 
 #[test]
 fn a_query_or_a_short_reply_claims_nothing() {
-    assert_eq!(claims(&probe("rgsp"), "rgsp"), Some(false));
-    let reply = answer(&probe("rgsp"), IP, "rgsp").unwrap();
+    assert_eq!(claims(&probe("slot", IP), "slot"), Some(false));
+    let reply = answer(&probe("slot", IP), IP, "slot").unwrap();
     for n in 0..24 {
-        assert_ne!(claims(&reply[..n], "rgsp"), Some(true), "truncated at {n}");
+        assert_ne!(claims(&reply[..n], "slot"), Some(true), "truncated at {n}");
     }
 }
 
 #[test]
-fn only_another_device_is_a_rival() {
-    let reply = answer(&probe("rgsp"), IP, "rgsp").unwrap();
-    let me = std::net::SocketAddr::V4(SocketAddrV4::new(IP, 5353));
-    let other = std::net::SocketAddr::V4(src(5353));
-    assert!(!rival(&reply, me, IP, "rgsp"));
-    assert!(rival(&reply, other, IP, "rgsp"));
-    assert!(!rival(&reply, other, IP, "slot"));
+fn only_another_device_answering_takes_the_name() {
+    let reply = answer(&probe("slot", OTHER), OTHER, "slot").unwrap();
+    assert_eq!(heard(&reply, from(IP), IP, "slot"), Heard::Nothing);
+    assert_eq!(heard(&reply, from(OTHER), IP, "slot"), Heard::Taken);
+    assert_eq!(heard(&reply, from(OTHER), IP, "slot-2"), Heard::Nothing);
+}
+
+#[test]
+fn of_two_devices_probing_at_once_the_higher_address_keeps_the_name() {
+    let higher = Ipv4Addr::new(192, 168, 4, 200);
+    assert_eq!(heard(&probe("slot", higher), from(higher), IP, "slot"), Heard::Lost);
+    assert_eq!(heard(&probe("slot", OTHER), from(OTHER), IP, "slot"), Heard::Nothing);
+    assert_eq!(heard(&probe("slot-2", higher), from(higher), IP, "slot"), Heard::Nothing);
+    assert_eq!(heard(&probe("slot", IP), from(IP), IP, "slot"), Heard::Nothing);
+}
+
+#[test]
+fn another_address_for_the_held_name_is_a_conflict_and_the_same_one_is_not() {
+    let theirs = announcement("slot", OTHER, 120);
+    assert!(conflicts(&theirs, from(OTHER), IP, "slot"));
+    assert!(!conflicts(&theirs, from(OTHER), IP, "slot-2"));
+    assert!(!conflicts(&announcement("slot", IP, 120), from(OTHER), IP, "slot"));
+    assert!(!conflicts(&probe("slot", OTHER), from(OTHER), IP, "slot"));
+    assert!(!conflicts(&theirs, from(IP), IP, "slot"));
+}
+
+#[test]
+fn an_announcement_claims_the_name_and_a_goodbye_has_no_lifetime() {
+    let hello = announcement("slot", IP, 120);
+    assert_eq!(claims(&hello, "slot"), Some(true));
+    let bye = announcement("slot", IP, 0);
+    let n = bye.len();
+    assert_eq!(bye[n - 10..n - 6], [0, 0, 0, 0]);
+    assert_eq!(bye[n - 4..], IP.octets());
 }
 
 #[test]
 fn a_started_responder_names_a_host() {
-    std::env::set_var("BASEOS_MODEL", "RG SP");
     let Some(ip) = wifi_ip() else {
         return;
     };
-    let Some(first) = Responder::start(ip) else {
+    let Some(first) = Responder::start_with(ip, &BaseosMdns::default()) else {
         return;
     };
-    assert!(["SLOT.LOCAL", "RGSP.LOCAL"].contains(&first.host().as_str()));
+    let host = first.host();
+    assert!(host == "SLOT.LOCAL" || host.starts_with("SLOT-"), "{host}");
 }

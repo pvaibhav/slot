@@ -1,12 +1,15 @@
 mod common;
 
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Duration;
 
 use common::{app_booting_at, tmp_root_with_carts, CLOCK_IS_SET};
 use slot::app::{App, Phase};
 use slot::update::{UpdateEvent, UpdateJob, UpdateJobs};
 use slot::wifi::{Backend, Cmd, Fake, Wifi};
 use slot_input::{Action, Btn};
+use slot_power::{Battery, Charge, LedState, Platform, Power};
 use slot_store::{read_slot_state, write_slot_state, SlotState};
 use slot_ui::QuickRow;
 use std::collections::VecDeque;
@@ -447,9 +450,59 @@ fn the_studio_offers_the_label_printer_only_while_connected() {
     assert!(rows.contains(&slot::studio::Row::Label), "{rows:?}");
 }
 
-const NETWORK_NOW: i64 = 1_790_000_000;
+/// BaseOS as the clock sees it: its network time choice, and each change slot asks for.
+struct BaseOs {
+    root: std::path::PathBuf,
+    clock: Arc<AtomicI64>,
+    ntp: Arc<Mutex<Option<bool>>>,
+    asked: Arc<Mutex<Vec<bool>>>,
+}
 
-fn with_network_time(on: bool) -> (TempDir, App, common::Clock) {
+impl Platform for BaseOs {
+    fn set_backlight(&mut self, _step: u8) {}
+    fn battery(&self) -> Option<Battery> {
+        None
+    }
+    fn charge(&self) -> Charge {
+        Charge::Unknown
+    }
+    fn set_led(&mut self, _state: LedState) {}
+    fn poweroff(&mut self) -> ! {
+        panic!("BaseOs never powers off")
+    }
+    fn restart(&mut self) -> ! {
+        panic!("BaseOs never restarts")
+    }
+    fn root(&self) -> &std::path::Path {
+        &self.root
+    }
+    fn now(&self) -> i64 {
+        self.clock.load(Ordering::Relaxed)
+    }
+    fn set_clock(&mut self, secs: i64) {
+        self.clock.store(secs, Ordering::Relaxed);
+    }
+    fn set_rumble(&mut self, _strength: u16) {}
+    fn network_time(&self) -> Option<bool> {
+        *self.ntp.lock().unwrap()
+    }
+    fn set_network_time(&mut self, on: bool) {
+        *self.ntp.lock().unwrap() = Some(on);
+        self.asked.lock().unwrap().push(on);
+    }
+}
+
+type Asked = Arc<Mutex<Vec<bool>>>;
+
+fn with_network_time(on: bool, baseos: Option<bool>) -> (TempDir, App, Asked) {
+    let (d, a, asked, _clock) = with_network_time_and_clock(on, baseos);
+    (d, a, asked)
+}
+
+fn with_network_time_and_clock(
+    on: bool,
+    baseos: Option<bool>,
+) -> (TempDir, App, Asked, Arc<AtomicI64>) {
     let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
     write_slot_state(
         d.path(),
@@ -461,10 +514,20 @@ fn with_network_time(on: bool) -> (TempDir, App, common::Clock) {
     )
     .unwrap();
     std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
-    let (mut a, clock) = app_booting_at(d.path(), CLOCK_IS_SET);
-    a.set_net_time_source(Arc::new(|| Some(NETWORK_NOW)));
+    let (mut a, _clock) = app_booting_at(d.path(), CLOCK_IS_SET);
+    let asked = Asked::default();
+    let clock = Arc::new(AtomicI64::new(CLOCK_IS_SET));
+    a.set_power(Power::new(
+        Box::new(BaseOs {
+            root: d.path().into(),
+            clock: clock.clone(),
+            ntp: Arc::new(Mutex::new(baseos)),
+            asked: asked.clone(),
+        }),
+        Duration::from_secs(60),
+    ));
     a.set_wifi(Wifi::inline(Box::new(Fake::joined())));
-    (d, a, clock)
+    (d, a, asked, clock)
 }
 
 fn open_clock(a: &mut App) {
@@ -479,36 +542,9 @@ fn open_clock(a: &mut App) {
     a.apply(Action::GbaDown(Btn::A));
 }
 
-fn wait_for_clock(a: &mut App, clock: &common::Clock) {
-    for _ in 0..200 {
-        settle(a);
-        if clock.get() == NETWORK_NOW {
-            return;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(5));
-    }
-}
-
-#[test]
-fn network_time_sets_the_clock_once_online() {
-    let (_d, mut a, clock) = with_network_time(true);
-    wait_for_clock(&mut a, &clock);
-    assert_eq!(clock.get(), NETWORK_NOW);
-}
-
-#[test]
-fn network_time_left_off_never_touches_the_clock() {
-    let (_d, mut a, clock) = with_network_time(false);
-    for _ in 0..20 {
-        settle(&mut a);
-    }
-    assert!(a.wifi_up());
-    assert_eq!(clock.get(), CLOCK_IS_SET);
-}
-
 #[test]
 fn the_clock_screen_offers_network_time_with_a_saved_network() {
-    let (_d, mut a, _clock) = with_network_time(false);
+    let (_d, mut a, _asked) = with_network_time(false, Some(false));
     settle(&mut a);
     open_clock(&mut a);
     assert_eq!(a.picker().and_then(|p| p.network_time()), Some(false));
@@ -523,21 +559,40 @@ fn the_clock_screen_keeps_quiet_without_a_saved_network() {
 }
 
 #[test]
-fn confirming_network_time_saves_it_and_asks_at_once() {
-    let (d, mut a, clock) = with_network_time(false);
+fn the_clock_screen_shows_what_baseos_does_now() {
+    let (_d, mut a, asked) = with_network_time(false, Some(true));
+    settle(&mut a);
+    open_clock(&mut a);
+    assert_eq!(a.picker().and_then(|p| p.network_time()), Some(true));
+    a.confirm_clock();
+    assert!(asked.lock().unwrap().is_empty(), "BaseOS already does it");
+}
+
+#[test]
+fn confirming_network_time_hands_the_clock_to_baseos_and_saves_it() {
+    let (d, mut a, asked) = with_network_time(false, Some(false));
     settle(&mut a);
     open_clock(&mut a);
     a.apply(Action::GbaDown(Btn::A));
     a.confirm_clock();
     assert!(read_slot_state(d.path()).network_time);
-    wait_for_clock(&mut a, &clock);
-    assert_eq!(clock.get(), NETWORK_NOW);
+    assert_eq!(*asked.lock().unwrap(), [true]);
+}
+
+#[test]
+fn turning_network_time_off_stops_baseos_keeping_the_clock() {
+    let (d, mut a, asked) = with_network_time(true, Some(true));
+    settle(&mut a);
+    open_clock(&mut a);
+    a.apply(Action::GbaDown(Btn::A));
+    a.confirm_clock();
+    assert!(!read_slot_state(d.path()).network_time);
+    assert_eq!(*asked.lock().unwrap(), [false]);
 }
 
 #[test]
 fn an_edit_left_behind_network_time_is_dropped() {
-    let (_d, mut a, clock) = with_network_time(false);
-    a.set_net_time_source(Arc::new(|| None));
+    let (_d, mut a, asked, clock) = with_network_time_and_clock(false, Some(false));
     settle(&mut a);
     open_clock(&mut a);
     a.apply(Action::GbaDown(Btn::Down));
@@ -547,5 +602,6 @@ fn an_edit_left_behind_network_time_is_dropped() {
     a.apply(Action::GbaDown(Btn::Up));
     a.apply(Action::GbaDown(Btn::A));
     a.confirm_clock();
-    assert_eq!(clock.get(), CLOCK_IS_SET);
+    assert_eq!(*asked.lock().unwrap(), [true]);
+    assert_eq!(clock.load(Ordering::Relaxed), CLOCK_IS_SET);
 }

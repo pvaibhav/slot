@@ -3,7 +3,7 @@ use std::io;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket};
 use std::os::fd::FromRawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -17,6 +17,12 @@ const TTL: u32 = 120;
 const LEGACY_TTL: u32 = 10;
 const POLL: Duration = Duration::from_millis(100);
 const PROBE_WAIT: Duration = Duration::from_millis(250);
+const PROBES: usize = 3;
+const LOST_WAIT: Duration = Duration::from_secs(1);
+const LOST_TRIES: usize = 3;
+const ANNOUNCE_GAP: Duration = Duration::from_secs(1);
+const MAX_SUFFIX: u32 = 9;
+const BASEOS_CONF: &str = "/run/baseos.conf";
 
 pub fn wifi_ip() -> Option<Ipv4Addr> {
     let mut head: *mut libc::ifaddrs = std::ptr::null_mut();
@@ -204,52 +210,175 @@ pub fn model_name(model: &str) -> Option<String> {
     (!name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric())).then_some(name)
 }
 
-pub fn probe(name: &str) -> Vec<u8> {
-    let mut out = vec![0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0];
-    name_bytes(&mut out, name);
-    out.extend_from_slice(&[0, 255, 0, 1]);
+/// The names slot answers to, in order. BaseOS's Avahi already answers `<hostname>.local`, so
+/// slot claims only its own name and, like Avahi, numbers it when another device holds it.
+pub fn names() -> impl Iterator<Item = String> {
+    std::iter::once(NAME.to_string()).chain((2..=MAX_SUFFIX).map(|n| format!("{NAME}-{n}")))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct BaseosMdns {
+    pub off: bool,
+    pub hostname: Option<String>,
+}
+
+/// What BaseOS's runtime settings say about mDNS. `mdns=false` turns every responder off.
+pub fn baseos_mdns(conf: &str) -> BaseosMdns {
+    let mut out = BaseosMdns::default();
+    for line in conf.lines() {
+        match line.trim().split_once('=') {
+            Some(("mdns", value)) => out.off = value.trim() == "false",
+            Some(("hostname", value)) if !value.trim().is_empty() => {
+                out.hostname = Some(value.trim().to_ascii_lowercase());
+            }
+            _ => {}
+        }
+    }
     out
 }
 
-pub fn claims(reply: &[u8], name: &str) -> Option<bool> {
-    if u16_at(reply, 2)? & 0x8000 == 0 {
-        return Some(false);
-    }
+fn a_record(out: &mut Vec<u8>, name: &str, class: u16, ttl: u32, ip: Ipv4Addr) {
+    name_bytes(out, name);
+    out.extend_from_slice(&1u16.to_be_bytes());
+    out.extend_from_slice(&class.to_be_bytes());
+    out.extend_from_slice(&ttl.to_be_bytes());
+    out.extend_from_slice(&[0, 4]);
+    out.extend_from_slice(&ip.octets());
+}
+
+/// A probe for `name`, with the address slot would answer in its authority section so two
+/// devices probing at once can settle who keeps it (RFC 6762 8.2).
+pub fn probe(name: &str, ip: Ipv4Addr) -> Vec<u8> {
+    let mut out = vec![0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0];
+    name_bytes(&mut out, name);
+    out.extend_from_slice(&[0, 255, 0x80, 1]);
+    a_record(&mut out, name, 1, TTL, ip);
+    out
+}
+
+/// An unsolicited answer for `name`. TTL zero says goodbye.
+pub fn announcement(name: &str, ip: Ipv4Addr, ttl: u32) -> Vec<u8> {
+    let mut out = vec![0, 0, 0x84, 0, 0, 0, 0, 1, 0, 0, 0, 0];
+    a_record(&mut out, name, 0x8001, ttl, ip);
+    out
+}
+
+struct Record<'a> {
+    labels: Vec<String>,
+    rtype: u16,
+    rdata: &'a [u8],
+}
+
+/// The answer and authority records of a packet, past its questions.
+fn records(packet: &[u8]) -> Option<(u16, Vec<Record<'_>>, Vec<Record<'_>>)> {
+    let flags = u16_at(packet, 2)?;
     let mut pos = 12;
-    for _ in 0..u16_at(reply, 4)? {
-        pos = read_name(reply, pos)?.1 + 4;
+    for _ in 0..u16_at(packet, 4)? {
+        pos = read_name(packet, pos)?.1 + 4;
     }
-    for _ in 0..u16_at(reply, 6)? {
-        let (labels, next) = read_name(reply, pos)?;
-        if named(&labels, name) {
-            return Some(true);
+    let mut read = |count: u16| -> Option<Vec<Record<'_>>> {
+        let mut out = Vec::new();
+        for _ in 0..count {
+            let (labels, next) = read_name(packet, pos)?;
+            let rtype = u16_at(packet, next)?;
+            let len = u16_at(packet, next + 8)? as usize;
+            let rdata = packet.get(next + 10..next + 10 + len)?;
+            pos = next + 10 + len;
+            out.push(Record { labels, rtype, rdata });
         }
-        pos = next + 10 + u16_at(reply, next + 8)? as usize;
+        Some(out)
+    };
+    let answers = read(u16_at(packet, 6)?)?;
+    let authority = read(u16_at(packet, 8)?)?;
+    Some((flags, answers, authority))
+}
+
+pub fn claims(reply: &[u8], name: &str) -> Option<bool> {
+    let (flags, answers, _) = records(reply)?;
+    Some(flags & 0x8000 != 0 && answers.iter().any(|r| named(&r.labels, name)))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Heard {
+    Nothing,
+    /// Another device answers for the name.
+    Taken,
+    /// Another device probes for it at the same time and wins the tie-break.
+    Lost,
+}
+
+/// What a packet means for a name slot is probing for. Packets from slot's own address are its
+/// own probes looped back, or BaseOS's Avahi answering for the hostname.
+pub fn heard(packet: &[u8], from: SocketAddr, ip: Ipv4Addr, name: &str) -> Heard {
+    if from.ip() == ip {
+        return Heard::Nothing;
     }
-    Some(false)
+    let Some((flags, answers, authority)) = records(packet) else {
+        return Heard::Nothing;
+    };
+    if flags & 0x8000 != 0 {
+        return match answers.iter().any(|r| named(&r.labels, name)) {
+            true => Heard::Taken,
+            false => Heard::Nothing,
+        };
+    }
+    let theirs = authority
+        .iter()
+        .filter(|r| named(&r.labels, name) && r.rtype == 1)
+        .map(|r| r.rdata)
+        .max();
+    match theirs {
+        Some(theirs) if theirs > &ip.octets()[..] => Heard::Lost,
+        _ => Heard::Nothing,
+    }
 }
 
-pub fn rival(reply: &[u8], from: SocketAddr, ip: Ipv4Addr, name: &str) -> bool {
-    from.ip() != ip && claims(reply, name) == Some(true)
+/// Whether another device answers for the name slot holds with a different address.
+pub fn conflicts(packet: &[u8], from: SocketAddr, ip: Ipv4Addr, name: &str) -> bool {
+    if from.ip() == ip {
+        return false;
+    }
+    let Some((flags, answers, _)) = records(packet) else {
+        return false;
+    };
+    flags & 0x8000 != 0
+        && answers
+            .iter()
+            .any(|r| named(&r.labels, name) && r.rtype == 1 && r.rdata != ip.octets())
 }
 
-fn taken(sock: &UdpSocket, ip: Ipv4Addr, name: &str) -> bool {
+fn probe_once(sock: &UdpSocket, ip: Ipv4Addr, name: &str) -> Heard {
     let mut buf = [0u8; 1500];
-    let _ = sock.send_to(&probe(name), SocketAddrV4::new(GROUP, MDNS_PORT));
-    let until = Instant::now() + PROBE_WAIT;
-    while Instant::now() < until {
-        if let Ok((n, from)) = sock.recv_from(&mut buf) {
-            if rival(&buf[..n], from, ip, name) {
-                return true;
+    for _ in 0..PROBES {
+        let _ = sock.send_to(&probe(name, ip), SocketAddrV4::new(GROUP, MDNS_PORT));
+        let until = Instant::now() + PROBE_WAIT;
+        while Instant::now() < until {
+            if let Ok((n, from)) = sock.recv_from(&mut buf) {
+                match heard(&buf[..n], from, ip, name) {
+                    Heard::Nothing => {}
+                    other => return other,
+                }
             }
         }
     }
-    false
+    Heard::Nothing
 }
 
-fn free_name(sock: &UdpSocket, ip: Ipv4Addr) -> Option<String> {
-    let model = crate::baseos::var("BASEOS_MODEL").and_then(|m| model_name(&m));
-    std::iter::once(NAME.to_string()).chain(model).find(|name| !taken(sock, ip, name))
+/// The first name from `skip` on that no other device holds, announced once.
+fn claim(sock: &UdpSocket, ip: Ipv4Addr, skip: usize) -> Option<(usize, String)> {
+    for (at, name) in names().enumerate().skip(skip) {
+        for _ in 0..LOST_TRIES {
+            match probe_once(sock, ip, &name) {
+                Heard::Nothing => {
+                    let _ = sock.send_to(&announcement(&name, ip, TTL), SocketAddrV4::new(GROUP, MDNS_PORT));
+                    return Some((at, name));
+                }
+                Heard::Taken => break,
+                Heard::Lost => thread::sleep(LOST_WAIT),
+            }
+        }
+    }
+    None
 }
 
 fn setsockopt<T>(fd: i32, level: i32, name: i32, value: &T) -> io::Result<()> {
@@ -296,23 +425,39 @@ fn open(ip: Ipv4Addr) -> io::Result<UdpSocket> {
 }
 
 pub struct Responder {
-    name: String,
+    name: Arc<Mutex<String>>,
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
 }
 
 impl Responder {
     pub fn start(ip: Ipv4Addr) -> Option<Responder> {
-        let sock = open(ip).ok()?;
-        let name = free_name(&sock, ip)?;
+        let conf = std::fs::read_to_string(BASEOS_CONF).unwrap_or_default();
+        Self::start_with(ip, &baseos_mdns(&conf))
+    }
+
+    pub fn start_with(ip: Ipv4Addr, baseos: &BaseosMdns) -> Option<Responder> {
+        if baseos.off {
+            return None;
+        }
         let stop = Arc::new(AtomicBool::new(false));
+        if baseos.hostname.as_deref() == Some(NAME) {
+            return Some(Responder { name: Arc::new(Mutex::new(NAME.into())), stop, thread: None });
+        }
+        let sock = open(ip).ok()?;
+        let (at, name) = claim(&sock, ip, 0)?;
+        let name = Arc::new(Mutex::new(name));
         let (flag, served) = (stop.clone(), name.clone());
-        let thread = thread::Builder::new().name("slot-mdns".into()).spawn(move || serve(sock, ip, &served, flag)).ok()?;
+        let thread = thread::Builder::new()
+            .name("slot-mdns".into())
+            .spawn(move || serve(sock, ip, served, at, flag))
+            .ok()?;
         Some(Responder { name, stop, thread: Some(thread) })
     }
 
     pub fn host(&self) -> String {
-        format!("{}.{DOMAIN}", self.name).to_uppercase()
+        let name = self.name.lock().unwrap_or_else(|e| e.into_inner());
+        format!("{name}.{DOMAIN}").to_uppercase()
     }
 
     pub fn stop(mut self) {
@@ -333,12 +478,26 @@ impl Drop for Responder {
     }
 }
 
-fn serve(sock: UdpSocket, ip: Ipv4Addr, name: &str, stop: Arc<AtomicBool>) {
+fn serve(sock: UdpSocket, ip: Ipv4Addr, name: Arc<Mutex<String>>, mut at: usize, stop: Arc<AtomicBool>) {
+    let group = SocketAddrV4::new(GROUP, MDNS_PORT);
+    let mut current = name.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    // RFC 6762 8.3: a second announcement a second after the first.
+    let mut announce_at = Some(Instant::now() + ANNOUNCE_GAP);
     let mut buf = [0u8; 1500];
     while !stop.load(Ordering::SeqCst) {
         match sock.recv_from(&mut buf) {
+            Ok((n, from)) if conflicts(&buf[..n], from, ip, &current) => {
+                let _ = sock.send_to(&announcement(&current, ip, 0), group);
+                let Some((next, renamed)) = claim(&sock, ip, at + 1) else {
+                    return;
+                };
+                at = next;
+                current = renamed;
+                *name.lock().unwrap_or_else(|e| e.into_inner()) = current.clone();
+                announce_at = Some(Instant::now() + ANNOUNCE_GAP);
+            }
             Ok((n, SocketAddr::V4(src))) => {
-                if let Some((reply, to)) = respond(&buf[..n], ip, name, src) {
+                if let Some((reply, to)) = respond(&buf[..n], ip, &current, src) {
                     let _ = sock.send_to(&reply, to);
                 }
             }
@@ -346,5 +505,10 @@ fn serve(sock: UdpSocket, ip: Ipv4Addr, name: &str, stop: Arc<AtomicBool>) {
             Err(e) if matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut | io::ErrorKind::Interrupted) => {}
             Err(_) => thread::sleep(POLL),
         }
+        if announce_at.is_some_and(|t| Instant::now() >= t) {
+            let _ = sock.send_to(&announcement(&current, ip, TTL), group);
+            announce_at = None;
+        }
     }
+    let _ = sock.send_to(&announcement(&current, ip, 0), group);
 }
