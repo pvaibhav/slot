@@ -11,7 +11,7 @@ use slot_input::Millis;
 use slot_store::{scan, Cart, Platform, ShellChoice};
 use slot_ui::ReceiptText;
 
-use super::{generate_pin, local_host, qr_modules, qr_url, shown_address, wifi_ip, Server, PORTS};
+use super::{generate_pin, qr_modules, qr_url, shown_address, wifi_ip, Responder, Server, PORTS};
 use crate::label_cache::fresh;
 use crate::print_scene::{Cue, PaperJob, PrintArtState, PrintArtWorker, PrintFrame, PrintScene, PrintTextures};
 
@@ -22,7 +22,7 @@ pub const SERVER_FAILED: &str = "GAMEBIT FAILED";
 pub struct ServerNet {
     pub ip: fn() -> Option<Ipv4Addr>,
     pub ports: Vec<u16>,
-    pub host: fn(Ipv4Addr) -> Option<String>,
+    pub responder: fn(Ipv4Addr) -> Option<Responder>,
 }
 
 impl Default for ServerNet {
@@ -30,7 +30,7 @@ impl Default for ServerNet {
         ServerNet {
             ip: wifi_ip,
             ports: PORTS.to_vec(),
-            host: local_host,
+            responder: Responder::start,
         }
     }
 }
@@ -48,6 +48,7 @@ pub enum ServerPaper {
 
 struct Serving {
     server: Server,
+    responder: Option<Responder>,
     before: Seen,
 }
 
@@ -113,10 +114,15 @@ fn bring_up(root: PathBuf, net: ServerNet) -> Up {
         server.stop();
         return plain(SERVER_FAILED);
     };
-    let host = (net.host)(ip).map(|h| shown_address(&h, port));
+    let responder = (net.responder)(ip);
+    let host = responder.as_ref().map(|r| shown_address(&r.host(), port));
     let shown = shown_address(&ip.to_string(), port);
     Up {
-        serving: Some(Serving { server, before }),
+        serving: Some(Serving {
+            server,
+            responder,
+            before,
+        }),
         paper: ServerPaper::Code {
             url,
             host: host.clone(),
@@ -136,6 +142,9 @@ pub struct Rescan {
 }
 
 fn tear_down(serving: Serving, root: &Path, hurry: &AtomicBool) -> Option<Rescan> {
+    if let Some(responder) = serving.responder {
+        responder.stop();
+    }
     serving.server.stop();
     let carts = scan(root).ok()?;
     let stale = carts
