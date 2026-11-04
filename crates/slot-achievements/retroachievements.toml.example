@@ -1,5 +1,5 @@
 # Copy to Config/retroachievements.toml, fill in your account, then restart slot.
-# Needs Home Wi-Fi: see Config/wifi.toml.example.
+# Needs Wi-Fi: join a network from Network in the shelf menu.
 enabled = true
 username = ""
 password = ""

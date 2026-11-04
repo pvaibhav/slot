@@ -27,11 +27,10 @@ Account and configuration changes take effect on restart. Omit the file or set
 `enabled = false` to disable the feature. TOML comments and literal strings are supported;
 for example, single quotes preserve backslashes in a password without escaping them.
 
-For home networking, configure `Config/wifi.toml` from its bundled example and turn
-**Home Wi-Fi** **On** once in the main menu. The toggle is remembered across reboots.
-Wi-Fi connection, network time sync, RA login, and library preparation then run automatically.
-When the Wi-Fi worker reports a new connection, RA retries immediately instead of waiting
-for its normal network backoff. Releases and deployment copy only the example files;
+Join a network from **Network** in the shelf menu. RA login and library preparation then run
+whenever Wi-Fi is connected. A connection made on the shelf stays up through a game, so unlocks
+and rich presence go out as you play. When Wi-Fi connects, RA retries immediately instead of
+waiting for its normal network backoff. Releases and deployment copy only the example files;
 existing credentials and caches are preserved.
 
 Treat the config and cached login token as credentials. slot does not print them in logs.

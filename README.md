@@ -42,26 +42,34 @@ notes are in the [changelog](CHANGELOG.md).
   has this!
 - ~~Holding POWER **shuts down** directly, without showing a menu.~~
   Included upstream since **v1.8.0**. Restart is available from Settings > About with X.
-- **Home Wi-Fi.** Slot can now connect to your home Wi-Fi. Just set up your Wi-Fi credentials
-  in `Config/wifi.toml` and then turn HOME WI-FI on under General. Everything happens
-  automatically from then onwards. Most of the features below depend on this.
-- **Hassle-free cart label scraping.** Just throw your ROMs on the SD card, and slot downloads
-  missing labels in the background. It will not replace a label you added yourself, though.
-  No config is needed for this feature. No Wi-Fi? Put `Artwork.pack` from the release page in
-  your card's `Labels` folder and slot labels your carts from that instead.
+- ~~**Home Wi-Fi.**~~ Included upstream since **v1.13.0** as the **Network** menu. Join your
+  network there. The old `Config/wifi.toml` is removed on first start.
+- **Wi-Fi stays connected while you play**, if it was connected when you put the cart in, so
+  RetroAchievements stay online. slot never starts a connection in a game, because a scan can
+  stall frames.
+- ~~**Online cart label scraping.**~~ Included upstream since **v1.13.0** as **Fetch Missing
+  Art** under Network. No Wi-Fi? Put `Artwork.pack` from the release page in your card's
+  `Labels` folder and slot labels your carts from that instead.
 - **RetroAchievements.** You can earn softcore GB, GBC, and GBA achievements, online or offline.
   Put your account in `Config/retroachievements.toml` for this to work. All your games' achievements
-  will be cached if Wi-Fi is on, so once the sync is done, you can go out and play without
-  losing your achievements. They'll sync automatically when you're back home. When you're
-  playing at home with Wi-Fi on, your achievements will sync in real time with rich presence.
+  are cached while Wi-Fi is connected, so once the sync is done, you can go out and play without
+  losing your achievements. They sync automatically when Wi-Fi connects again. When you play
+  with Wi-Fi connected, your achievements sync in real time with rich presence.
   A holographic trophy seal on a cart's label shows it's ready to earn achievements offline.
-- **Linking over home Wi-Fi.** When at home and connected to Wi-Fi, two handhelds can link
-  using that instead of having to create ad hoc networks. Outside of home, you can continue
-  using slot's normal method. This works seamlessly, no config needed.
+- ~~**Linking over home Wi-Fi.**~~ Removed. Links use upstream's direct link, which needs no
+  network. Wi-Fi is off during a link, and achievements earned then sync afterwards.
 - **Cheats.** Put `Cheats.pack` from the release page in `Cheats/`, and a game's cheats from the
   libretro database appear under **Cheats** in its in-game menu, each with an On/Off switch.
   slot remembers which are on for each game. To use your own, add a RetroArch `.cht` file named
   after the ROM to `Cheats/GBA`, `Cheats/GB` or `Cheats/GBC`. Cheats need the mGBA core.
+  Gambatte, the default Game Boy core on new cards since v1.14.0, has no cheats yet.
+- **Network time from BaseOS.** **Set Automatically** in Date & Time turns BaseOS's `ntpd` on
+  or off, instead of slot asking a time server itself.
+- **`slot.local` beside the device's own name.** Gamebit answers at `slot.local`, and BaseOS
+  still answers at `<hostname>.local`. If another device already has `slot.local`, slot takes
+  `slot-2.local`. `mdns=false` in BaseOS's settings turns both off.
+- **Updates from this fork.** Network > Check for Updates installs this fork's releases, never
+  upstream's.
 
 Existing blending preferences are kept: the old On setting becomes Mix, and Off stays Off.
 mGBA also offers upstream's Ghosting mode.
@@ -73,9 +81,9 @@ for that combination and returns to `schedutil` when play pauses or ends.
 
 ## How to configure
 
-The release includes an `.example` copy of each config file in `Config/`. Remove `.example`
-from the name, and fill in your details. You only need to configure your Wi-Fi and
-RetroAchievements credentials. Everything else is automatic.
+Join your Wi-Fi network from **Network** in the shelf menu. For RetroAchievements, the release
+includes `Config/retroachievements.toml.example`. Remove `.example` from the name, and fill in
+your account. Everything else is automatic.
 
 ## Versions
 
