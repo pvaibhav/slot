@@ -181,11 +181,13 @@ fn build(query: &[u8], ip: Ipv4Addr, name: &str, legacy: bool) -> Option<Vec<u8>
             out.extend_from_slice(&ip.octets());
         }
         Kind::Nsec => {
+            let mut next = Vec::new();
+            name_bytes(&mut next, name);
             out.extend_from_slice(&47u16.to_be_bytes());
             out.extend_from_slice(&class.to_be_bytes());
             out.extend_from_slice(&ttl.to_be_bytes());
-            out.extend_from_slice(&[0, 15]);
-            name_bytes(&mut out, name);
+            out.extend_from_slice(&(next.len() as u16 + 3).to_be_bytes());
+            out.extend_from_slice(&next);
             out.extend_from_slice(&[0, 1, 0x40]);
         }
     }
@@ -216,25 +218,11 @@ pub fn names() -> impl Iterator<Item = String> {
     std::iter::once(NAME.to_string()).chain((2..=MAX_SUFFIX).map(|n| format!("{NAME}-{n}")))
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct BaseosMdns {
-    pub off: bool,
-    pub hostname: Option<String>,
-}
-
-/// What BaseOS's runtime settings say about mDNS. `mdns=false` turns every responder off.
-pub fn baseos_mdns(conf: &str) -> BaseosMdns {
-    let mut out = BaseosMdns::default();
-    for line in conf.lines() {
-        match line.trim().split_once('=') {
-            Some(("mdns", value)) => out.off = value.trim() == "false",
-            Some(("hostname", value)) if !value.trim().is_empty() => {
-                out.hostname = Some(value.trim().to_ascii_lowercase());
-            }
-            _ => {}
-        }
-    }
-    out
+/// Whether BaseOS's runtime settings turn mDNS off with `mdns=false`, as they do for Avahi.
+pub fn mdns_off(conf: &str) -> bool {
+    conf.lines()
+        .filter_map(|line| line.trim().split_once('='))
+        .any(|(key, value)| key.trim() == "mdns" && value.trim() == "false")
 }
 
 fn a_record(out: &mut Vec<u8>, name: &str, class: u16, ttl: u32, ip: Ipv4Addr) {
@@ -247,11 +235,13 @@ fn a_record(out: &mut Vec<u8>, name: &str, class: u16, ttl: u32, ip: Ipv4Addr) {
 }
 
 /// A probe for `name`, with the address slot would answer in its authority section so two
-/// devices probing at once can settle who keeps it (RFC 6762 8.2).
+/// devices probing at once can settle who keeps it (RFC 6762 8.2). It asks for multicast
+/// replies: slot shares port 5353 with Avahi, and a unicast reply may reach only Avahi's socket
+/// (RFC 6762 15.1).
 pub fn probe(name: &str, ip: Ipv4Addr) -> Vec<u8> {
     let mut out = vec![0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0];
     name_bytes(&mut out, name);
-    out.extend_from_slice(&[0, 255, 0x80, 1]);
+    out.extend_from_slice(&[0, 255, 0, 1]);
     a_record(&mut out, name, 1, TTL, ip);
     out
 }
@@ -269,8 +259,15 @@ struct Record<'a> {
     rdata: &'a [u8],
 }
 
-/// The answer and authority records of a packet, past its questions.
-fn records(packet: &[u8]) -> Option<(u16, Vec<Record<'_>>, Vec<Record<'_>>)> {
+struct Sections<'a> {
+    flags: u16,
+    authority: Vec<Record<'a>>,
+    /// Answer and additional records, either of which can claim a name (RFC 6762 9).
+    claims: Vec<Record<'a>>,
+}
+
+/// The records of a packet, past its questions.
+fn records(packet: &[u8]) -> Option<Sections<'_>> {
     let flags = u16_at(packet, 2)?;
     let mut pos = 12;
     for _ in 0..u16_at(packet, 4)? {
@@ -288,14 +285,19 @@ fn records(packet: &[u8]) -> Option<(u16, Vec<Record<'_>>, Vec<Record<'_>>)> {
         }
         Some(out)
     };
-    let answers = read(u16_at(packet, 6)?)?;
+    let mut claims = read(u16_at(packet, 6)?)?;
     let authority = read(u16_at(packet, 8)?)?;
-    Some((flags, answers, authority))
+    claims.extend(read(u16_at(packet, 10)?)?);
+    Some(Sections {
+        flags,
+        authority,
+        claims,
+    })
 }
 
 pub fn claims(reply: &[u8], name: &str) -> Option<bool> {
-    let (flags, answers, _) = records(reply)?;
-    Some(flags & 0x8000 != 0 && answers.iter().any(|r| named(&r.labels, name)))
+    let s = records(reply)?;
+    Some(s.flags & 0x8000 != 0 && s.claims.iter().any(|r| named(&r.labels, name)))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -313,16 +315,17 @@ pub fn heard(packet: &[u8], from: SocketAddr, ip: Ipv4Addr, name: &str) -> Heard
     if from.ip() == ip {
         return Heard::Nothing;
     }
-    let Some((flags, answers, authority)) = records(packet) else {
+    let Some(s) = records(packet) else {
         return Heard::Nothing;
     };
-    if flags & 0x8000 != 0 {
-        return match answers.iter().any(|r| named(&r.labels, name)) {
+    if s.flags & 0x8000 != 0 {
+        return match s.claims.iter().any(|r| named(&r.labels, name)) {
             true => Heard::Taken,
             false => Heard::Nothing,
         };
     }
-    let theirs = authority
+    let theirs = s
+        .authority
         .iter()
         .filter(|r| named(&r.labels, name) && r.rtype == 1)
         .map(|r| r.rdata)
@@ -338,11 +341,11 @@ pub fn conflicts(packet: &[u8], from: SocketAddr, ip: Ipv4Addr, name: &str) -> b
     if from.ip() == ip {
         return false;
     }
-    let Some((flags, answers, _)) = records(packet) else {
+    let Some(s) = records(packet) else {
         return false;
     };
-    flags & 0x8000 != 0
-        && answers
+    s.flags & 0x8000 != 0
+        && s.claims
             .iter()
             .any(|r| named(&r.labels, name) && r.rtype == 1 && r.rdata != ip.octets())
 }
@@ -433,17 +436,16 @@ pub struct Responder {
 impl Responder {
     pub fn start(ip: Ipv4Addr) -> Option<Responder> {
         let conf = std::fs::read_to_string(BASEOS_CONF).unwrap_or_default();
-        Self::start_with(ip, &baseos_mdns(&conf))
+        Self::start_with(ip, mdns_off(&conf))
     }
 
-    pub fn start_with(ip: Ipv4Addr, baseos: &BaseosMdns) -> Option<Responder> {
-        if baseos.off {
+    /// Avahi answering for a hostname of `slot` from this address does not stop slot claiming
+    /// it: the same address for the same name is no conflict.
+    pub fn start_with(ip: Ipv4Addr, off: bool) -> Option<Responder> {
+        if off {
             return None;
         }
         let stop = Arc::new(AtomicBool::new(false));
-        if baseos.hostname.as_deref() == Some(NAME) {
-            return Some(Responder { name: Arc::new(Mutex::new(NAME.into())), stop, thread: None });
-        }
         let sock = open(ip).ok()?;
         let (at, name) = claim(&sock, ip, 0)?;
         let name = Arc::new(Mutex::new(name));
@@ -453,6 +455,20 @@ impl Responder {
             .spawn(move || serve(sock, ip, served, at, flag))
             .ok()?;
         Some(Responder { name, stop, thread: Some(thread) })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn named(name: &str) -> Responder {
+        Responder {
+            name: Arc::new(Mutex::new(name.into())),
+            stop: Arc::new(AtomicBool::new(false)),
+            thread: None,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn rename(&self, name: &str) {
+        *self.name.lock().unwrap() = name.into();
     }
 
     pub fn host(&self) -> String {

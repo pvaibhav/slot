@@ -49,6 +49,7 @@ pub enum ServerPaper {
 struct Serving {
     server: Server,
     responder: Option<Responder>,
+    modules: Vec<Vec<bool>>,
     before: Seen,
 }
 
@@ -121,6 +122,7 @@ fn bring_up(root: PathBuf, net: ServerNet) -> Up {
         serving: Some(Serving {
             server,
             responder,
+            modules: modules.clone(),
             before,
         }),
         paper: ServerPaper::Code {
@@ -134,6 +136,22 @@ fn bring_up(root: PathBuf, net: ServerNet) -> Up {
             text: ReceiptText { host, ip: shown, pin },
         },
     }
+}
+
+/// The receipt's text with `host`, when that differs from the host it shows.
+fn renamed(paper: &mut ServerPaper, host: Option<String>) -> Option<ReceiptText> {
+    let ServerPaper::Code { host: shown, ip, pin, .. } = paper else {
+        return None;
+    };
+    if host.is_none() || host == *shown {
+        return None;
+    }
+    shown.clone_from(&host);
+    Some(ReceiptText {
+        host,
+        ip: ip.clone(),
+        pin: pin.clone(),
+    })
 }
 
 pub struct Rescan {
@@ -212,6 +230,7 @@ impl ServerSession {
                 Err(TryRecvError::Empty) => {}
             }
         }
+        self.follow_rename();
         if self.stop_asked && self.rising.is_none() && self.stopped.is_none() && self.stopping.is_none() {
             self.begin_stop();
         }
@@ -228,6 +247,27 @@ impl ServerSession {
         }
         if let Some(scene) = self.scene.as_mut().filter(|_| !self.paper_up) {
             scene.hold_print(now);
+        }
+    }
+
+    /// A conflict can move the responder to another name while Gamebit runs. The receipt is then
+    /// printed again with the name it answers to now.
+    fn follow_rename(&mut self) {
+        if self.stop_asked {
+            return;
+        }
+        let (Some(serving), Some(paper)) = (&self.serving, &mut self.paper) else {
+            return;
+        };
+        let host = serving
+            .responder
+            .as_ref()
+            .map(|r| shown_address(&r.host(), serving.server.port()));
+        if let Some(text) = renamed(paper, host) {
+            self.art = Some(PrintArtWorker::spawn(PaperJob::Code {
+                modules: serving.modules.clone(),
+                text,
+            }));
         }
     }
 
@@ -348,5 +388,41 @@ impl ServerSession {
 
     pub fn take_rescan(&mut self) -> Option<Rescan> {
         self.stopped.take().flatten()
+    }
+}
+
+#[cfg(test)]
+mod rename_tests {
+    use super::*;
+
+    fn code(host: &str) -> ServerPaper {
+        ServerPaper::Code {
+            url: "http://192.168.4.77/?pin=1234".into(),
+            host: Some(host.into()),
+            ip: "192.168.4.77".into(),
+            pin: "1234".into(),
+        }
+    }
+
+    #[test]
+    fn a_renamed_responder_reprints_the_receipt_with_its_new_name() {
+        let responder = Responder::named("slot");
+        let mut paper = code("SLOT.LOCAL");
+        assert!(renamed(&mut paper, Some(responder.host())).is_none());
+        responder.rename("slot-2");
+        let text = renamed(&mut paper, Some(responder.host())).unwrap();
+        assert_eq!(text.host.as_deref(), Some("SLOT-2.LOCAL"));
+        assert_eq!((text.ip.as_str(), text.pin.as_str()), ("192.168.4.77", "1234"));
+        assert_eq!(paper, code("SLOT-2.LOCAL"));
+        assert!(renamed(&mut paper, Some(responder.host())).is_none(), "printed once");
+    }
+
+    #[test]
+    fn a_plain_receipt_or_no_responder_is_left_alone() {
+        let mut plain = ServerPaper::Plain(NO_WIFI);
+        assert!(renamed(&mut plain, Some("SLOT.LOCAL".into())).is_none());
+        let mut paper = code("SLOT.LOCAL");
+        assert!(renamed(&mut paper, None).is_none());
+        assert_eq!(paper, code("SLOT.LOCAL"));
     }
 }
