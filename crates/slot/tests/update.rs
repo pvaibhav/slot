@@ -166,7 +166,7 @@ fn parse_release_reads_the_version_url_and_digest() {
     assert_eq!(r.version, "1.11.0");
     assert_eq!(
         r.url,
-        "https://github.com/BrandonKowalski/slot/releases/download/v1.11.0/slot-v1.11.0-h700.zip"
+        "https://github.com/pvaibhav/slot/releases/download/v1.11.0/slot-v1.11.0-h700.zip"
     );
     assert_eq!(r.size, 6919551);
     assert_eq!(&r.sha256[..2], &[0xe7, 0x8b]);
@@ -196,6 +196,33 @@ fn newer_compares_numerically() {
     assert!(!newer("1.11.0", "1.11.0"));
     assert!(!newer("1.11.0", "1.12.0"));
     assert!(!newer("1.12.0-rc1", "1.11.0"));
+}
+
+#[test]
+fn newer_counts_fork_releases_of_the_same_upstream_version() {
+    assert!(newer("1.14.0-pvaibhav.2", "1.14.0-pvaibhav.1"));
+    assert!(newer("1.14.0-pvaibhav.10", "1.14.0-pvaibhav.9"));
+    assert!(newer("1.14.0-pvaibhav.1", "1.13.0-pvaibhav.3"));
+    assert!(newer("1.14.0-pvaibhav.1", "1.14.0"));
+    assert!(!newer("1.14.0", "1.14.0-pvaibhav.1"));
+    assert!(!newer("1.14.0-pvaibhav.1", "1.14.0-pvaibhav.1"));
+    assert!(!newer("1.14.0-someone.2", "1.14.0"));
+    assert!(!newer("1.14.0-pvaibhav.x", "1.14.0"));
+}
+
+#[test]
+fn a_fork_release_is_found_in_this_forks_releases() {
+    let json = release_json(
+        "v1.14.0-pvaibhav.1",
+        "slot-v1.14.0-pvaibhav.1-h700.zip",
+        &"ab".repeat(32),
+    );
+    let release = parse_release(&json).unwrap();
+    assert_eq!(release.version, "1.14.0-pvaibhav.1");
+    assert_eq!(
+        release.url,
+        "https://github.com/pvaibhav/slot/releases/download/v1.14.0-pvaibhav.1/slot-v1.14.0-pvaibhav.1-h700.zip"
+    );
 }
 
 #[test]

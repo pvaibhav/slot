@@ -120,8 +120,21 @@ fn parts(v: &str) -> Option<Vec<u64>> {
     v.split('.').map(|p| p.parse().ok()).collect()
 }
 
+/// An upstream version and this fork's release of it: `1.14.0` is `([1, 14, 0], 0)` and
+/// `1.14.0-pvaibhav.2` is `([1, 14, 0], 2)`. Anything else, such as `1.14.0-rc1`, is `None`.
+fn fork_version(v: &str) -> Option<(Vec<u64>, u64)> {
+    let (base, fork) = match v.split_once('-') {
+        None => (v, 0),
+        Some((base, suffix)) => {
+            let n = suffix.strip_prefix(FORK)?.strip_prefix('.')?;
+            (base, n.parse().ok()?)
+        }
+    };
+    Some((parts(base).filter(|p| p.len() == 3)?, fork))
+}
+
 pub fn newer(release: &str, running: &str) -> bool {
-    match (parts(release), parts(running)) {
+    match (fork_version(release), fork_version(running)) {
         (Some(r), Some(c)) => r > c,
         _ => false,
     }
@@ -277,8 +290,11 @@ impl<R: Read> Read for Stoppable<R> {
 }
 
 pub const WIFI_CONF: &str = "Config/wifi.conf";
-pub const LATEST: &str = "https://slot-cfw.fyi/versions.json";
-const RELEASES: &str = "https://github.com/BrandonKowalski/slot/releases/download";
+// This fork's releases carry their own versions.json, so updates never cross over to
+// upstream's builds.
+pub const LATEST: &str = "https://github.com/pvaibhav/slot/releases/latest/download/versions.json";
+const RELEASES: &str = "https://github.com/pvaibhav/slot/releases/download";
+const FORK: &str = "pvaibhav";
 const BASEOS_RELEASES: &str = "https://github.com/pvaibhav/BaseOS/releases/download";
 
 #[derive(Debug, Clone, Copy)]

@@ -74,6 +74,19 @@ jobs:
           gh release create "$GITHUB_REF_NAME" "$ZIP" --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" --notes-file notes.md
 
+      # The fork's devices read versions.json from the latest release, not from the site.
+      - name: Attach versions.json for the updater
+        if: github.repository != 'BrandonKowalski/slot'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLOT_REPO: ${{ github.repository }}
+          OUT: versions.json
+        run: |
+          set -eu
+          bash .github/scripts/versions.sh
+          test "$(jq -r .stable.tag versions.json)" = "$GITHUB_REF_NAME"
+          gh release upload "$GITHUB_REF_NAME" versions.json --repo "$GITHUB_REPOSITORY"
+
       - name: Publish versions.json with the site
         if: github.repository == 'BrandonKowalski/slot'
         env:
