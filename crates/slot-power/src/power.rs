@@ -87,8 +87,12 @@ impl Power {
         self.platform.set_clock(secs);
     }
 
-    pub fn set_clock_in_background(&mut self, secs: i64) {
-        self.platform.set_clock_in_background(secs);
+    pub fn network_time(&self) -> Option<bool> {
+        self.platform.network_time()
+    }
+
+    pub fn set_network_time(&mut self, on: bool) {
+        self.platform.set_network_time(on);
     }
 }
 
