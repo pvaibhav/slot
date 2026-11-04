@@ -530,13 +530,14 @@ impl Platform for BaseOs {
 type Asked = Arc<Mutex<Vec<bool>>>;
 
 fn with_network_time(on: bool, baseos: Option<bool>) -> (TempDir, App, Asked) {
-    let (d, a, asked, _clock) = with_network_time_and_clock(on, baseos);
+    let (d, a, asked, _clock) = with_network_time_and_clock(on, baseos, CLOCK_IS_SET);
     (d, a, asked)
 }
 
 fn with_network_time_and_clock(
     on: bool,
     baseos: Option<bool>,
+    secs: i64,
 ) -> (TempDir, App, Asked, Arc<AtomicI64>) {
     let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
     write_slot_state(
@@ -551,7 +552,7 @@ fn with_network_time_and_clock(
     std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
     let (mut a, _clock) = app_booting_at(d.path(), CLOCK_IS_SET);
     let asked = Asked::default();
-    let clock = Arc::new(AtomicI64::new(CLOCK_IS_SET));
+    let clock = Arc::new(AtomicI64::new(secs));
     a.set_power(Power::new(
         Box::new(BaseOs {
             root: d.path().into(),
@@ -627,7 +628,7 @@ fn turning_network_time_off_stops_baseos_keeping_the_clock() {
 
 #[test]
 fn an_edit_left_behind_network_time_is_dropped() {
-    let (_d, mut a, asked, clock) = with_network_time_and_clock(false, Some(false));
+    let (_d, mut a, asked, clock) = with_network_time_and_clock(false, Some(false), CLOCK_IS_SET);
     settle(&mut a);
     open_clock(&mut a);
     a.apply(Action::GbaDown(Btn::Down));
@@ -639,4 +640,13 @@ fn an_edit_left_behind_network_time_is_dropped() {
     a.confirm_clock();
     assert_eq!(*asked.lock().unwrap(), [true]);
     assert_eq!(clock.load(Ordering::Relaxed), CLOCK_IS_SET);
+}
+
+#[test]
+fn confirming_the_startup_clock_turns_on_what_it_shows_even_if_baseos_forgot() {
+    let (_d, mut a, asked, _clock) = with_network_time_and_clock(true, Some(false), 0);
+    assert!(matches!(a.phase(), Phase::SetClock { .. }));
+    assert_eq!(a.picker().and_then(|p| p.network_time()), Some(true));
+    a.confirm_clock();
+    assert_eq!(*asked.lock().unwrap(), [true]);
 }

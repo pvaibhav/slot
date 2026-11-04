@@ -1,6 +1,6 @@
 use slot::server::{
-    announcement, answer, baseos_mdns, claims, conflicts, heard, model_name, names, probe, respond, wifi_ip,
-    BaseosMdns, Heard, Responder,
+    announcement, answer, claims, conflicts, heard, mdns_off, model_name, names, probe, respond, wifi_ip, Heard,
+    Responder,
 };
 use std::net::SocketAddr;
 use std::net::{Ipv4Addr, SocketAddrV4};
@@ -158,35 +158,38 @@ fn slot_numbers_its_name_like_avahi_and_never_takes_the_device_name() {
 }
 
 #[test]
-fn baseos_settings_turn_mdns_off_and_name_the_host() {
-    assert_eq!(baseos_mdns(""), BaseosMdns::default());
-    assert_eq!(
-        baseos_mdns("hostname=RG34XXSP\nmdns=true\n"),
-        BaseosMdns {
-            off: false,
-            hostname: Some("rg34xxsp".into())
-        }
-    );
-    assert!(baseos_mdns("hostname=rgsp\nmdns=false\n").off);
+fn mdns_false_in_baseos_settings_turns_slot_off_too() {
+    assert!(!mdns_off(""));
+    assert!(!mdns_off("hostname=slot\nmdns=true\n"));
+    assert!(mdns_off("hostname=rgsp\nmdns=false\n"));
+    assert!(Responder::start_with(IP, true).is_none());
 }
 
 #[test]
-fn with_mdns_off_in_baseos_nothing_answers() {
-    let off = BaseosMdns {
-        off: true,
-        hostname: None,
-    };
-    assert!(Responder::start_with(IP, &off).is_none());
+fn a_probe_asks_for_replies_every_responder_on_the_port_hears() {
+    let p = probe("slot", IP);
+    assert_eq!(p[12 + NAME.len()..12 + NAME.len() + 4], [0, 255, 0, 1]);
 }
 
 #[test]
-fn a_device_named_slot_leaves_the_name_to_avahi() {
-    let named = BaseosMdns {
-        off: false,
-        hostname: Some("slot".into()),
-    };
-    let r = Responder::start_with(IP, &named).unwrap();
-    assert_eq!(r.host(), "SLOT.LOCAL");
+fn a_numbered_name_says_it_has_no_ipv6_address_in_a_well_formed_record() {
+    for host in ["slot", "slot-2"] {
+        let reply = answer(&query_type(&[host, "local"], 28), IP, host).unwrap();
+        let encoded = host.len() + 1 + 6 + 1;
+        let rdlength = u16::from_be_bytes([reply[12 + encoded + 8], reply[12 + encoded + 9]]) as usize;
+        assert_eq!(rdlength, reply.len() - (12 + encoded + 10), "{host}");
+        assert_eq!(rdlength, encoded + 3, "{host}");
+    }
+}
+
+#[test]
+fn an_address_in_the_additional_section_claims_the_name_too() {
+    let theirs = announcement("slot", OTHER, 120);
+    let mut moved = theirs.clone();
+    moved[6..12].copy_from_slice(&[0, 0, 0, 0, 0, 1]);
+    assert!(conflicts(&moved, from(OTHER), IP, "slot"));
+    assert_eq!(heard(&moved, from(OTHER), IP, "slot"), Heard::Taken);
+    assert_eq!(claims(&moved, "slot"), Some(true));
 }
 
 #[test]
@@ -254,7 +257,7 @@ fn a_started_responder_names_a_host() {
     let Some(ip) = wifi_ip() else {
         return;
     };
-    let Some(first) = Responder::start_with(ip, &BaseosMdns::default()) else {
+    let Some(first) = Responder::start_with(ip, false) else {
         return;
     };
     let host = first.host();

@@ -12,7 +12,7 @@ pub use carts::render_once;
 pub use files::{move_path, rename_via_temp};
 pub use http::{generate_pin, parse_target, Body, Handler, Reply, Request, Server};
 pub use net::{
-    announcement, answer, baseos_mdns, claims, conflicts, heard, model_name, names, probe, respond, wifi_ip, BaseosMdns,
+    announcement, answer, claims, conflicts, heard, model_name, names, probe, respond, mdns_off, wifi_ip,
     Heard, Responder,
 };
 pub use paths::{card_name, resolve, Refused};
