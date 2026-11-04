@@ -1,11 +1,10 @@
 use slot_store::{move_config, read_slot_state};
 
-const FILES: [(&str, &str); 6] = [
+const FILES: [(&str, &str); 5] = [
     ("slot.state", "slot.state"),
     ("selected_core.ini", "selected_core.txt"),
     ("video_mode.ini", "video_mode.txt"),
     ("cart_shell.ini", "cart_shell.txt"),
-    ("wifi.toml", "wifi.toml"),
     ("retroachievements.toml", "retroachievements.toml"),
 ];
 
@@ -125,4 +124,35 @@ fn settings_written_before_the_move_are_still_read_after_it() {
         ),
         (Some("Emerald"), 40, -240)
     );
+}
+
+#[test]
+fn the_old_home_wifi_files_are_removed() {
+    let d = tempfile::tempdir().unwrap();
+    for dir in ["System", "Config", "System/slot-net/lib"] {
+        std::fs::create_dir_all(d.path().join(dir)).unwrap();
+    }
+    for f in [
+        "System/wifi.toml",
+        "Config/wifi.toml",
+        "Config/wifi.toml.example",
+        "System/slot-services",
+        "System/slot-net/lib/libnl.so",
+        "Config/wifi.conf",
+    ] {
+        std::fs::write(d.path().join(f), f).unwrap();
+    }
+
+    move_config(d.path()).unwrap();
+
+    for gone in [
+        "System/wifi.toml",
+        "Config/wifi.toml",
+        "Config/wifi.toml.example",
+        "System/slot-services",
+        "System/slot-net",
+    ] {
+        assert!(!d.path().join(gone).exists(), "{gone} was left behind");
+    }
+    assert!(d.path().join("Config/wifi.conf").exists());
 }

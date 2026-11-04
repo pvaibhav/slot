@@ -15,7 +15,6 @@ pub enum QuickRow {
     FastForwardSound,
     Screen,
     Rumble,
-    HomeWifi,
     DateTime,
     About,
     GbaShader,
@@ -125,12 +124,11 @@ pub enum QuickRow {
 }
 
 impl QuickRow {
-    pub const ALL: [QuickRow; 111] = [
+    pub const ALL: [QuickRow; 110] = [
         QuickRow::FastForward,
         QuickRow::FastForwardSound,
         QuickRow::Screen,
         QuickRow::Rumble,
-        QuickRow::HomeWifi,
         QuickRow::DateTime,
         QuickRow::About,
         QuickRow::GbaShader,
@@ -247,14 +245,13 @@ impl QuickRow {
         QuickRow::About,
     ];
 
-    pub const GENERAL: [QuickRow; 8] = [
+    pub const GENERAL: [QuickRow; 7] = [
         QuickRow::Theme,
         QuickRow::Wallpaper,
         QuickRow::WallpaperTint,
         QuickRow::Recents,
         QuickRow::ShowTitles,
         QuickRow::LidOff,
-        QuickRow::HomeWifi,
         QuickRow::DateTime,
     ];
 
@@ -447,8 +444,7 @@ impl QuickRow {
             | QuickRow::Theme
             | QuickRow::Recents
             | QuickRow::ShowTitles
-            | QuickRow::LidOff
-            | QuickRow::HomeWifi => &QuickRow::GENERAL,
+            | QuickRow::LidOff => &QuickRow::GENERAL,
             QuickRow::ControlsShelf | QuickRow::Shortcuts | QuickRow::ControlsInGame => {
                 &QuickRow::CONTROL_PAGES
             }
@@ -566,7 +562,6 @@ impl QuickRow {
             QuickRow::ScreenGeneral => "General",
             QuickRow::Brightness | QuickRow::PlayBrightness => "Brightness",
             QuickRow::BlueLight | QuickRow::PlayBlueLight => "Blue Light",
-            QuickRow::HomeWifi => "Home Wi-Fi",
             QuickRow::Saturation | QuickRow::PlaySaturation => "Saturation",
             QuickRow::Contrast | QuickRow::PlayContrast => "Contrast",
             QuickRow::DateTime => "Date & Time",

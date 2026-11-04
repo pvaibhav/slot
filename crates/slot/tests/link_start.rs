@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use slot::link_net::{Cancel, TcpLink};
-use slot::link_radio::{LinkNet, LinkRole, RadioFail};
+use slot::link_radio::{LinkRole, RadioFail};
 use slot::link_start::{LinkFail, LinkProgress, LinkStarter, LinkStep};
 
 const BAIL: Duration = Duration::from_secs(5);
@@ -39,71 +39,6 @@ fn drain_steps(starter: &mut LinkStarter) -> Vec<LinkStep> {
             "the worker never reached an outcome"
         );
     }
-}
-
-/// The network the radio step brings up is what the socket step is told, and a device already on
-/// the home network has no radio to take down when the session ends the ordinary way.
-#[test]
-fn the_socket_step_is_told_which_network_the_radio_step_chose() {
-    let lan = LinkNet::Lan {
-        local: std::net::Ipv4Addr::new(192, 168, 1, 24),
-    };
-    let seen = Arc::new(std::sync::Mutex::new(None));
-    let record = seen.clone();
-    let downs = Arc::new(AtomicUsize::new(0));
-    let count = downs.clone();
-    let mut starter = LinkStarter::spawn_net(
-        Box::new(move |_, _| Ok(lan)),
-        Box::new(move || {
-            count.fetch_add(1, Ordering::SeqCst);
-        }),
-        LinkRole::Join,
-        0,
-        Box::new(move |net, _, _| {
-            *record.lock().unwrap() = Some(net);
-            Err(io::Error::from(io::ErrorKind::TimedOut))
-        }),
-    );
-    let outcome = drain(&mut starter);
-    assert!(matches!(
-        outcome,
-        LinkProgress::Failed(LinkFail::NobodyCame)
-    ));
-    assert_eq!(*seen.lock().unwrap(), Some(lan));
-    // A failure tears down whichever network it was on, so a service that took a lease has it
-    // released; the direct path's own test asserts the count for that side.
-    assert_eq!(downs.load(Ordering::SeqCst), 1);
-}
-
-#[test]
-fn a_direct_radio_still_reaches_the_socket_as_direct() {
-    let seen = Arc::new(std::sync::Mutex::new(None));
-    let record = seen.clone();
-    let mut starter = LinkStarter::spawn_with(
-        Box::new(|_, _| Ok(())),
-        Box::new(|| {}),
-        LinkRole::Host,
-        0,
-        Box::new(move |_, _| {
-            *record.lock().unwrap() = Some(());
-            Err(io::Error::other("stop here"))
-        }),
-    );
-    let _ = drain(&mut starter);
-    assert!(seen.lock().unwrap().is_some());
-}
-
-#[test]
-fn the_services_answer_to_link_lan_is_an_address_or_nothing() {
-    use slot::link_radio::parse_lan_reply;
-    assert_eq!(
-        parse_lan_reply("0 192.168.34.81\n"),
-        Some(std::net::Ipv4Addr::new(192, 168, 34, 81))
-    );
-    assert_eq!(parse_lan_reply("1 NO_HOME_LAN"), None);
-    assert_eq!(parse_lan_reply("0 not-an-address"), None);
-    assert_eq!(parse_lan_reply("0"), None);
-    assert_eq!(parse_lan_reply(""), None);
 }
 
 #[test]

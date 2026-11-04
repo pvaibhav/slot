@@ -444,7 +444,6 @@ pub struct App {
     name_pending: bool,
     slot_letter: Option<char>,
     shelf_named: Option<Millis>,
-    wifi: Option<TexId>,
     shelf_clock: slot_ui::Printed,
     achievement_sync: Option<slot_ui::SyncIndicator>,
     hud: Hud,
@@ -670,7 +669,6 @@ impl App {
             name_pending: false,
             slot_letter: None,
             shelf_named: None,
-            wifi: None,
             shelf_clock: slot_ui::Printed::default(),
             achievement_sync: None,
             hud: Hud::new(),
@@ -721,7 +719,6 @@ impl App {
         app.carousel = read_carousel(root);
         app.shortcuts = read_shortcuts(root);
         app.controls = read_controls(root);
-        app.radio.ask(RadioJob::Home(app.state.home_wifi_enabled));
         app.restock_recents();
         app.restock_favorites();
         if let Some((at, i)) = app.remembered_seat() {
@@ -1258,7 +1255,6 @@ impl App {
             QuickRow::GbcShader => Some(shader_value(self.state.shader_gbc)),
             QuickRow::Rumble => Some(QuickValue::flag(self.state.rumble)),
             QuickRow::LeftStick => Some(QuickValue::flag(self.state.left_stick_dpad)),
-            QuickRow::HomeWifi => Some(QuickValue::flag(self.state.home_wifi_enabled)),
             QuickRow::AutoLoad => Some(QuickValue::flag(self.state.auto_load)),
             QuickRow::EjectSave => Some(QuickValue::flag(self.state.eject_save)),
             QuickRow::Turbo => Some(QuickValue::flag(self.state.turbo)),
@@ -1795,14 +1791,6 @@ impl App {
 
     pub fn set_wallpaper(&mut self, face: TexId) {
         self.wallpaper = Some(face);
-    }
-
-    pub fn set_wifi_face(&mut self, face: TexId) {
-        self.wifi = Some(face);
-    }
-
-    pub fn home_connected(&self) -> bool {
-        self.radio.home_connected()
     }
 
     pub fn set_bolt_face(&mut self, bolt: TexId) {
@@ -2993,7 +2981,11 @@ impl App {
             Some(GameMenu::Working { since, .. }) => since,
             _ => self.now(),
         };
-        self.start_link_from(self.spawn_link(reload.role), reload.role.client_id(), since);
+        self.start_link_from(
+            LinkStarter::spawn(reload.role.role(), link_port()),
+            reload.role.client_id(),
+            since,
+        );
     }
 
     pub fn link_reload_failed(&mut self) {
@@ -3419,7 +3411,6 @@ impl App {
             | QuickRow::Model
             | QuickRow::Rumble
             | QuickRow::LeftStick
-            | QuickRow::HomeWifi
             | QuickRow::Theme
             | QuickRow::Recents
             | QuickRow::ShowTitles
@@ -3660,10 +3651,6 @@ impl App {
             }
             QuickRow::Rumble => s.rumble = !s.rumble,
             QuickRow::LeftStick => s.left_stick_dpad = !s.left_stick_dpad,
-            QuickRow::HomeWifi => {
-                s.home_wifi_enabled = !s.home_wifi_enabled;
-                self.radio.ask(RadioJob::Home(s.home_wifi_enabled));
-            }
             QuickRow::AutoLoad => s.auto_load = !s.auto_load,
             QuickRow::EjectSave => s.eject_save = !s.eject_save,
             QuickRow::Turbo => s.turbo = !s.turbo,
@@ -4796,9 +4783,6 @@ impl App {
                 if let Some(icon) = self.achievement_sync {
                     slot_ui::draw_footer_sync(self.canvas(), self.shelf_clock, icon, out);
                 }
-                if self.state.home_wifi_enabled && self.radio.home_connected() {
-                    slot_ui::draw_home_wifi(self.battery, self.battery_percent, self.wifi, out);
-                }
             }
             Phase::About => {
                 slot_ui::draw_menu_ground(self.canvas(), self.menu_ground(), out);
@@ -5511,13 +5495,6 @@ impl App {
                 sprites,
                 out,
             );
-            crate::link_screen::draw_network_label(
-                self.canvas(),
-                menu,
-                self.radio.home_connected(),
-                sprites,
-                out,
-            );
         }
         let line = match menu {
             GameMenu::Pick(role) => self.link_menu_faces.get(role.index()).copied(),
@@ -6029,12 +6006,6 @@ impl App {
                 .is_some_and(|(cart, _)| link_dual(&cart.code, &cart.title))
     }
 
-    /// The real starter for this cart, which names its game to the other handheld by header code.
-    fn spawn_link(&self, role: LinkRow) -> LinkStarter {
-        let game = self.seated_cart().map_or("", |c| c.code.as_str());
-        LinkStarter::spawn(role.role(), link_port(), game)
-    }
-
     fn pick_link(&mut self, role: LinkRow) {
         let Some(stem) = self.seated().map(str::to_string) else {
             return;
@@ -6043,7 +6014,10 @@ impl App {
         if self.core == Core::Mgba {
             let player = role.client_id() as u8;
             if self.link_player == Some(player) {
-                return self.start_link(self.spawn_link(role), role.client_id());
+                return self.start_link(
+                    LinkStarter::spawn(role.role(), link_port()),
+                    role.client_id(),
+                );
             }
             if self.snapshot.as_ref().is_some_and(|s| !s.resume_trusted()) {
                 return self.refuse();
@@ -6067,7 +6041,10 @@ impl App {
         }
         let (_, serial) = self.link_mode(&stem);
         if serial == loaded {
-            return self.start_link(self.spawn_link(role), role.client_id());
+            return self.start_link(
+                LinkStarter::spawn(role.role(), link_port()),
+                role.client_id(),
+            );
         }
         if self.snapshot.as_ref().is_some_and(|s| !s.resume_trusted()) {
             return self.refuse();

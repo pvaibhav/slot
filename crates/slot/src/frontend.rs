@@ -145,7 +145,6 @@ struct ShelfLook {
     slot: [[TexId; 2]; 2],
     plugged: [TexId; 2],
     bolt: [TexId; 2],
-    wifi: [TexId; 2],
     port: [Option<TexId>; 2],
     legend: [Vec<(TexId, u32)>; 2],
     applied: Option<(bool, bool, bool)>,
@@ -377,15 +376,10 @@ impl Frontend {
             compositor.create_texture(dark_bolt.w, dark_bolt.h, &dark_bolt.rgba),
             compositor.create_texture(light_bolt.w, light_bolt.h, &light_bolt.rgba),
         ];
-        let wifi = [false, true].map(|light| {
-            let f = icon_face(Icon::Wifi, 18.0, footer_ink(light));
-            compositor.create_texture(f.w, f.h, &f.rgba)
-        });
         self.look = Some(ShelfLook {
             slot,
             plugged,
             bolt,
-            wifi,
             port: [None, None],
             legend: [Vec::new(), Vec::new()],
             applied: None,
@@ -418,7 +412,6 @@ impl Frontend {
                 look.slot[i],
                 look.plugged[i],
                 look.bolt[i],
-                look.wifi[i],
                 look.bolt[0],
                 look.port[i],
                 look.legend[i].clone(),
@@ -426,18 +419,8 @@ impl Frontend {
                 port_ready,
             )
         });
-        let Some((
-            done,
-            slot,
-            plugged,
-            bolt,
-            wifi,
-            hud_bolt,
-            port,
-            legend,
-            legend_ready,
-            port_ready,
-        )) = ready
+        let Some((done, slot, plugged, bolt, hud_bolt, port, legend, legend_ready, port_ready)) =
+            ready
         else {
             return;
         };
@@ -447,7 +430,6 @@ impl Frontend {
         self.session.app_mut().set_slot_faces(slot[0], slot[1]);
         self.session.app_mut().set_plugged_face(plugged);
         self.session.app_mut().set_bolt_face(bolt);
-        self.session.app_mut().set_wifi_face(wifi);
         self.session.app_mut().set_hud_bolt_face(hud_bolt);
         if let Some(tex) = port {
             self.session.app_mut().set_link_port(tex);
@@ -709,8 +691,6 @@ impl Frontend {
                     clicks: up(&art.clicks),
                     arrow_left: up(&art.arrow_left),
                     arrow_right: up(&art.arrow_right),
-                    net_home: up(&art.net_home),
-                    net_direct: up(&art.net_direct),
                 };
                 self.session.app_mut().set_link_sprites(sprites);
                 self.link_art_done = true;

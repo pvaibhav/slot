@@ -186,7 +186,7 @@ class Device:
         self.shell(f"rm -rf {q(root)}; mkdir -p {q(root + '/Config')} {q(root + '/System')} "
                    f"{q(root + '/Games/' + platform)} {q(root + '/Labels/' + platform)} "
                    f"{q(root + '/Saves/' + platform)} {q(root + '/States/' + platform + '/' + core + '/' + stem)}")
-        for library in ("mgba_libretro.so", "gpsp_libretro.so", "slot-services", "slot-net"):
+        for library in ("mgba_libretro.so", "gpsp_libretro.so"):
             source = self.session + "/gpsp_libretro.so" if library == "gpsp_libretro.so" and self.args.gpsp else self.args.card + "/System/" + library
             self.shell(f"ln -s {q(source)} {q(root + '/System/' + library)}")
         if not latency:

@@ -376,8 +376,6 @@ pub struct SlotState {
     pub zone: Zone,
     pub clock_24h: bool,
     pub rumble: bool,
-    /// Home association only; Link holds its own radio lease.
-    pub home_wifi_enabled: bool,
     pub ff_speed: u8,
     pub ff_sound: bool,
     pub colour_correction_gba: bool,
@@ -554,7 +552,6 @@ impl Default for SlotState {
             zone: Zone::default(),
             clock_24h: true,
             rumble: true,
-            home_wifi_enabled: false,
             ff_speed: FF_SPEED_DEFAULT,
             ff_sound: false,
             colour_correction_gba: false,
@@ -645,7 +642,7 @@ fn write_list(root: &Path, name: &str, list: &[Recent]) -> std::io::Result<()> {
 
 pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
     let mut text = format!(
-        "cart={}\ncart_platform={}\nbrightness={}\nblue_light={}\nvolume={}\nvolume_hp={}\nmuted={}\nmuted_hp={}\nclock_set={}\nzone={}\nclock_24h={}\nrumble={}\nff_speed={}\nff_sound={}\ncolour_correction_gba={}\ncolour_correction_gb={}\nshader_gba={}\nshader_gb={}\neject_save={}\nturbo={}\nrewind={}\nhigh_refresh={}\ngb_palettes={}\ngb_palette={}\nhome_wifi_enabled={}\nappearance={}\nwallpaper={}\n",
+        "cart={}\ncart_platform={}\nbrightness={}\nblue_light={}\nvolume={}\nvolume_hp={}\nmuted={}\nmuted_hp={}\nclock_set={}\nzone={}\nclock_24h={}\nrumble={}\nff_speed={}\nff_sound={}\ncolour_correction_gba={}\ncolour_correction_gb={}\nshader_gba={}\nshader_gb={}\neject_save={}\nturbo={}\nrewind={}\nhigh_refresh={}\ngb_palettes={}\ngb_palette={}\nappearance={}\nwallpaper={}\n",
         s.cart.as_deref().unwrap_or(""),
         s.cart_platform.map_or(String::new(), platform_key),
         s.brightness,
@@ -670,7 +667,6 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
         s.high_refresh as u8,
         s.gb_palettes as u8,
         s.gb_palette.core_name(),
-        s.home_wifi_enabled as u8,
         s.appearance.name(),
         s.wallpaper.key()
     );
@@ -731,7 +727,6 @@ fn parse(text: &str) -> Option<SlotState> {
     let mut zone = None;
     let mut clock_24h = None;
     let mut rumble = None;
-    let mut home_wifi_enabled = None;
     let mut ff_speed = None;
     let mut ff_sound = None;
     let mut colour_correction = None;
@@ -792,7 +787,6 @@ fn parse(text: &str) -> Option<SlotState> {
             "zone" => zone = Zone::parse(value),
             "clock_24h" => clock_24h = flag(value),
             "rumble" => rumble = flag(value),
-            "home_wifi_enabled" => home_wifi_enabled = flag(value),
             "ff_speed" => ff_speed = ff_speed_value(value),
             "ff_sound" => ff_sound = flag(value),
             "colour_correction" => colour_correction = flag(value),
@@ -857,7 +851,6 @@ fn parse(text: &str) -> Option<SlotState> {
         zone: zone.or_else(|| utc_offset_min.map(|m| Zone::for_offset(i64::from(m), now())))?,
         clock_24h: clock_24h.unwrap_or(fallback.clock_24h),
         rumble: rumble.unwrap_or(fallback.rumble),
-        home_wifi_enabled: home_wifi_enabled.unwrap_or(false),
         ff_speed: ff_speed.unwrap_or(fallback.ff_speed),
         ff_sound: ff_sound.unwrap_or(fallback.ff_sound),
         colour_correction_gba: colour_correction_gba

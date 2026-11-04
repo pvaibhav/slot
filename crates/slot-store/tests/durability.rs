@@ -22,7 +22,7 @@ fn fork_ghosting_preferences_migrate_to_upstream_blending_and_survive_a_rewrite(
     assert_eq!(state.cart_platform, Some(Platform::Gba));
     assert_eq!(state.brightness, 3);
     assert_eq!(state.volume, 40);
-    assert!(state.muted && state.home_wifi_enabled);
+    assert!(state.muted);
     assert!(!state.high_refresh);
     assert_eq!(state.zone, Zone::parse("Asia/Kolkata").unwrap());
     assert_eq!(
@@ -312,7 +312,6 @@ fn a_card_from_before_the_settings_keeps_all_its_values() {
             ),
             clock_24h: true,
             rumble: true,
-            home_wifi_enabled: false,
             ff_speed: FF_SPEED_DEFAULT,
             ff_sound: false,
             colour_correction_gba: false,
@@ -654,28 +653,6 @@ fn an_offset_outside_the_range_of_real_zones_reads_as_default() {
     ] {
         std::fs::write(d.path().join("Config/slot.state"), body).unwrap();
         assert_eq!(read_slot_state(d.path()), SlotState::default(), "{body}");
-    }
-}
-
-#[test]
-fn home_wifi_defaults_off_and_malformed_optional_flag_preserves_old_settings() {
-    let d = tmp_root();
-    let s = SlotState {
-        home_wifi_enabled: true,
-        volume: 30,
-        zone: Zone::parse("Asia/Kathmandu").unwrap(),
-        ..SlotState::default()
-    };
-    write_slot_state(d.path(), &s).unwrap();
-    assert!(read_slot_state(d.path()).home_wifi_enabled);
-    let path = d.path().join("Config/slot.state");
-    let text = std::fs::read_to_string(&path).unwrap();
-    for replacement in ["", "home_wifi_enabled=broken"] {
-        std::fs::write(&path, text.replace("home_wifi_enabled=1", replacement)).unwrap();
-        let restored = read_slot_state(d.path());
-        assert!(!restored.home_wifi_enabled);
-        assert_eq!(restored.volume, 30);
-        assert_eq!(restored.zone, Zone::parse("Asia/Kathmandu").unwrap());
     }
 }
 

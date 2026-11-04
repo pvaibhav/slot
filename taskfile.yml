@@ -79,7 +79,7 @@ tasks:
   lint:device:
     desc: Clippy the device build, which the host lint never compiles
     cmds:
-      - cargo clippy -p slot -p slot-services --no-default-features --features slot/device -- -D warnings
+      - cargo clippy -p slot --no-default-features --features device -- -D warnings
 
   check:
     desc: Everything a CI run would do
@@ -390,26 +390,14 @@ tasks:
           docker run --rm --platform linux/arm64 "$@" -v "$PWD":/src -w /src rust:1-bullseye sh -c '{{.CMD}}'
         fi
 
-  network:tools:
-    desc: Bundle iw and its ARM64 libraries for BaseOS channel queries
-    status:
-      - test -f vendor/slot-net/iw
-      - test -f vendor/slot-net/versions.txt
-      - file vendor/slot-net/iw | grep -q aarch64
-    cmds:
-      - task: device:sh
-        vars:
-          CMD: sh network/build-tools.sh
-
   build:device:
     desc: Build for the H700, in an arm64 container unless this is already one
-    deps: [network:tools]
     cmds:
       - task: device:sh
         vars:
           CMD: >-
             cargo build --profile device --target-dir target-device
-            -p slot -p slot-services --no-default-features --features slot/device
+            -p slot --no-default-features --features device
       - file target-device/device/slot | grep -q aarch64
       - 'echo "built target-device/device/slot"'
 
@@ -435,10 +423,7 @@ tasks:
         vars:
           CMD: ./target-device/device/slot --init-root {{.OUT}}
       - cp target-device/device/slot {{.OUT}}/System/slot
-      - cp target-device/device/slot-services {{.OUT}}/System/
-      - cp network/wifi.toml.example crates/slot-achievements/retroachievements.toml.example {{.OUT}}/Config/
-      - mkdir {{.OUT}}/System/slot-net
-      - cp vendor/slot-net/iw vendor/slot-net/*.so.* {{.OUT}}/System/slot-net/
+      - cp crates/slot-achievements/retroachievements.toml.example {{.OUT}}/Config/
       - cp -R card/System/* {{.OUT}}/System/
       - for d in Bezels Cheats Labels Wallpapers; do cp card/$d/README.txt {{.OUT}}/$d/; done
       - file vendor/mgba_libretro.so | grep -q aarch64
@@ -504,10 +489,7 @@ tasks:
       - "{{.ADB}} push vendor/fsck.exfat '{{.SD}}/System/fsck.exfat'"
       - "{{.ADB}} push licenses '{{.SD}}/System/'"
       - "{{.ADB}} push vendor/exfatprogs-{{.EXFATPROGS_VERSION}}.tar.gz '{{.SD}}/System/licenses/'"
-      - "{{.ADB}} push target-device/device/slot-services '{{.SD}}/System/slot-services'"
-      - "{{.ADB}} push network/wifi.toml.example crates/slot-achievements/retroachievements.toml.example '{{.SD}}/Config/'"
-      - "{{.ADB}} shell mkdir -p '{{.SD}}/System/slot-net'"
-      - "{{.ADB}} push vendor/slot-net/iw vendor/slot-net/*.so.* '{{.SD}}/System/slot-net/'"
+      - "{{.ADB}} push crates/slot-achievements/retroachievements.toml.example '{{.SD}}/Config/'"
       - "{{.ADB}} push vendor/slot-net/licenses/. '{{.SD}}/System/licenses/'"
       - "{{.ADB}} push vendor/slot-net/versions.txt '{{.SD}}/System/licenses/slot-net.meta'"
       - |
