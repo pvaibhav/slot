@@ -397,6 +397,40 @@ fn art_upload_caches_the_label_for_the_shelf() {
     server.stop();
 }
 
+fn solid_png(w: u32, h: u32, rgb: [u8; 3]) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut enc = png::Encoder::new(&mut out, w, h);
+    enc.set_color(png::ColorType::Rgb);
+    let mut writer = enc.write_header().unwrap();
+    let px: Vec<u8> = (0..w * h).flat_map(|_| rgb).collect();
+    writer.write_image_data(&px).unwrap();
+    drop(writer);
+    out
+}
+
+#[test]
+fn art_upload_over_a_label_learned_at_boot_shows_the_new_label() {
+    let (d, server) = start();
+    let root = d.path();
+    put(root, "Games/GBA/Gamma.gba", b"gamma-rom");
+    put(root, "Labels/GBA/Gamma.png", &solid_png(640, 330, [200, 10, 10]));
+    slot::label_cache::learn_stamps(root);
+    let cart = slot_store::Cart {
+        platform: Platform::Gba,
+        stem: "Gamma".into(),
+        rom: root.join("Games/GBA/Gamma.gba"),
+        label: Some(root.join("Labels/GBA/Gamma.png")),
+        title: String::new(),
+        code: String::new(),
+        shell: None,
+    };
+    assert_eq!(&slot::label_cache::label_art(root, &cart).unwrap()[..3], &[200, 10, 10]);
+    let (status, _) = call(server.port(), "POST", "/api/games/GBA/0/art?name=new.png", &solid_png(640, 330, [10, 10, 200]));
+    assert_eq!(status, 200);
+    assert_eq!(&slot::label_cache::label_art(root, &cart).unwrap()[..3], &[10, 10, 200]);
+    server.stop();
+}
+
 #[test]
 fn art_upload_replaces_the_label_and_delete_removes_it() {
     let (d, server) = start();

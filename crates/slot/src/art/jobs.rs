@@ -538,6 +538,7 @@ pub fn fetch_label(root: &Path, cart: &Cart) -> Result<bool, UpdateFail> {
     make::write_replacing(&path, &png).map_err(|_| UpdateFail::Bad)?;
     let mut labeled = cart.clone();
     labeled.label = Some(path);
+    let _ = std::fs::remove_file(crate::label_cache::cache_path(root, &labeled));
     let _ = crate::label_cache::label_art(root, &labeled);
     Ok(true)
 }

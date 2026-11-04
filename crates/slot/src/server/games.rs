@@ -312,6 +312,7 @@ fn art(root: &Path, cart: &Cart, req: &mut Request) -> Reply {
                     let mut labeled = cart.clone();
                     labeled.label = Some(dest);
                     labeled.read_header();
+                    let _ = fs::remove_file(crate::label_cache::cache_path(root, &labeled));
                     let _ = crate::label_cache::label_art(root, &labeled);
                     ok()
                 }
