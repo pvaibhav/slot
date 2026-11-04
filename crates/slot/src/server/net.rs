@@ -212,13 +212,10 @@ pub fn model_name(model: &str) -> Option<String> {
     (!name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric())).then_some(name)
 }
 
-/// The names slot answers to, in order. BaseOS's Avahi already answers `<hostname>.local`, so
-/// slot claims only its own name and, like Avahi, numbers it when another device holds it.
 pub fn names() -> impl Iterator<Item = String> {
     std::iter::once(NAME.to_string()).chain((2..=MAX_SUFFIX).map(|n| format!("{NAME}-{n}")))
 }
 
-/// Whether BaseOS's runtime settings turn mDNS off with `mdns=false`, as they do for Avahi.
 pub fn mdns_off(conf: &str) -> bool {
     conf.lines()
         .filter_map(|line| line.trim().split_once('='))
@@ -234,10 +231,6 @@ fn a_record(out: &mut Vec<u8>, name: &str, class: u16, ttl: u32, ip: Ipv4Addr) {
     out.extend_from_slice(&ip.octets());
 }
 
-/// A probe for `name`, with the address slot would answer in its authority section so two
-/// devices probing at once can settle who keeps it (RFC 6762 8.2). It asks for multicast
-/// replies: slot shares port 5353 with Avahi, and a unicast reply may reach only Avahi's socket
-/// (RFC 6762 15.1).
 pub fn probe(name: &str, ip: Ipv4Addr) -> Vec<u8> {
     let mut out = vec![0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0];
     name_bytes(&mut out, name);
@@ -246,7 +239,6 @@ pub fn probe(name: &str, ip: Ipv4Addr) -> Vec<u8> {
     out
 }
 
-/// An unsolicited answer for `name`. TTL zero says goodbye.
 pub fn announcement(name: &str, ip: Ipv4Addr, ttl: u32) -> Vec<u8> {
     let mut out = vec![0, 0, 0x84, 0, 0, 0, 0, 1, 0, 0, 0, 0];
     a_record(&mut out, name, 0x8001, ttl, ip);
@@ -262,11 +254,9 @@ struct Record<'a> {
 struct Sections<'a> {
     flags: u16,
     authority: Vec<Record<'a>>,
-    /// Answer and additional records, either of which can claim a name (RFC 6762 9).
     claims: Vec<Record<'a>>,
 }
 
-/// The records of a packet, past its questions.
 fn records(packet: &[u8]) -> Option<Sections<'_>> {
     let flags = u16_at(packet, 2)?;
     let mut pos = 12;
@@ -303,14 +293,10 @@ pub fn claims(reply: &[u8], name: &str) -> Option<bool> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Heard {
     Nothing,
-    /// Another device answers for the name.
     Taken,
-    /// Another device probes for it at the same time and wins the tie-break.
     Lost,
 }
 
-/// What a packet means for a name slot is probing for. Packets from slot's own address are its
-/// own probes looped back, or BaseOS's Avahi answering for the hostname.
 pub fn heard(packet: &[u8], from: SocketAddr, ip: Ipv4Addr, name: &str) -> Heard {
     if from.ip() == ip {
         return Heard::Nothing;
@@ -336,7 +322,6 @@ pub fn heard(packet: &[u8], from: SocketAddr, ip: Ipv4Addr, name: &str) -> Heard
     }
 }
 
-/// Whether another device answers for the name slot holds with a different address.
 pub fn conflicts(packet: &[u8], from: SocketAddr, ip: Ipv4Addr, name: &str) -> bool {
     if from.ip() == ip {
         return false;
@@ -367,7 +352,6 @@ fn probe_once(sock: &UdpSocket, ip: Ipv4Addr, name: &str) -> Heard {
     Heard::Nothing
 }
 
-/// The first name from `skip` on that no other device holds, announced once.
 fn claim(sock: &UdpSocket, ip: Ipv4Addr, skip: usize) -> Option<(usize, String)> {
     for (at, name) in names().enumerate().skip(skip) {
         for _ in 0..LOST_TRIES {
@@ -439,8 +423,6 @@ impl Responder {
         Self::start_with(ip, mdns_off(&conf))
     }
 
-    /// Avahi answering for a hostname of `slot` from this address does not stop slot claiming
-    /// it: the same address for the same name is no conflict.
     pub fn start_with(ip: Ipv4Addr, off: bool) -> Option<Responder> {
         if off {
             return None;
@@ -497,7 +479,6 @@ impl Drop for Responder {
 fn serve(sock: UdpSocket, ip: Ipv4Addr, name: Arc<Mutex<String>>, mut at: usize, stop: Arc<AtomicBool>) {
     let group = SocketAddrV4::new(GROUP, MDNS_PORT);
     let mut current = name.lock().unwrap_or_else(|e| e.into_inner()).clone();
-    // RFC 6762 8.3: a second announcement a second after the first.
     let mut announce_at = Some(Instant::now() + ANNOUNCE_GAP);
     let mut buf = [0u8; 1500];
     while !stop.load(Ordering::SeqCst) {
