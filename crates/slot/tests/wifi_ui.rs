@@ -153,7 +153,7 @@ fn menus_keep_it() {
 }
 
 #[test]
-fn a_studio_fetch_keeps_the_radio_once_and_a_game_releases_it() {
+fn a_studio_fetch_keeps_the_radio_once_and_a_game_keeps_the_connection() {
     let _g = serial();
     let (_d, mut a, log) = on_shelf();
     settle(&mut a);
@@ -166,6 +166,41 @@ fn a_studio_fetch_keeps_the_radio_once_and_a_game_releases_it() {
     assert_eq!(count(&log, "start"), 1);
     a.apply(Action::Insert);
     frames(&mut a, 2);
+    settle(&mut a);
+    assert_eq!(count(&log, "stop"), 0);
+    assert!(a.wifi_up());
+}
+
+#[test]
+fn a_game_never_starts_the_radio() {
+    let _g = serial();
+    let (_d, mut a, log) = booted(true, Fake::broken());
+    settle(&mut a);
+    assert_eq!(count(&log, "start"), 1);
+    assert!(!a.wifi().held);
+    a.apply(Action::Insert);
+    for _ in 0..10 {
+        let t = a.now();
+        a.tick_ms(t + 10_000);
+    }
+    assert_eq!(count(&log, "start"), 1, "a retry during the game");
+}
+
+#[test]
+fn a_connection_lost_in_a_game_is_let_go_until_the_shelf() {
+    let _g = serial();
+    let fake = Fake::demo();
+    let no_lease = fake.no_lease.clone();
+    let (_d, mut a, log) = booted(true, fake);
+    settle(&mut a);
+    join_home(&mut a);
+    a.apply(Action::Insert);
+    frames(&mut a, 2);
+    assert!(a.wifi_up());
+    no_lease.store(true, std::sync::atomic::Ordering::SeqCst);
+    settle(&mut a);
+    assert!(!a.wifi_up());
+    assert!(!a.wifi().held);
     assert_eq!(count(&log, "stop"), 1);
 }
 
@@ -202,7 +237,7 @@ fn the_status_bar_follows_the_connection() {
     assert_eq!(wifi_icons(&a), 1);
     a.apply(Action::Insert);
     frames(&mut a, 2);
-    assert!(!a.wifi_up());
+    assert!(a.wifi_up(), "a game keeps the connection");
 }
 
 fn wifi_icons(a: &App) -> usize {

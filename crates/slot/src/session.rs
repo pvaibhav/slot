@@ -22,6 +22,7 @@ use crate::print_scene::Cue;
 
 pub struct Session {
     achievements: slot_achievements::Service,
+    wifi_up: bool,
     root: PathBuf,
     app: App,
     emu: Option<EmuHandle>,
@@ -51,6 +52,7 @@ impl Session {
     pub fn boot_with(root: PathBuf, sink: Box<dyn AudioSink>) -> Self {
         let mut session = Session {
             achievements: slot_achievements::Service::start(root.clone()),
+            wifi_up: false,
             app: App::boot(&root),
             root,
             emu: None,
@@ -368,6 +370,11 @@ impl Session {
 
     pub fn update(&mut self, dt: f32) {
         self.bridge_link(|app| app.update(dt));
+        let up = self.app.wifi_up();
+        if up && !self.wifi_up {
+            self.achievements.network_available();
+        }
+        self.wifi_up = up;
         self.sink.hold_open(self.app.headphones());
         if let Some(emu) = &self.emu {
             emu.set_volume(self.app.output_volume());

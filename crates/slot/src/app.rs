@@ -6938,6 +6938,16 @@ impl App {
     }
 
     fn wifi_wanted(&self) -> bool {
+        if self.seated_cart().is_some() {
+            // A game keeps a connection it already has, so RetroAchievements stay online, but
+            // never starts one: a scan while playing can stall frames.
+            return self.wifi_held
+                && self.wifi_up()
+                && !matches!(self.phase, Phase::Doze { .. })
+                && !self.link_active()
+                && !self.shutting_down()
+                && !self.state.wifi_off;
+        }
         matches!(
             self.phase,
             Phase::Shelf
