@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.14.0](https://github.com/BrandonKowalski/slot/releases/tag/v1.14.0)
+
+- Gambatte is a new core for Game Boy and Game Boy Color, and the default on new cards. Existing cards stay on mGBA. Press START on a Game Boy cart to switch cores. Saves and the clock carry over between them. ([#184](https://github.com/BrandonKowalski/slot/issues/184))
+- Game Boy and Game Boy Color audio no longer pops going into and out of silence, on both Gambatte and mGBA. Potentially fixes ([#184](https://github.com/BrandonKowalski/slot/issues/184))
+- Brightness has six new software steps below the lowest backlight level. ([#189](https://github.com/BrandonKowalski/slot/issues/189))
+- Press X on the shelf to take a game off Recents. It can be rebound under Settings → Controls → Shelf as Remove Recent. ([#185](https://github.com/BrandonKowalski/slot/issues/185))
+- Large shelves scroll more smoothly. slot keeps an index of ROM headers and a faster label cache, so moving along the shelf no longer reads ROMs or source labels. Existing label caches are converted, not redrawn.
+- slot keeps a log of the last five link attempts in `Logs/slotlink.log`.
+
 ## [1.13.0](https://github.com/BrandonKowalski/slot/releases/tag/v1.13.0)
 
 - OTA Updater: Open the menu on the shelf and pick Network → Check for Updates. It checks if there is a new release of slot or BaseOS.

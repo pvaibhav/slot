@@ -13,6 +13,8 @@
 *.dylib
 *.so
 
+.r2*
+
 .DS_Store
 /.idea/
 /target-device
