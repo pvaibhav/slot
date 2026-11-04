@@ -20,11 +20,11 @@ fn no_lan() -> Option<Ipv4Addr> {
     None
 }
 
-fn no_mdns() -> Option<String> {
+fn no_mdns(_: Ipv4Addr) -> Option<String> {
     None
 }
 
-fn handheld() -> Option<String> {
+fn handheld(_: Ipv4Addr) -> Option<String> {
     Some("RGSP.LOCAL".to_string())
 }
 
@@ -1040,7 +1040,7 @@ mod screen {
         assert_ne!(r.f.app().quick_menu(), before);
     }
 
-    fn slow_mdns() -> Option<String> {
+    fn slow_mdns(_: std::net::Ipv4Addr) -> Option<String> {
         std::thread::sleep(Duration::from_millis(1500));
         None
     }

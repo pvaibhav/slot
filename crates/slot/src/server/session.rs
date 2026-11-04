@@ -22,7 +22,7 @@ pub const SERVER_FAILED: &str = "GAMEBIT FAILED";
 pub struct ServerNet {
     pub ip: fn() -> Option<Ipv4Addr>,
     pub ports: Vec<u16>,
-    pub host: fn() -> Option<String>,
+    pub host: fn(Ipv4Addr) -> Option<String>,
 }
 
 impl Default for ServerNet {
@@ -113,7 +113,7 @@ fn bring_up(root: PathBuf, net: ServerNet) -> Up {
         server.stop();
         return plain(SERVER_FAILED);
     };
-    let host = (net.host)().map(|h| shown_address(&h, port));
+    let host = (net.host)(ip).map(|h| shown_address(&h, port));
     let shown = shown_address(&ip.to_string(), port);
     Up {
         serving: Some(Serving { server, before }),

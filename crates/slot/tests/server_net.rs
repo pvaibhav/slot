@@ -1,4 +1,5 @@
-use slot::server::{mdns_host, model_name};
+use slot::server::{model_name, ptr_name, reverse_query};
+use std::net::Ipv4Addr;
 
 #[test]
 fn every_baseos_model_makes_a_name() {
@@ -21,25 +22,41 @@ fn every_baseos_model_makes_a_name() {
     assert_eq!(model_name("a.b"), None);
 }
 
-#[test]
-fn the_system_host_name_is_shown_as_local() {
-    assert_eq!(mdns_host("rgsp\n", None).as_deref(), Some("RGSP.LOCAL"));
-    assert_eq!(
-        mdns_host("MyHandheld", Some("hostname=MyHandheld\nmdns=true\n")).as_deref(),
-        Some("MYHANDHELD.LOCAL")
-    );
-    assert_eq!(
-        mdns_host("Studio.local", None).as_deref(),
-        Some("STUDIO.LOCAL")
-    );
+const SP: Ipv4Addr = Ipv4Addr::new(192, 168, 1, 250);
+const QUERY: &str = "123400000001000000000000033235300131033136380331393207696e2d61646472046172706100000c0001";
+const AVAHI_REPLY: &str = "123484000001000100000000033235300131033136380331393207696e2d61646472046172706100000c0001c00c000c00010000000a000c0472677370056c6f63616c00";
+
+fn bytes(hex: &str) -> Vec<u8> {
+    (0..hex.len()).step_by(2).map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap()).collect()
 }
 
 #[test]
-fn mdns_turned_off_in_baseos_shows_no_host() {
-    assert_eq!(mdns_host("rgsp", Some("hostname=rgsp\nmdns=false\n")), None);
+fn the_reverse_query_asks_for_the_address() {
+    assert_eq!(reverse_query(SP, 0x1234), bytes(QUERY));
 }
 
 #[test]
-fn an_empty_host_name_shows_no_host() {
-    assert_eq!(mdns_host("", None), None);
+fn avahi_names_the_device_in_its_reply() {
+    assert_eq!(ptr_name(&bytes(AVAHI_REPLY), 0x1234).as_deref(), Some("RGSP.LOCAL"));
+}
+
+#[test]
+fn a_renamed_device_reports_its_new_name() {
+    let mut reply = bytes(AVAHI_REPLY);
+    let at = reply.len() - 12;
+    reply.splice(at.., [6, b'r', b'g', b's', b'p', b'-', b'2', 5, b'l', b'o', b'c', b'a', b'l', 0]);
+    let n = reply.len();
+    reply[n - 15] = 14;
+    assert_eq!(ptr_name(&reply, 0x1234).as_deref(), Some("RGSP-2.LOCAL"));
+}
+
+#[test]
+fn a_reply_to_another_question_is_ignored() {
+    assert_eq!(ptr_name(&bytes(AVAHI_REPLY), 0x4321), None);
+}
+
+#[test]
+fn a_query_or_a_short_packet_names_nothing() {
+    assert_eq!(ptr_name(&bytes(QUERY), 0x1234), None);
+    assert_eq!(ptr_name(&bytes(&AVAHI_REPLY[..60]), 0x1234), None);
 }

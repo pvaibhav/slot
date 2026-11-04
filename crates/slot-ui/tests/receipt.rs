@@ -78,6 +78,15 @@ fn no_host_omits_the_line() {
 }
 
 #[test]
+fn a_host_too_long_to_fit_is_left_off() {
+    let m = modules(URL);
+    let long = format!("{}.LOCAL:2003", "A".repeat(63));
+    let with = receipt_face(&m, &text(Some(&long), "192.168.1.42"));
+    let without = receipt_face(&m, &text(None, "192.168.1.42"));
+    assert_eq!(with.rgba, without.rgba);
+}
+
+#[test]
 fn padding_below_pin_is_blank() {
     let f = receipt_face(&modules(URL), &text(Some("GAMEBIT.LOCAL"), "192.168.1.42"));
     let last = *ink_rows(&f).last().unwrap();
