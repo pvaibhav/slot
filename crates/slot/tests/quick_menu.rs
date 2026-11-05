@@ -639,7 +639,7 @@ fn tools_holds_the_network_tools() {
     }
 }
 
-const NO_NETWORK: &str = "You must be connected to a network to use tools";
+const NO_NETWORK: &str = "Not connected";
 
 #[test]
 fn tools_shows_the_message_when_not_connected() {

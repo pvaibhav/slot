@@ -696,3 +696,36 @@ mod romm_pages {
         assert!(decode(&px, size).is_none());
     }
 }
+
+#[test]
+fn the_no_network_notice_fits_the_screen() {
+    for panel in [(640, 480), (720, 480)] {
+        let Some((_d, mut f, mut c, _s)) = setup() else {
+            return;
+        };
+        f.app_mut().set_panel(panel);
+        f.app_mut().wifi_send(Cmd::Disconnect);
+        settle(&mut f);
+        assert!(!f.app().wifi_up());
+        let canvas = f.app().canvas();
+        f.app_mut().apply(Action::QuickMenu);
+        while f.app().quick_menu() != Some(QuickRow::Network) {
+            press(&mut f, Btn::Down);
+        }
+        press(&mut f, Btn::A);
+        assert!(f.app().update_text().is_some(), "{panel:?}: no notice");
+        let px = frame(&mut f, &mut c);
+        dump(&px, &format!("no-network-{}", panel.0));
+        let (left, right, n) = [150.0, 202.0, 254.0]
+            .into_iter()
+            .filter_map(|top| ink_span(&px, top))
+            .reduce(|a, b| (a.0.min(b.0), a.1.max(b.1), a.2 + b.2))
+            .expect("no notice drawn");
+        assert!(n > 100, "{panel:?}: notice too faint");
+        assert!(
+            left >= 12 && (right as f32) < canvas.w - 12.0,
+            "{panel:?}: notice spans {left}..{right} on a {} canvas",
+            canvas.w
+        );
+    }
+}

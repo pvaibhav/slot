@@ -9235,8 +9235,8 @@ impl App {
             UpdateState::Notice(NetNotice::Password) => ("Invalid Password".into(), String::new()),
             UpdateState::Notice(NetNotice::RommPort) => ("Invalid Port".into(), String::new()),
             UpdateState::Notice(NetNotice::NoNetwork) => (
-                "You must be connected to a network to use tools".into(),
-                String::new(),
+                "Not connected".into(),
+                "Join a Wi-Fi network to use Tools.".into(),
             ),
             UpdateState::Notice(NetNotice::RommNoServer) => (
                 "Enter a server first".into(),
