@@ -166,7 +166,7 @@ fn parse_release_reads_the_version_url_and_digest() {
     assert_eq!(r.version, "1.11.0");
     assert_eq!(
         r.url,
-        "https://github.com/BrandonKowalski/slot/releases/download/v1.11.0/slot-v1.11.0-h700.zip"
+        "https://github.com/slot-cfw/slot/releases/download/v1.11.0/slot-v1.11.0-h700.zip"
     );
     assert_eq!(r.size, 6919551);
     assert_eq!(&r.sha256[..2], &[0xe7, 0x8b]);

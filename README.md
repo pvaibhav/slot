@@ -2,9 +2,9 @@
 
 <img src=".github/resources/banner.png" width="100%" alt="slot. A bespoke, Game Boy-centric frontend for the Anbernic RG SP.">
 
-<a href="LICENSE"><img src="https://img.shields.io/github/license/BrandonKowalski/slot?style=for-the-badge&labelColor=242429&color=4d4d57" height="36" alt="License"></a>
-<a href="https://github.com/BrandonKowalski/slot/stargazers"><img src="https://img.shields.io/github/stars/BrandonKowalski/slot?style=for-the-badge&labelColor=242429&color=4d4d57" height="36" alt="Stars"></a>
-<a href="https://github.com/BrandonKowalski/slot/releases"><img src="https://img.shields.io/github/downloads/BrandonKowalski/slot/total?style=for-the-badge&labelColor=242429&color=4d4d57" height="36" alt="Downloads"></a>
+<a href="LICENSE"><img src="https://img.shields.io/github/license/slot-cfw/slot?style=for-the-badge&labelColor=242429&color=4d4d57" height="36" alt="License"></a>
+<a href="https://github.com/slot-cfw/slot/stargazers"><img src="https://img.shields.io/github/stars/slot-cfw/slot?style=for-the-badge&labelColor=242429&color=4d4d57" height="36" alt="Stars"></a>
+<a href="https://github.com/slot-cfw/slot/releases"><img src="https://img.shields.io/github/downloads/slot-cfw/slot/total?style=for-the-badge&labelColor=242429&color=4d4d57" height="36" alt="Downloads"></a>
 <a href="https://slot-cfw.fyi"><img src="https://img.shields.io/badge/Guide-slot--cfw.fyi-4d4d57?style=for-the-badge&labelColor=242429" height="36" alt="Docs"></a>
 <a href="https://discord.gg/NYRWsSuPUu"><img src="https://img.shields.io/badge/Discord-4d4d57?style=for-the-badge&labelColor=242429&logo=discord&logoColor=white" height="36" alt="Discord"></a>
 
@@ -51,7 +51,7 @@ A full user guide can be found at [slot-cfw.fyi](https://slot-cfw.fyi).
 | Anbernic RG35XX-H  | Yes                                          | 1.7.0         |
 
 If you have one of the untested devices, or have tried slot on a device not listed,
-please [open an issue on GitHub](https://github.com/BrandonKowalski/slot/issues) and let me know how it went.
+please [open an issue on GitHub](https://github.com/slot-cfw/slot/issues) and let me know how it went.
 
 ---
 

@@ -278,7 +278,7 @@ impl<R: Read> Read for Stoppable<R> {
 
 pub const WIFI_CONF: &str = "Config/wifi.conf";
 pub const LATEST: &str = "https://slot-cfw.fyi/versions.json";
-const RELEASES: &str = "https://github.com/BrandonKowalski/slot/releases/download";
+const RELEASES: &str = "https://github.com/slot-cfw/slot/releases/download";
 const BASEOS_RELEASES: &str = "https://github.com/pvaibhav/BaseOS/releases/download";
 
 #[derive(Debug, Clone, Copy)]

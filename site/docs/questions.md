@@ -22,7 +22,7 @@ hide:
 
 </div>
 
-If you have tried slot on a device not listed, please [open an issue on GitHub](https://github.com/BrandonKowalski/slot/issues) and let me know how it went.
+If you have tried slot on a device not listed, please [open an issue on GitHub](https://github.com/slot-cfw/slot/issues) and let me know how it went.
 
 ### Will slot run anything other than GBA?
 
