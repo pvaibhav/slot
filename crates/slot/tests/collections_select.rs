@@ -277,19 +277,16 @@ fn a_adds_and_returns_to_the_cart_you_were_on() {
 }
 
 #[test]
-fn the_screen_reopens_on_the_collection_last_added_to_across_reboots() {
+fn the_screen_opens_on_new_collection_after_adding_to_one() {
     let d = card();
     let mut a = boot_with(d.path(), one_favorite());
     on_cart(&mut a, "Game Boy Advance", "Fusion");
     hold_y(&mut a);
     to_choice(&mut a, "Empty");
     press(&mut a, Btn::A);
-    a.flush_state();
-    drop(a);
-    let mut a = App::boot(d.path());
     on_cart(&mut a, "Game Boy Advance", "Apotris");
     hold_y(&mut a);
-    assert_eq!(a.picked_choice(), Some("Empty"));
+    assert_eq!(a.picked_choice(), Some("New Collection"));
 }
 
 #[test]

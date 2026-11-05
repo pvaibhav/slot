@@ -112,14 +112,8 @@ pub fn layout(n: usize) -> Layout {
     }
 }
 
-pub fn opening_pick(choices: &[Choice], collections: &[Collection], last: Option<&str>) -> usize {
-    let named = choices.iter().position(|c| match c {
-        Choice::Collection(i) => Some(collections[*i].name.as_str()) == last,
-        Choice::New => false,
-    });
-    named
-        .or_else(|| choices.iter().position(|c| *c == Choice::New))
-        .unwrap_or(0)
+pub fn opening_pick(choices: &[Choice]) -> usize {
+    choices.iter().position(|c| *c == Choice::New).unwrap_or(0)
 }
 
 pub fn step_pick(at: usize, by: i32, n: usize) -> usize {

@@ -62,6 +62,11 @@ tasks:
     cmds:
       - cargo nextest run --workspace {{.FILTER}}
 
+  test:collections:
+    desc: Run the collections test checklist and print it ticked
+    cmds:
+      - python3 tools/collections_checklist.py
+
   fmt:
     desc: Format the workspace
     cmds:

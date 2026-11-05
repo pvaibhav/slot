@@ -1,7 +1,7 @@
 use crate::plate::UndoFace;
 use crate::text;
 
-const HEADING_PX: f32 = 16.0;
+const HEADING_PX: f32 = 20.0;
 const LAST_PX: f32 = 20.0;
 const HEADING_INK: [u8; 3] = [0xc9, 0xc6, 0xbf];
 const LAST_INK: [u8; 3] = [0xe6, 0xe3, 0xdd];

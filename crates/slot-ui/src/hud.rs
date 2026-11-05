@@ -2,7 +2,7 @@ use slot_gfx::{Canvas, Draw, TexId, OUT_H};
 use slot_store::{BLUE_LIGHT_MAX, BRIGHTNESS_MAX, DIM_MAX, SUNLIGHT_MAX, VOLUME_MAX};
 
 use crate::icon::icon_box;
-use crate::toast::toast_rect;
+use crate::toast::{toast_band, toast_lines, toast_rect, toast_rect_lines};
 use crate::{Badge, Icon, Toast};
 
 pub type Millis = u64;
@@ -153,6 +153,7 @@ pub struct Hud {
     headphones: bool,
     ff: FfState,
     said: Option<(Toast, Millis)>,
+    said_lines: usize,
     alarm: Option<Millis>,
     alarm_toast: Option<Toast>,
     icons: Vec<TexId>,
@@ -179,7 +180,12 @@ impl Hud {
     }
 
     pub fn toast(&mut self, toast: Toast, now: Millis) {
+        self.toast_saying(toast, &toast.text(), now);
+    }
+
+    pub fn toast_saying(&mut self, toast: Toast, said: &str, now: Millis) {
         self.said = Some((toast, now));
+        self.said_lines = toast_lines(toast, said);
     }
 
     pub fn hush(&mut self) {
@@ -272,7 +278,10 @@ impl Hud {
                 x: 0.0,
                 y: 0.0,
                 w: canvas.w,
-                h: PLATE_H,
+                h: match toast > 0.0 {
+                    true => toast_band(self.said_lines),
+                    false => PLATE_H,
+                },
                 colour: faded(PLATE, alpha.max(toast)),
             });
             if toast > 0.0 {
@@ -375,7 +384,7 @@ impl Hud {
         let Some((said, _)) = self.said else {
             return;
         };
-        let (x, y, w, h) = toast_rect(canvas, said);
+        let (x, y, w, h) = toast_rect_lines(canvas, said, self.said_lines);
         out.push(Draw::Tex {
             x,
             y,

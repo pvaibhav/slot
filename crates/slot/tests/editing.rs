@@ -67,19 +67,11 @@ fn layouts_follow_the_choice_count() {
 }
 
 #[test]
-fn the_screen_opens_on_the_last_collection_added_to() {
+fn the_screen_opens_on_new_collection() {
     let all = [holding("Pokemon", &[]), holding("Puzzlers", &[])];
     let offered = choices(&all, &[gbc("Crystal")]);
-    assert_eq!(opening_pick(&offered, &all, Some("Puzzlers")), 2);
-}
-
-#[test]
-fn the_screen_falls_back_to_new_collection() {
-    let all = [holding("Pokemon", &["Crystal"]), holding("Puzzlers", &[])];
-    let offered = choices(&all, &[gbc("Crystal")]);
     let new = offered.iter().position(|c| *c == Choice::New).unwrap();
-    assert_eq!(opening_pick(&offered, &all, Some("Pokemon")), new);
-    assert_eq!(opening_pick(&offered, &all, None), new);
+    assert_eq!(opening_pick(&offered), new);
 }
 
 #[test]

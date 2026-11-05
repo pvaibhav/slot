@@ -47,17 +47,3 @@ fn the_remembered_collection_survives_a_restart() {
     write_slot_state(d.path(), &SlotState::default()).unwrap();
     assert_eq!(read_slot_state(d.path()).collection, None);
 }
-
-#[test]
-fn add_to_round_trips() {
-    let d = card();
-    let s = slot_store::SlotState {
-        add_to: Some("Puzzlers".into()),
-        ..slot_store::SlotState::default()
-    };
-    slot_store::write_slot_state(d.path(), &s).unwrap();
-    assert_eq!(
-        slot_store::read_slot_state(d.path()).add_to.as_deref(),
-        Some("Puzzlers")
-    );
-}

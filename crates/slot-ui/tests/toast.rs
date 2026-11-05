@@ -422,9 +422,95 @@ fn a_failed_shot_says_so_beside_the_alert() {
     assert_eq!(Toast::ShotFailed.icon(), Some(Icon::Alert));
 }
 
+
+fn ink_bands(f: &slot_ui::CartFace) -> Vec<(u32, u32, u32)> {
+    let lit = |x: u32, y: u32| {
+        let p = &f.rgba[((y * f.w + x) * 4) as usize..][..4];
+        p[3] > 0x80 && p[0] > 0x80
+    };
+    let mut bands = Vec::new();
+    let mut open: Option<u32> = None;
+    for y in 0..=f.h {
+        let inked = y < f.h && (0..f.w).any(|x| lit(x, y));
+        match (inked, open) {
+            (true, None) => open = Some(y),
+            (false, Some(top)) => {
+                let cols: Vec<u32> = (0..f.w).filter(|x| (top..y).any(|yy| lit(*x, yy))).collect();
+                bands.push((top, y - top, cols.last().unwrap() - cols.first().unwrap() + 1));
+                open = None;
+            }
+            _ => {}
+        }
+    }
+    bands
+}
+
 #[test]
-fn collection_toast_text_shrinks_to_fit() {
+fn a_short_toast_stays_on_one_line() {
+    let f = toast_face_text(Toast::Collection, "Added 2 to Pokemon");
+    assert_eq!(ink_bands(&f).len(), 1, "{:?}", ink_bands(&f));
+}
+
+#[test]
+fn a_long_toast_wraps_onto_two_even_lines_at_full_size() {
+    let short = ink_bands(&toast_face(Toast::StateSaved));
     let f = toast_face_text(Toast::Collection, "Removed from A Very Long Collection Name");
-    assert!(f.w <= 242, "{} px wide", f.w);
-    assert!(f.rgba.chunks(4).any(|p| p[3] > 0), "the banner is blank");
+    let bands = ink_bands(&f);
+    assert_eq!(bands.len(), 2, "{bands:?}");
+    for (_, h, _) in &bands {
+        assert_eq!(*h, short[0].1, "a wrapped line was shrunk: {bands:?} against {short:?}");
+    }
+    let (a, b) = (bands[0].2, bands[1].2);
+    assert!(a.min(b) * 10 >= a.max(b) * 6, "the lines are {a} and {b} px wide");
+}
+
+#[test]
+fn a_toast_is_set_the_size_of_the_shelf_title() {
+    let toast = ink_bands(&toast_face(Toast::StateSaved))[0].1;
+    let heading = slot_ui::heading_text_face("State Saved", true);
+    let title = ink_bands(&slot_ui::CartFace {
+        rgba: heading.rgba,
+        w: heading.w,
+        h: heading.h,
+    })[0]
+    .1;
+    assert_eq!(toast, title);
+}
+
+#[test]
+fn a_two_line_toast_deepens_the_band_to_hold_it() {
+    let mut h = Hud::new();
+    h.set_toasts((0..Toast::all().len()).map(TexId::from_raw).collect());
+    h.toast_saying(Toast::Collection, "Removed from A Very Long Collection Name", 0);
+    let mut out = Vec::new();
+    h.draw(Canvas::FRAMED, 0, &mut out);
+    let band = out
+        .iter()
+        .find_map(|d| match d {
+            Draw::Rect { w, h, .. } if *w == OUT_W as f32 => Some(*h),
+            _ => None,
+        })
+        .unwrap();
+    let (y, th) = out
+        .iter()
+        .find_map(|d| match d {
+            Draw::Tex { y, h, .. } => Some((*y, *h)),
+            _ => None,
+        })
+        .unwrap();
+    assert!(band > PLATE_H, "the band stayed {band} px");
+    assert!(y >= 0.0 && y + th <= band, "the toast at {y}+{th} spills out of a {band} px band");
+}
+
+#[test]
+fn an_edit_heading_is_set_the_size_of_a_toast() {
+    let toast = ink_bands(&toast_face(Toast::StateSaved))[0].1;
+    let heading = slot_ui::heading_text_face("State Saved", false);
+    let set = ink_bands(&slot_ui::CartFace {
+        rgba: heading.rgba,
+        w: heading.w,
+        h: heading.h,
+    })[0]
+    .1;
+    assert_eq!(set, toast);
 }

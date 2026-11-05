@@ -151,9 +151,8 @@ const PICK_DIM_ALPHA: f32 = 0.4;
 const BUNDLE_MAX: usize = 4;
 const BUNDLE_SCALE: f32 = 0.29;
 const BUNDLE_SPREAD: f32 = 30.0;
-const BUNDLE_BASE_Y: f32 = 100.0;
 const BUNDLE_BADGE_DX: f32 = 56.0;
-const BUNDLE_BADGE_Y: f32 = 7.0;
+const BUNDLE_BADGE_LIFT: f32 = 6.0;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct StudioTex {
@@ -1699,8 +1698,9 @@ impl App {
 
     fn say_collection(&mut self, text: String) {
         let generation = self.collection_said.as_ref().map_or(0, |(g, _)| *g) + 1;
+        let now = self.now();
+        self.hud.toast_saying(Toast::Collection, &text, now);
         self.collection_said = Some((generation, text));
-        self.hud.toast(Toast::Collection, self.now());
     }
 
     pub fn collection_said(&self) -> Option<(u64, &str)> {
@@ -2114,8 +2114,7 @@ impl App {
         now: Millis,
     ) {
         let choices = crate::editing::choices(&self.collections, &games);
-        let at =
-            crate::editing::opening_pick(&choices, &self.collections, self.state.add_to.as_deref());
+        let at = crate::editing::opening_pick(&choices);
         self.edit = Some(crate::editing::Edit::Choosing {
             games,
             from,
@@ -2232,7 +2231,6 @@ impl App {
             ));
         }
         let name = self.collections[i].name.clone();
-        self.state.add_to = Some(name.clone());
         let hidden = self.state.shelf_mode == ShelfMode::Collections
             && matches!(self.shelves[from.shelf].0, Rack::Of(_));
         match hidden {
@@ -7429,7 +7427,9 @@ impl App {
                         (true, crate::editing::Edit::Choosing { games, .. }) => {
                             let begin = out.len();
                             self.draw_bundle_at(games, *stack_x, out);
-                            let drop = u * (front[1] + front[3] / 2.0 - BUNDLE_BASE_Y / 2.0);
+                            let (_, base) = self.bundle_frame(games);
+                            let mid_y = (ADD_FLOAT_TOP + base) / 2.0;
+                            let drop = u * (front[1] + front[3] / 2.0 - mid_y);
                             for d in &mut out[begin..] {
                                 if let Draw::Tex { y, alpha, .. } = d {
                                     *y += drop;
@@ -7718,25 +7718,40 @@ impl App {
         games
     }
 
+    fn bundle_frame(&self, checked: &[Recent]) -> (f32, f32) {
+        let shown = &checked[..checked.len().min(BUNDLE_MAX)];
+        let room = slot_ui::cart_box(Platform::Gba).1 as f32 * BUNDLE_SCALE;
+        let tallest = shown
+            .iter()
+            .map(|g| slot_ui::cart_box(g.platform).1 as f32)
+            .fold(0.0, f32::max);
+        let scale = match tallest > 0.0 {
+            true => BUNDLE_SCALE.min(room / tallest),
+            false => BUNDLE_SCALE,
+        };
+        (scale, ADD_FLOAT_TOP + tallest * scale)
+    }
+
     fn draw_bundle_at(&self, checked: &[Recent], mid: f32, out: &mut Vec<Draw>) {
         let shown = &checked[..checked.len().min(BUNDLE_MAX)];
         let n = shown.len();
+        let (scale, base) = self.bundle_frame(checked);
         for (k, g) in shown.iter().enumerate() {
             let Some((at, i)) = self.bundle_seat(g) else {
                 continue;
             };
             let shelf = &self.shelves[at].1;
             let (cw, ch) = slot_ui::cart_box(g.platform);
-            let (w, h) = (cw as f32 * BUNDLE_SCALE, ch as f32 * BUNDLE_SCALE);
+            let (w, h) = (cw as f32 * scale, ch as f32 * scale);
             let cx = mid + (k as f32 - (n as f32 - 1.0) / 2.0) * BUNDLE_SPREAD;
-            shelf.draw_cart_at(i, [cx - w / 2.0, BUNDLE_BASE_Y - h, w, h], out);
+            shelf.draw_cart_at(i, [cx - w / 2.0, base - h, w, h], out);
         }
         if checked.len() > 1 {
             if let Some(((tex, w, h), _)) = self.count_badge {
                 let x = mid + (n as f32 - 1.0) / 2.0 * BUNDLE_SPREAD + BUNDLE_BADGE_DX;
                 out.push(Draw::Tex {
                     x: (x - w / 2.0).round(),
-                    y: BUNDLE_BADGE_Y,
+                    y: (ADD_FLOAT_TOP - BUNDLE_BADGE_LIFT).round(),
                     w,
                     h,
                     tex,
@@ -11167,8 +11182,9 @@ impl App {
                 for id in ids {
                     self.wifi_send(crate::wifi::Cmd::Forget(id));
                 }
+                let now = self.now();
+                self.hud.toast_saying(Toast::Forgotten, &format!("{ssid} was forgotten"), now);
                 self.forgotten = Some(ssid.clone());
-                self.hud.toast(Toast::Forgotten, self.now());
                 self.phase = Phase::Networks {
                     pick: crate::networks::NetPick::Name(ssid),
                 };

@@ -603,3 +603,45 @@ fn a_new_collection_shows_its_name_as_the_cart_drops_in() {
         "the name under the box did not change"
     );
 }
+
+fn bright_in(px: &[u8], xs: std::ops::Range<usize>, ys: std::ops::Range<usize>) -> usize {
+    ys.flat_map(|y| xs.clone().map(move |x| (x, y)))
+        .filter(|&(x, y)| {
+            let o = (y * OUT_W as usize + x) * 4;
+            px[o..o + 3].iter().any(|&c| c > 0x70)
+        })
+        .count()
+}
+
+#[test]
+fn a_bundle_of_game_boy_carts_stays_under_the_heading() {
+    let Some(mut r) = Rig::new() else {
+        return;
+    };
+    r.hold_select();
+    for _ in 0..6 {
+        if r.f.app().shelf_platform_name() == Some("Game Boy") {
+            break;
+        }
+        r.tap(Btn::R1);
+    }
+    assert_eq!(r.f.app().shelf_platform_name(), Some("Game Boy"));
+    r.tap(Btn::A);
+    r.tap(Btn::Start);
+    let last = r.f.app().choice_names().last().cloned();
+    for _ in 0..4 {
+        if r.f.app().picked_choice().map(str::to_string) == last {
+            break;
+        }
+        r.tap(Btn::Right);
+    }
+    assert_eq!(r.f.app().picked_count(), Some(2));
+    r.settle(60);
+    let add = r.frame("add-gb-bundle");
+    assert!(lit_in(&add, W / 2 - 160..W / 2 + 160, 10..34) > 60, "no heading");
+    assert_eq!(
+        bright_in(&add, W / 2..W, 35..40),
+        0,
+        "the bundle reaches into the heading row"
+    );
+}
