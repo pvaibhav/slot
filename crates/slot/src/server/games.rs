@@ -440,6 +440,41 @@ fn plan_step(
     Ok(())
 }
 
+fn clean_stem(stem: &str) -> &str {
+    stem.trim_start().trim_end_matches(|c: char| c == '.' || c.is_whitespace())
+}
+
+fn needs_sweep(root: &Path, platform: Platform) -> bool {
+    let Ok(dir) = at(root, &["Games", platform.dir_name()]) else { return false };
+    let Ok(entries) = fs::read_dir(dir) else { return false };
+    entries.filter_map(|e| e.ok()?.file_name().into_string().ok()).any(|name| {
+        let stem = stem_of(&name);
+        platform.accepts(Path::new(&name)) && !clean_stem(&stem).is_empty() && clean_stem(&stem) != stem
+    })
+}
+
+pub fn sweep_names(root: &Path) {
+    for platform in Platform::ALL {
+        if !needs_sweep(root, platform) {
+            continue;
+        }
+        let index = Index::new(root, platform);
+        for cart in carts(root, platform) {
+            let clean = clean_stem(&cart.stem);
+            if clean.is_empty() || clean == cart.stem {
+                continue;
+            }
+            let ext = cart.rom.extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
+            let name = format!("{clean}.{ext}");
+            let old = file_name(&cart.rom);
+            match rename(root, &index, &cart, &name) {
+                Ok(()) => eprintln!("slot: renamed {old:?} to {name:?}"),
+                Err(r) => eprintln!("slot: left {old:?}: {}", r.message),
+            }
+        }
+    }
+}
+
 fn rename(root: &Path, index: &Index, cart: &Cart, name: &str) -> Result<(), Refused> {
     let tag = cart.platform.dir_name();
     let new_rom = new_rom_name(cart, name)?;
@@ -468,7 +503,7 @@ fn rename(root: &Path, index: &Index, cart: &Cart, name: &str) -> Result<(), Ref
         None => None,
     };
     for core in Core::ALL {
-        let from = at(root, &["States", tag, core.as_str(), &cart.stem])?;
+        let from = root.join("States").join(tag).join(core.as_str()).join(&cart.stem);
         if from.is_dir() {
             plan.push((from, at(root, &["States", tag, core.as_str(), &new_stem])?));
         }

@@ -9,6 +9,7 @@ mod session;
 mod states;
 
 pub use carts::render_once;
+pub use games::sweep_names;
 pub use files::{move_path, rename_via_temp};
 pub use http::{generate_pin, parse_target, Body, Handler, Reply, Request, Server};
 pub use net::{

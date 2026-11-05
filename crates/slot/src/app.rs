@@ -1184,6 +1184,7 @@ impl App {
 
     pub fn boot_marked(root: &Path, loading: Option<LoadingMark>) -> Self {
         crate::root::ensure(root);
+        crate::server::sweep_names(root);
         slot_store::header_index::load(root);
         crate::boot_time::mark("root");
         let carts = scan(root).unwrap_or_default();
