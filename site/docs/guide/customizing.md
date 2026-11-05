@@ -105,11 +105,27 @@ Each template is the screen in grey with a hole where the game goes. Paint over 
 
 ## Boot logo
 
+!!! info "Skip the BMP homework"
+    Turn any image into a boot logo that's the right size and format for your device.
+
+    [Open Boot Logo Studio](../bootlogo-studio.md){ .btn }
+
 Put a `.bmp` at `Config/bootlogo.bmp`, or upload one on Gamebit's Boot Logo page.
 
 slot will install it on the next boot, so you'll see it on the second power-on after adding it.
 
 slot copies the file as it is, without resizing it.
+
+Boot logos must be a 24-bit, uncompressed `.bmp` at your device's screen size:
+
+| Device                                                                         | Size                                 |
+|--------------------------------------------------------------------------------|--------------------------------------|
+| RG35XX Plus, RG35XX 2024, RG35XX H, RG35XX Pro, RG35XX SP, RG40XX H, RG40XX V | 640×480                              |
+| RG SP, RG34XX, RG34XX SP                                                       | 720×480                              |
+| RG CubeXX                                                                      | 720×720                              |
+| RG28XX                                                                         | 480×640, turned 90° counterclockwise |
+
+A smaller image is centred on black. A larger one, a 32-bit one or a compressed one won't show, and you'll get no logo at boot.
 
 Delete `Config/bootlogo.bmp` to go back to the slot logo.
 
