@@ -286,8 +286,8 @@ impl QuickRow {
         QuickRow::Recents,
         QuickRow::ShowTitles,
         QuickRow::LidOff,
-        QuickRow::DateTime,
         QuickRow::Wifi,
+        QuickRow::DateTime,
     ];
 
     pub const WIFI: [QuickRow; 2] = [QuickRow::WifiPower, QuickRow::Networks];

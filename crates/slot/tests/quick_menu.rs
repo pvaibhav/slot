@@ -601,7 +601,7 @@ fn network_sits_between_controls_and_about() {
         ]
     );
     assert_eq!(QuickRow::WIFI, [QuickRow::WifiPower, QuickRow::Networks]);
-    assert_eq!(QuickRow::GENERAL.last(), Some(&QuickRow::Wifi));
+    assert_eq!(QuickRow::GENERAL.last(), Some(&QuickRow::DateTime));
     let (_d, mut a, _) = on_carousel();
     common::connect(&mut a);
     open_at(&mut a, QuickRow::Network);
@@ -1054,7 +1054,7 @@ fn only_the_selected_rows_value_is_lit() {
         press(&mut a, Btn::Up);
     }
     press(&mut a, Btn::A);
-    for _ in 0..QuickRow::LidOff.position(&a.hidden_rows()) {
+    for _ in 0..QuickRow::Wifi.position(&a.hidden_rows()) {
         press(&mut a, Btn::Down);
     }
     let out = frame(&a);
