@@ -472,6 +472,9 @@ kbd{
 .md-typeset .admonition.warning > p{margin:10px 0 0;color:var(--muted)}
 .md-typeset .warning > .admonition-title::before{display:none}
 
+.md-typeset a.btn:not(.ghost),.md-typeset a.btn:not(.ghost):hover,.md-typeset a.btn:not(.ghost):focus{color:var(--opening);text-decoration:none}
+.md-typeset .admonition a.btn{padding:8px 16px;border-radius:7px;font-size:inherit}
+
 .install-steps > ol{list-style:none;counter-reset:step;margin:0;padding:0}
 .md-typeset .install-steps > ol > li{counter-increment:step;position:relative;margin:0;padding:0 0 22px 52px}
 .install-steps > ol > li::before{
@@ -554,7 +557,7 @@ kbd{
 .md-header__inner.md-grid{max-width:none}
 .md-main__inner:has(> .md-sidebar--secondary:not([hidden])){max-width:960px}
 .md-main__inner:has(> .md-sidebar--primary:not([hidden])){max-width:1280px}
-.md-main__inner:has(> .md-sidebar--primary[hidden]):has(> .md-sidebar--secondary[hidden]):not(:has(.hero, .guide)) > .md-content{max-width:760px;margin-inline:auto}
+.md-main__inner:has(> .md-sidebar--primary[hidden]):has(> .md-sidebar--secondary[hidden]):not(:has(.hero, .guide, .blm)) > .md-content{max-width:760px;margin-inline:auto}
 .md-typeset details.way{
   margin:0 0 16px;
   padding:0;
