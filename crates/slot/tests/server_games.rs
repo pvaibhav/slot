@@ -488,3 +488,47 @@ fn a_gb_game_lists_mgba_and_gambatte_only() {
 fn a_gba_game_lists_mgba_and_gpsp_only() {
     assert_eq!(resume_names(Platform::Gba, "GBA", "Alpha.gba"), serde_json::json!(["mGBA", "gpSP"]));
 }
+
+fn collections(root: &Path) {
+    put(root, "Collections/Puzzlers.txt", b"gba/Alpha\ngb/Beta\n");
+    put(root, "Collections/Other.txt", b"gb/Beta\n");
+    put(root, "Collections/order.txt", b"Puzzlers\nOther\n");
+}
+
+#[test]
+fn rename_carries_collections() {
+    let (d, server) = start();
+    library(d.path());
+    collections(d.path());
+    let other = d.path().join("Collections/Other.txt");
+    let stamp = std::fs::metadata(&other).unwrap().modified().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    let (status, body) = call(server.port(), "POST", "/api/games/GBA/0/rename?name=Gamma.gba", b"");
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(read(d.path(), "Collections/Puzzlers.txt"), "gba/Gamma\ngb/Beta\n");
+    assert_eq!(std::fs::metadata(&other).unwrap().modified().unwrap(), stamp);
+    server.stop();
+}
+
+#[test]
+fn rename_onto_a_game_already_collected_keeps_one() {
+    let (d, server) = start();
+    library(d.path());
+    put(d.path(), "Collections/Puzzlers.txt", b"gba/Alpha\ngba/Gamma\n");
+    let (status, body) = call(server.port(), "POST", "/api/games/GBA/0/rename?name=Gamma.gba", b"");
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(read(d.path(), "Collections/Puzzlers.txt"), "gba/Gamma\n");
+    server.stop();
+}
+
+#[test]
+fn purge_removes_from_collections() {
+    let (d, server) = start();
+    library(d.path());
+    collections(d.path());
+    let (status, body) = call(server.port(), "DELETE", "/api/games/GBA/0?purge=true&rom=Alpha.gba", b"");
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(read(d.path(), "Collections/Puzzlers.txt"), "gb/Beta\n");
+    assert_eq!(read(d.path(), "Collections/Other.txt"), "gb/Beta\n");
+    server.stop();
+}

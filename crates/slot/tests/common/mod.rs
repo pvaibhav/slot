@@ -636,6 +636,41 @@ pub fn through(a: &mut App, btn: slot_input::Btn) {
     feed_through(a, btn, now, |a, action| a.apply(action));
 }
 
+pub fn chord(a: &mut App, modifier: slot_input::Btn, btn: slot_input::Btn) {
+    let now = a.now();
+    let mut g = slot_input::Gestures::new();
+    g.set_entries(a.binding_table().entries());
+    for ev in [
+        slot_input::RawEvent::Down(modifier),
+        slot_input::RawEvent::Down(btn),
+        slot_input::RawEvent::Up(btn),
+        slot_input::RawEvent::Up(modifier),
+    ] {
+        g.set_context(a.input_context());
+        for action in g.feed(ev, now) {
+            a.apply(action);
+        }
+    }
+}
+
+pub fn hold(a: &mut App, btn: slot_input::Btn, ms: slot_input::Millis) {
+    let now = a.now();
+    let mut g = slot_input::Gestures::new();
+    g.set_entries(a.binding_table().entries());
+    g.set_context(a.input_context());
+    for action in g.feed(slot_input::RawEvent::Down(btn), now) {
+        a.apply(action);
+    }
+    g.set_context(a.input_context());
+    for action in g.tick(now + ms) {
+        a.apply(action);
+    }
+    g.set_context(a.input_context());
+    for action in g.feed(slot_input::RawEvent::Up(btn), now + ms + 1) {
+        a.apply(action);
+    }
+}
+
 pub fn through_at(a: &mut App, btn: slot_input::Btn, at: slot_input::Millis) {
     feed_through(a, btn, at, |a, action| a.apply_at(action, at));
 }

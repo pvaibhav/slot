@@ -212,6 +212,22 @@ fn close_reloads_what_the_server_edited() {
 }
 
 #[test]
+fn close_reloads_the_collections_the_server_edited() {
+    let (d, mut a) = on_shelf();
+    let cols = d.path().join("Collections");
+    std::fs::create_dir_all(&cols).unwrap();
+    std::fs::write(cols.join("Puzzlers.txt"), "gba/Emerald\n").unwrap();
+    a.set_server_net(net(&[free_port()]));
+    open(&mut a);
+    paper(&mut a);
+    std::fs::write(cols.join("Puzzlers.txt"), "gba/Fusion\n").unwrap();
+    std::fs::write(cols.join("Arcade.txt"), "gba/Emerald\n").unwrap();
+    press(&mut a, Btn::B);
+    until(&mut a, |a| !a.server_open());
+    assert_eq!(a.collection_names(), ["Arcade", "Puzzlers"]);
+}
+
+#[test]
 fn nothing_overwrites_the_servers_edits_during_a_session() {
     let (d, mut a) = on_shelf();
     a.set_server_net(net(&[free_port()]));

@@ -72,6 +72,7 @@ pub struct Frontend {
     networks: crate::network_faces::NetworkSync,
     quick_palette: QuickPalette,
     wallpaper: WallpaperSync,
+    picking_faces: PickingSync,
     game_bezel: BezelSync,
     look: Option<ShelfLook>,
     link_shot: Option<TexId>,
@@ -564,6 +565,7 @@ impl Frontend {
             networks: Default::default(),
             quick_palette: QuickPalette::default(),
             wallpaper: WallpaperSync::default(),
+            picking_faces: PickingSync::default(),
             game_bezel: BezelSync::default(),
             look: None,
             link_shot: None,
@@ -674,6 +676,11 @@ impl Frontend {
         self.session
             .app_mut()
             .set_clock_title_face((tex, title.w, title.h));
+        let picking = [false, true].map(|light| {
+            slot_ui::picking_legend_faces(footer_ink(light))
+                .map(|f| (compositor.create_texture(f.w, f.h, &f.rgba), f.w))
+        });
+        self.session.app_mut().set_picking_faces(picking);
         let heart = slot_ui::heart_face(slot_ui::HEART_SCALE, slot_ui::HEART_INK);
         let id = compositor.create_texture_nearest(heart.w, heart.h, &heart.rgba);
         self.session.app_mut().set_heart_face(id, heart.w, heart.h);
@@ -1057,6 +1064,7 @@ impl Frontend {
         self.networks.sync(self.session.app_mut(), compositor);
         sync_quick_palette(self.session.app_mut(), compositor, &mut self.quick_palette);
         sync_wallpaper(self.session.app_mut(), compositor, &mut self.wallpaper);
+        sync_picking(self.session.app_mut(), compositor, &mut self.picking_faces);
         sync_game_bezel(self.session.app_mut(), compositor, &mut self.game_bezel);
         compositor.set_game_bezel(self.session.app().shown_game_bezel());
         compositor.set_sp_frame(self.session.app().picture_on_top());
@@ -1770,7 +1778,8 @@ fn sync_clock(app: &mut App, compositor: &mut Compositor, clocks: &mut Clocks) {
         app.set_shelf_clock_face(id, w);
     }
     let platform_shown = app.slot_text().unwrap_or_default();
-    if platform_shown != clocks.platform {
+    let lost = !platform_shown.is_empty() && app.shelf_platform_missing();
+    if platform_shown != clocks.platform || lost {
         clocks.platform = platform_shown.clone();
         if platform_shown.is_empty() {
             app.clear_shelf_platform();
@@ -1931,9 +1940,98 @@ fn sync_shelf_wallpaper(app: &mut App, compositor: &mut Compositor, state: &mut 
     }
 }
 
+#[derive(Default)]
+struct PickingSync {
+    add: Option<[TexId; 2]>,
+    badge: Option<TexId>,
+    heading: Option<(String, bool)>,
+    heading_tex: Option<TexId>,
+    names: Vec<String>,
+    name_texs: Vec<[TexId; 2]>,
+}
+
+fn sync_edit_text(app: &mut App, compositor: &mut Compositor, state: &mut PickingSync) {
+    let heading = app.edit_heading();
+    if heading != state.heading {
+        state.heading = heading.clone();
+        let face = heading.map(|(text, large)| {
+            let f = slot_ui::heading_text_face(&text, large);
+            let (w, h) = (f.w, f.h);
+            (upload(compositor, &mut state.heading_tex, f), w, h)
+        });
+        app.set_heading_face(face);
+    }
+    let names = app.name_face_names();
+    if names != state.names {
+        let mut faces = Vec::new();
+        for (k, name) in names.iter().enumerate() {
+            let pair = [false, true].map(|picked| slot_ui::stack_name_face(name, picked));
+            let ids = match state.name_texs.get(k) {
+                Some(ids) => {
+                    for (id, f) in ids.iter().zip(&pair) {
+                        compositor.update_texture(*id, f.w.max(1), f.h.max(1), &f.rgba);
+                    }
+                    *ids
+                }
+                None => {
+                    let ids = pair
+                        .each_ref()
+                        .map(|f| compositor.create_texture(f.w.max(1), f.h.max(1), &f.rgba));
+                    state.name_texs.push(ids);
+                    ids
+                }
+            };
+            faces.push((
+                name.clone(),
+                [
+                    (ids[0], pair[0].w, pair[0].h),
+                    (ids[1], pair[1].w, pair[1].h),
+                ],
+            ));
+        }
+        state.names = names;
+        app.set_name_faces(faces);
+    }
+}
+
+fn sync_picking(app: &mut App, compositor: &mut Compositor, state: &mut PickingSync) {
+    sync_edit_text(app, compositor, state);
+    let Some(n) = app.picked_count() else {
+        return;
+    };
+    if app.add_faces_count() != Some(n) {
+        let faces = [false, true].map(|light| slot_ui::add_legend(footer_ink(light), n));
+        let ids = match state.add {
+            Some(ids) => {
+                for (id, f) in ids.iter().zip(&faces) {
+                    compositor.update_texture(*id, f.w, f.h, &f.rgba);
+                }
+                ids
+            }
+            None => faces
+                .each_ref()
+                .map(|f| compositor.create_texture(f.w, f.h, &f.rgba)),
+        };
+        state.add = Some(ids);
+        app.set_add_faces([(ids[0], faces[0].w), (ids[1], faces[1].w)], n);
+    }
+    if n > 1 && app.count_badge_count() != Some(n) {
+        let f = slot_ui::count_badge_face(n);
+        let id = match state.badge {
+            Some(id) => {
+                compositor.update_texture(id, f.w, f.h, &f.rgba);
+                id
+            }
+            None => compositor.create_texture(f.w, f.h, &f.rgba),
+        };
+        state.badge = Some(id);
+        app.set_count_badge((id, f.w, f.h), n);
+    }
+}
+
 fn sync_wallpaper(app: &mut App, compositor: &mut Compositor, state: &mut WallpaperSync) {
     let (w, h) = app.wallpaper_size();
-    let on_shelf = app.wallpaper() == slot_store::WallpaperPick::Shelf;
+    let on_shelf = app.wallpapers_preload();
     if on_shelf {
         sync_shelf_wallpaper(app, compositor, state);
     }

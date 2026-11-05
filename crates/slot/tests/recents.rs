@@ -207,9 +207,9 @@ fn turning_recents_on_and_off_in_the_menu_saves_and_adds_and_removes_the_shelf()
     let mut names = Vec::new();
     for _ in 0..3 {
         press(&mut a, Btn::R1);
-        names.extend(a.shelf_platform_name());
+        names.extend(a.shelf_platform_name().map(str::to_string));
     }
-    assert!(names.contains(&"Recents"), "{names:?}");
+    assert!(names.iter().any(|n| n == "Recents"), "{names:?}");
     while a.shelf_platform_name() != Some("Recents") {
         press(&mut a, Btn::R1);
     }

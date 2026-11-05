@@ -1313,3 +1313,18 @@ fn a_wrapped_cart_draws_its_box_and_an_unwrapped_one_draws_its_cart() {
     assert_eq!(after.len(), plain.len());
     assert!(after.iter().all(|d| matches!(d, Draw::Rect { .. })));
 }
+
+#[test]
+fn restocking_keeps_the_faces_of_carts_that_stay() {
+    let mut s = shelf_with(4);
+    for i in 0..4 {
+        s.set_face(i, TexId::from_raw(100 + i));
+        s.set_interior(i, TexId::from_raw(200 + i));
+    }
+    let kept: Vec<Cart> = [0, 2, 3].iter().map(|&i| s.carts[i].clone()).collect();
+    let freed = s.restock(kept);
+    assert_eq!(freed, [TexId::from_raw(101), TexId::from_raw(201)]);
+    assert_eq!(s.face(0), Some(TexId::from_raw(100)));
+    assert_eq!(s.face(1), Some(TexId::from_raw(102)));
+    assert_eq!(s.face(2), Some(TexId::from_raw(103)));
+}

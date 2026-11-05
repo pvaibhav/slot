@@ -53,9 +53,9 @@ impl Building {
         self.outdated.remove(&key);
     }
 
-    fn finish(&mut self, key: Key) -> bool {
-        self.carts.remove(&key);
-        !self.outdated.remove(&key)
+    fn finish(&mut self, key: Key, seated: Option<&Cart>) -> bool {
+        let built = self.carts.remove(&key);
+        !self.outdated.remove(&key) && built.as_ref() == seated
     }
 }
 
@@ -150,7 +150,7 @@ impl CartFaces {
         interior: Option<CartFace>,
     ) {
         self.asked.retain(|w| (w.shelf, w.index) != key);
-        if !self.building.finish(key) {
+        if !self.building.finish(key, app.face_cart(key.0, key.1)) {
             return;
         }
         let tex = self.texture(compositor, &face);
@@ -219,9 +219,9 @@ mod tests {
         new.label = Some("new.png".into());
         assert!(b.start((0, 0), &old));
         assert!(!b.start((0, 0), &new));
-        assert!(!b.finish((0, 0)));
+        assert!(!b.finish((0, 0), Some(&new)));
         assert!(b.start((0, 0), &new));
-        assert!(b.finish((0, 0)));
+        assert!(b.finish((0, 0), Some(&new)));
     }
 
     #[test]
@@ -229,6 +229,15 @@ mod tests {
         let mut b = Building::default();
         assert!(b.start((0, 0), &cart("A")));
         assert!(!b.start((0, 0), &cart("A")));
-        assert!(b.finish((0, 0)));
+        assert!(b.finish((0, 0), Some(&cart("A"))));
+    }
+
+    #[test]
+    fn a_face_whose_seat_now_holds_another_cart_is_thrown_away() {
+        let mut b = Building::default();
+        assert!(b.start((3, 0), &cart("A")));
+        assert!(!b.finish((3, 0), Some(&cart("B"))));
+        assert!(b.start((3, 1), &cart("A")));
+        assert!(!b.finish((3, 1), None));
     }
 }

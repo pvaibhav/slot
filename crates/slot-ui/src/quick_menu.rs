@@ -27,6 +27,7 @@ pub enum QuickRow {
     Theme,
     Wallpaper,
     Recents,
+    ShelfMode,
     ShowTitles,
     WallpaperTint,
     GbcShader,
@@ -54,6 +55,8 @@ pub enum QuickRow {
     ShelfNext,
     ShelfFavorite,
     ShelfForget,
+    CollPrev,
+    CollNext,
     PlayControls,
     Shortcuts,
     GameUp,
@@ -90,6 +93,7 @@ pub enum QuickRow {
     FetchArt,
     Controls,
     ControlsShelf,
+    ControlsCollections,
     ControlsInGame,
     LeftStick,
     ScreenGeneral,
@@ -135,7 +139,7 @@ pub enum QuickRow {
 }
 
 impl QuickRow {
-    pub const ALL: [QuickRow; 123] = [
+    pub const ALL: [QuickRow; 127] = [
         QuickRow::FastForward,
         QuickRow::FastForwardSound,
         QuickRow::Screen,
@@ -154,6 +158,7 @@ impl QuickRow {
         QuickRow::Theme,
         QuickRow::Wallpaper,
         QuickRow::Recents,
+        QuickRow::ShelfMode,
         QuickRow::ShowTitles,
         QuickRow::WallpaperTint,
         QuickRow::GbcShader,
@@ -181,6 +186,8 @@ impl QuickRow {
         QuickRow::ShelfNext,
         QuickRow::ShelfFavorite,
         QuickRow::ShelfForget,
+        QuickRow::CollPrev,
+        QuickRow::CollNext,
         QuickRow::PlayControls,
         QuickRow::Shortcuts,
         QuickRow::GameUp,
@@ -217,6 +224,7 @@ impl QuickRow {
         QuickRow::FetchArt,
         QuickRow::Controls,
         QuickRow::ControlsShelf,
+        QuickRow::ControlsCollections,
         QuickRow::ControlsInGame,
         QuickRow::LeftStick,
         QuickRow::ScreenGeneral,
@@ -270,10 +278,11 @@ impl QuickRow {
         QuickRow::About,
     ];
 
-    pub const GENERAL: [QuickRow; 8] = [
+    pub const GENERAL: [QuickRow; 9] = [
         QuickRow::Theme,
         QuickRow::Wallpaper,
         QuickRow::WallpaperTint,
+        QuickRow::ShelfMode,
         QuickRow::Recents,
         QuickRow::ShowTitles,
         QuickRow::LidOff,
@@ -315,8 +324,9 @@ impl QuickRow {
         QuickRow::RommDisconnect,
     ];
 
-    pub const CONTROL_PAGES: [QuickRow; 3] = [
+    pub const CONTROL_PAGES: [QuickRow; 4] = [
         QuickRow::ControlsShelf,
+        QuickRow::ControlsCollections,
         QuickRow::Shortcuts,
         QuickRow::ControlsInGame,
     ];
@@ -326,6 +336,11 @@ impl QuickRow {
         QuickRow::ShelfNext,
         QuickRow::ShelfFavorite,
         QuickRow::ShelfForget,
+    ];
+
+    pub const COLLECTION_KEYS: [QuickRow; 2] = [
+        QuickRow::CollPrev,
+        QuickRow::CollNext,
     ];
 
     pub const CONTROLS: [QuickRow; 12] = [
@@ -498,6 +513,7 @@ impl QuickRow {
             | QuickRow::DateTime
             | QuickRow::Theme
             | QuickRow::Recents
+            | QuickRow::ShelfMode
             | QuickRow::ShowTitles
             | QuickRow::LidOff
             | QuickRow::Wifi => &QuickRow::GENERAL,
@@ -514,9 +530,10 @@ impl QuickRow {
             | QuickRow::RommStatus
             | QuickRow::RommPairedServer
             | QuickRow::RommDisconnect => &QuickRow::ROMM,
-            QuickRow::ControlsShelf | QuickRow::Shortcuts | QuickRow::ControlsInGame => {
-                &QuickRow::CONTROL_PAGES
-            }
+            QuickRow::ControlsShelf
+            | QuickRow::ControlsCollections
+            | QuickRow::Shortcuts
+            | QuickRow::ControlsInGame => &QuickRow::CONTROL_PAGES,
             QuickRow::Resume
             | QuickRow::UndoSave
             | QuickRow::UndoLoad
@@ -531,6 +548,8 @@ impl QuickRow {
             }
             r if r.game_button().is_some() => &QuickRow::CONTROLS,
             r if r.shortcut().is_some() => &QuickRow::SHORTCUTS,
+            QuickRow::CollPrev
+            | QuickRow::CollNext => &QuickRow::COLLECTION_KEYS,
             r if r.carousel_action().is_some() => &QuickRow::SHELF_KEYS,
             QuickRow::Shader
             | QuickRow::ColourCorrection
@@ -561,6 +580,8 @@ impl QuickRow {
             QuickRow::WifiPower => Some(QuickRow::Wifi),
             QuickRow::ControlsShelf => Some(QuickRow::Controls),
             QuickRow::ShelfPrev => Some(QuickRow::ControlsShelf),
+            QuickRow::CollPrev => Some(QuickRow::ControlsCollections),
+            QuickRow::ControlsCollections => Some(QuickRow::Controls),
             _ => None,
         }
     }
@@ -600,6 +621,7 @@ impl QuickRow {
             QuickRow::Wifi => Some(QuickRow::WIFI[0]),
             QuickRow::Controls => Some(QuickRow::CONTROL_PAGES[0]),
             QuickRow::ControlsShelf => Some(QuickRow::SHELF_KEYS[0]),
+            QuickRow::ControlsCollections => Some(QuickRow::COLLECTION_KEYS[0]),
             QuickRow::ControlsInGame => Some(QuickRow::CONTROLS[0]),
             QuickRow::ScreenGeneral => Some(QuickRow::SCREEN_GENERAL[0]),
             QuickRow::ScreenGba => Some(QuickRow::SCREEN_GBA[0]),
@@ -653,6 +675,7 @@ impl QuickRow {
             QuickRow::Theme => "Theme",
             QuickRow::Wallpaper => "Wallpaper",
             QuickRow::Recents => "Recents",
+            QuickRow::ShelfMode => "Shelf Mode",
             QuickRow::ShowTitles => "Game Titles",
             QuickRow::WallpaperTint => "Wallpaper Tint",
             QuickRow::Resume => "Resume",
@@ -682,6 +705,7 @@ impl QuickRow {
             QuickRow::RommDisconnect => "Disconnect",
             QuickRow::Controls => "Controls",
             QuickRow::ControlsShelf => "Shelf",
+            QuickRow::ControlsCollections => "Collections",
             QuickRow::ControlsInGame => "In-Game",
             QuickRow::PlayControls => "Controls",
             QuickRow::Shortcuts => "Shortcuts",
@@ -719,7 +743,9 @@ impl QuickRow {
             QuickRow::ShelfPrev
             | QuickRow::ShelfNext
             | QuickRow::ShelfFavorite
-            | QuickRow::ShelfForget => self.carousel_action().map_or("", CarouselAction::label),
+            | QuickRow::ShelfForget
+            | QuickRow::CollPrev
+            | QuickRow::CollNext => self.carousel_action().map_or("", CarouselAction::label),
             QuickRow::PlayScreen => "Screen",
             QuickRow::PlayGameplay => "Gameplay",
             QuickRow::Shader => "Shader",
@@ -765,6 +791,7 @@ impl QuickRow {
                 | QuickRow::General
                 | QuickRow::Controls
                 | QuickRow::ControlsShelf
+                | QuickRow::ControlsCollections
                 | QuickRow::ControlsInGame
                 | QuickRow::PlayControls
                 | QuickRow::Shortcuts
@@ -834,6 +861,8 @@ impl QuickRow {
             QuickRow::ShelfNext => CarouselAction::NextShelf,
             QuickRow::ShelfFavorite => CarouselAction::Favorite,
             QuickRow::ShelfForget => CarouselAction::ForgetRecent,
+            QuickRow::CollPrev => CarouselAction::PreviousCollection,
+            QuickRow::CollNext => CarouselAction::NextCollection,
             _ => return None,
         })
     }
@@ -907,10 +936,12 @@ pub enum QuickValue {
     Ghosting,
     Https,
     Http,
+    All,
+    Collections,
 }
 
 impl QuickValue {
-    pub const ALL: [QuickValue; 50] = [
+    pub const ALL: [QuickValue; 52] = [
         QuickValue::Speed1_5,
         QuickValue::Speed2,
         QuickValue::Speed3,
@@ -961,6 +992,8 @@ impl QuickValue {
         QuickValue::Ghosting,
         QuickValue::Https,
         QuickValue::Http,
+        QuickValue::All,
+        QuickValue::Collections,
     ];
 
     pub const LEVELS: [QuickValue; 16] = [
@@ -1013,6 +1046,8 @@ impl QuickValue {
             QuickValue::Light => "Light",
             QuickValue::Show => "Show",
             QuickValue::Hide => "Hide",
+            QuickValue::All => "All",
+            QuickValue::Collections => "Collections",
             QuickValue::Low => "25%",
             QuickValue::Medium => "45%",
             QuickValue::High => "65%",
@@ -1230,6 +1265,29 @@ pub fn quick_legend_faces(ink: [u8; 3]) -> [UndoFace; 8] {
         with_hint(button_face(ButtonLegend::X), "Clear", hint, false),
         with_hint(button_face(ButtonLegend::Y), "Reset All", hint, true),
     ]
+}
+
+pub fn picking_legend_faces(ink: [u8; 3]) -> [UndoFace; 8] {
+    let hint = Some(ink);
+    [
+        with_hint(button_face(ButtonLegend::B), "Cancel", hint, true),
+        with_hint(button_face(ButtonLegend::A), "Select", hint, false),
+        with_hint(button_face(ButtonLegend::A), "Unselect", hint, false),
+        with_hint(button_face(ButtonLegend::B), "Back", hint, true),
+        with_hint(button_face(ButtonLegend::A), "Add", hint, false),
+        with_hint(button_face(ButtonLegend::B), "Keep", hint, true),
+        with_hint(button_face(ButtonLegend::A), "Remove", hint, false),
+        with_hint(button_face(ButtonLegend::A), "Drop", hint, false),
+    ]
+}
+
+pub fn add_legend(ink: [u8; 3], n: usize) -> UndoFace {
+    with_hint(
+        button_face(ButtonLegend::Start),
+        &format!("Add {n}"),
+        Some(ink),
+        false,
+    )
 }
 
 pub fn quick_description_face(lines: &[&str]) -> UndoFace {

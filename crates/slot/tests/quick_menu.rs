@@ -1412,7 +1412,7 @@ fn wallpaper_tint_hides_until_a_wallpaper_of_your_own_is_picked() {
     press(&mut a, Btn::Down);
     assert_eq!(
         a.quick_menu(),
-        Some(QuickRow::Recents),
+        Some(QuickRow::ShelfMode),
         "the tint row showed on the default wallpaper"
     );
     press(&mut a, Btn::Up);
@@ -1430,7 +1430,7 @@ fn wallpaper_tint_hides_until_a_wallpaper_of_your_own_is_picked() {
         let below = if shown {
             QuickRow::WallpaperTint
         } else {
-            QuickRow::Recents
+            QuickRow::ShelfMode
         };
         assert_eq!(a.quick_menu(), Some(below), "below {pick:?}");
         press(&mut a, Btn::Up);

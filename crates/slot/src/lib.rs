@@ -46,6 +46,7 @@ pub mod network_faces;
 pub mod networks;
 pub mod panel_turn;
 pub mod persist;
+pub mod editing;
 pub mod prefetch;
 pub mod print_scene;
 pub mod resample;

@@ -10,6 +10,8 @@ mod barcode;
 mod battery;
 mod board;
 mod cart;
+mod checkbox;
+mod edit_text;
 mod clock;
 mod draw;
 mod footer;
@@ -87,6 +89,8 @@ pub use hud::{
     badge_at, ff_badge, footer_ink, FfState, Hud, HudKind, LinkBadge, Millis, ALARM_BAND_H,
     HUD_ICON_PX, HUD_INK, HUD_MS, LINK_HOST_INK, LINK_JOIN_INK, PLATE_H,
 };
+pub use checkbox::count_badge_face;
+pub use edit_text::{heading_text_face, stack_name_face};
 pub use icon::{badge_face, heart_face, icon_box, icon_face, warm_fonts, Badge, Icon};
 pub use link_art::{
     link_art, LinkArt, ADAPTER_BASE_X, ADAPTER_BASE_Y, ADAPTER_H, ADAPTER_W, ARCS, ARROW_H,
@@ -106,7 +110,7 @@ pub use polaroids::{
 };
 pub use power_menu::{heading_face, menu_detail_face, menu_face, PowerChoice, MENU_PAD};
 pub use quick_menu::{
-    clock_legend_faces, core_button_legends, delete_legends, draw_menu_ground, link_button_legends,
+    add_legend, clock_legend_faces, core_button_legends, picking_legend_faces, delete_legends, draw_menu_ground, link_button_legends,
     fetch_choice_legends, fetch_legends, fetch_skip_legend, print_stop_legend, prompt_legends,
     studio_legend,
     StudioGlyph, quick_description_face, quick_label_face, quick_legend_faces,
@@ -117,7 +121,7 @@ pub use quick_menu::{
 };
 pub use rebuild::{headline_face, rebuild_count_face, rebuild_title_face, RebuildScreen};
 pub use refusal::Refusal;
-pub use shelf::{box_size, foot_y, repeat_gap, rest_y, Shelf, HEART_INK, HEART_SCALE, REPEAT_DELAY_MS};
+pub use shelf::{box_size, foot_y, turn_about, repeat_gap, rest_y, Shelf, HEART_INK, HEART_SCALE, REPEAT_DELAY_MS};
 pub use shell::{
     gb_plastics, gb_table_shells, gba_plastics, gba_shell_for,
     indexed_shell, lookup_order_is_exact_then_family_then_default, shell_for, shell_presets, table_keys, Finish,

@@ -1,12 +1,13 @@
 # Controls
 
-Three submenus for adjusting controls can be found in Settings → Controls.
+Four submenus for adjusting controls can be found in Settings → Controls.
 
 - **Shelf**: the keys for getting around the shelf. Previous Shelf, Next Shelf, Favorite and Remove Recent.
+- **Collections**: the keys for flipping through [collections](collections.md), Previous and Next.
 - **Shortcuts**: everything you do with a chord in game. Save and load states, brightness, blue light, shaders, palettes, color correction, screenshots, fast-forward, rewind and the [solar sensor](playing.md#solar-sensor).
 - **In-Game**: which console button each button on your device presses. This is where you'd swap A and B, or move Turbo A and Turbo B off X and Y.
 
-All three apply globally. The In-Game page is also in the in-game menu, for on-the-fly remapping.
+All four apply globally. The In-Game page is also in the in-game menu, for on-the-fly remapping.
 
 ## Changing a button
 
@@ -65,6 +66,9 @@ For other chords, the first button goes to the game straight away and the second
 <kbd>L1</kbd> / <kbd>R1</kbd>
 :   Switch between platforms
 
+<kbd>L2</kbd> / <kbd>R2</kbd>
+:   Switch between Game Boy Advance and Game Boy Advance Video
+
 Tap <kbd>A</kbd>
 :   Resume the last save state
 
@@ -82,6 +86,30 @@ Hold <kbd>A</kbd>
 
 <kbd>START</kbd>
 :   Choose which emulator runs the cart (GBA only)
+
+Hold <kbd>Y</kbd>
+:   Add the game to a collection
+
+Hold <kbd>SELECT</kbd>
+:   Check several games to add to a collection
+
+</div>
+
+### Collections
+
+<div class="keys" markdown>
+
+<kbd>L2</kbd> / <kbd>R2</kbd>
+:   Previous / next collection, on Favorites
+
+Hold <kbd>Y</kbd>
+:   Take the game out of the collection you're on
+
+<kbd>X</kbd>
+:   Pick up the game to move it
+
+Hold <kbd>X</kbd>
+:   Pick up the whole collection to move it
 
 </div>
 

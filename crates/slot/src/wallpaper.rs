@@ -70,6 +70,12 @@ pub fn list(root: &Path) -> Vec<String> {
     files
 }
 
+pub fn collection_list(root: &Path) -> Vec<String> {
+    let mut files = pngs(&root.join("Wallpapers").join("Collections"));
+    files.sort();
+    files
+}
+
 pub fn pick(root: &Path, seed: u64) -> Option<PathBuf> {
     let dir = root.join("Wallpapers");
     let mut files = pngs(&dir);

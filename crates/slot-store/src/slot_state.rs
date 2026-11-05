@@ -34,6 +34,30 @@ pub struct Recent {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
+pub enum ShelfMode {
+    #[default]
+    All,
+    Collections,
+}
+
+impl ShelfMode {
+    pub fn key(self) -> &'static str {
+        match self {
+            ShelfMode::All => "all",
+            ShelfMode::Collections => "collections",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<ShelfMode> {
+        match value {
+            "all" => Some(ShelfMode::All),
+            "collections" => Some(ShelfMode::Collections),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
 pub enum Appearance {
     #[default]
     Dark,
@@ -392,6 +416,9 @@ pub struct SlotState {
     pub favorites: Vec<Recent>,
     pub shelf: Option<String>,
     pub shelf_cart: Option<Recent>,
+    pub shelf_mode: ShelfMode,
+    pub collection: Option<String>,
+    pub add_to: Option<String>,
 }
 
 impl SlotState {
@@ -569,6 +596,9 @@ impl Default for SlotState {
             favorites: Vec::new(),
             shelf: None,
             shelf_cart: None,
+            shelf_mode: ShelfMode::All,
+            collection: None,
+            add_to: None,
         }
     }
 }
@@ -689,6 +719,12 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
             r.stem
         ))
     ));
+    text.push_str(&format!("shelf_mode={}\n", s.shelf_mode.key()));
+    text.push_str(&format!(
+        "collection={}\n",
+        s.collection.as_deref().unwrap_or("")
+    ));
+    text.push_str(&format!("add_to={}\n", s.add_to.as_deref().unwrap_or("")));
     atomic_write(&state_path(root), text.as_bytes())?;
     write_list(root, RECENTS_FILE, &s.recents)?;
     write_list(root, FAVORITES_FILE, &s.favorites)
@@ -749,6 +785,9 @@ fn parse(text: &str) -> Option<SlotState> {
     let mut blending_gbc = None;
     let mut shelf = None;
     let mut shelf_cart = None;
+    let mut shelf_mode = None;
+    let mut collection = None;
+    let mut add_to = None;
     for line in text.lines().filter(|l| !l.is_empty()) {
         let Some((key, value)) = line.split_once('=') else {
             continue;
@@ -806,6 +845,9 @@ fn parse(text: &str) -> Option<SlotState> {
             "blending_gbc" => blending_gbc = Blending::parse(value),
             "shelf" => shelf = Some(value.to_string()).filter(|v| !v.is_empty()),
             "shelf_cart" => shelf_cart = recent_value(value),
+            "shelf_mode" => shelf_mode = ShelfMode::parse(value),
+            "collection" => collection = Some(value.to_string()).filter(|v| !v.is_empty()),
+            "add_to" => add_to = Some(value.to_string()).filter(|v| !v.is_empty()),
             "shader_gb" => shader_gb = Shader::parse(value).filter(|s| Shader::GB.contains(s)),
             "shader_gbc" => shader_gbc = Shader::parse(value).filter(|s| Shader::GB.contains(s)),
             _ => {}
@@ -875,14 +917,17 @@ fn parse(text: &str) -> Option<SlotState> {
         favorites: Vec::new(),
         shelf,
         shelf_cart,
+        shelf_mode: shelf_mode.unwrap_or(fallback.shelf_mode),
+        collection,
+        add_to,
     })
 }
 
-fn platform_key(platform: Platform) -> String {
+pub(crate) fn platform_key(platform: Platform) -> String {
     platform.dir_name().to_ascii_lowercase()
 }
 
-fn recent_value(value: &str) -> Option<Recent> {
+pub(crate) fn recent_value(value: &str) -> Option<Recent> {
     let (platform, stem) = value.split_once('/')?;
     Some(Recent {
         platform: platform_value(platform)?,

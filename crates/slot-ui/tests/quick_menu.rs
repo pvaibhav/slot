@@ -90,6 +90,7 @@ fn the_rows_run_in_the_order_the_user_chose() {
             "Theme",
             "Wallpaper",
             "Wallpaper Tint",
+            "Shelf Mode",
             "Recents",
             "Game Titles",
             "Lid Power Off",
@@ -103,7 +104,7 @@ fn the_rows_run_in_the_order_the_user_chose() {
     );
     assert_eq!(
         QuickRow::CONTROL_PAGES.map(QuickRow::label),
-        ["Shelf", "Shortcuts", "In-Game"]
+        ["Shelf", "Collections", "Shortcuts", "In-Game"]
     );
     assert_eq!(
         QuickRow::SHELF_KEYS.map(QuickRow::label),
@@ -188,6 +189,7 @@ fn the_rows_run_in_the_order_the_user_chose() {
             QuickRow::FetchArt,
             QuickRow::Controls,
             QuickRow::ControlsShelf,
+            QuickRow::ControlsCollections,
             QuickRow::ControlsInGame,
             QuickRow::ScreenGeneral,
             QuickRow::UndoSave,
@@ -229,14 +231,14 @@ fn the_rows_run_in_the_order_the_user_chose() {
 #[test]
 fn a_hidden_row_is_stepped_over_and_takes_no_place() {
     let hidden = [QuickRow::WallpaperTint, QuickRow::DateTime];
-    assert_eq!(QuickRow::Wallpaper.down(&hidden), QuickRow::Recents);
-    assert_eq!(QuickRow::Recents.up(&hidden), QuickRow::Wallpaper);
+    assert_eq!(QuickRow::Wallpaper.down(&hidden), QuickRow::ShelfMode);
+    assert_eq!(QuickRow::ShelfMode.up(&hidden), QuickRow::Wallpaper);
     assert_eq!(QuickRow::Theme.up(&hidden), QuickRow::Wifi);
-    assert_eq!(QuickRow::Recents.position(&hidden), 2);
+    assert_eq!(QuickRow::ShelfMode.position(&hidden), 2);
     assert_eq!(QuickRow::Wallpaper.down(&[]), QuickRow::WallpaperTint);
-    assert_eq!(QuickRow::Recents.position(&[]), 3);
+    assert_eq!(QuickRow::ShelfMode.position(&[]), 3);
     assert_eq!(
-        slot_ui::quick_row_top(QuickRow::Recents, &hidden)
+        slot_ui::quick_row_top(QuickRow::ShelfMode, &hidden)
             - slot_ui::quick_row_top(QuickRow::Wallpaper, &hidden),
         slot_ui::QUICK_PITCH
     );
@@ -297,6 +299,8 @@ fn the_values_read_as_the_menu_prints_them() {
             "Ghosting",
             "HTTPS",
             "HTTP",
+            "All",
+            "Collections",
         ]
     );
     assert_eq!(QuickValue::flag(true), QuickValue::On);
@@ -670,4 +674,36 @@ fn the_romm_page_holds_both_sets_in_row_order() {
         assert_eq!(QuickRow::ALL[row.index()], row);
     }
     assert_eq!(QuickRow::ALL[QuickRow::Romm.index()], QuickRow::Romm);
+}
+
+#[test]
+fn collections_sits_after_shelf_in_controls() {
+    assert_eq!(
+        QuickRow::CONTROL_PAGES,
+        [
+            QuickRow::ControlsShelf,
+            QuickRow::ControlsCollections,
+            QuickRow::Shortcuts,
+            QuickRow::ControlsInGame,
+        ]
+    );
+    assert_eq!(QuickRow::ControlsCollections.label(), "Collections");
+    assert_eq!(
+        QuickRow::ControlsCollections.child(),
+        Some(QuickRow::CollPrev)
+    );
+    assert_eq!(
+        QuickRow::CollNext.parent(),
+        Some(QuickRow::ControlsCollections)
+    );
+}
+
+#[test]
+fn the_collections_page_lists_previous_and_next() {
+    let labels: Vec<&str> = QuickRow::COLLECTION_KEYS
+        .iter()
+        .map(|r| r.label())
+        .collect();
+    assert_eq!(labels, ["Previous", "Next"]);
+    assert_eq!(QuickRow::CollNext.page(), &QuickRow::COLLECTION_KEYS[..]);
 }

@@ -61,7 +61,32 @@ fn rekey(root: &Path, file: &str, matches: &dyn Fn(&str) -> bool, to: Option<&st
     let _ = atomic_write(&path, out.as_bytes());
 }
 
+fn collections(root: &Path, platform: Platform, stem: &str, to: Option<&str>) {
+    let gone = slot_store::Recent { platform, stem: stem.to_string() };
+    for mut c in slot_store::read_collections(root) {
+        let Some(at) = c.games.iter().position(|g| *g == gone) else {
+            continue;
+        };
+        match to {
+            Some(new) => {
+                let renamed = slot_store::Recent { platform, stem: new.to_string() };
+                match c.games.contains(&renamed) {
+                    true => {
+                        c.games.remove(at);
+                    }
+                    false => c.games[at] = renamed,
+                }
+            }
+            None => {
+                c.games.remove(at);
+            }
+        }
+        let _ = slot_store::write_collection(root, &c);
+    }
+}
+
 fn lists(root: &Path, platform: Platform, stem: &str, to: Option<&str>) {
+    collections(root, platform, stem, to);
     let mut state = read_slot_state(root);
     let before = (
         state.recents.clone(),

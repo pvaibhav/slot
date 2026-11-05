@@ -15,6 +15,7 @@ nav = [
   { "Guide" = [
     { "Playing" = [
       "guide/shelf.md",
+      "guide/collections.md",
       "guide/playing.md",
       "guide/game-guides.md",
       "guide/screenshots.md",

@@ -8,7 +8,8 @@ use slot_power::{Battery, Charge, LedState, LidPolicy, Power, RepairResult};
 use slot_retro::LinkChannel;
 use slot_store::{
     format_stamp, parse_stamp, read_slot_state, scan, write_slot_state, BezelPick, Blending, Cart,
-    Core, GbColors, Platform, Recent, Scale, Shader, ShotDir, ShotEntry, SlotState, StateEntry,
+    Collection, Core, GbColors, Platform, Recent, Scale, Shader, ShelfMode, ShotDir, ShotEntry,
+    SlotState, StateEntry,
     StateRing, Stretch, WallpaperPick, WallpaperTint, BLUE_LIGHT_MAX, BRIGHTNESS_MAX, CONTRAST_MAX,
     DIM_MAX, FF_SPEEDS, RING_MAX, SATURATION_MAX, SUNLIGHT_MAX, VOLUME_MAX,
 };
@@ -112,6 +113,47 @@ const SLOT_NAME_ALPHA: f32 = 1.0;
 const CORE_PICKER_DIM: f32 = 0.25 / (1.0 - CORE_PICKER_RECEDE);
 const LINK_TEXT_Y: f32 = 44.0;
 const LINK_LEGEND_Y: f32 = OUT_H as f32 - MOUTH_H;
+const EDIT_DIM: [f32; 4] = [0.043, 0.043, 0.059, 0.38];
+const PART_PUSH: f32 = 300.0;
+const SIDE_SCALE: f32 = 0.78;
+const SIDE_PITCH: f32 = 368.0;
+const GLIDE_MS: Millis = 200;
+const ENTER_RISE: f32 = 24.0;
+const HEADING_Y: f32 = 12.0;
+const STACK_BASE: f32 = 344.0;
+const STACK_PICKED: f32 = 0.5;
+const STACK_SIDE: f32 = 0.38;
+const STACK_SIDE_ALPHA: f32 = 0.75;
+const STACK_SPREAD: f32 = 16.0;
+const STACK_RAISE: f32 = 6.0;
+const STACK_TILT: f32 = 6.0;
+const NEW_W: f32 = 155.0;
+const NEW_H: f32 = 170.0;
+const PAIR_GAP: f32 = 120.0;
+const TRIO_GAP: f32 = 230.0;
+const ROW_GAP: f32 = 262.0;
+const ROW_SIDE: f32 = 0.78;
+const ROW_SIDE_ALPHA: f32 = 0.8;
+const ROW_HELD: f32 = 0.6;
+const ROW_BASE: f32 = 350.0;
+const ROW_LIFT: f32 = -16.0;
+const ROW_NAME_Y: f32 = 364.0;
+const PICKED_NAME_Y: f32 = 362.0;
+const SIDE_NAME_Y: f32 = 356.0;
+const ADD_FLOAT: f32 = 0.34;
+const ADD_FLOAT_TOP: f32 = 46.0;
+const REMOVE_FLOAT: f32 = 0.42;
+const REMOVE_FLOAT_TOP: f32 = 56.0;
+const REMOVE_BASE: f32 = 398.0;
+const LAST_SCALE: f32 = 0.82;
+const LAST_DROP: f32 = 38.0;
+const PICK_DIM_ALPHA: f32 = 0.4;
+const BUNDLE_MAX: usize = 4;
+const BUNDLE_SCALE: f32 = 0.29;
+const BUNDLE_SPREAD: f32 = 30.0;
+const BUNDLE_BASE_Y: f32 = 100.0;
+const BUNDLE_BADGE_DX: f32 = 56.0;
+const BUNDLE_BADGE_Y: f32 = 7.0;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct StudioTex {
@@ -362,6 +404,7 @@ pub struct PairFaces {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KeyboardFor {
     Password { ssid: String, hidden: bool },
+    CollectionName,
     NetworkName,
     RommServer,
     RommPort,
@@ -381,6 +424,7 @@ pub struct NetLegends {
 enum Rack {
     Recents,
     Favorites,
+    Collection(usize),
     Of(Platform),
 }
 
@@ -388,7 +432,7 @@ impl Rack {
     fn platform(self) -> Option<Platform> {
         match self {
             Rack::Of(p) => Some(p),
-            Rack::Recents | Rack::Favorites => None,
+            Rack::Recents | Rack::Favorites | Rack::Collection(_) => None,
         }
     }
 
@@ -396,6 +440,7 @@ impl Rack {
         match self {
             Rack::Recents => "recents".into(),
             Rack::Favorites => "favorites".into(),
+            Rack::Collection(i) => format!("collection/{i}"),
             Rack::Of(p) => p.dir_name().to_ascii_lowercase(),
         }
     }
@@ -404,6 +449,7 @@ impl Rack {
         match self {
             Rack::Recents => "Recents",
             Rack::Favorites => "Favorites",
+            Rack::Collection(_) => "",
             Rack::Of(p) => p.name(),
         }
     }
@@ -501,6 +547,7 @@ const UPDATE_BLINK_MS: Millis = 400;
 pub struct App {
     phase: Phase,
     shelves: Vec<(Rack, Shelf)>,
+    collections: Vec<Collection>,
     shelf_at: usize,
     orphaned: Vec<TexId>,
     play_held: Option<Millis>,
@@ -511,6 +558,15 @@ pub struct App {
     shutdown_faces: Vec<(TexId, u32, u32)>,
     repair_faces: Vec<(TexId, u32, u32)>,
     core_picker: Option<CorePicker>,
+    edit: Option<crate::editing::Edit>,
+    picking_faces: Option<[[(TexId, u32); 8]; 2]>,
+    heading_face: Option<(TexId, u32, u32)>,
+    glide: Option<(f32, Millis)>,
+    leaving: Option<(Leaving, Millis)>,
+    press: Option<(Btn, Millis)>,
+    name_faces: Vec<(String, [(TexId, u32, u32); 2])>,
+    add_faces: Option<([(TexId, u32); 2], usize)>,
+    count_badge: Option<((TexId, f32, f32), usize)>,
     core_board_face: Option<TexId>,
     core_interior_face: Option<TexId>,
     core_lid_face: Option<TexId>,
@@ -599,6 +655,8 @@ pub struct App {
     wallpaper: Option<TexId>,
     random_wallpaper: Option<Option<String>>,
     shelf_wallpaper: Option<String>,
+    collection_wallpaper: Option<String>,
+    collection_pngs: Vec<String>,
     battery_percent: slot_ui::Printed,
     bolt: Option<TexId>,
     hud_bolt: Option<TexId>,
@@ -677,6 +735,7 @@ pub struct App {
     forget_prompt: bool,
     forget_faces: Vec<(TexId, u32, u32)>,
     forgotten: Option<String>,
+    collection_said: Option<(u64, String)>,
     studio_art: Option<crate::art::jobs::StudioArt>,
     studio_fetched: bool,
     studio_stale: usize,
@@ -763,9 +822,10 @@ fn retain_headers(carts: &[Cart]) {
     slot_store::header_index::retain(&roms);
 }
 
-fn shelves_of(carts: Vec<Cart>) -> Vec<(Rack, Shelf)> {
+fn shelves_of(carts: Vec<Cart>, collections: usize) -> Vec<(Rack, Shelf)> {
     let mut rows: Vec<(Rack, Vec<Cart>)> = [Rack::Recents, Rack::Favorites]
         .into_iter()
+        .chain((0..collections).map(Rack::Collection))
         .chain(Platform::ALL.iter().map(|p| Rack::Of(*p)))
         .map(|r| (r, Vec::new()))
         .collect();
@@ -780,6 +840,10 @@ fn shelves_of(carts: Vec<Cart>) -> Vec<(Rack, Shelf)> {
 }
 
 fn wallpaper_of_rack(rack: Rack, files: &[String]) -> Option<String> {
+    let rack = match rack {
+        Rack::Collection(_) => Rack::Favorites,
+        rack => rack,
+    };
     std::iter::once(rack)
         .chain(rack.platform().map(|p| Rack::Of(p.hardware())))
         .find_map(|rack| {
@@ -814,9 +878,37 @@ pub(crate) fn shift_down(draws: &mut [Draw], dy: f32) {
     }
 }
 
+#[derive(Clone)]
+enum Leaving {
+    Added {
+        snap: crate::editing::Edit,
+        game: Recent,
+        stack_x: f32,
+        multi: bool,
+        before: (usize, Vec<Recent>),
+    },
+    Backed {
+        snap: crate::editing::Edit,
+        game: Recent,
+        float_x: f32,
+    },
+    Removed {
+        game: Recent,
+        around: Vec<Recent>,
+    },
+    Kept {
+        game: Recent,
+        around: Vec<Recent>,
+        last: bool,
+    },
+    LastRemoved {
+        game: Recent,
+    },
+}
+
 impl App {
     pub fn new(carts: Vec<Cart>) -> Self {
-        let shelves = shelves_of(carts);
+        let shelves = shelves_of(carts, 0);
         let shelf_at = shelves
             .iter()
             .position(|(_, s)| !s.carts.is_empty())
@@ -863,6 +955,7 @@ impl App {
             forget_prompt: false,
             forget_faces: Vec::new(),
             forgotten: None,
+            collection_said: None,
             studio_art: None,
             studio_fetched: false,
             studio_stale: 0,
@@ -933,6 +1026,7 @@ impl App {
             delete_shot_text: None,
             phase: Phase::Shelf,
             shelves,
+            collections: Vec::new(),
             shelf_at,
             orphaned: Vec::new(),
             play_held: None,
@@ -943,6 +1037,15 @@ impl App {
             shutdown_faces: Vec::new(),
             repair_faces: Vec::new(),
             core_picker: None,
+            edit: None,
+            picking_faces: None,
+            heading_face: None,
+            glide: None,
+            leaving: None,
+            press: None,
+            name_faces: Vec::new(),
+            add_faces: None,
+            count_badge: None,
             core_board_face: None,
             core_interior_face: None,
             core_lid_face: None,
@@ -1031,6 +1134,8 @@ impl App {
             wallpaper: None,
             random_wallpaper: None,
             shelf_wallpaper: None,
+            collection_wallpaper: None,
+            collection_pngs: Vec::new(),
             battery_percent: slot_ui::Printed::default(),
             bolt: None,
             hud_bolt: None,
@@ -1093,13 +1198,24 @@ impl App {
         app.carousel = read_carousel(root);
         app.shortcuts = read_shortcuts(root);
         app.controls = read_controls(root);
+        app.install_collections(slot_store::read_collections(root));
         app.restock_recents();
         app.restock_favorites();
+        app.restock_collections();
         if let Some((at, i)) = app.remembered_seat() {
             app.shelf_at = at;
             app.shelves[at].1.select(i);
         } else if !app.shelves[RECENTS_AT].1.carts.is_empty() {
             app.shelf_at = RECENTS_AT;
+        }
+        let hidden = matches!(
+            (app.state.shelf_mode, app.shelves[app.shelf_at].0),
+            (ShelfMode::Collections, Rack::Of(_))
+        );
+        if hidden {
+            if let Some(to) = (0..app.shelves.len()).find_map(|at| app.row_target(at)) {
+                app.shelf_at = to;
+            }
         }
         if app.state.clock_set {
             app.start();
@@ -1209,6 +1325,10 @@ impl App {
         let Some(to) = self.next_shelf(by) else {
             return;
         };
+        self.land_on(to);
+    }
+
+    fn land_on(&mut self, to: usize) {
         self.shelf_mut().release_hold();
         self.play_held = None;
         self.shelf_at = to;
@@ -1333,15 +1453,892 @@ impl App {
 
     fn next_shelf(&self, by: i32) -> Option<usize> {
         let n = self.shelves.len() as i32;
+        let from = self.row_seat(self.shelf_at) as i32;
         (1..n)
-            .map(|step| (self.shelf_at as i32 + by * step).rem_euclid(n) as usize)
-            .find(|at| !self.shelves[*at].1.carts.is_empty())
+            .map(|step| (from + by * step).rem_euclid(n) as usize)
+            .find_map(|at| self.row_target(at))
+    }
+
+    fn row_seat(&self, at: usize) -> usize {
+        match (self.state.shelf_mode, self.shelves[at].0) {
+            (ShelfMode::All, Rack::Collection(_)) => FAVORITES_AT,
+            (_, Rack::Of(Platform::Gbav)) => self.rack_at(Rack::Of(Platform::Gba)).unwrap_or(at),
+            _ => at,
+        }
+    }
+
+    fn row_target(&self, at: usize) -> Option<usize> {
+        let (rack, shelf) = &self.shelves[at];
+        match (self.state.shelf_mode, rack) {
+            (ShelfMode::All, Rack::Collection(_)) => None,
+            (ShelfMode::All, Rack::Favorites) => self.stack_landing(),
+            (ShelfMode::Collections, Rack::Of(_)) if !self.shows_systems() => None,
+            (_, Rack::Of(Platform::Gbav)) => None,
+            (_, Rack::Of(Platform::Gba)) => self.video_stack().first().copied(),
+            _ => (!shelf.carts.is_empty()).then_some(at),
+        }
+    }
+
+    fn rack_at(&self, rack: Rack) -> Option<usize> {
+        self.shelves.iter().position(|(r, _)| *r == rack)
+    }
+
+    fn video_stack(&self) -> Vec<usize> {
+        [Platform::Gba, Platform::Gbav]
+            .into_iter()
+            .filter_map(|p| self.rack_at(Rack::Of(p)))
+            .filter(|&at| !self.shelves[at].1.carts.is_empty())
+            .collect()
+    }
+
+    fn shows_systems(&self) -> bool {
+        matches!(
+            self.edit,
+            Some(crate::editing::Edit::Selecting { .. })
+                | Some(crate::editing::Edit::Choosing { multi: true, .. })
+        )
+    }
+
+    fn rack_key(&self, rack: Rack) -> String {
+        match rack {
+            Rack::Collection(i) => format!("collection/{}", self.collections[i].name),
+            rack => rack.key(),
+        }
+    }
+
+    fn rack_name(&self, rack: Rack) -> &str {
+        match rack {
+            Rack::Collection(i) => &self.collections[i].name,
+            rack => rack.name(),
+        }
+    }
+
+    fn stack(&self) -> Vec<usize> {
+        self.shelves
+            .iter()
+            .enumerate()
+            .filter(|(_, (r, s))| {
+                matches!(r, Rack::Favorites | Rack::Collection(_)) && !s.carts.is_empty()
+            })
+            .map(|(at, _)| at)
+            .collect()
+    }
+
+    fn stack_landing(&self) -> Option<usize> {
+        let stack = self.stack();
+        let want = self.state.collection.as_deref();
+        stack
+            .iter()
+            .copied()
+            .find(|&at| match self.shelves[at].0 {
+                Rack::Collection(i) => want == Some(self.collections[i].name.as_str()),
+                _ => want.is_none(),
+            })
+            .or(stack.first().copied())
+    }
+
+    fn flip_stack(&mut self, by: i32) {
+        let stack = match self.shelves[self.shelf_at].0 {
+            Rack::Of(Platform::Gba | Platform::Gbav) => self.video_stack(),
+            _ if self.state.shelf_mode != ShelfMode::All => return,
+            _ => self.stack(),
+        };
+        let Some(pos) = stack.iter().position(|&at| at == self.shelf_at) else {
+            return;
+        };
+        if stack.len() < 2 {
+            return;
+        }
+        let to = stack[(pos as i32 + by).rem_euclid(stack.len() as i32) as usize];
+        self.land_on(to);
+        self.note_shelf();
+    }
+
+    fn fallback_shelf(&self) -> usize {
+        let on_stack = matches!(
+            self.shelves[self.shelf_at].0,
+            Rack::Favorites | Rack::Collection(_)
+        );
+        if on_stack && self.state.shelf_mode == ShelfMode::All {
+            if let Some(at) = self.stack_landing() {
+                return at;
+            }
+        }
+        self.next_shelf(1).unwrap_or(0)
+    }
+
+    fn set_shelf_mode(&mut self, mode: ShelfMode) {
+        self.state.shelf_mode = mode;
+        let here = self.shelf_at;
+        let stays = match (mode, self.shelves[here].0) {
+            (ShelfMode::Collections, Rack::Of(_)) => false,
+            _ => !self.shelves[here].1.carts.is_empty(),
+        };
+        if !stays {
+            if let Some(to) = (0..self.shelves.len()).find_map(|at| self.row_target(at)) {
+                self.land_on(to);
+            }
+        }
+        self.remember_shelf();
+        self.persist();
+    }
+
+    fn install_collections(&mut self, collections: Vec<Collection>) {
+        self.collection_pngs = self
+            .root
+            .as_deref()
+            .map(crate::wallpaper::collection_list)
+            .unwrap_or_default();
+        let keep = self.rack_key(self.shelves[self.shelf_at].0);
+        let mut kept = Vec::new();
+        let mut old: Vec<(String, Shelf)> = Vec::new();
+        for (rack, shelf) in std::mem::take(&mut self.shelves) {
+            match rack {
+                Rack::Collection(i) => old.push((self.collections[i].name.clone(), shelf)),
+                _ => kept.push((rack, shelf)),
+            }
+        }
+        let tail = kept.split_off(FAVORITES_AT + 1);
+        let fresh: Vec<(Rack, Shelf)> = collections
+            .iter()
+            .enumerate()
+            .map(|(i, c)| {
+                let shelf = match old.iter().position(|(n, _)| *n == c.name) {
+                    Some(at) => old.remove(at).1,
+                    None => kept[FAVORITES_AT].1.empty_like(),
+                };
+                (Rack::Collection(i), shelf)
+            })
+            .collect();
+        for (_, mut shelf) in old {
+            self.orphaned.extend(shelf.restock(Vec::new()));
+        }
+        kept.extend(fresh);
+        kept.extend(tail);
+        self.shelves = kept;
+        self.collections = collections;
+        self.shelf_at = (0..self.shelves.len())
+            .find(|&at| self.rack_key(self.shelves[at].0) == keep)
+            .unwrap_or(0);
+    }
+
+    fn restock_collections(&mut self) {
+        for i in 0..self.collections.len() {
+            let carts: Vec<Cart> = self.collections[i]
+                .games
+                .iter()
+                .filter_map(|g| {
+                    self.carts()
+                        .find(|c| c.platform == g.platform && c.stem == g.stem)
+                })
+                .cloned()
+                .collect();
+            let at = self
+                .shelves
+                .iter()
+                .position(|(r, _)| *r == Rack::Collection(i))
+                .expect("a rack per collection");
+            self.restock(at, carts);
+        }
+        self.mark_hearts();
+    }
+
+    fn on_collection(&self) -> Option<usize> {
+        match self.shelves[self.shelf_at].0 {
+            Rack::Collection(i) => Some(i),
+            _ => None,
+        }
+    }
+
+    fn collection_at(&self, i: usize) -> usize {
+        self.shelves
+            .iter()
+            .position(|(r, _)| *r == Rack::Collection(i))
+            .expect("a rack per collection")
+    }
+
+    fn save_collection(&self, i: usize) {
+        let Some(root) = &self.root else {
+            return;
+        };
+        let written = slot_store::write_collection(root, &self.collections[i]);
+        if let Err(e) = &written {
+            eprintln!("slot: collection: {e}");
+        }
+        self.card_writes.wrote("collection", &written);
+    }
+
+    fn delete_collection(&mut self, i: usize) {
+        let mut collections = self.collections.clone();
+        let gone = collections.remove(i);
+        self.install_collections(collections);
+        self.restock_collections();
+        self.save_order();
+        let Some(root) = &self.root else {
+            return;
+        };
+        let deleted = slot_store::delete_collection(root, &gone.name);
+        if let Err(e) = &deleted {
+            eprintln!("slot: collection: {e}");
+        }
+        self.card_writes.wrote("collection", &deleted);
+    }
+
+    fn save_order(&self) {
+        let Some(root) = &self.root else {
+            return;
+        };
+        let names: Vec<String> = self.collection_names();
+        let written = slot_store::write_order(root, &names);
+        if let Err(e) = &written {
+            eprintln!("slot: collection order: {e}");
+        }
+        self.card_writes.wrote("collection order", &written);
+    }
+
+    fn say_collection(&mut self, text: String) {
+        let generation = self.collection_said.as_ref().map_or(0, |(g, _)| *g) + 1;
+        self.collection_said = Some((generation, text));
+        self.hud.toast(Toast::Collection, self.now());
+    }
+
+    pub fn collection_said(&self) -> Option<(u64, &str)> {
+        self.collection_said
+            .as_ref()
+            .map(|(g, text)| (*g, text.as_str()))
+    }
+
+    fn selected_game(&self) -> Option<Recent> {
+        self.shelf().carts.get(self.shelf().index).map(|c| Recent {
+            platform: c.platform,
+            stem: c.stem.clone(),
+        })
+    }
+
+    fn remove_from_collection(&mut self) {
+        let Some(crate::editing::Edit::Removing {
+            game, collection: i, ..
+        }) = self.edit.take()
+        else {
+            return;
+        };
+        let around = crate::editing::remove_stack(&self.shelf_games(self.shelf_at), self.shelf().index);
+        if !self.collections[i].remove(&game) {
+            return;
+        }
+        let leaving = match around.is_empty() {
+            true => Leaving::LastRemoved { game: game.clone() },
+            false => Leaving::Removed {
+                game: game.clone(),
+                around,
+            },
+        };
+        self.leaving = Some((leaving, self.now()));
+        self.save_collection(i);
+        let index = self.shelf().index;
+        let at = self.shelf_at;
+        self.restock_collections();
+        let left = self.shelves[at].1.carts.len();
+        if left > 0 {
+            let shelf = &mut self.shelves[at].1;
+            shelf.select(if index < left { index } else { 0 });
+        } else {
+            let to = self.after_emptied(at);
+            self.land_on(to);
+        }
+        let name = self.collections[i].name.clone();
+        if self.collections[i].games.is_empty() {
+            self.delete_collection(i);
+        }
+        self.say_collection(format!("Removed from {name}"));
+        self.note_shelf();
+    }
+
+    fn after_emptied(&self, at: usize) -> usize {
+        if self.state.shelf_mode == ShelfMode::All {
+            let stack = self.stack();
+            if let Some(&to) = stack
+                .iter()
+                .find(|&&s| s > at)
+                .or_else(|| stack.first())
+            {
+                return to;
+            }
+        }
+        let n = self.shelves.len();
+        (1..=n)
+            .map(|k| (at + k) % n)
+            .find_map(|s| self.row_target(s))
+            .unwrap_or(0)
+    }
+
+    pub fn edit(&self) -> Option<&crate::editing::Edit> {
+        self.edit.as_ref()
+    }
+
+    fn choosing(&self) -> Option<(&[Recent], &[crate::editing::Choice], usize)> {
+        match self.edit.as_ref()? {
+            crate::editing::Edit::Choosing {
+                games, choices, at, ..
+            } => Some((games, choices, *at)),
+            _ => None,
+        }
+    }
+
+    fn picked(&self) -> Option<crate::editing::Choice> {
+        let (_, choices, at) = self.choosing()?;
+        choices.get(at).copied()
+    }
+
+    fn choice_name(&self, c: crate::editing::Choice) -> &str {
+        match c {
+            crate::editing::Choice::Collection(i) => &self.collections[i].name,
+            crate::editing::Choice::New => "New Collection",
+        }
+    }
+
+    pub fn picked_choice(&self) -> Option<&str> {
+        self.picked().map(|c| self.choice_name(c))
+    }
+
+    pub fn choice_names(&self) -> Vec<String> {
+        self.choosing()
+            .map(|(_, choices, _)| {
+                choices
+                    .iter()
+                    .map(|c| self.choice_name(*c).to_string())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn here(&self) -> crate::editing::Seat {
+        crate::editing::Seat {
+            shelf: self.shelf_at,
+            index: self.shelf().index,
+        }
+    }
+
+    fn sit(&mut self, seat: crate::editing::Seat) {
+        if self.shelf_at != seat.shelf {
+            self.land_on(seat.shelf);
+        }
+        let shelf = self.shelf_mut();
+        if seat.index < shelf.carts.len() {
+            shelf.select(seat.index);
+        }
+    }
+
+    fn edit_input(&mut self, action: Action, now: Millis) {
+        use crate::editing::Edit;
+        match self.edit {
+            Some(Edit::Selecting { .. }) => self.selecting_input(action, now),
+            Some(Edit::Choosing { .. }) => self.choosing_input(action),
+            Some(Edit::MovingGame { .. } | Edit::MovingCollection { .. }) => {
+                self.moving_input(action, now)
+            }
+            Some(Edit::Removing { .. }) => match action {
+                Action::GbaDown(Btn::A) => self.remove_from_collection(),
+                Action::GbaDown(Btn::B) => {
+                    if let Some(crate::editing::Edit::Removing { game, last, .. }) = self.edit.take() {
+                        let around = crate::editing::remove_stack(&self.shelf_games(self.shelf_at), self.shelf().index);
+                        self.leaving = Some((Leaving::Kept { game, around, last }, now));
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+
+    fn open_moving(&mut self, now: Millis) {
+        let Some(collection) = self.on_collection() else {
+            return;
+        };
+        self.edit = Some(crate::editing::Edit::MovingGame {
+            collection,
+            before: self.collections[collection].games.clone(),
+            from: self.shelf().index,
+            hold: None,
+            done: 0,
+            since: now,
+        });
+    }
+
+    fn moving_input(&mut self, action: Action, now: Millis) {
+        use crate::editing::{Edit, Hold};
+        let dir = match action {
+            Action::GbaDown(Btn::Left) | Action::GbaUp(Btn::Left) => -1,
+            Action::GbaDown(Btn::Right) | Action::GbaUp(Btn::Right) => 1,
+            Action::GbaDown(Btn::A) => return self.drop_moved(),
+            Action::GbaDown(Btn::B) => return self.cancel_move(),
+            Action::ForgetRecentHold => return self.lift_collection(now),
+            _ => return,
+        };
+        let pressed = matches!(action, Action::GbaDown(_));
+        let room = match &self.edit {
+            Some(Edit::MovingCollection { row, .. }) => row.len(),
+            _ => self.shelf().carts.len(),
+        };
+        if pressed && room < 2 {
+            return;
+        }
+        self.tick_move(now);
+        let (Some(Edit::MovingGame { hold, done, .. }) | Some(Edit::MovingCollection { hold, done, .. })) =
+            self.edit.as_mut()
+        else {
+            return;
+        };
+        match pressed {
+            true => {
+                *hold = Some(Hold {
+                    down: now,
+                    up: None,
+                    dir,
+                });
+                *done = 0;
+            }
+            false => {
+                if let Some(h) = hold.as_mut().filter(|h| h.dir == dir && h.up.is_none()) {
+                    h.up = Some(now);
+                }
+            }
+        }
+    }
+
+    fn tick_move(&mut self, now: Millis) {
+        use crate::editing::Edit;
+        let (target, dir) = match &self.edit {
+            Some(Edit::MovingGame {
+                hold: Some(h),
+                done,
+                ..
+            })
+            | Some(Edit::MovingCollection {
+                hold: Some(h),
+                done,
+                ..
+            }) => {
+                let target = crate::editing::travel(h, now, 10_000).floor() as usize;
+                (target.saturating_sub(*done), h.dir)
+            }
+            _ => return,
+        };
+        for _ in 0..target {
+            self.carry(dir);
+        }
+    }
+
+    fn lift_collection(&mut self, now: Millis) {
+        use crate::editing::Edit;
+        let Some(Edit::MovingGame {
+            collection,
+            before,
+            from,
+            hold: None,
+            done: 0,
+            ..
+        }) = self.edit.clone()
+        else {
+            return;
+        };
+        self.collections[collection].games = before;
+        self.restock_collections();
+        let at = self.collection_at(collection);
+        self.shelves[at].1.select(from);
+        let row: Vec<String> = (0..self.collections.len())
+            .filter(|&i| !self.shelves[self.collection_at(i)].1.carts.is_empty())
+            .map(|i| self.collections[i].name.clone())
+            .collect();
+        let name = self.collections[collection].name.clone();
+        let Some(pos) = row.iter().position(|n| *n == name) else {
+            return;
+        };
+        self.edit = Some(Edit::MovingCollection {
+            before: self.collection_names(),
+            row,
+            at: pos,
+            hold: None,
+            done: 0,
+            since: now,
+        });
+    }
+
+    fn carry(&mut self, dir: i32) {
+        use crate::editing::Edit;
+        if let Some(Edit::MovingCollection { row, at, done, .. }) = self.edit.as_mut() {
+            *done += 1;
+            let n = row.len();
+            if n > 1 {
+                let to = (*at as i32 + dir).rem_euclid(n as i32) as usize;
+                row.swap(*at, to);
+                *at = to;
+            }
+            return;
+        }
+        let Some(Edit::MovingGame {
+            collection, done, ..
+        }) = self.edit.as_mut()
+        else {
+            return;
+        };
+        *done += 1;
+        let i = *collection;
+        let at = self.collection_at(i);
+        let Some((from, to)) = self.shelves[at].1.carry(dir) else {
+            return;
+        };
+        let shelf = &self.shelves[at].1;
+        let [a, b] = [from, to].map(|k| Recent {
+            platform: shelf.carts[k].platform,
+            stem: shelf.carts[k].stem.clone(),
+        });
+        let games = &mut self.collections[i].games;
+        if let (Some(p), Some(q)) = (
+            games.iter().position(|g| *g == a),
+            games.iter().position(|g| *g == b),
+        ) {
+            games.swap(p, q);
+        }
+    }
+
+    fn drop_moved(&mut self) {
+        use crate::editing::Edit;
+        match self.edit.take() {
+            Some(Edit::MovingGame { collection, .. }) => {
+                self.save_collection(collection);
+                self.note_shelf();
+            }
+            Some(Edit::MovingCollection { before, row, .. }) => {
+                let order = crate::editing::reorder_with_hidden(&before, &row);
+                let mut collections = self.collections.clone();
+                collections.sort_by_key(|c| order.iter().position(|n| *n == c.name));
+                self.install_collections(collections);
+                self.restock_collections();
+                self.save_order();
+                self.note_shelf();
+            }
+            _ => {}
+        }
+    }
+
+    fn cancel_move(&mut self) {
+        if let Some(crate::editing::Edit::MovingGame {
+            collection,
+            before,
+            from,
+            ..
+        }) = self.edit.take()
+        {
+            self.collections[collection].games = before;
+            self.restock_collections();
+            let at = self.collection_at(collection);
+            self.shelves[at].1.select(from);
+        }
+    }
+
+    pub fn moving(&self) -> Option<String> {
+        match self.edit.as_ref()? {
+            crate::editing::Edit::MovingGame { .. } => Some("Move".to_string()),
+            crate::editing::Edit::MovingCollection { row, at, .. } => {
+                Some(format!("Move {}", row[*at]))
+            }
+            _ => None,
+        }
+    }
+
+    fn open_removing(&mut self, now: Millis) {
+        let (Some(collection), Some(game)) = (self.on_collection(), self.selected_game()) else {
+            return;
+        };
+        let last = self.shelf().carts.len() == 1;
+        self.edit = Some(crate::editing::Edit::Removing {
+            game,
+            collection,
+            last,
+            since: now,
+        });
+    }
+
+    pub fn removing(&self) -> Option<(&str, bool)> {
+        match self.edit.as_ref()? {
+            crate::editing::Edit::Removing {
+                collection, last, ..
+            } => Some((self.collections[*collection].name.as_str(), *last)),
+            _ => None,
+        }
+    }
+
+    fn selecting_input(&mut self, action: Action, now: Millis) {
+        use crate::editing::Edit;
+        let all = self.state.shelf_mode == ShelfMode::All;
+        match action {
+            Action::GbaDown(Btn::A) => {
+                if let (Some(game), Some(edit)) = (self.selected_game(), self.edit.as_mut()) {
+                    edit.toggle(game);
+                }
+            }
+            Action::GbaDown(Btn::Start) => {
+                let checked = match &self.edit {
+                    Some(Edit::Selecting { checked, .. }) => checked.clone(),
+                    _ => return,
+                };
+                if !checked.is_empty() {
+                    let from = self.here();
+                    self.open_choosing(checked, from, true, now);
+                }
+            }
+            Action::GbaDown(Btn::B) => {
+                if all || !matches!(self.shelves[self.shelf_at].0, Rack::Of(_)) {
+                    self.end_edit();
+                }
+            }
+            Action::PreviousShelf => self.switch_shelf(-1),
+            Action::NextShelf => self.switch_shelf(1),
+            Action::PreviousCollection => self.flip_stack(-1),
+            Action::NextCollection => self.flip_stack(1),
+            Action::GbaDown(Btn::Up) => self.jump_letter(-1),
+            Action::GbaDown(Btn::Down) => self.jump_letter(1),
+            Action::ShelfLeft | Action::GbaDown(Btn::Left) => self.shelf_mut().hold_left(now),
+            Action::ShelfRight | Action::GbaDown(Btn::Right) => self.shelf_mut().hold_right(now),
+            _ => {}
+        }
+    }
+
+    fn open_choosing(
+        &mut self,
+        games: Vec<Recent>,
+        from: crate::editing::Seat,
+        multi: bool,
+        now: Millis,
+    ) {
+        let choices = crate::editing::choices(&self.collections, &games);
+        let at =
+            crate::editing::opening_pick(&choices, &self.collections, self.state.add_to.as_deref());
+        self.edit = Some(crate::editing::Edit::Choosing {
+            games,
+            from,
+            multi,
+            choices,
+            at,
+            since: now,
+        });
+    }
+
+    fn choosing_input(&mut self, action: Action) {
+        use crate::editing::{Choice, Edit};
+        let step = match action {
+            Action::ShelfLeft | Action::GbaDown(Btn::Left) => -1,
+            Action::ShelfRight | Action::GbaDown(Btn::Right) => 1,
+            Action::GbaDown(Btn::A) => {
+                return match self.picked() {
+                    Some(Choice::New) => self.open_keyboard(
+                        "New Collection",
+                        None,
+                        KeyboardFor::CollectionName,
+                        slot_ui::Layout::General,
+                        "",
+                    ),
+                    Some(Choice::Collection(i)) => self.add_to_collection(i),
+                    None => {}
+                };
+            }
+            Action::GbaDown(Btn::B) => return self.back_out(),
+            _ => return,
+        };
+        let from = self.choosing().and_then(|(_, choices, at)| match crate::editing::layout(choices.len()) {
+            crate::editing::Layout::Carousel => Some(self.canvas().w / 2.0 + step as f32 * ROW_GAP),
+            layout => self.choice_x(layout, at, at, choices.len()),
+        });
+        if let Some(Edit::Choosing { choices, at, .. }) = self.edit.as_mut() {
+            *at = crate::editing::step_pick(*at, step, choices.len());
+        }
+        let now = self.now();
+        self.glide = from.map(|x| (x, now));
+    }
+
+    fn picked_x(&self) -> f32 {
+        self.choosing()
+            .and_then(|(_, choices, at)| {
+                self.choice_x(crate::editing::layout(choices.len()), at, at, choices.len())
+            })
+            .unwrap_or(self.canvas().w / 2.0)
+    }
+
+    fn back_out(&mut self) {
+        use crate::editing::Edit;
+        let float_x = self.picked_x();
+        let snap = self.edit.clone();
+        let Some(Edit::Choosing {
+            games, from, multi, ..
+        }) = self.edit.take()
+        else {
+            return;
+        };
+        if let (false, Some(snap), Some(game)) = (multi, snap, games.first()) {
+            self.leaving = Some((
+                Leaving::Backed {
+                    snap,
+                    game: game.clone(),
+                    float_x,
+                },
+                self.now(),
+            ));
+        }
+        if multi {
+            self.edit = Some(Edit::Selecting {
+                checked: games,
+                seat: Some(from),
+            });
+        }
+        self.sit(from);
+    }
+
+    fn add_to_collection(&mut self, i: usize) {
+        let Some((games, _, _)) = self.choosing() else {
+            return;
+        };
+        let fresh = crate::editing::missing(&self.collections[i], games);
+        let before = self.stack_of(i);
+        self.collections[i].add(&fresh);
+        if !fresh.is_empty() {
+            self.save_collection(i);
+            self.restock_collections();
+        }
+        self.finish_adding(i, &fresh, before);
+    }
+
+    fn finish_adding(&mut self, i: usize, added: &[Recent], before: Vec<Recent>) {
+        use crate::editing::Edit;
+        let stack_x = self.picked_x();
+        let snap = self.edit.clone();
+        let Some(Edit::Choosing {
+            from, games, multi, ..
+        }) = self.edit.take()
+        else {
+            return;
+        };
+        if let (Some(snap), Some(game)) = (snap, games.first()) {
+            self.leaving = Some((
+                Leaving::Added {
+                    snap,
+                    game: game.clone(),
+                    stack_x,
+                    multi,
+                    before: (i, before),
+                },
+                self.now(),
+            ));
+        }
+        let name = self.collections[i].name.clone();
+        self.state.add_to = Some(name.clone());
+        let hidden = self.state.shelf_mode == ShelfMode::Collections
+            && matches!(self.shelves[from.shelf].0, Rack::Of(_));
+        match hidden {
+            false => self.sit(from),
+            true => {
+                self.land_on(self.collection_at(i));
+                if let Some(at) = added.first().and_then(|g| {
+                    self.shelf()
+                        .carts
+                        .iter()
+                        .position(|c| c.platform == g.platform && c.stem == g.stem)
+                }) {
+                    self.shelf_mut().select(at);
+                }
+            }
+        }
+        self.say_collection(match added.len() {
+            1 => format!("Added to {name}"),
+            n => format!("Added {n} to {name}"),
+        });
+        self.note_shelf();
+    }
+
+    fn end_edit(&mut self) {
+        self.edit = None;
+        let hidden = matches!(
+            (self.state.shelf_mode, self.shelves[self.shelf_at].0),
+            (ShelfMode::Collections, Rack::Of(_))
+        );
+        if hidden {
+            let to = (0..self.shelves.len()).find_map(|at| self.row_target(at));
+            if let Some(to) = to {
+                self.land_on(to);
+            }
+        }
+    }
+
+    fn name_collection(&mut self, text: String) {
+        let name = text.trim().to_string();
+        if !slot_store::name_ok(&name, &self.collections) {
+            let taken = self
+                .collections
+                .iter()
+                .any(|c| c.name.eq_ignore_ascii_case(&name));
+            let why = match taken {
+                true => "Name already exists, use a different name",
+                false => "Name not allowed, use a different name",
+            };
+            match self.keyboard.as_mut() {
+                Some((kb, _)) => kb.refuse(why),
+                None => self.open_keyboard(
+                    "New Collection",
+                    Some(why),
+                    KeyboardFor::CollectionName,
+                    slot_ui::Layout::General,
+                    &text,
+                ),
+            }
+            return;
+        }
+        let Some((games, _, _)) = self.choosing() else {
+            return;
+        };
+        let games = games.to_vec();
+        self.keyboard = None;
+        let from_key = match &self.edit {
+            Some(crate::editing::Edit::Choosing { from, .. }) => {
+                Some(self.rack_key(self.shelves[from.shelf].0))
+            }
+            _ => None,
+        };
+        let mut collections = self.collections.clone();
+        collections.push(Collection {
+            name: name.clone(),
+            games: games.clone(),
+        });
+        self.install_collections(collections);
+        let moved = from_key.and_then(|key| {
+            (0..self.shelves.len()).find(|&at| self.rack_key(self.shelves[at].0) == key)
+        });
+        if let (Some(at), Some(crate::editing::Edit::Choosing { from, .. })) =
+            (moved, self.edit.as_mut())
+        {
+            from.shelf = at;
+        }
+        let i = self.collections.len() - 1;
+        self.save_collection(i);
+        self.save_order();
+        self.restock_collections();
+        self.finish_adding(i, &games, Vec::new());
+    }
+
+    pub fn collection_names(&self) -> Vec<String> {
+        self.collections.iter().map(|c| c.name.clone()).collect()
+    }
+
+    pub fn shelf_stems(&self) -> Vec<&str> {
+        self.shelf().carts.iter().map(|c| c.stem.as_str()).collect()
     }
 
     fn remembered_seat(&self) -> Option<(usize, usize)> {
         let key = self.state.shelf.as_deref()?;
         let cart = self.state.shelf_cart.as_ref()?;
-        let at = self.shelves.iter().position(|(r, _)| r.key() == key)?;
+        let at = self
+            .shelves
+            .iter()
+            .position(|(r, _)| self.rack_key(*r) == key)?;
         let i = self.shelves[at]
             .1
             .carts
@@ -1350,7 +2347,29 @@ impl App {
         Some((at, i))
     }
 
+    fn note_shelf(&mut self) {
+        self.note_collection();
+        let Some(cart) = self.shelf().carts.get(self.shelf().index) else {
+            return self.persist_soon();
+        };
+        self.state.shelf_cart = Some(Recent {
+            platform: cart.platform,
+            stem: cart.stem.clone(),
+        });
+        self.state.shelf = Some(self.rack_key(self.shelves[self.shelf_at].0));
+        self.persist_soon();
+    }
+
+    fn note_collection(&mut self) {
+        self.state.collection = match self.shelves[self.shelf_at].0 {
+            Rack::Collection(i) => Some(self.collections[i].name.clone()),
+            Rack::Favorites => None,
+            _ => return,
+        };
+    }
+
     fn remember_shelf(&mut self) {
+        self.note_collection();
         let Some(cart) = self.shelf().carts.get(self.shelf().index) else {
             return;
         };
@@ -1358,7 +2377,7 @@ impl App {
             platform: cart.platform,
             stem: cart.stem.clone(),
         });
-        self.state.shelf = Some(self.shelves[self.shelf_at].0.key());
+        self.state.shelf = Some(self.rack_key(self.shelves[self.shelf_at].0));
         self.persist();
     }
 
@@ -1651,6 +2670,10 @@ impl App {
             } else {
                 QuickValue::Hide
             }),
+            QuickRow::ShelfMode => Some(match self.state.shelf_mode {
+                ShelfMode::All => QuickValue::All,
+                ShelfMode::Collections => QuickValue::Collections,
+            }),
             QuickRow::ShowTitles => Some(if self.state.show_titles {
                 QuickValue::Show
             } else {
@@ -1719,6 +2742,8 @@ impl App {
             | QuickRow::ShelfNext
             | QuickRow::ShelfFavorite
             | QuickRow::ShelfForget
+            | QuickRow::CollPrev
+            | QuickRow::CollNext
             | QuickRow::PlayControls
             | QuickRow::Shortcuts
             | QuickRow::GameUp
@@ -1754,6 +2779,7 @@ impl App {
             | QuickRow::ScGuide
             | QuickRow::Controls
             | QuickRow::ControlsShelf
+            | QuickRow::ControlsCollections
             | QuickRow::ControlsInGame => None,
         }
     }
@@ -1961,6 +2987,10 @@ impl App {
     }
 
     pub fn shown_wallpaper(&mut self) -> Option<String> {
+        self.collection_wallpaper = self.collection_wallpaper_here();
+        if let Some(name) = &self.collection_wallpaper {
+            return Some(name.clone());
+        }
         match self.resolved_wallpaper() {
             WallpaperPick::File(name) => Some(name),
             WallpaperPick::Random => self.random_wallpaper(),
@@ -1972,17 +3002,58 @@ impl App {
         }
     }
 
+    fn shown_rack(&self) -> Option<Rack> {
+        match self.picked() {
+            Some(crate::editing::Choice::Collection(i)) => Some(Rack::Collection(i)),
+            Some(crate::editing::Choice::New) => None,
+            None => Some(self.shelves[self.shelf_at].0),
+        }
+    }
+
     fn wallpaper_for_shelf(&self) -> Option<String> {
-        wallpaper_of_rack(self.shelves[self.shelf_at].0, &self.wallpaper_files())
+        wallpaper_of_rack(self.shown_rack()?, &self.wallpaper_files())
+    }
+
+    fn collection_wallpaper_here(&self) -> Option<String> {
+        let Some(Rack::Collection(i)) = self.shown_rack() else {
+            return None;
+        };
+        let name = &self.collections[i].name;
+        self.collection_pngs
+            .iter()
+            .cloned()
+            .find(|file| {
+                file.rsplit_once('.')
+                    .is_some_and(|(stem, _)| stem.eq_ignore_ascii_case(name))
+            })
+            .map(|file| format!("Collections/{file}"))
+    }
+
+    pub fn wallpapers_preload(&self) -> bool {
+        self.state.wallpaper == WallpaperPick::Shelf || !self.collection_pngs.is_empty()
     }
 
     pub fn shelf_wallpapers(&self) -> Vec<String> {
         let files = self.wallpaper_files();
-        let mut names: Vec<String> = self
-            .shelves
-            .iter()
-            .filter_map(|(rack, _)| wallpaper_of_rack(*rack, &files))
-            .collect();
+        let mut names: Vec<String> = match self.state.wallpaper {
+            WallpaperPick::Shelf => self
+                .shelves
+                .iter()
+                .filter_map(|(rack, _)| wallpaper_of_rack(*rack, &files))
+                .collect(),
+            WallpaperPick::File(_) => match self.resolved_wallpaper() {
+                WallpaperPick::File(name) => vec![name],
+                _ => Vec::new(),
+            },
+            _ => Vec::new(),
+        };
+        names.extend(self.collection_pngs.iter().filter_map(|file| {
+            let (stem, _) = file.rsplit_once('.')?;
+            self.collections
+                .iter()
+                .any(|c| c.name.eq_ignore_ascii_case(stem))
+                .then(|| format!("Collections/{file}"))
+        }));
         names.sort();
         names.dedup();
         names
@@ -2032,6 +3103,9 @@ impl App {
 
     fn menu_ground(&self) -> Option<(TexId, u32)> {
         let [_, blur, own] = self.grounds();
+        if self.collection_wallpaper.is_some() {
+            return own;
+        }
         match &self.state.wallpaper {
             WallpaperPick::None => None,
             WallpaperPick::Default | WallpaperPick::Blur => blur,
@@ -2044,6 +3118,7 @@ impl App {
     fn draw_background(&self, out: &mut Vec<Draw>) {
         let [ground, blur, own] = self.grounds();
         let face = match &self.state.wallpaper {
+            _ if self.collection_wallpaper.is_some() => own,
             WallpaperPick::None => None,
             WallpaperPick::Default => ground,
             WallpaperPick::Random if !self.random_drawn() => ground,
@@ -2065,6 +3140,9 @@ impl App {
     }
 
     fn own_wallpaper_shown(&self) -> bool {
+        if self.collection_wallpaper.is_some() {
+            return self.wallpaper.is_some();
+        }
         match self.state.wallpaper {
             WallpaperPick::File(_) => self.wallpaper.is_some(),
             WallpaperPick::Random => self.random_drawn() && self.wallpaper.is_some(),
@@ -2234,6 +3312,10 @@ impl App {
         self.shelf_platform = slot_ui::Printed::new(face, w);
     }
 
+    pub fn shelf_platform_missing(&self) -> bool {
+        self.shelf_platform.face.is_none()
+    }
+
     pub fn clear_shelf_platform(&mut self) {
         self.shelf_platform = slot_ui::Printed::default();
     }
@@ -2272,9 +3354,9 @@ impl App {
         1.0 - self.slot_name_alpha() / SLOT_NAME_ALPHA
     }
 
-    pub fn shelf_platform_name(&self) -> Option<&'static str> {
+    pub fn shelf_platform_name(&self) -> Option<&str> {
         self.next_shelf(1)?;
-        Some(self.shelves[self.shelf_at].0.name())
+        Some(self.rack_name(self.shelves[self.shelf_at].0))
     }
 
     pub fn set_battery_percent_face(&mut self, face: TexId, w: u32) {
@@ -2333,6 +3415,7 @@ impl App {
                 .filter(|i| !screen.contains(i))
                 .map(|i| (self.shelf_at, i)),
         );
+        wants.extend(self.bundle_seats());
         wants
             .into_iter()
             .filter(|(at, i)| self.shelves[*at].1.face(*i).is_none())
@@ -2358,15 +3441,17 @@ impl App {
 
     pub fn shed_faces(&mut self) -> Vec<TexId> {
         let neighbours = self.neighbour_shelves();
+        let bundle = self.bundle_seats();
         let mut shed = std::mem::take(&mut self.orphaned);
         for (at, (_, shelf)) in self.shelves.iter_mut().enumerate() {
-            let keep = if at == self.shelf_at {
+            let mut keep = if at == self.shelf_at {
                 shelf.around(FACE_KEEP)
             } else if neighbours.contains(&at) {
                 shelf.on_screen()
             } else {
                 Vec::new()
             };
+            keep.extend(bundle.iter().filter(|(s, _)| *s == at).map(|(_, i)| *i));
             for i in 0..shelf.carts.len() {
                 if !keep.contains(&i) {
                     shed.extend(shelf.take_face(i));
@@ -2750,7 +3835,10 @@ impl App {
             };
             ("shortcuts", write_shortcuts(root, &self.shortcuts))
         } else {
-            self.carousel = CarouselKeys::default();
+            let fresh = CarouselKeys::default();
+            for &a in Self::carousel_page(row) {
+                self.carousel.set(a, fresh.get(a));
+            }
             let Some(root) = &self.root else {
                 return;
             };
@@ -2768,7 +3856,17 @@ impl App {
         } else if row.shortcut().is_some() {
             self.shortcuts == ShortcutKeys::default()
         } else {
-            self.carousel == CarouselKeys::default()
+            let fresh = CarouselKeys::default();
+            Self::carousel_page(row)
+                .iter()
+                .all(|a| self.carousel.get(*a) == fresh.get(*a))
+        }
+    }
+
+    fn carousel_page(row: QuickRow) -> &'static [slot_store::CarouselAction] {
+        match row.page() == &QuickRow::COLLECTION_KEYS[..] {
+            true => &slot_store::COLLECTION_ACTIONS,
+            false => &slot_store::SHELF_ACTIONS,
         }
     }
 
@@ -3520,8 +4618,54 @@ impl App {
             }
         }
         let now = self.now();
+        if matches!(self.phase, Phase::Shelf) {
+            if matches!(action, Action::GbaDown(_)) {
+                self.leaving = None;
+            }
+            match action {
+                Action::GbaDown(Btn::Y) if self.edit.is_none() => self.press = Some((Btn::Y, now)),
+                Action::GbaUp(Btn::Y) | Action::FavoriteHold => self.press = None,
+                _ => {}
+            }
+        }
         match self.phase {
             Phase::Shelf => match action {
+                Action::SelectHold if self.core_picker.is_none() && self.studio.is_none() => {
+                    if self.edit.is_none() {
+                        let mut edit = crate::editing::Edit::selecting();
+                        if let Some(game) = self.selected_game() {
+                            edit.toggle(game);
+                        }
+                        self.edit = Some(edit);
+                    }
+                }
+                Action::FavoriteHold
+                    if self.edit.is_none()
+                        && self.core_picker.is_none()
+                        && self.studio.is_none()
+                        && self.on_collection().is_none() =>
+                {
+                    if let Some(game) = self.selected_game() {
+                        let from = self.here();
+                        self.open_choosing(vec![game], from, false, now);
+                    }
+                }
+                Action::FavoriteHold
+                    if self.edit.is_none()
+                        && self.core_picker.is_none()
+                        && self.studio.is_none() =>
+                {
+                    self.open_removing(now)
+                }
+                Action::ForgetRecent
+                    if self.edit.is_none()
+                        && self.core_picker.is_none()
+                        && self.studio.is_none()
+                        && self.on_collection().is_some() =>
+                {
+                    self.open_moving(now)
+                }
+                _ if self.edit.is_some() && self.core_picker.is_none() => self.edit_input(action, now),
                 Action::SelectTap if self.core_picker.is_none() => self.open_studio(),
                 Action::GbaDown(Btn::Start) if self.core_picker.is_none() => {
                     self.open_core_picker()
@@ -3529,6 +4673,8 @@ impl App {
                 _ if self.core_picker.is_some() => self.core_picker_input(action),
                 Action::PreviousShelf => self.switch_shelf(-1),
                 Action::NextShelf => self.switch_shelf(1),
+                Action::PreviousCollection => self.flip_stack(-1),
+                Action::NextCollection => self.flip_stack(1),
                 Action::Favorite => self.toggle_favorite(),
                 Action::ForgetRecent if self.shelf_at == RECENTS_AT => self.forget_recent(),
                 Action::GbaDown(Btn::Up) => self.jump_letter(-1),
@@ -3782,6 +4928,7 @@ impl App {
             | QuickRow::Wifi
             | QuickRow::Controls
             | QuickRow::ControlsShelf
+            | QuickRow::ControlsCollections
             | QuickRow::ControlsInGame => {
                 if let Some(row) = row.child() {
                     let row = row.shown(&self.hidden_rows())[0];
@@ -3813,6 +4960,7 @@ impl App {
             | QuickRow::LeftStick
             | QuickRow::Theme
             | QuickRow::Recents
+            | QuickRow::ShelfMode
             | QuickRow::ShowTitles
             | QuickRow::Wallpaper
             | QuickRow::WallpaperTint
@@ -3849,6 +4997,8 @@ impl App {
             | QuickRow::ShelfNext
             | QuickRow::ShelfFavorite
             | QuickRow::ShelfForget
+            | QuickRow::CollPrev
+            | QuickRow::CollNext
             | QuickRow::PlayControls
             | QuickRow::GameUp
             | QuickRow::GameDown
@@ -3992,6 +5142,13 @@ impl App {
             self.persist();
             return;
         }
+        if row == QuickRow::ShelfMode {
+            self.set_shelf_mode(match self.state.shelf_mode {
+                ShelfMode::All => ShelfMode::Collections,
+                ShelfMode::Collections => ShelfMode::All,
+            });
+            return;
+        }
         if row == QuickRow::ShowTitles {
             self.state.show_titles = !self.state.show_titles;
             self.persist();
@@ -4088,6 +5245,7 @@ impl App {
             | QuickRow::PlayContrast
             | QuickRow::Wallpaper
             | QuickRow::Recents
+            | QuickRow::ShelfMode
             | QuickRow::ShowTitles
             | QuickRow::DateTime
             | QuickRow::About
@@ -4128,6 +5286,8 @@ impl App {
             | QuickRow::ShelfNext
             | QuickRow::ShelfFavorite
             | QuickRow::ShelfForget
+            | QuickRow::CollPrev
+            | QuickRow::CollNext
             | QuickRow::PlayControls
             | QuickRow::Shortcuts
             | QuickRow::GameUp
@@ -4163,6 +5323,7 @@ impl App {
             | QuickRow::ScGuide
             | QuickRow::Controls
             | QuickRow::ControlsShelf
+            | QuickRow::ControlsCollections
             | QuickRow::ControlsInGame
             | QuickRow::LidOff
             | QuickRow::FetchArt
@@ -4478,6 +5639,19 @@ impl App {
         self.timers();
         self.poll_link();
         let now = self.now();
+        self.tick_move(now);
+        let lead = match (&self.edit, self.move_view(now)) {
+            (Some(crate::editing::Edit::MovingGame { .. }), Some((_, cam))) => {
+                self.shelf().index as f32 - cam
+            }
+            _ => 0.0,
+        };
+        self.shelf_mut().set_lead(lead);
+        if let Some((l, start)) = &self.leaving {
+            if now.saturating_sub(*start) > Self::leaving_ms(l) {
+                self.leaving = None;
+            }
+        }
         let ready = self.core_faces_ready();
         if let Some(picker) = &mut self.core_picker {
             if picker.waiting() && (ready || picker.waited(now) >= FACES_WAIT_MS) {
@@ -4489,6 +5663,7 @@ impl App {
         }
         if !self.on_shelf() {
             self.shelf_mut().release_hold();
+            self.press = None;
         }
         if let Phase::Unwrap { stem } = &self.phase {
             if self.unwrap_scene.is_none_or(|s| s.done(now)) {
@@ -4951,7 +6126,7 @@ impl App {
         self.orphaned.extend(old);
         let empty = self.shelves[at].1.carts.is_empty();
         if self.shelf_at == at && empty {
-            self.shelf_at = self.next_shelf(1).unwrap_or(0);
+            self.shelf_at = self.fallback_shelf();
         }
     }
 
@@ -5220,6 +6395,7 @@ impl App {
                 canvas: self.canvas(),
             }
             .draw(out),
+            Phase::Shelf if self.keyboard.is_some() => self.draw_networks(out),
             Phase::Shelf | Phase::Unwrap { .. } => {
                 self.draw_background(out);
                 match (self.core_picker_shown(), self.selected_stem()) {
@@ -5237,14 +6413,24 @@ impl App {
                         draw_empty_slot(self.canvas(), self.slot_faces, out);
                     }
                     _ => {
-                        if !self.draw_unwrap(out) {
+                        if self.edit.is_some() {
+                            self.draw_picking(out);
+                        } else if self.draw_leaving(out) {
+                        } else if self.draw_pressing(out) {
+                        } else if !self.draw_unwrap(out) {
                             self.shelf()
                                 .draw(self.canvas(), self.shelf_shake(), self.slot_faces, out);
                         }
+                        let name_alpha = match &self.edit {
+                            None | Some(crate::editing::Edit::Selecting { .. }) => {
+                                self.slot_name_alpha()
+                            }
+                            Some(_) => 0.0,
+                        };
                         slot_ui::draw_slot_title(
                             self.canvas(),
                             self.shelf_platform,
-                            self.slot_name_alpha(),
+                            name_alpha,
                             out,
                         );
                         slot_ui::draw_slot_title(
@@ -5255,17 +6441,23 @@ impl App {
                         );
                     }
                 }
-                draw_footer(
-                    self.canvas(),
-                    self.battery,
-                    self.battery_percent,
-                    self.bolt,
-                    self.shelf_clock,
-                    footer_ink(self.light()),
-                    out,
-                );
-                if self.wifi_up() {
-                    slot_ui::draw_wifi_icon(self.battery_percent, self.wifi_face(), out);
+                if self.edit.is_some() && self.core_picker_shown().is_none() {
+                    slot_ui::draw_plugged_slot(self.canvas(), self.plugged_face, 1.0, out);
+                    self.draw_picking_legends(out);
+                    self.draw_heading(out);
+                } else {
+                    draw_footer(
+                        self.canvas(),
+                        self.battery,
+                        self.battery_percent,
+                        self.bolt,
+                        self.shelf_clock,
+                        footer_ink(self.light()),
+                        out,
+                    );
+                    if self.wifi_up() {
+                        slot_ui::draw_wifi_icon(self.battery_percent, self.wifi_face(), out);
+                    }
                 }
                 if let Some(picker) = self.core_picker_shown() {
                     let lift = lift_of(picker.openness(self.now()));
@@ -5631,12 +6823,23 @@ impl App {
         alpha: f32,
         out: &mut Vec<Draw>,
     ) {
+        let alphas = vec![alpha; legends.len()];
+        self.draw_spread_legends_each(legends, y, &alphas, out);
+    }
+
+    fn draw_spread_legends_each(
+        &self,
+        legends: &[(TexId, u32)],
+        y: f32,
+        alphas: &[f32],
+        out: &mut Vec<Draw>,
+    ) {
         let seen = |w: u32| w.saturating_sub(HINT_EDGE) as f32;
         let room = self.canvas().w - 2.0 * LINK_LEGEND_EDGE;
         let gap =
             (room - legends.iter().map(|l| seen(l.1)).sum::<f32>()) / (legends.len() - 1) as f32;
         let mut x = LINK_LEGEND_EDGE;
-        for &(tex, w) in legends {
+        for (&(tex, w), &alpha) in legends.iter().zip(alphas) {
             out.push(Draw::Tex {
                 x: x.round(),
                 y,
@@ -5647,6 +6850,968 @@ impl App {
             });
             x += seen(w) + gap;
         }
+    }
+
+    fn draw_picking(&self, out: &mut Vec<Draw>) {
+        use crate::editing::Edit;
+        let Some(edit) = &self.edit else {
+            return;
+        };
+        let canvas = self.canvas();
+        let now = self.now();
+        match edit {
+            Edit::Selecting { .. } => {
+                let shelf = self.shelf();
+                let turn = |i: usize| {
+                    let c = &shelf.carts[i];
+                    match edit.is_checked(c.platform, &c.stem) {
+                        true => crate::editing::soft_jiggle(now, (i % 2) as f32 * 0.45),
+                        false => 0.0,
+                    }
+                };
+                shelf.draw_row_turned(canvas, None, 1.0, &turn, &|_| (0.0, 0.0, 1.0), out);
+            }
+            Edit::Choosing {
+                games,
+                at,
+                choices,
+                since,
+                multi,
+                ..
+            } => {
+                let slide = crate::editing::ease_in(crate::editing::progress(now, *since, crate::editing::ENTER_SLIDE_MS));
+                let move_ = crate::editing::ease_in_out(crate::editing::progress(now, *since, crate::editing::ENTER_MOVE_MS));
+                let fade = self.edit_fade();
+                if move_ < 1.0 {
+                    let hidden = match (multi, games.first()) {
+                        (false, Some(g)) => Some(g.stem.as_str()),
+                        _ => None,
+                    };
+                    self.draw_parted(hidden, slide * PART_PUSH, 1.0 - slide, out);
+                }
+                self.draw_dim_at(move_, out);
+                let target = self.draw_choices(choices, *at, fade, out);
+                let carousel = crate::editing::layout(choices.len()) == crate::editing::Layout::Carousel;
+                let picked_x = match self.glide {
+                    Some((from, t)) if !carousel => {
+                        from + (target - from) * crate::editing::ease_out(crate::editing::progress(now, t, GLIDE_MS))
+                    }
+                    _ => target,
+                };
+                match (games.as_slice(), multi) {
+                    ([one], false) => {
+                        let float = self.float_rect(one, picked_x, ADD_FLOAT_TOP, ADD_FLOAT);
+                        let rect = Self::lerp_rect(self.home_rect(one), float, move_);
+                        self.draw_game_at(one, rect, 1.0, 0.0, out);
+                    }
+                    _ => self.draw_bundle_at(games, picked_x, out),
+                }
+            }
+            Edit::Removing { last: true, since, .. } => {
+                let e = crate::editing::ease_in_out(crate::editing::progress(now, *since, crate::editing::ENTER_MOVE_MS));
+                self.draw_dim_at(e, out);
+                let shelf = self.shelf();
+                let Some(cart) = shelf.carts.get(shelf.index) else {
+                    return;
+                };
+                let (cw, ch) = slot_ui::cart_box(cart.platform);
+                let s = 1.0 + (LAST_SCALE - 1.0) * e;
+                let (w, h) = (cw as f32 * s, ch as f32 * s);
+                let foot = slot_ui::foot_y(ch as f32);
+                let y = foot - ch as f32 + (ch as f32 - h) / 2.0 + LAST_DROP * e;
+                shelf.draw_cart_at(shelf.index, [canvas.w / 2.0 - w / 2.0, y, w, h], out);
+            }
+            Edit::Removing { game, since, .. } => {
+                let slide = crate::editing::ease_in(crate::editing::progress(now, *since, crate::editing::ENTER_SLIDE_MS));
+                let move_ = crate::editing::ease_in_out(crate::editing::progress(now, *since, crate::editing::ENTER_MOVE_MS));
+                let fade = self.edit_fade();
+                if move_ < 1.0 {
+                    self.draw_parted(Some(game.stem.as_str()), slide * PART_PUSH, 1.0 - slide, out);
+                }
+                self.draw_dim_at(move_, out);
+                let shelf_at = self.shelf_at;
+                let around = crate::editing::remove_stack(&self.shelf_games(shelf_at), self.shelf().index);
+                let rise = (1.0 - fade) * ENTER_RISE;
+                self.draw_stack(&around, canvas.w / 2.0, REMOVE_BASE + rise, STACK_PICKED, fade, 0.0, out);
+                let float = self.float_rect(game, canvas.w / 2.0, REMOVE_FLOAT_TOP, REMOVE_FLOAT);
+                self.draw_game_at(game, Self::lerp_rect(self.home_rect(game), float, move_), 1.0, 0.0, out);
+            }
+            Edit::MovingGame { hold, .. } => {
+                let shelf = self.shelf();
+                let held = shelf.index;
+                let n = shelf.carts.len();
+                let still = crate::editing::move_still(hold.as_ref(), now);
+                let turn = |i: usize| match i == held {
+                    true => crate::editing::soft_jiggle(now, 0.0) * still,
+                    false => 0.0,
+                };
+                let (ahead, dir) = self.move_pass(now);
+                let passed = (held as i32 + dir).rem_euclid(n.max(1) as i32) as usize;
+                let (slide, dip, grow) = crate::editing::pass(ahead);
+                let d = dir as f32;
+                let shift = |i: usize| match i {
+                    _ if dir == 0 || n < 2 => (0.0, 0.0, 1.0),
+                    i if i == held => (d * ahead, 0.0, 1.0),
+                    i if i == passed => (-d * slide, dip, grow),
+                    _ => (0.0, 0.0, 1.0),
+                };
+                shelf.draw_row_turned(canvas, None, 1.0, &turn, &shift, out);
+            }
+            Edit::MovingCollection { row, at, since, .. } => {
+                let gather = crate::editing::ease_in_out(crate::editing::progress(now, *since, crate::editing::GATHER_MS));
+                if gather < 1.0 {
+                    self.draw_parted(None, 0.0, 1.0 - gather, out);
+                }
+                self.draw_dim_at(gather, out);
+                let (held, cam) = self.move_view(now).unwrap_or((*at as f32, *at as f32));
+                let (ahead, dir) = self.move_pass(now);
+                let n = row.len() as i32;
+                let passed = (*at as i32 + dir).rem_euclid(n.max(1));
+                let (slide, dip, grow) = crate::editing::pass(ahead);
+                let order = (0..row.len())
+                    .filter(|&k| k != *at)
+                    .chain(std::iter::once(*at));
+                for k in order {
+                    let name = &row[k];
+                    let off = k as i32 - *at as i32;
+                    let passing = dir != 0 && n > 1 && k as i32 == passed;
+                    let Some(i) = self.collections.iter().position(|c| c.name == *name) else {
+                        continue;
+                    };
+                    let games = self.stack_of(i);
+                    let raw = match (off, passing) {
+                        (0, _) => held - cam,
+                        (_, true) => k as f32 - dir as f32 * slide - cam,
+                        _ => k as f32 - cam,
+                    };
+                    let place = (raw + n as f32 / 2.0).rem_euclid(n as f32) - n as f32 / 2.0;
+                    if place.abs() > 1.6 {
+                        continue;
+                    }
+                    let cx = canvas.w / 2.0 + place * ROW_GAP;
+                    let (scale, alpha, lift) = match off {
+                        0 => (ROW_HELD, 1.0, ROW_LIFT),
+                        _ => {
+                            let a = place.abs().min(1.0);
+                            let (dip, grow) = match passing {
+                                true => (dip, grow),
+                                false => (0.0, 1.0),
+                            };
+                            (
+                                ROW_HELD * (1.0 + (ROW_SIDE - 1.0) * a) * grow,
+                                1.0 + (ROW_SIDE_ALPHA - 1.0) * a,
+                                dip,
+                            )
+                        }
+                    };
+                    self.draw_stack(&games, cx, ROW_BASE + lift, scale, alpha * gather, 0.0, out);
+                    if off != 0 {
+                        self.draw_name(name, false, cx, ROW_NAME_Y, gather, out);
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn move_offset(&self) -> Option<f32> {
+        self.move_view(self.now()).map(|(held, cam)| held - cam)
+    }
+
+    pub fn pressing(&self) -> bool {
+        self.press.is_some()
+    }
+
+    fn draw_pressing(&self, out: &mut Vec<Draw>) -> bool {
+        let Some((Btn::Y, since)) = self.press else {
+            return false;
+        };
+        let t = self.now().saturating_sub(since);
+        if t < crate::editing::JIGGLE_DELAY_MS || self.core_picker.is_some() || self.studio.is_some() {
+            return false;
+        }
+        let shelf = self.shelf();
+        let Some(cart) = shelf.carts.get(shelf.index) else {
+            return false;
+        };
+        let canvas = self.canvas();
+        let dim = crate::editing::neighbor_dim(t);
+        shelf.draw_row(canvas, Some(cart.stem.as_str()), self.shelf_shake(), 0.0, dim, out);
+        let (x, scale) = shelf.selected_at(canvas);
+        let (cw, ch) = slot_ui::cart_box(cart.platform);
+        let (w, h) = (cw as f32 * scale, ch as f32 * scale);
+        let rect = [x, slot_ui::foot_y(ch as f32) - h, w, h];
+        let start = out.len();
+        shelf.draw_cart_at(shelf.index, rect, out);
+        slot_ui::turn_about(&mut out[start..], [x + w / 2.0, rect[1] + h / 2.0], crate::editing::hold_jiggle(t));
+        draw_empty_slot(canvas, self.slot_faces, out);
+        true
+    }
+
+    fn draw_dim_at(&self, amount: f32, out: &mut Vec<Draw>) {
+        let canvas = self.canvas();
+        let [r, g, b, a] = EDIT_DIM;
+        out.push(Draw::Rect {
+            x: 0.0,
+            y: 0.0,
+            w: canvas.w,
+            h: canvas.h,
+            colour: [r, g, b, a * amount],
+        });
+    }
+
+    fn edit_fade(&self) -> f32 {
+        use crate::editing::{ease_out, progress, Edit, ENTER_FADE_MS, ENTER_MOVE_MS};
+        let since = match &self.edit {
+            Some(Edit::Choosing { since, .. }) | Some(Edit::Removing { since, .. }) => *since,
+            Some(Edit::MovingCollection { since, .. }) => {
+                return ease_out(progress(self.now(), *since, crate::editing::GATHER_MS));
+            }
+            _ => return 1.0,
+        };
+        ease_out(progress(self.now(), since + ENTER_MOVE_MS - 40, ENTER_FADE_MS))
+    }
+
+    fn move_pass(&self, now: Millis) -> (f32, i32) {
+        use crate::editing::Edit;
+        let (hold, done) = match &self.edit {
+            Some(Edit::MovingCollection { hold, done, .. }) | Some(Edit::MovingGame { hold, done, .. }) => (hold, *done),
+            _ => return (0.0, 0),
+        };
+        let Some(h) = hold else {
+            return (0.0, 0);
+        };
+        let ahead = crate::editing::travel(h, now, 10_000) - done as f32;
+        (ahead.clamp(0.0, 1.0), h.dir)
+    }
+
+    fn move_view(&self, now: Millis) -> Option<(f32, f32)> {
+        use crate::editing::Edit;
+        let (at, hold, done) = match &self.edit {
+            Some(Edit::MovingCollection { at, hold, done, .. }) => (*at as f32, hold, *done),
+            Some(Edit::MovingGame { hold, done, .. }) => (self.shelf().index as f32, hold, *done),
+            _ => return None,
+        };
+        let Some(h) = hold else {
+            return Some((at, at));
+        };
+        let dir = h.dir as f32;
+        let start = at - dir * done as f32;
+        let moved = crate::editing::travel(h, now, 10_000);
+        let held = start + dir * moved;
+        let trail = |m: f32| start + dir * (m - 1.0).max(0.0);
+        let cam = match h.up {
+            None => trail(moved),
+            Some(up) => {
+                let from = trail(crate::editing::travel(h, up, 10_000));
+                let to = start + dir * crate::editing::travel(h, up + 60_000, 10_000);
+                let settle = crate::editing::ease_in_out(crate::editing::progress(now, up, crate::editing::CAMERA_MS));
+                from + (to - from) * settle
+            }
+        };
+        Some((held, cam))
+    }
+
+    fn shelf_games(&self, at: usize) -> Vec<Recent> {
+        self.shelves[at]
+            .1
+            .carts
+            .iter()
+            .map(|c| Recent {
+                platform: c.platform,
+                stem: c.stem.clone(),
+            })
+            .collect()
+    }
+
+    fn stack_of(&self, i: usize) -> Vec<Recent> {
+        crate::editing::stack_games(&self.collections[i], &self.shelf_games(self.collection_at(i)))
+    }
+
+    fn choice_x(&self, layout: crate::editing::Layout, k: usize, at: usize, n: usize) -> Option<f32> {
+        use crate::editing::Layout;
+        let mid = self.canvas().w / 2.0;
+        let off = match layout {
+            Layout::Single => 0.0,
+            Layout::Pair => [-PAIR_GAP, PAIR_GAP][k],
+            Layout::Trio => [-TRIO_GAP, 0.0, TRIO_GAP][k],
+            Layout::Carousel => {
+                let n = n as i32;
+                let mut off = k as i32 - at as i32;
+                if off > n / 2 {
+                    off -= n;
+                }
+                if off < -(n / 2) {
+                    off += n;
+                }
+                if off.abs() > 2 {
+                    return None;
+                }
+                off as f32 * ROW_GAP
+            }
+        };
+        Some(mid + off)
+    }
+
+    fn draw_choices(
+        &self,
+        choices: &[crate::editing::Choice],
+        at: usize,
+        fade: f32,
+        out: &mut Vec<Draw>,
+    ) -> f32 {
+        self.draw_choices_as(choices, at, fade, None, None, out)
+    }
+
+    fn draw_choices_as(
+        &self,
+        choices: &[crate::editing::Choice],
+        at: usize,
+        fade: f32,
+        swap: Option<&(usize, Vec<Recent>)>,
+        fresh: Option<(&str, f32)>,
+        out: &mut Vec<Draw>,
+    ) -> f32 {
+        use crate::editing::{Choice, Layout};
+        let layout = crate::editing::layout(choices.len());
+        let rise = (1.0 - fade) * ENTER_RISE;
+        let mid = self.canvas().w / 2.0;
+        let slide = match (layout, self.glide) {
+            (Layout::Carousel, Some((from, t))) => {
+                (from - mid) * (1.0 - crate::editing::ease_out(crate::editing::progress(self.now(), t, GLIDE_MS)))
+            }
+            _ => 0.0,
+        };
+        let mut picked_x = mid;
+        for (k, choice) in choices.iter().enumerate() {
+            let Some(cx) = self.choice_x(layout, k, at, choices.len()) else {
+                continue;
+            };
+            let cx = cx + slide;
+            if cx < -ROW_GAP || cx > self.canvas().w + ROW_GAP {
+                continue;
+            }
+            let picked = k == at;
+            let (scale, alpha) = match (picked, layout) {
+                (true, _) => (STACK_PICKED, 1.0),
+                (false, Layout::Carousel) => (STACK_PICKED * ROW_SIDE, ROW_SIDE_ALPHA),
+                (false, _) => (STACK_SIDE, STACK_SIDE_ALPHA),
+            };
+            if fade > 0.0 {
+                match choice {
+                    Choice::Collection(i) => {
+                        let stack = match swap {
+                            Some((k, before)) if k == i => before.clone(),
+                            _ => self.stack_of(*i),
+                        };
+                        self.draw_stack(&stack, cx, STACK_BASE + rise, scale, alpha * fade, 0.0, out);
+                    }
+                    Choice::New => {
+                        let solid = fresh.map_or(1.0, |(_, a)| a);
+                        self.draw_new_stack(cx, STACK_BASE + rise, scale, alpha * fade * solid, out)
+                    }
+                }
+                let y = match picked {
+                    true => PICKED_NAME_Y,
+                    false => SIDE_NAME_Y,
+                };
+                let name = match (choice, fresh) {
+                    (Choice::New, Some((name, _))) => name,
+                    _ => self.choice_name(*choice),
+                };
+                self.draw_name(name, picked, cx, y + rise, fade, out);
+            }
+            if picked {
+                picked_x = cx - slide;
+            }
+        }
+        picked_x
+    }
+
+    fn float_rect(&self, g: &Recent, cx: f32, top: f32, scale: f32) -> [f32; 4] {
+        let (cw, ch) = slot_ui::cart_box(g.platform);
+        let (w, h) = (cw as f32 * scale, ch as f32 * scale);
+        [cx - w / 2.0, top, w, h]
+    }
+
+    fn home_rect(&self, g: &Recent) -> [f32; 4] {
+        let (cw, ch) = slot_ui::cart_box(g.platform);
+        let (w, h) = (cw as f32, ch as f32);
+        [self.canvas().w / 2.0 - w / 2.0, slot_ui::foot_y(h) - h, w, h]
+    }
+
+    fn fresh_rect(&self, g: &Recent, cx: f32) -> [f32; 4] {
+        let (cw, ch) = slot_ui::cart_box(g.platform);
+        let (w, h) = (cw as f32 * STACK_PICKED, ch as f32 * STACK_PICKED);
+        [cx - w / 2.0, STACK_BASE - (NEW_H + h) / 2.0, w, h]
+    }
+
+    fn front_rect(&self, g: &Recent, cx: f32) -> [f32; 4] {
+        let (cw, ch) = slot_ui::cart_box(g.platform);
+        let (w, h) = (cw as f32 * STACK_PICKED, ch as f32 * STACK_PICKED);
+        [cx + STACK_SPREAD - w / 2.0, STACK_BASE - h, w, h]
+    }
+
+    fn draw_game_at(&self, g: &Recent, rect: [f32; 4], alpha: f32, turn: f32, out: &mut Vec<Draw>) {
+        let Some((at, i)) = self.bundle_seat(g) else {
+            return;
+        };
+        let start = out.len();
+        self.shelves[at].1.draw_cart_faded(i, rect, alpha, out);
+        slot_ui::turn_about(&mut out[start..], [rect[0] + rect[2] / 2.0, rect[1] + rect[3] / 2.0], turn);
+    }
+
+    fn draw_parted(&self, hidden: Option<&str>, push: f32, alpha: f32, out: &mut Vec<Draw>) {
+        if alpha <= 0.0 {
+            return;
+        }
+        let start = out.len();
+        let canvas = self.canvas();
+        self.shelf().draw_row(canvas, hidden, 0.0, 0.0, alpha, out);
+        let mid = canvas.w / 2.0;
+        for draw in &mut out[start..] {
+            let dx = |x: f32, w: f32| if x + w / 2.0 < mid { -push } else { push };
+            match draw {
+                Draw::Rect { x, w, .. } | Draw::Tex { x, w, .. } | Draw::Part { x, w, .. } | Draw::Turned { x, w, .. } => {
+                    *x += dx(*x, *w);
+                }
+                Draw::Quad { corners, .. } => {
+                    let cx = corners.iter().map(|c| c[0]).sum::<f32>() / 4.0;
+                    let d = if cx < mid { -push } else { push };
+                    for c in corners {
+                        c[0] += d;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn lerp_rect(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
+        [0, 1, 2, 3].map(|k| a[k] + (b[k] - a[k]) * t)
+    }
+
+    fn stack_rects(&self, games: &[Recent], cx: f32, base: f32, scale: f32) -> Vec<([f32; 4], f32)> {
+        let s = scale / STACK_PICKED;
+        let fan = [(-1.0, -STACK_TILT), (0.0, 0.0), (1.0, STACK_TILT)];
+        games
+            .iter()
+            .take(3)
+            .enumerate()
+            .map(|(k, g)| {
+                let slot = match games.len().min(3) {
+                    1 => 1,
+                    2 => [2, 0][k],
+                    _ => [2, 1, 0][k],
+                };
+                let (side, tilt) = fan[slot];
+                let (cw, ch) = slot_ui::cart_box(g.platform);
+                let (w, h) = (cw as f32 * scale, ch as f32 * scale);
+                let x = cx + side * STACK_SPREAD * s - w / 2.0;
+                let dy = if side == 0.0 { -STACK_RAISE * s } else { 0.0 };
+                ([x, base - h + dy, w, h], tilt)
+            })
+            .collect()
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn draw_stack(
+        &self,
+        games: &[Recent],
+        cx: f32,
+        base: f32,
+        scale: f32,
+        alpha: f32,
+        wob: f32,
+        out: &mut Vec<Draw>,
+    ) {
+        let rects = self.stack_rects(games, cx, base, scale);
+        for (g, (rect, tilt)) in games.iter().zip(rects).rev() {
+            self.draw_game_at(g, rect, alpha, tilt + wob, out);
+        }
+    }
+
+    fn side_rect(&self, g: &Recent, side: f32) -> [f32; 4] {
+        let (cw, ch) = slot_ui::cart_box(g.platform);
+        let (w, h) = (cw as f32 * SIDE_SCALE, ch as f32 * SIDE_SCALE);
+        let cx = self.canvas().w / 2.0 + side * SIDE_PITCH;
+        [cx - w / 2.0, slot_ui::foot_y(ch as f32) - h, w, h]
+    }
+
+    fn leaving_ms(l: &Leaving) -> Millis {
+        use crate::editing::*;
+        match l {
+            Leaving::Added { .. } => KEYS_OUT_MS + ADD_SLOT_MS + ADD_PAUSE_MS + HOME_MS + NEIGHBORS_IN_MS,
+            Leaving::Backed { .. } => BACK_HOME_MS + NEIGHBORS_IN_MS,
+            Leaving::Removed { .. } => REMOVE_RISE_MS + FAN_MS,
+            Leaving::Kept { .. } => FAN_MS,
+            Leaving::LastRemoved { .. } => REMOVE_RISE_MS + LAST_RISE_MS,
+        }
+    }
+
+    fn draw_snap(
+        &self,
+        snap: &crate::editing::Edit,
+        fade: f32,
+        swap: Option<&(usize, Vec<Recent>)>,
+        fresh: Option<(&str, f32)>,
+        out: &mut Vec<Draw>,
+    ) {
+        if let crate::editing::Edit::Choosing { choices, at, .. } = snap {
+            self.draw_choices_as(choices, *at, fade, swap, fresh, out);
+        }
+    }
+
+    fn fresh_name(&self, snap: &crate::editing::Edit, i: usize) -> Option<&str> {
+        match snap {
+            crate::editing::Edit::Choosing { choices, at, .. } => match choices.get(*at) {
+                Some(crate::editing::Choice::New) => self.collections.get(i).map(|c| c.name.as_str()),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    pub fn exit_stack(&self) -> Option<Vec<String>> {
+        match &self.leaving {
+            Some((Leaving::Added { before, .. }, _)) => {
+                Some(before.1.iter().map(|g| g.stem.clone()).collect())
+            }
+            _ => None,
+        }
+    }
+
+    pub fn exit_cart(&self) -> Option<String> {
+        match &self.leaving {
+            Some((Leaving::Added { multi: true, .. }, _)) => None,
+            Some((Leaving::Added { game, .. } | Leaving::Backed { game, .. }, _)) => {
+                Some(game.stem.clone())
+            }
+            _ => None,
+        }
+    }
+
+    fn draw_leaving(&self, out: &mut Vec<Draw>) -> bool {
+        use crate::editing::*;
+        let Some((leaving, start)) = &self.leaving else {
+            return false;
+        };
+        let now = self.now();
+        let t = now.saturating_sub(*start);
+        let mid = self.canvas().w / 2.0;
+        match leaving {
+            Leaving::Added {
+                snap,
+                game,
+                stack_x,
+                multi,
+                before,
+            } => {
+                let fresh = self.fresh_name(snap, before.0);
+                let lead = match fresh {
+                    Some(_) => KEYS_OUT_MS,
+                    None => 0,
+                };
+                let start = &(*start + lead);
+                let t = t.saturating_sub(lead);
+                let float = self.float_rect(game, *stack_x, ADD_FLOAT_TOP, ADD_FLOAT);
+                let front = match fresh {
+                    Some(_) => self.fresh_rect(game, *stack_x),
+                    None => self.front_rect(game, *stack_x),
+                };
+                let pause_end = ADD_SLOT_MS + ADD_PAUSE_MS;
+                let u = ease_in_out(progress(now, *start, ADD_SLOT_MS));
+                let fresh = fresh.map(|n| (n, 1.0 - u));
+                if t < pause_end {
+                    self.draw_dim_at(1.0, out);
+                    self.draw_snap(snap, 1.0, Some(before), fresh, out);
+                    match (multi, snap) {
+                        (true, crate::editing::Edit::Choosing { games, .. }) => {
+                            let begin = out.len();
+                            self.draw_bundle_at(games, *stack_x, out);
+                            let drop = u * (front[1] + front[3] / 2.0 - BUNDLE_BASE_Y / 2.0);
+                            for d in &mut out[begin..] {
+                                if let Draw::Tex { y, alpha, .. } = d {
+                                    *y += drop;
+                                    *alpha *= 1.0 - u.powi(3);
+                                }
+                            }
+                        }
+                        _ => self.draw_game_at(game, Self::lerp_rect(float, front, u), 1.0, 0.0, out),
+                    }
+                    if fresh.is_some() && now < *start {
+                        let keys = 1.0 - ease_out(progress(now, *start - lead, lead));
+                        let begin = out.len();
+                        slot_ui::draw_menu_ground(self.canvas(), self.menu_ground(), out);
+                        for d in &mut out[begin..] {
+                            match d {
+                                Draw::Part { alpha, .. } | Draw::Tex { alpha, .. } => *alpha *= keys,
+                                Draw::Rect { colour, .. } => colour[3] *= keys,
+                                _ => {}
+                            }
+                        }
+                    }
+                    return true;
+                }
+                let begin = *start + pause_end;
+                let o = ease_out(progress(now, begin, OUT_MS));
+                let c = ease_in_out(progress(now, begin, HOME_MS));
+                self.draw_dim_at(1.0 - c, out);
+                self.draw_snap(snap, 1.0 - o, Some(before), fresh, out);
+                if *multi {
+                    let n = ease_out(progress(now, begin, HOME_MS));
+                    self.draw_parted(None, (1.0 - n) * PART_PUSH, 1.0, out);
+                } else {
+                    self.draw_neighbours_in(game, begin + HOME_MS - NEIGHBORS_LEAD_MS, out);
+                    self.draw_game_at(game, Self::lerp_rect(front, self.home_rect(game), c), 1.0, 0.0, out);
+                }
+            }
+            Leaving::Backed { snap, game, float_x } => {
+                let o = ease_out(progress(now, *start, OUT_MS));
+                let c = ease_in_out(progress(now, *start, BACK_HOME_MS));
+                self.draw_dim_at(1.0 - c, out);
+                self.draw_snap(snap, 1.0 - o, None, None, out);
+                self.draw_neighbours_in(game, *start + BACK_HOME_MS - NEIGHBORS_LEAD_MS, out);
+                let float = self.float_rect(game, *float_x, ADD_FLOAT_TOP, ADD_FLOAT);
+                self.draw_game_at(game, Self::lerp_rect(float, self.home_rect(game), c), 1.0, 0.0, out);
+            }
+            Leaving::Removed { game, around } => {
+                let g = progress(now, *start, REMOVE_RISE_MS);
+                let f = ease_in_out(progress(now, *start + REMOVE_RISE_MS - 40, FAN_MS));
+                self.draw_dim_at(1.0 - f, out);
+                self.draw_fan(around, mid, REMOVE_BASE, f, &[0.0, -1.0, 1.0], out);
+                let mut float = self.float_rect(game, mid, REMOVE_FLOAT_TOP, REMOVE_FLOAT);
+                float[1] -= 150.0 * g * g;
+                self.draw_game_at(game, float, 1.0 - ease_out(g), 0.0, out);
+            }
+            Leaving::Kept { game, around, last } => {
+                let c = ease_in_out(progress(now, *start, FAN_MS));
+                self.draw_dim_at(1.0 - c, out);
+                self.draw_fan(around, mid, REMOVE_BASE, c, &[1.0, -1.0, f32::NAN], out);
+                let home = self.home_rect(game);
+                let from = match last {
+                    true => {
+                        let (w, h) = (home[2] * LAST_SCALE, home[3] * LAST_SCALE);
+                        [mid - w / 2.0, home[1] + (home[3] - h) / 2.0 + LAST_DROP, w, h]
+                    }
+                    false => self.float_rect(game, mid, REMOVE_FLOAT_TOP, REMOVE_FLOAT),
+                };
+                self.draw_game_at(game, Self::lerp_rect(from, home, c), 1.0, 0.0, out);
+            }
+            Leaving::LastRemoved { game } => {
+                let g = progress(now, *start, REMOVE_RISE_MS);
+                let c = ease_in_out(progress(now, *start + REMOVE_RISE_MS - 80, LAST_RISE_MS));
+                self.draw_dim_at(1.0 - c, out);
+                self.draw_parted(None, 0.0, c, out);
+                let home = self.home_rect(game);
+                let (w, h) = (home[2] * LAST_SCALE, home[3] * LAST_SCALE);
+                let rect = [
+                    mid - w / 2.0,
+                    home[1] + (home[3] - h) / 2.0 + LAST_DROP - 470.0 * g * g,
+                    w,
+                    h,
+                ];
+                self.draw_game_at(game, rect, 1.0 - ease_out(g), 0.0, out);
+            }
+        }
+        true
+    }
+
+    fn draw_neighbours_in(&self, game: &Recent, from: Millis, out: &mut Vec<Draw>) {
+        let now = self.now();
+        if now < from {
+            return;
+        }
+        let n = crate::editing::ease_out(crate::editing::progress(now, from, crate::editing::NEIGHBORS_IN_MS));
+        self.draw_parted(Some(game.stem.as_str()), (1.0 - n) * PART_PUSH, 1.0, out);
+    }
+
+    fn draw_fan(&self, around: &[Recent], cx: f32, base: f32, f: f32, sides: &[f32], out: &mut Vec<Draw>) {
+        let rects = self.stack_rects(around, cx, base, STACK_PICKED);
+        for (k, (g, (rect, tilt))) in around.iter().zip(rects).enumerate().rev() {
+            let side = sides.get(k).copied().unwrap_or(f32::NAN);
+            if side.is_nan() {
+                self.draw_game_at(g, rect, crate::editing::fan_fade(f), tilt, out);
+                continue;
+            }
+            let to = match side == 0.0 {
+                true => self.home_rect(g),
+                false => self.side_rect(g, side),
+            };
+            self.draw_game_at(g, Self::lerp_rect(rect, to, f), 1.0, tilt * (1.0 - f), out);
+        }
+    }
+
+    fn draw_new_stack(&self, cx: f32, base: f32, scale: f32, alpha: f32, out: &mut Vec<Draw>) {
+        let s = scale / STACK_PICKED;
+        let (w, h) = (NEW_W * s, NEW_H * s);
+        let (x, y) = (cx - w / 2.0, base - h);
+        let ink = [1.0, 1.0, 1.0, 0.66 * alpha];
+        out.push(Draw::Rect {
+            x,
+            y,
+            w,
+            h,
+            colour: [1.0, 1.0, 1.0, 0.06 * alpha],
+        });
+        let t = 3.0;
+        let dash = 12.0 * s;
+        let gap = 9.0 * s;
+        let mut d = 0.0;
+        while d < w {
+            let len = dash.min(w - d);
+            for yy in [y, y + h - t] {
+                out.push(Draw::Rect { x: x + d, y: yy, w: len, h: t, colour: ink });
+            }
+            d += dash + gap;
+        }
+        let mut d = 0.0;
+        while d < h {
+            let len = dash.min(h - d);
+            for xx in [x, x + w - t] {
+                out.push(Draw::Rect { x: xx, y: y + d, w: t, h: len, colour: ink });
+            }
+            d += dash + gap;
+        }
+        let arm = 22.0 * s;
+        out.push(Draw::Rect { x: cx - arm / 2.0, y: y + h / 2.0 - 2.0, w: arm, h: 4.0, colour: ink });
+        out.push(Draw::Rect { x: cx - 2.0, y: y + h / 2.0 - arm / 2.0, w: 4.0, h: arm, colour: ink });
+    }
+
+    fn draw_name(&self, name: &str, picked: bool, cx: f32, y: f32, alpha: f32, out: &mut Vec<Draw>) {
+        let Some(&(_, faces)) = self.name_faces.iter().find(|(n, _)| n == name) else {
+            return;
+        };
+        let (tex, w, h) = faces[picked as usize];
+        out.push(Draw::Tex {
+            x: (cx - w as f32 / 2.0).round(),
+            y,
+            w: w as f32,
+            h: h as f32,
+            tex,
+            alpha,
+        });
+    }
+
+    fn draw_heading(&self, out: &mut Vec<Draw>) {
+        let Some((tex, w, h)) = self.heading_face else {
+            return;
+        };
+        out.push(Draw::Tex {
+            x: (self.canvas().w / 2.0 - w as f32 / 2.0).round(),
+            y: HEADING_Y,
+            w: w as f32,
+            h: h as f32,
+            tex,
+            alpha: self.edit_fade(),
+        });
+    }
+
+    pub fn edit_heading(&self) -> Option<(String, bool)> {
+        use crate::editing::Edit;
+        match self.edit.as_ref()? {
+            Edit::Selecting { .. } => None,
+            Edit::Choosing { .. } => Some(("Add to which collection?".to_string(), false)),
+            Edit::Removing { collection, last, .. } => {
+                let name = &self.collections[*collection].name;
+                Some(match last {
+                    true => (format!("Remove last game from {name}?"), true),
+                    false => (format!("Remove from {name}?"), false),
+                })
+            }
+            Edit::MovingGame { .. } | Edit::MovingCollection { .. } => {
+                self.moving().map(|m| (m, true))
+            }
+        }
+    }
+
+    pub fn set_heading_face(&mut self, face: Option<(TexId, u32, u32)>) {
+        self.heading_face = face;
+    }
+
+    pub fn set_name_faces(&mut self, faces: Vec<(String, [(TexId, u32, u32); 2])>) {
+        self.name_faces = faces;
+    }
+
+    pub fn name_face_names(&self) -> Vec<String> {
+        self.collections
+            .iter()
+            .map(|c| c.name.clone())
+            .chain(std::iter::once("New Collection".to_string()))
+            .collect()
+    }
+
+    fn bundle_seat(&self, g: &Recent) -> Option<(usize, usize)> {
+        let here = self
+            .shelf()
+            .carts
+            .iter()
+            .position(|c| c.platform == g.platform && c.stem == g.stem);
+        if let Some(i) = here {
+            return Some((self.shelf_at, i));
+        }
+        let at = self
+            .shelves
+            .iter()
+            .position(|(r, _)| *r == Rack::Of(g.platform))?;
+        let i = self.shelves[at]
+            .1
+            .carts
+            .iter()
+            .position(|c| c.stem == g.stem)?;
+        Some((at, i))
+    }
+
+    fn bundle_seats(&self) -> Vec<(usize, usize)> {
+        let mut games = self.edit.as_ref().map_or(Vec::new(), |e| self.edit_games(e));
+        match self.leaving.as_ref().map(|(l, _)| l) {
+            Some(Leaving::Added { snap, game, before, .. }) => {
+                games.extend(self.edit_games(snap));
+                games.push(game.clone());
+                games.extend(before.1.iter().cloned());
+            }
+            Some(Leaving::Backed { snap, game, .. }) => {
+                games.extend(self.edit_games(snap));
+                games.push(game.clone());
+            }
+            Some(Leaving::Removed { game, around }) | Some(Leaving::Kept { game, around, .. }) => {
+                games.push(game.clone());
+                games.extend(around.iter().cloned());
+            }
+            Some(Leaving::LastRemoved { game }) => games.push(game.clone()),
+            None => {}
+        }
+        let mut seats: Vec<(usize, usize)> = games.iter().filter_map(|g| self.bundle_seat(g)).collect();
+        seats.sort();
+        seats.dedup();
+        seats
+    }
+
+    fn edit_games(&self, edit: &crate::editing::Edit) -> Vec<Recent> {
+        use crate::editing::{Choice, Edit};
+        let mut games: Vec<Recent> = Vec::new();
+        match edit {
+            Edit::Choosing { games: carried, choices, .. } => {
+                games.extend(carried.iter().take(BUNDLE_MAX).cloned());
+                for c in choices {
+                    if let Choice::Collection(i) = c {
+                        games.extend(self.stack_of(*i));
+                    }
+                }
+            }
+            Edit::Removing { game, .. } => {
+                games.push(game.clone());
+                games.extend(crate::editing::remove_stack(
+                    &self.shelf_games(self.shelf_at),
+                    self.shelf().index,
+                ));
+            }
+            Edit::MovingCollection { row, .. } => {
+                for name in row {
+                    if let Some(i) = self.collections.iter().position(|c| c.name == *name) {
+                        games.extend(self.stack_of(i));
+                    }
+                }
+            }
+            _ => {}
+        }
+        games
+    }
+
+    fn draw_bundle_at(&self, checked: &[Recent], mid: f32, out: &mut Vec<Draw>) {
+        let shown = &checked[..checked.len().min(BUNDLE_MAX)];
+        let n = shown.len();
+        for (k, g) in shown.iter().enumerate() {
+            let Some((at, i)) = self.bundle_seat(g) else {
+                continue;
+            };
+            let shelf = &self.shelves[at].1;
+            let (cw, ch) = slot_ui::cart_box(g.platform);
+            let (w, h) = (cw as f32 * BUNDLE_SCALE, ch as f32 * BUNDLE_SCALE);
+            let cx = mid + (k as f32 - (n as f32 - 1.0) / 2.0) * BUNDLE_SPREAD;
+            shelf.draw_cart_at(i, [cx - w / 2.0, BUNDLE_BASE_Y - h, w, h], out);
+        }
+        if checked.len() > 1 {
+            if let Some(((tex, w, h), _)) = self.count_badge {
+                let x = mid + (n as f32 - 1.0) / 2.0 * BUNDLE_SPREAD + BUNDLE_BADGE_DX;
+                out.push(Draw::Tex {
+                    x: (x - w / 2.0).round(),
+                    y: BUNDLE_BADGE_Y,
+                    w,
+                    h,
+                    tex,
+                    alpha: 1.0,
+                });
+            }
+        }
+    }
+
+    fn draw_picking_legends(&self, out: &mut Vec<Draw>) {
+        use crate::editing::Edit;
+        let (Some(edit), Some(faces)) = (&self.edit, self.picking_faces) else {
+            return;
+        };
+        let ink = self.light() as usize;
+        let [cancel, select, unselect, back, add, keep, remove, drop] = faces[ink];
+        match edit {
+            Edit::Selecting { checked, .. } => {
+                let shelf = self.shelf();
+                let check = match shelf.carts.get(shelf.index) {
+                    Some(c) if edit.is_checked(c.platform, &c.stem) => unselect,
+                    _ => select,
+                };
+                let Some((add, _)) = self.add_faces else {
+                    return;
+                };
+                let dim = match checked.is_empty() {
+                    true => PICK_DIM_ALPHA,
+                    false => 1.0,
+                };
+                self.draw_spread_legends_each(
+                    &[cancel, check, add[ink]],
+                    LINK_LEGEND_Y,
+                    &[1.0, 1.0, dim],
+                    out,
+                );
+            }
+            Edit::Choosing { .. } => {
+                self.draw_spread_legends(&[back, add], LINK_LEGEND_Y, self.edit_fade(), out)
+            }
+            Edit::Removing { .. } => {
+                self.draw_spread_legends(&[keep, remove], LINK_LEGEND_Y, self.edit_fade(), out)
+            }
+            Edit::MovingGame { .. } | Edit::MovingCollection { .. } => {
+                self.draw_spread_legends(&[cancel, drop], LINK_LEGEND_Y, 1.0, out)
+            }
+        }
+    }
+
+    pub fn picked_count(&self) -> Option<usize> {
+        match self.edit.as_ref()? {
+            crate::editing::Edit::Selecting { checked, .. } => Some(checked.len()),
+            crate::editing::Edit::Choosing { games, .. } => Some(games.len()),
+            _ => None,
+        }
+    }
+
+    pub fn set_picking_faces(&mut self, faces: [[(TexId, u32); 8]; 2]) {
+        self.picking_faces = Some(faces);
+    }
+
+    pub fn set_add_faces(&mut self, faces: [(TexId, u32); 2], n: usize) {
+        self.add_faces = Some((faces, n));
+    }
+
+    pub fn add_faces_count(&self) -> Option<usize> {
+        self.add_faces.map(|(_, n)| n)
+    }
+
+
+    pub fn set_count_badge(&mut self, face: (TexId, u32, u32), n: usize) {
+        self.count_badge = Some(((face.0, face.1 as f32, face.2 as f32), n));
+    }
+
+    pub fn count_badge_count(&self) -> Option<usize> {
+        self.count_badge.map(|(_, n)| n)
     }
 
     fn draw_side_legend(&self, face: (TexId, u32), right: bool, y: f32, out: &mut Vec<Draw>) {
@@ -8275,12 +10440,16 @@ impl App {
         self.state.cart = disk.cart;
         self.state.cart_platform = disk.cart_platform;
         self.state.shelf_cart = disk.shelf_cart;
+        let collections = slot_store::read_collections(root);
+        self.install_collections(collections);
+        self.restock_collections();
     }
 
     fn adopt_rescan(&mut self, carts: Vec<Cart>) {
         retain_headers(&carts);
         if let Some(root) = self.root.clone() {
             self.gifts.retain_games(&root, &carts);
+            self.collection_pngs = crate::wallpaper::collection_list(&root);
         }
         let seats: Vec<(usize, Option<(Platform, String)>)> = self
             .shelves
@@ -8290,12 +10459,16 @@ impl App {
                 (shelf.index, cart.map(|c| (c.platform, c.stem.clone())))
             })
             .collect();
-        for (at, (_, fresh)) in shelves_of(carts).into_iter().enumerate() {
+        for (at, (_, fresh)) in shelves_of(carts, self.collections.len())
+            .into_iter()
+            .enumerate()
+        {
             let old = self.shelves[at].1.restock(fresh.carts);
             self.orphaned.extend(old);
         }
         self.restock_recents();
         self.restock_favorites();
+        self.restock_collections();
         for ((_, shelf), (index, seat)) in self.shelves.iter_mut().zip(seats) {
             let found = shelf
                 .carts
@@ -8306,7 +10479,7 @@ impl App {
             }
         }
         if self.shelf().carts.is_empty() {
-            self.shelf_at = self.next_shelf(1).unwrap_or(0);
+            self.shelf_at = self.fallback_shelf();
         }
         self.shelf_platform = slot_ui::Printed::default();
         self.slot_letter = None;
@@ -8884,6 +11057,7 @@ impl App {
                 slot_ui::Layout::General,
                 "",
             ),
+            KeyboardFor::CollectionName => self.name_collection(text),
             KeyboardFor::RommServer => {
                 self.romm.server = text.trim().to_string();
                 self.keyboard = None;

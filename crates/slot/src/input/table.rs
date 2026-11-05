@@ -98,6 +98,8 @@ fn shelf_action(a: CarouselAction) -> Action {
         CarouselAction::NextShelf => Action::NextShelf,
         CarouselAction::Favorite => Action::Favorite,
         CarouselAction::ForgetRecent => Action::ForgetRecent,
+        CarouselAction::PreviousCollection => Action::PreviousCollection,
+        CarouselAction::NextCollection => Action::NextCollection,
     }
 }
 

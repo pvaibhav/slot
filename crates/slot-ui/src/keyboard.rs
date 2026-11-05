@@ -47,6 +47,7 @@ pub struct Keyboard {
     layout: Layout,
     title: String,
     subtitle: Option<String>,
+    alert: bool,
     text: Vec<char>,
     cursor: usize,
     row: usize,
@@ -143,6 +144,7 @@ impl Keyboard {
             layout,
             title: title.to_string(),
             subtitle: subtitle.map(str::to_string),
+            alert: false,
             cursor: text.len(),
             text,
             row,
@@ -164,6 +166,22 @@ impl Keyboard {
 
     pub fn subtitle(&self) -> Option<&str> {
         self.subtitle.as_deref()
+    }
+
+    pub fn alerted(self) -> Keyboard {
+        Keyboard {
+            alert: true,
+            ..self
+        }
+    }
+
+    pub fn refuse(&mut self, why: &str) {
+        self.subtitle = Some(why.to_string());
+        self.alert = true;
+    }
+
+    pub fn alert(&self) -> bool {
+        self.alert
     }
 
     pub fn text(&self) -> String {
@@ -392,6 +410,7 @@ impl KeyboardFaces {
 const TITLE_Y: f32 = 20.0;
 const SUBTITLE_Y: f32 = 60.0;
 const SUBTITLE_PX: f32 = 16.0;
+const ALERT_PX: f32 = 18.0;
 const SUBTITLE_H: u32 = 24;
 const FIELD_X: f32 = 60.0;
 const FIELD_Y: f32 = 104.0;
@@ -515,11 +534,15 @@ pub fn keyboard_text_face(kb: &Keyboard) -> (UndoFace, Vec<f32>) {
     (face, stops)
 }
 
-fn subtitle_face(label: &str) -> UndoFace {
+fn subtitle_face(label: &str, alert: bool) -> UndoFace {
     let Some(font) = text::label_font() else {
         return blank();
     };
-    let layout = text::fit(font, label, f32::INFINITY, 1, SUBTITLE_PX, SUBTITLE_PX);
+    let (px, ink) = match alert {
+        true => (ALERT_PX, MENU_INK),
+        false => (SUBTITLE_PX, DIM_INK),
+    };
+    let layout = text::fit(font, label, f32::INFINITY, 1, px, px);
     let set = layout
         .lines
         .iter()
@@ -527,7 +550,7 @@ fn subtitle_face(label: &str) -> UndoFace {
         .fold(0.0, f32::max);
     let w = set.ceil() as u32 + 2;
     let mut rgba = vec![0u8; (w * SUBTITLE_H * 4) as usize];
-    text::draw_centred(&mut rgba, w, SUBTITLE_H, &layout, DIM_INK);
+    text::draw_centred(&mut rgba, w, SUBTITLE_H, &layout, ink);
     UndoFace {
         rgba,
         w,
@@ -695,7 +718,7 @@ pub fn keyboard_faces(kb: &Keyboard, canvas: Canvas) -> KeyboardFaces {
     let (text, stops) = keyboard_text_face(kb);
     KeyboardFaces {
         title: heading_face(kb.title()),
-        subtitle: kb.subtitle().map(subtitle_face),
+        subtitle: kb.subtitle().map(|s| subtitle_face(s, kb.alert())),
         text,
         stops,
         caps: keyboard_cap_faces(kb, canvas),

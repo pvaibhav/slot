@@ -486,7 +486,9 @@ fn the_shortcuts_page_renders() {
         tap(&mut f, &mut input, Btn::Down);
     }
     tap(&mut f, &mut input, Btn::A);
-    tap(&mut f, &mut input, Btn::Down);
+    for _ in 0..QuickRow::Shortcuts.position(&[]) {
+        tap(&mut f, &mut input, Btn::Down);
+    }
     tap(&mut f, &mut input, Btn::A);
     assert_eq!(f.app().quick_menu(), Some(QuickRow::ScSave));
     let px = composed(&mut f, &mut c, "shortcuts");
@@ -560,7 +562,9 @@ fn a_duplicate_binding_shows_a_warning_naming_the_other_row() {
         tap(&mut f, &mut input, Btn::Down);
     }
     tap(&mut f, &mut input, Btn::A);
-    tap(&mut f, &mut input, Btn::Down);
+    for _ in 0..QuickRow::Shortcuts.position(&[]) {
+        tap(&mut f, &mut input, Btn::Down);
+    }
     tap(&mut f, &mut input, Btn::A);
     tap(&mut f, &mut input, Btn::A);
     assert!(f.app().capturing());
