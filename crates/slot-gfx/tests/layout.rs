@@ -236,11 +236,11 @@ fn every_panel_gets_its_own_canvas() {
         ((720, 480), (720.0, 480.0)),
         ((640, 480), (640.0, 480.0)),
         ((720, 720), (720.0, 720.0)),
-        ((1024, 768), (1024.0, 768.0)),
+        ((1024, 768), (800.0, 600.0)),
         ((1440, 960), (720.0, 480.0)),
         ((1280, 960), (640.0, 480.0)),
         ((1440, 1440), (720.0, 720.0)),
-        ((2048, 1536), (1024.0, 768.0)),
+        ((2048, 1536), (800.0, 600.0)),
         ((1920, 1080), (960.0, 540.0)),
         ((1000, 700), (1000.0, 700.0)),
     ] {
@@ -313,4 +313,17 @@ fn the_placeholder_bezel_collapses_with_the_screen() {
     let opening = placeholder_frame(&mut c, 0.5);
     assert_ne!(at(&opening, 30), lime, "lime shows outside the opening screen");
     assert_eq!(at(&opening, 130), lime, "lime is missing around the opening picture");
+}
+
+#[test]
+fn the_ds_plus_draws_its_800_by_600_layout_on_the_whole_panel() {
+    assert_eq!(slot_gfx::panel_pixels((1024, 768)), (1024, 768));
+    assert_eq!(slot_gfx::panel_pixels((2048, 1536)), (1024, 768));
+    assert_eq!(slot_gfx::panel_pixels((720, 720)), (720, 720));
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    c.fit((1024, 768));
+    c.begin_frame();
+    assert_eq!(c.frame_size(), (1024, 768));
 }

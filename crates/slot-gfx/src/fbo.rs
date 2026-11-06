@@ -529,8 +529,7 @@ fn frame_size_for(window: (u32, u32)) -> (u32, u32) {
     if !crate::layout::fills(window) {
         return canvas_size(window);
     }
-    let c = Canvas::of(window);
-    (c.w as u32, c.h as u32)
+    crate::layout::panel_pixels(window)
 }
 
 pub fn canvas_size(window: (u32, u32)) -> (u32, u32) {

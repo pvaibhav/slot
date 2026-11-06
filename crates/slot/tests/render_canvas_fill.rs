@@ -111,24 +111,14 @@ fn the_footer_reaches_both_edges_at_1024() {
     let Some((_s, mut c)) = compositor() else {
         return;
     };
-    let reference = shelf(&mut c, (720, 480), &[]);
     let wide = shelf(&mut c, (1024, 768), &[]);
-    let (low, high) = (472, 760);
-    assert_eq!(
-        wide.row(high, 152..872),
-        reference.row(low, 0..720),
-        "the strip is not drawn 1:1 in the middle"
-    );
-    assert_eq!(
-        wide.row(high, 0..152),
-        reference.row(low, 568..720),
-        "the left margin does not continue the plastic"
-    );
-    assert_eq!(
-        wide.row(high, 872..1024),
-        reference.row(low, 0..152),
-        "the right margin does not continue the plastic"
-    );
+    for x in [1, 1022] {
+        let p = wide.at(x, 760);
+        assert!(
+            p[..3].iter().all(|c| *c < 0x40),
+            "the footer does not reach x {x}: {p:?}"
+        );
+    }
 }
 
 #[test]
@@ -177,7 +167,7 @@ fn a_cart_face_is_drawn_texel_for_texel() {
     };
     let reference = shelf(&mut c, (720, 480), &[]);
     let at = label_crop(&reference, 360, 252);
-    for panel in [(720, 720), (1024, 768)] {
+    for panel in [(720, 720)] {
         let shown = shelf(&mut c, panel, &[]);
         let (dx, dy) = ((panel.0 as usize - 720) / 2, (panel.1 as usize - 480) / 2);
         assert!(
@@ -456,4 +446,27 @@ fn no_cart_shows_as_a_sliver_on_a_wide_panel() {
         })
         .collect();
     assert!(slivers.is_empty(), "carts showing as slivers: {slivers:?}");
+}
+
+fn label_run(shown: &Shown, y: usize) -> usize {
+    let label = shown.at(shown.w / 2, y);
+    let near = |p: [u8; 4]| p[..3].iter().zip(&label[..3]).all(|(a, b)| a.abs_diff(*b) < 12);
+    let left = (0..shown.w / 2).rev().take_while(|x| near(shown.at(*x, y))).count();
+    let right = (shown.w / 2..shown.w).take_while(|x| near(shown.at(*x, y))).count();
+    left + right
+}
+
+#[test]
+fn the_ds_plus_draws_carts_at_1_28x() {
+    let Some((_s, mut c)) = compositor() else {
+        return;
+    };
+    let reference = shelf(&mut c, (720, 480), &[]);
+    let ds = shelf(&mut c, (1024, 768), &[]);
+    let (low, high) = (label_run(&reference, 200), label_run(&ds, 333));
+    let ratio = high as f32 / low as f32;
+    assert!(
+        (ratio - 1.28).abs() < 0.03,
+        "label {low} px at 720x480, {high} px on the RG DS+: {ratio}"
+    );
 }

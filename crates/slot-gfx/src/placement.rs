@@ -89,8 +89,14 @@ fn own_canvas(canvas: crate::layout::Canvas, picture: (u32, u32), sizing: Sizing
 }
 
 pub fn game_layout(window: (u32, u32), picture: (u32, u32), sizing: Sizing) -> GameLayout {
-    let canvas = crate::layout::Canvas::of(window);
-    let size = (canvas.w as u32, canvas.h as u32);
+    let size = match crate::layout::fills(window) {
+        true => crate::layout::panel_pixels(window),
+        false => (OUT_W, OUT_H),
+    };
+    let canvas = crate::layout::Canvas {
+        w: size.0 as f32,
+        h: size.1 as f32,
+    };
     if let Some([x, y, w, h]) = table_placement(size, picture, sizing) {
         let (sx, sy) = (OUT_W as f32 / canvas.w, OUT_H as f32 / canvas.h);
         return GameLayout {
