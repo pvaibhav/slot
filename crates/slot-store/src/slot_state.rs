@@ -447,6 +447,7 @@ pub struct SlotState {
     pub shelf_cart: Option<Recent>,
     pub shelf_mode: ShelfMode,
     pub collection: Option<String>,
+    pub gba_video: bool,
     pub kid_mode: KidMode,
     pub kid_shelf: String,
 }
@@ -628,6 +629,7 @@ impl Default for SlotState {
             shelf_cart: None,
             shelf_mode: ShelfMode::All,
             collection: None,
+            gba_video: false,
             kid_mode: KidMode::Off,
             kid_shelf: KID_SHELF_ALL.to_string(),
         }
@@ -757,6 +759,7 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
         "collection={}\n",
         s.collection.as_deref().unwrap_or("")
     ));
+    text.push_str(&format!("gba_video={}\n", s.gba_video as u8));
     atomic_write(&state_path(root), text.as_bytes())?;
     write_list(root, RECENTS_FILE, &s.recents)?;
     write_list(root, FAVORITES_FILE, &s.favorites)
@@ -821,6 +824,7 @@ fn parse(text: &str) -> Option<SlotState> {
     let mut kid_mode = None;
     let mut kid_shelf = None;
     let mut collection = None;
+    let mut gba_video = None;
     for line in text.lines().filter(|l| !l.is_empty()) {
         let Some((key, value)) = line.split_once('=') else {
             continue;
@@ -882,6 +886,7 @@ fn parse(text: &str) -> Option<SlotState> {
             "kid_mode" => kid_mode = KidMode::parse(value),
             "kid_shelf" => kid_shelf = Some(value.to_string()).filter(|v| !v.is_empty()),
             "collection" => collection = Some(value.to_string()).filter(|v| !v.is_empty()),
+            "gba_video" => gba_video = flag(value),
             "shader_gb" => shader_gb = Shader::parse(value).filter(|s| Shader::GB.contains(s)),
             "shader_gbc" => shader_gbc = Shader::parse(value).filter(|s| Shader::GB.contains(s)),
             _ => {}
@@ -955,6 +960,7 @@ fn parse(text: &str) -> Option<SlotState> {
         kid_mode: kid_mode.unwrap_or(KidMode::Off),
         kid_shelf: kid_shelf.unwrap_or_else(|| KID_SHELF_ALL.to_string()),
         collection,
+        gba_video: gba_video.unwrap_or(false),
     })
 }
 

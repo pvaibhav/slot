@@ -1350,6 +1350,7 @@ impl App {
             return;
         };
         self.land_on(to);
+        self.note_shelf();
     }
 
     fn land_on(&mut self, to: usize) {
@@ -1502,7 +1503,7 @@ impl App {
             (ShelfMode::All, Rack::Favorites) => self.stack_landing(),
             (ShelfMode::Collections, Rack::Of(_)) if !self.shows_systems() => None,
             (_, Rack::Of(Platform::Gbav)) => None,
-            (_, Rack::Of(Platform::Gba)) => self.video_stack().first().copied(),
+            (_, Rack::Of(Platform::Gba)) => self.video_landing(),
             _ => (!shelf.carts.is_empty()).then_some(at),
         }
     }
@@ -1517,6 +1518,19 @@ impl App {
             .filter_map(|p| self.rack_at(Rack::Of(p)))
             .filter(|&at| !self.shelves[at].1.carts.is_empty())
             .collect()
+    }
+
+    fn video_landing(&self) -> Option<usize> {
+        let stack = self.video_stack();
+        let want = Rack::Of(match self.state.gba_video {
+            true => Platform::Gbav,
+            false => Platform::Gba,
+        });
+        stack
+            .iter()
+            .copied()
+            .find(|&at| self.shelves[at].0 == want)
+            .or(stack.first().copied())
     }
 
     fn shows_systems(&self) -> bool {
@@ -2392,6 +2406,11 @@ impl App {
     }
 
     fn note_collection(&mut self) {
+        self.state.gba_video = match self.shelves[self.shelf_at].0 {
+            Rack::Of(Platform::Gba) => false,
+            Rack::Of(Platform::Gbav) => true,
+            _ => self.state.gba_video,
+        };
         self.state.collection = match self.shelves[self.shelf_at].0 {
             Rack::Collection(i) => Some(self.collections[i].name.clone()),
             Rack::Favorites => None,

@@ -33,6 +33,24 @@ fn boot(d: &tempfile::TempDir, shelf: &str, platform: Platform, stem: &str) -> A
     App::boot(d.path())
 }
 
+fn on_gb_after_video(d: &tempfile::TempDir, gba_video: bool) -> App {
+    write_slot_state(
+        d.path(),
+        &SlotState {
+            clock_set: true,
+            shelf: Some("gb".into()),
+            shelf_cart: Some(Recent {
+                platform: Platform::Gb,
+                stem: "Tetris".into(),
+            }),
+            gba_video,
+            ..SlotState::default()
+        },
+    )
+    .unwrap();
+    App::boot(d.path())
+}
+
 fn on_gba(d: &tempfile::TempDir) -> App {
     let a = boot(d, "gba", Platform::Gba, "Emerald");
     assert_eq!(a.shelf_platform_name(), Some("Game Boy Advance"));
@@ -74,6 +92,8 @@ fn l1_r1_from_video_moves_along_the_row_from_gba() {
     let mut a = on_gba(&d);
     common::through(&mut a, Btn::R1);
     let after_gba = a.shelf_platform_name().map(str::to_string);
+    a.flush_state();
+    drop(a);
     let mut a = boot(&d, "gbav", Platform::Gbav, "Shrek");
     assert_eq!(a.shelf_platform_name(), Some("Game Boy Advance Video"));
     common::through(&mut a, Btn::R1);
@@ -86,4 +106,58 @@ fn with_no_gba_games_video_takes_the_gba_seat() {
     let mut a = boot(&d, "gb", Platform::Gb, "Tetris");
     let seen = row(&mut a);
     assert!(seen.iter().any(|n| n == "Game Boy Advance Video"), "{seen:?}");
+}
+
+#[test]
+fn coming_back_along_the_row_lands_on_the_gba_shelf_last_used() {
+    let d = card(true);
+    let mut a = on_gba(&d);
+    common::through(&mut a, Btn::R2);
+    assert_eq!(a.shelf_platform_name(), Some("Game Boy Advance Video"));
+    common::through(&mut a, Btn::R1);
+    assert_ne!(a.shelf_platform_name(), Some("Game Boy Advance Video"));
+    common::through(&mut a, Btn::L1);
+    assert_eq!(a.shelf_platform_name(), Some("Game Boy Advance Video"));
+}
+
+#[test]
+fn the_gba_shelf_last_used_holds_across_a_restart() {
+    let d = card(true);
+    let mut a = on_gba(&d);
+    common::through(&mut a, Btn::R2);
+    a.flush_state();
+    drop(a);
+    assert!(slot_store::read_slot_state(d.path()).gba_video);
+    let mut a = on_gb_after_video(&d, true);
+    assert_eq!(a.shelf_platform_name(), Some("Game Boy"));
+    common::through(&mut a, Btn::L1);
+    assert_eq!(a.shelf_platform_name(), Some("Game Boy Advance Video"));
+}
+
+#[test]
+fn flipping_back_to_gba_is_remembered_too() {
+    let d = card(true);
+    let mut a = on_gba(&d);
+    common::through(&mut a, Btn::R2);
+    common::through(&mut a, Btn::R2);
+    assert_eq!(a.shelf_platform_name(), Some("Game Boy Advance"));
+    common::through(&mut a, Btn::R1);
+    common::through(&mut a, Btn::L1);
+    assert_eq!(a.shelf_platform_name(), Some("Game Boy Advance"));
+}
+
+#[test]
+fn a_remembered_video_shelf_with_no_games_lands_on_gba() {
+    let d = card(true);
+    std::fs::remove_file(
+        d.path()
+            .join("Games")
+            .join(Platform::Gbav.dir_name())
+            .join("Shrek.gba"),
+    )
+    .unwrap();
+    let mut a = on_gb_after_video(&d, true);
+    assert_eq!(a.shelf_platform_name(), Some("Game Boy"));
+    common::through(&mut a, Btn::L1);
+    assert_eq!(a.shelf_platform_name(), Some("Game Boy Advance"));
 }

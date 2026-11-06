@@ -47,3 +47,15 @@ fn the_remembered_collection_survives_a_restart() {
     write_slot_state(d.path(), &SlotState::default()).unwrap();
     assert_eq!(read_slot_state(d.path()).collection, None);
 }
+
+#[test]
+fn the_gba_shelf_last_used_round_trips() {
+    let d = card();
+    let state = slot_store::SlotState {
+        gba_video: true,
+        ..slot_store::SlotState::default()
+    };
+    slot_store::write_slot_state(d.path(), &state).unwrap();
+    assert!(slot_store::read_slot_state(d.path()).gba_video);
+    assert!(!slot_store::SlotState::default().gba_video);
+}
