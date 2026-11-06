@@ -108,6 +108,18 @@ pub fn blur_background() -> Option<&'static [u8]> {
         .as_deref()
 }
 
+pub fn reference_ground_covers((w, h): (u32, u32)) -> bool {
+    h == OUT_H && w <= OUT_W
+}
+
+pub fn default_background_at(w: u32, h: u32) -> Option<Vec<u8>> {
+    art::cover_bytes(DEFAULT_PNG, w, h)
+}
+
+pub fn blur_background_at(w: u32, h: u32) -> Option<Vec<u8>> {
+    art::cover_bytes(BLUR_PNG, w, h)
+}
+
 pub fn draw_ground(canvas: Canvas, face: Option<(TexId, u32)>, out: &mut Vec<Draw>) {
     let Some(face) = face else {
         return;
@@ -124,7 +136,7 @@ pub fn draw_backdrop(canvas: Canvas, face: Option<(TexId, u32)>, out: &mut Vec<D
         x: 0.0,
         y: 0.0,
         w: canvas.w,
-        h: OUT_H as f32,
+        h: canvas.h,
         colour: [0.0, 0.0, 0.0, SCRIM],
     });
 }
@@ -134,7 +146,7 @@ fn ground(canvas: Canvas, (tex, tex_w): (TexId, u32)) -> Draw {
         x: 0.0,
         y: 0.0,
         w: canvas.w,
-        h: OUT_H as f32,
+        h: canvas.h,
         tex,
         alpha: 1.0,
         uv: canvas.cover(tex_w as f32),

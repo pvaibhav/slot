@@ -197,7 +197,7 @@ fn a_cart_the_row_had_not_finished_moving_slides_across_as_it_goes_in() {
         "the cart starts at {start:?} rather than in the quad the row had it in"
     );
     assert!(
-        (start.y + start.h - foot_y(CART_H as f32)).abs() < 0.01,
+        (start.y + start.h - foot_y(slot_ui::Canvas::FRAMED, CART_H as f32)).abs() < 0.01,
         "the cart starts with its foot at {} rather than on the row's floor",
         start.y + start.h
     );

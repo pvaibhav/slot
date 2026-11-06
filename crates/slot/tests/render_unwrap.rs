@@ -152,7 +152,7 @@ impl Rig {
             },
             Draw::Tex {
                 x: canvas.centred(w as f32),
-                y: foot_y(cart_box(p).1 as f32) - h as f32,
+                y: foot_y(slot_ui::Canvas::FRAMED, cart_box(p).1 as f32) - h as f32,
                 w: w as f32,
                 h: h as f32,
                 tex: self.face[i],
@@ -175,7 +175,7 @@ fn box_sits_in_the_cart_box() {
         let (bw, bh) = box_size(p);
         let (cw, ch) = cart_box(p);
         assert!(bw <= cw, "{p:?}");
-        let foot = foot_y(ch as f32) as usize;
+        let foot = foot_y(slot_ui::Canvas::FRAMED, ch as f32) as usize;
         let px = r.face_shot(i, p);
         save(&format!("face-{p:?}"), OUT_W, &px);
         let mid = w / 2;
@@ -229,7 +229,7 @@ fn cart_stays_behind_the_front_wall() {
         let w = window as usize;
         for p in [Platform::Gba, Platform::Gb] {
             let px = r.at_ms(900, p, window, &format!("wall-{p:?}-{window}"));
-            let rim = rim_y(p) as usize;
+            let rim = rim_y(slot_ui::Canvas::FRAMED, p) as usize;
             let mid = w / 2;
             assert!(purple(at(&px, w, mid, rim + 1)), "{:?}", at(&px, w, mid, rim + 1));
             for y in rim..rim + 140 {
@@ -251,7 +251,7 @@ fn nothing_draws_over_the_footer() {
         return;
     };
     let w = OUT_W as usize;
-    let top = footer_top() as usize;
+    let top = footer_top(slot_ui::Canvas::FRAMED) as usize;
     for p in [Platform::Gba, Platform::Gb] {
         for ms in (0..=2220).step_by(20) {
             let ground = r.ground;
@@ -275,7 +275,7 @@ fn glow_is_gone_before_the_cart_lands() {
     assert_ne!(at(&lit, w, w / 2 - 120, 150), GROUND);
     let px = r.at_ms(1800, Platform::Gba, OUT_W, "glow");
     let [x, y, cw, ch] = cart_rect(UnwrapScene::new(0).frame(1800).cart.unwrap(), Platform::Gba, Canvas::FRAMED);
-    for py in 0..footer_top() as usize {
+    for py in 0..footer_top(slot_ui::Canvas::FRAMED) as usize {
         for px_x in (0..w).step_by(5) {
             let inside = (px_x as f32) > x - 2.0
                 && (px_x as f32) < x + cw + 2.0
@@ -331,7 +331,7 @@ fn a_gift_unwraps_on_the_real_shelf() {
         tick(&mut f, &mut input, vec![RawEvent::Up(Btn::Right)]);
     }
     let w = OUT_W as usize;
-    let foot = foot_y(cart_box(Platform::Gba).1 as f32) as usize;
+    let foot = foot_y(slot_ui::Canvas::FRAMED, cart_box(Platform::Gba).1 as f32) as usize;
     let mut built = false;
     for _ in 0..400 {
         tick(&mut f, &mut input, Vec::new());

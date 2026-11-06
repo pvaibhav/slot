@@ -1,4 +1,4 @@
-use slot_gfx::{Canvas, Draw, TexId, OUT_H};
+use slot_gfx::{Canvas, Draw, TexId};
 use slot_store::{BLUE_LIGHT_MAX, BRIGHTNESS_MAX, DIM_MAX, SUNLIGHT_MAX, VOLUME_MAX};
 
 use crate::icon::icon_box;
@@ -349,7 +349,7 @@ impl Hud {
     fn draw_alarm(&self, canvas: Canvas, age: Millis, out: &mut Vec<Draw>) {
         out.push(Draw::Rect {
             x: 0.0,
-            y: (OUT_H as f32 - ALARM_BAND_H) / 2.0,
+            y: (canvas.h - ALARM_BAND_H) / 2.0,
             w: canvas.w,
             h: ALARM_BAND_H,
             colour: pulse(age),

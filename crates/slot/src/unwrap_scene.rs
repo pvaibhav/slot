@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::thread;
 
 use crate::app::App;
-use slot_gfx::{Canvas, Compositor, Draw, TexId, OUT_H};
+use slot_gfx::{Canvas, Compositor, Draw, TexId};
 use slot_input::Millis;
 use slot_store::Platform;
 use slot_ui::{box_size, cart_box, foot_y, rest_y, CART_H, MOUTH_H};
@@ -153,12 +153,12 @@ pub fn body_width(platform: Platform) -> f32 {
     BODY_W * box_scale(platform)
 }
 
-pub fn rim_y(platform: Platform) -> f32 {
-    foot_y(cart_box(platform).1 as f32) - BODY_H * box_scale(platform)
+pub fn rim_y(canvas: Canvas, platform: Platform) -> f32 {
+    foot_y(canvas, cart_box(platform).1 as f32) - BODY_H * box_scale(platform)
 }
 
-pub fn footer_top() -> f32 {
-    OUT_H as f32 - MOUTH_H
+pub fn footer_top(canvas: Canvas) -> f32 {
+    canvas.h - MOUTH_H
 }
 
 pub fn cart_rect(cart: (f32, f32), platform: Platform, canvas: Canvas) -> [f32; 4] {
@@ -168,8 +168,8 @@ pub fn cart_rect(cart: (f32, f32), platform: Platform, canvas: Canvas) -> [f32; 
     let small = (1.0 - scale) / (1.0 - CART_SMALL);
     let size = mix(1.0, START_H / ch, small);
     let (w, h) = (cw * size, ch * size);
-    let rest = rest_y(ch) + ch / 2.0;
-    let mid = mix(rest, rim_y(platform), small) + off * START_H;
+    let rest = rest_y(canvas, ch) + ch / 2.0;
+    let mid = mix(rest, rim_y(canvas, platform), small) + off * START_H;
     [canvas.centred(w), mid - h / 2.0, w, h]
 }
 
@@ -254,16 +254,16 @@ pub fn unwrap_draws(
     let (platform, _) = gift;
     let k = box_scale(platform);
     let mid = canvas.w / 2.0;
-    let foot = foot_y(cart_box(platform).1 as f32);
+    let foot = foot_y(canvas, cart_box(platform).1 as f32);
     let floor = foot + frame.box_drop;
-    let clip = footer_top();
+    let clip = footer_top(canvas);
     let limit = (clip - floor) / k;
     let base = Aff::shift(mid, floor)
         .then(Aff::turn(frame.shake))
         .then(Aff::scale(k, k));
     if frame.glow > 0.0 {
         let (w, h) = (GLOW_SIZE.0 * k, GLOW_SIZE.1 * k);
-        let y = rim_y(platform) - GLOW_ABOVE * k + frame.box_drop;
+        let y = rim_y(canvas, platform) - GLOW_ABOVE * k + frame.box_drop;
         let rect = [mid - w / 2.0, y - h / 2.0, w, h];
         out.extend(piece(
             Aff::shift(0.0, 0.0),

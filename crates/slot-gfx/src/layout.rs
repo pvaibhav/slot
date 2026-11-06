@@ -1,5 +1,19 @@
-use crate::bezel::framed;
 use crate::surface::{OUT_H, OUT_W};
+
+const MIN_W: u32 = 640;
+const MIN_H: u32 = 480;
+
+pub fn fills(panel: (u32, u32)) -> bool {
+    panel.0 >= MIN_W && panel.1 >= MIN_H
+}
+
+pub fn canvas_scale(panel: (u32, u32)) -> u32 {
+    let most = (panel.0 / MIN_W).min(panel.1 / MIN_H).max(1);
+    (1..=most)
+        .rev()
+        .find(|k| panel.0.is_multiple_of(*k) && panel.1.is_multiple_of(*k))
+        .unwrap_or(1)
+}
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Canvas {
@@ -14,13 +28,18 @@ impl Canvas {
     };
 
     pub fn of(panel: (u32, u32)) -> Canvas {
-        match framed(panel) {
-            true => Canvas {
-                w: (OUT_H * panel.0 / panel.1) as f32,
-                h: OUT_H as f32,
-            },
-            false => Canvas::FRAMED,
+        if !fills(panel) {
+            return Canvas::FRAMED;
         }
+        let k = canvas_scale(panel);
+        Canvas {
+            w: (panel.0 / k) as f32,
+            h: (panel.1 / k) as f32,
+        }
+    }
+
+    pub fn inset_y(self) -> f32 {
+        (self.h - OUT_H as f32) / 2.0
     }
 
     pub fn centred(self, w: f32) -> f32 {

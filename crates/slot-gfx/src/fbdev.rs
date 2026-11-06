@@ -8,26 +8,27 @@ const FALLBACK_PANEL: (u32, u32) = (720, 480);
 
 const FB0: &str = "/sys/class/graphics/fb0";
 
-const EGL_SUCCESS: i32 = 0x3000;
-const EGL_NONE: i32 = 0x3038;
-const EGL_ALPHA_SIZE: i32 = 0x3021;
-const EGL_BLUE_SIZE: i32 = 0x3022;
-const EGL_GREEN_SIZE: i32 = 0x3023;
-const EGL_RED_SIZE: i32 = 0x3024;
-const EGL_SURFACE_TYPE: i32 = 0x3033;
+pub(crate) const EGL_SUCCESS: i32 = 0x3000;
+pub(crate) const EGL_NONE: i32 = 0x3038;
+pub(crate) const EGL_ALPHA_SIZE: i32 = 0x3021;
+pub(crate) const EGL_BLUE_SIZE: i32 = 0x3022;
+pub(crate) const EGL_GREEN_SIZE: i32 = 0x3023;
+pub(crate) const EGL_RED_SIZE: i32 = 0x3024;
+pub(crate) const EGL_SURFACE_TYPE: i32 = 0x3033;
 const EGL_HEIGHT: i32 = 0x3056;
 const EGL_WIDTH: i32 = 0x3057;
-const EGL_RENDERABLE_TYPE: i32 = 0x3040;
-const EGL_CONTEXT_CLIENT_VERSION: i32 = 0x3098;
-const EGL_OPENGL_ES_API: u32 = 0x30A0;
-const EGL_WINDOW_BIT: i32 = 0x0004;
-const EGL_OPENGL_ES2_BIT: i32 = 0x0004;
+pub(crate) const EGL_RENDERABLE_TYPE: i32 = 0x3040;
+pub(crate) const EGL_CONTEXT_CLIENT_VERSION: i32 = 0x3098;
+pub(crate) const EGL_OPENGL_ES_API: u32 = 0x30A0;
+pub(crate) const EGL_WINDOW_BIT: i32 = 0x0004;
+pub(crate) const EGL_OPENGL_ES2_BIT: i32 = 0x0004;
 
-type Ptr = *mut c_void;
+pub(crate) type Ptr = *mut c_void;
 type GetDisplay = unsafe extern "C" fn(Ptr) -> Ptr;
 type Initialize = unsafe extern "C" fn(Ptr, *mut i32, *mut i32) -> u32;
 type BindApi = unsafe extern "C" fn(u32) -> u32;
 type ChooseConfig = unsafe extern "C" fn(Ptr, *const i32, *mut Ptr, i32, *mut i32) -> u32;
+type GetConfigAttrib = unsafe extern "C" fn(Ptr, Ptr, i32, *mut i32) -> u32;
 type CreateWindowSurface = unsafe extern "C" fn(Ptr, Ptr, Ptr, *const i32) -> Ptr;
 type CreateContext = unsafe extern "C" fn(Ptr, Ptr, Ptr, *const i32) -> Ptr;
 type MakeCurrent = unsafe extern "C" fn(Ptr, Ptr, Ptr, Ptr) -> u32;
@@ -38,21 +39,22 @@ type GetProcAddress = unsafe extern "C" fn(*const c_char) -> *const c_void;
 type GetError = unsafe extern "C" fn() -> i32;
 type Terminate = unsafe extern "C" fn(Ptr) -> u32;
 
-struct Egl {
-    get_display: GetDisplay,
-    initialize: Initialize,
-    bind_api: BindApi,
-    choose_config: ChooseConfig,
-    create_window_surface: CreateWindowSurface,
-    create_context: CreateContext,
-    make_current: MakeCurrent,
-    query_surface: QuerySurface,
-    swap_buffers: SwapBuffers,
-    swap_interval: SwapInterval,
-    get_proc_address: GetProcAddress,
-    get_error: GetError,
-    terminate: Terminate,
-    _lib: Library,
+pub(crate) struct Egl {
+    pub(crate) get_display: GetDisplay,
+    pub(crate) initialize: Initialize,
+    pub(crate) bind_api: BindApi,
+    pub(crate) choose_config: ChooseConfig,
+    pub(crate) get_config_attrib: GetConfigAttrib,
+    pub(crate) create_window_surface: CreateWindowSurface,
+    pub(crate) create_context: CreateContext,
+    pub(crate) make_current: MakeCurrent,
+    pub(crate) query_surface: QuerySurface,
+    pub(crate) swap_buffers: SwapBuffers,
+    pub(crate) swap_interval: SwapInterval,
+    pub(crate) get_proc_address: GetProcAddress,
+    pub(crate) get_error: GetError,
+    pub(crate) terminate: Terminate,
+    pub(crate) lib: Library,
 }
 
 #[repr(C)]
@@ -115,18 +117,18 @@ pub fn egl_error(what: &str, code: i32) -> GfxError {
     }
 }
 
-fn open(name: &str) -> Result<Library, GfxError> {
+pub(crate) fn open(name: &str) -> Result<Library, GfxError> {
     unsafe { Library::new(name) }.map_err(|e| GfxError::Context(format!("{name}: {e}")))
 }
 
-unsafe fn sym<T: Copy>(lib: &Library, name: &str) -> Result<T, GfxError> {
+pub(crate) unsafe fn sym<T: Copy>(lib: &Library, name: &str) -> Result<T, GfxError> {
     lib.get::<T>(name.as_bytes())
         .map(|s| *s)
         .map_err(|e| GfxError::Context(format!("{name}: {e}")))
 }
 
 impl Egl {
-    fn load() -> Result<Self, GfxError> {
+    pub(crate) fn load() -> Result<Self, GfxError> {
         let lib = open("libEGL.so.1").or_else(|_| open("libEGL.so"))?;
         unsafe {
             Ok(Egl {
@@ -134,6 +136,7 @@ impl Egl {
                 initialize: sym(&lib, "eglInitialize")?,
                 bind_api: sym(&lib, "eglBindAPI")?,
                 choose_config: sym(&lib, "eglChooseConfig")?,
+                get_config_attrib: sym(&lib, "eglGetConfigAttrib")?,
                 create_window_surface: sym(&lib, "eglCreateWindowSurface")?,
                 create_context: sym(&lib, "eglCreateContext")?,
                 make_current: sym(&lib, "eglMakeCurrent")?,
@@ -143,12 +146,12 @@ impl Egl {
                 get_proc_address: sym(&lib, "eglGetProcAddress")?,
                 get_error: sym(&lib, "eglGetError")?,
                 terminate: sym(&lib, "eglTerminate")?,
-                _lib: lib,
+                lib,
             })
         }
     }
 
-    fn fail(&self, what: &str) -> GfxError {
+    pub(crate) fn fail(&self, what: &str) -> GfxError {
         egl_error(what, unsafe { (self.get_error)() })
     }
 }
@@ -287,14 +290,18 @@ impl Surface for FbdevSurface {
     }
 
     fn proc_address(&self, name: &str) -> *const c_void {
-        let Ok(c) = CString::new(name) else {
-            return std::ptr::null();
-        };
-        let exported = unsafe { self.gles.get::<unsafe extern "C" fn()>(name.as_bytes()) };
-        match exported {
-            Ok(f) => *f as *const c_void,
-            Err(_) => unsafe { (self.egl.get_proc_address)(c.as_ptr()) },
-        }
+        gl_proc(&self.egl, &self.gles, name)
+    }
+}
+
+pub(crate) fn gl_proc(egl: &Egl, gles: &Library, name: &str) -> *const c_void {
+    let Ok(c) = CString::new(name) else {
+        return std::ptr::null();
+    };
+    let exported = unsafe { gles.get::<unsafe extern "C" fn()>(name.as_bytes()) };
+    match exported {
+        Ok(f) => *f as *const c_void,
+        Err(_) => unsafe { (egl.get_proc_address)(c.as_ptr()) },
     }
 }
 

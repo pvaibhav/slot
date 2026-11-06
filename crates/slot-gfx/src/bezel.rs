@@ -1,7 +1,8 @@
 use crate::surface::{OUT_H, OUT_W};
 
 pub fn framed(panel: (u32, u32)) -> bool {
-    panel.0 > 0 && panel.0 * 3 == panel.1 * 4
+    let c = crate::layout::Canvas::of(panel);
+    crate::layout::fills(panel) && c.w == 640.0 && c.h == 480.0
 }
 
 pub fn screen_rect(panel: (u32, u32)) -> (i32, i32, i32, i32) {

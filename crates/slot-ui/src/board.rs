@@ -248,7 +248,7 @@ const CHIP_INK: [u8; 3] = [0xf2, 0xf2, 0xf2];
 fn lid_rest(canvas: Canvas) -> Placed {
     Placed {
         x: canvas.centred(144.0),
-        y: 70.5 - LID_REST_H / 2.0,
+        y: 70.5 + canvas.inset_y() - LID_REST_H / 2.0,
         w: 144.0,
         h: LID_REST_H,
     }
@@ -265,27 +265,27 @@ pub struct Placed {
 }
 
 pub fn shelf_cart(canvas: Canvas) -> Placed {
-    shelf_cart_at(canvas.centred(CART_W as f32), 1.0)
+    shelf_cart_at(canvas, canvas.centred(CART_W as f32), 1.0)
 }
 
-pub fn shelf_cart_at(x: f32, scale: f32) -> Placed {
+pub fn shelf_cart_at(canvas: Canvas, x: f32, scale: f32) -> Placed {
     let (w, h) = (CART_W as f32 * scale, CART_H as f32 * scale);
     Placed {
         x,
-        y: foot_y(CART_H as f32) - h,
+        y: foot_y(canvas, CART_H as f32) - h,
         w,
         h,
     }
 }
 
-pub fn shelf_cart_shaped(shell: Option<GbShell>, x: f32, scale: f32) -> Placed {
+pub fn shelf_cart_shaped(canvas: Canvas, shell: Option<GbShell>, x: f32, scale: f32) -> Placed {
     if shell.is_none() {
-        return shelf_cart_at(x, scale);
+        return shelf_cart_at(canvas, x, scale);
     }
     let (w, h) = (GB_CART_W as f32 * scale, GB_CART_H as f32 * scale);
     Placed {
         x,
-        y: foot_y(GB_CART_H as f32) - h,
+        y: foot_y(canvas, GB_CART_H as f32) - h,
         w,
         h,
     }
@@ -309,7 +309,7 @@ pub fn board_from_shaped(
     let w = GB_BOARD_REST_H * GB_CART_W as f32 / GB_CART_H as f32;
     let rest = Placed {
         x: canvas.centred(w),
-        y: GB_BOARD_Y,
+        y: GB_BOARD_Y + canvas.inset_y(),
         w,
         h: GB_BOARD_REST_H,
     };
@@ -332,7 +332,7 @@ pub fn lid_from_shaped(
     let w = GB_LID_REST_H * GB_CART_W as f32 / GB_CART_H as f32;
     let rest = Placed {
         x: canvas.centred(w),
-        y: GB_LID_REST_Y - GB_LID_REST_H / 2.0,
+        y: GB_LID_REST_Y + canvas.inset_y() - GB_LID_REST_H / 2.0,
         w,
         h: GB_LID_REST_H,
     };
@@ -412,7 +412,7 @@ pub fn board_at(canvas: Canvas, progress: f32) -> Placed {
 pub fn board_from(canvas: Canvas, shelf: Placed, progress: f32) -> Placed {
     let rest = Placed {
         x: board_x(canvas),
-        y: BOARD_Y,
+        y: BOARD_Y + canvas.inset_y(),
         w: BOARD_W as f32,
         h: BOARD_H as f32,
     };

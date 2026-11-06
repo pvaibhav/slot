@@ -507,7 +507,31 @@ fn paper_draw(tex: TexId, p: &Paper, shift: f32, flap: bool) -> Draw {
 
 pub fn print_draws(f: &PrintFrame, tex: &PrintTextures, canvas: Canvas, out: &mut Vec<Draw>) {
     let from = out.len();
+    if canvas.h > OUT_H as f32 {
+        let wide = canvas.w / canvas.h > SCENE_W / OUT_H as f32;
+        let uv = match wide {
+            true => {
+                let shown = SCENE_W / OUT_H as f32 * canvas.h / canvas.w;
+                [0.0, (1.0 - shown) / 2.0, 1.0, shown]
+            }
+            false => {
+                let shown = canvas.w / canvas.h * OUT_H as f32 / SCENE_W;
+                [(1.0 - shown) / 2.0, 0.0, shown, 1.0]
+            }
+        };
+        out.push(Draw::Part {
+            x: 0.0,
+            y: 0.0,
+            w: canvas.w,
+            h: canvas.h,
+            tex: tex.wood,
+            alpha: 1.0,
+            uv,
+        });
+    }
+    let scene = out.len();
     scene_draws(f, tex, canvas, out);
+    shift_down(&mut out[scene..], canvas.inset_y());
     shift_down(&mut out[from..], -f.slide * canvas.h);
 }
 

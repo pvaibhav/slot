@@ -1,4 +1,4 @@
-use slot_gfx::{Canvas, Draw, TexId, OUT_H};
+use slot_gfx::{Canvas, Draw, TexId, OUT_H, OUT_W};
 use slot_store::{Cart, Platform};
 
 use crate::board::{board_in, Placed};
@@ -8,21 +8,32 @@ use crate::silhouette::GbShell;
 use crate::slot_chrome::{draw_empty_slot, MOUTH_H};
 
 const SIDE_SCALE: f32 = 0.78;
+const HIDDEN_BELOW: f32 = 0.25;
+const SHOWN_FROM: f32 = 0.5;
+
+fn edge_fade(canvas: Canvas, x: f32, w: f32) -> f32 {
+    if canvas.w <= OUT_W as f32 || w <= 0.0 {
+        return 1.0;
+    }
+    let shown = ((x + w).min(canvas.w) - x.max(0.0)).max(0.0) / w;
+    ((shown - HIDDEN_BELOW) / (SHOWN_FROM - HIDDEN_BELOW)).clamp(0.0, 1.0)
+}
 const SIDE_ALPHA: f32 = 1.0;
 
-pub fn rest_y(h: f32) -> f32 {
-    let y = if h > CART_H as f32 {
-        (OUT_H as f32 - MOUTH_H - h) / 2.0
-    } else {
-        (OUT_H + CART_H) as f32 / 2.0 - h
-    };
+pub fn rest_y(canvas: Canvas, h: f32) -> f32 {
+    let y = canvas.inset_y()
+        + if h > CART_H as f32 {
+            (OUT_H as f32 - MOUTH_H - h) / 2.0
+        } else {
+            (OUT_H + CART_H) as f32 / 2.0 - h
+        };
     // A Game Boy pak is 337px in a 422px gap, which centres at 42.5. Snap to a
     // whole pixel so the 312×337 bitmap hits the RG SP panel 1:1.
     y.round()
 }
 
-pub fn foot_y(h: f32) -> f32 {
-    rest_y(h) + h
+pub fn foot_y(canvas: Canvas, h: f32) -> f32 {
+    rest_y(canvas, h) + h
 }
 
 pub fn box_size(platform: Platform) -> (u32, u32) {
@@ -640,7 +651,7 @@ impl Shelf {
             let offset = target + slot as f32 + dx - self.scroll;
             let t = offset.abs().min(1.0);
             let scale = shrink(offset) * grow;
-            let alpha = (1.0 + (SIDE_ALPHA - 1.0) * t) * (1.0 - recede);
+            let mut alpha = (1.0 + (SIDE_ALPHA - 1.0) * t) * (1.0 - recede);
             let (cw, ch) = cart_box(cart.platform);
             let (w, h) = (cw as f32 * scale, ch as f32 * scale);
             let away = offset.signum() * (1.0 + offset.abs());
@@ -650,11 +661,12 @@ impl Shelf {
                 false => self.pitch(slot, u),
             };
             let x = self.centre(canvas, slot) + dx * step - w / 2.0 + away * PART * recede;
+            alpha *= edge_fade(canvas, x, w);
             if x + w <= 0.0 || x >= canvas.w || alpha <= 0.0 {
                 continue;
             }
             let x = x + shake;
-            let y = foot_y(ch as f32) - h + dy;
+            let y = foot_y(canvas, ch as f32) - h + dy;
             let start = out.len();
             let deg = turn(i);
             let centre = [x + w / 2.0, y + h / 2.0];

@@ -4,7 +4,7 @@ use slot_store::{civil_from_days, days_from_civil, days_in_month, parse_stamp, Z
 use crate::plate::UndoFace;
 use crate::power_menu::{MENU_H, MENU_INK, MENU_PAD, MENU_PX};
 use crate::quick_menu::{
-    draw_menu_ground, quick_value_face, DIM_INK, LEGEND_Y, POINTER_BLEED, POINTER_GAP, QUICK_EDGE,
+    draw_menu_ground, legend_y, quick_value_face, DIM_INK, POINTER_BLEED, POINTER_GAP, QUICK_EDGE,
     QUICK_LABEL_X, QUICK_PITCH, QUICK_VISIBLE, TYPE_DROP,
 };
 use crate::text;
@@ -457,7 +457,7 @@ impl ClockScreen<'_> {
         draw_menu_ground(self.canvas, self.ground, out);
         let (right, pad) = (self.canvas.w - QUICK_EDGE, MENU_PAD as f32);
         let (start, len, selected) = self.picker.window();
-        let top = (LEGEND_Y - QUICK_PITCH * len as f32) / 2.0;
+        let top = (legend_y(self.canvas) - QUICK_PITCH * len as f32) / 2.0;
         if let (Some((tex, w, h)), None) = (self.title, self.picker.choosing) {
             let y = top - TITLE_GAP - h as f32;
             push(out, tex, self.canvas.centred(w as f32), y, w, h);

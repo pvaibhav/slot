@@ -36,6 +36,7 @@ pub struct Compositor {
     game: GamePass,
     sprites: Sprites,
     game_bezel: Option<TexId>,
+    placeholder: Option<[f32; 4]>,
     sp_frame: bool,
     game_panel: bool,
     turn: Option<Turn>,
@@ -94,6 +95,7 @@ impl Compositor {
                 game: GamePass::new()?,
                 sprites: Sprites::new()?,
                 game_bezel: None,
+                placeholder: None,
                 sp_frame: true,
                 game_panel: false,
                 turn: None,
@@ -138,6 +140,7 @@ impl Compositor {
                 Draw::Game => {
                     self.sprites.draw(&items[from..i], &self.quad);
                     self.in_game_rect(|c| {
+                        c.draw_placeholder_bezel();
                         c.game.draw(&c.quad);
                         if c.panel_bezel().is_none() {
                             c.draw_game_bezel();
@@ -209,6 +212,10 @@ impl Compositor {
         self.game_bezel = tex;
     }
 
+    pub fn set_placeholder_bezel(&mut self, colour: Option<[f32; 4]>) {
+        self.placeholder = colour;
+    }
+
     pub fn set_sp_frame(&mut self, on: bool) {
         self.sp_frame = on;
     }
@@ -216,6 +223,17 @@ impl Compositor {
     pub fn set_game_layout(&mut self, layout: crate::GameLayout) {
         self.game_panel = layout.panel;
         self.game.set_layout(layout.rect);
+    }
+
+    fn draw_placeholder_bezel(&mut self) {
+        let Some(colour) = self.placeholder else {
+            return;
+        };
+        let (x, y, w, h) = self.game.frame();
+        self.sprites.set_target(Canvas::FRAMED);
+        self.sprites
+            .draw(&[Draw::Rect { x, y, w, h, colour }], &self.quad);
+        self.sprites.set_target(Canvas::of(self.window));
     }
 
     fn draw_game_bezel(&mut self) {
@@ -244,11 +262,11 @@ impl Compositor {
 
     pub fn fit(&mut self, window: (u32, u32)) {
         self.window = window;
-        self.resize(canvas_size(window));
+        self.resize(frame_size_for(window));
     }
 
     fn native(&self) -> bool {
-        crate::bezel::framed(self.window)
+        crate::layout::fills(self.window)
     }
 
     fn resize(&mut self, size: (u32, u32)) {
@@ -370,12 +388,7 @@ impl Compositor {
     }
 
     pub fn begin_frame(&mut self) {
-        let size = if self.native() {
-            self.window
-        } else {
-            canvas_size(self.window)
-        };
-        self.resize(size);
+        self.resize(frame_size_for(self.window));
         self.sprites.set_target(Canvas::of(self.window));
         self.game.set_fbo_scale(
             self.size.0 as f32 / OUT_W as f32,
@@ -482,12 +495,12 @@ impl Compositor {
 
 impl Compositor {
     fn in_game_rect(&mut self, draw: impl FnOnce(&mut Self)) {
-        if !self.native() {
+        if !crate::bezel::framed(self.window) {
             return draw(self);
         }
         let (x, top, w, h) = match self.game_panel {
-            true => (0, 0, self.window.0 as i32, self.window.1 as i32),
-            false => crate::bezel::game_rect(self.window, self.sp_frame),
+            true => (0, 0, self.size.0 as i32, self.size.1 as i32),
+            false => crate::bezel::game_rect(self.size, self.sp_frame),
         };
         self.game
             .set_fbo_scale(w as f32 / OUT_W as f32, h as f32 / OUT_H as f32);
@@ -510,6 +523,14 @@ impl Compositor {
         }
         self.quad.draw();
     }
+}
+
+fn frame_size_for(window: (u32, u32)) -> (u32, u32) {
+    if !crate::layout::fills(window) {
+        return canvas_size(window);
+    }
+    let c = Canvas::of(window);
+    (c.w as u32, c.h as u32)
 }
 
 pub fn canvas_size(window: (u32, u32)) -> (u32, u32) {

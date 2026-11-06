@@ -186,6 +186,7 @@ pub fn draw_link_art(
     s: &LinkSprites,
     out: &mut Vec<Draw>,
 ) {
+    let start = out.len();
     let host = role_of(menu) == LinkRow::Host;
     let alpha = art_alpha(menu, now);
     let dx = canvas.centred(OUT_W as f32);
@@ -246,4 +247,5 @@ pub fn draw_link_art(
         tex(out, s.arrow_left, ARROW_LEFT_X + dx, ARROW_Y, ARROW_ALPHA);
         tex(out, s.arrow_right, ARROW_RIGHT_X + dx, ARROW_Y, ARROW_ALPHA);
     }
+    crate::app::shift_down(&mut out[start..], canvas.h - slot_gfx::OUT_H as f32);
 }

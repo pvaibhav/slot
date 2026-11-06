@@ -394,7 +394,7 @@ pub fn sticker_rect(canvas: slot_gfx::Canvas) -> (f32, f32, f32, f32) {
     let (w, h) = ((w * scale).round(), (h * scale).round());
     (
         canvas.centred(w).round(),
-        ((slot_gfx::OUT_H as f32 - h) / 2.0).round(),
+        ((canvas.h - h) / 2.0).round(),
         w,
         h,
     )

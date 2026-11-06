@@ -110,7 +110,7 @@ impl GamePass {
         let foot = self.bottom;
         match self.fills {
             true => (0.0, 0.0, OUT_W as f32, OUT_H as f32 - foot),
-            false => screen_rect_above(self.power, foot),
+            false => screen_rect_above(crate::Canvas::FRAMED, self.power, foot),
         }
     }
 

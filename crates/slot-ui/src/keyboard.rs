@@ -1,7 +1,7 @@
 use slot_input::Btn;
 
 use crate::bitmaps::ButtonLegend;
-use crate::draw::{Canvas, Draw, TexId, OUT_H};
+use crate::draw::{Canvas, Draw, TexId};
 use crate::guide::{draw_help_screen, help_rows_face, GUIDE_HELP_HINT};
 use crate::hud::footer_ink;
 use crate::icon::{icon_coverage, Icon};
@@ -476,7 +476,7 @@ fn indent(layout: Layout, row: usize, key_w: u32) -> f32 {
 
 pub fn key_rect(canvas: Canvas, layout: Layout, row: usize, col: usize) -> [f32; 4] {
     let caps = layout_rows(layout)[row];
-    let y = GRID_Y + row as f32 * ROW_PITCH;
+    let y = GRID_Y + canvas.inset_y() + row as f32 * ROW_PITCH;
     let kw = key_w(canvas);
     let w = cap_width(caps[col], kw) as f32;
     if caps[col] == Cap::Special(Space) {
@@ -766,7 +766,7 @@ fn draw_field(canvas: Canvas, faces: &KeyboardTex, kb: &Keyboard, out: &mut Vec<
         let shown = (tw as f32 - scroll).min(room);
         out.push(Draw::Part {
             x: FIELD_X,
-            y: FIELD_Y,
+            y: FIELD_Y + canvas.inset_y(),
             w: shown,
             h: th as f32,
             tex,
@@ -776,14 +776,14 @@ fn draw_field(canvas: Canvas, faces: &KeyboardTex, kb: &Keyboard, out: &mut Vec<
     }
     out.push(Draw::Rect {
         x: (FIELD_X + caret + CARET_GAP - scroll).round(),
-        y: FIELD_Y + CARET_INSET,
+        y: FIELD_Y + canvas.inset_y() + CARET_INSET,
         w: CARET_W,
         h: FIELD_H as f32 - 2.0 * CARET_INSET,
         colour: colour(MENU_INK),
     });
     out.push(Draw::Rect {
         x: RULE_X,
-        y: RULE_Y,
+        y: RULE_Y + canvas.inset_y(),
         w: canvas.w - 2.0 * RULE_X,
         h: RULE_H,
         colour: colour(DIM_INK),
@@ -813,10 +813,10 @@ pub fn draw_keyboard(
         out,
         faces.title,
         canvas.centred(faces.title.1 as f32),
-        TITLE_Y,
+        TITLE_Y + canvas.inset_y(),
     );
     if let Some(sub) = faces.subtitle {
-        place(out, sub, canvas.centred(sub.1 as f32), SUBTITLE_Y);
+        place(out, sub, canvas.centred(sub.1 as f32), SUBTITLE_Y + canvas.inset_y());
     }
     draw_field(canvas, faces, kb, out);
     for (r, row) in faces.caps.iter().enumerate() {
@@ -829,7 +829,7 @@ pub fn draw_keyboard(
 }
 
 pub fn draw_keyboard_legends(canvas: Canvas, faces: &KeyboardTex, out: &mut Vec<Draw>) {
-    let y = OUT_H as f32 - MOUTH_H;
+    let y = canvas.h - MOUTH_H;
     let [(cancel, cw, _), (done, dw, _)] = faces.legends;
     for (tex, w, x) in [
         (cancel, cw, 0.0),

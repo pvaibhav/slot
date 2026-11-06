@@ -39,6 +39,6 @@ fn the_title_sits_on_the_rack_names_baseline_and_grows_upward() {
         panic!("no title drawn");
     };
     assert_eq!(*h, TITLE_LINE_H as f32);
-    assert_eq!(y + h, slot_name_y() + HINT_H as f32);
+    assert_eq!(y + h, slot_name_y(slot_ui::Canvas::FRAMED) + HINT_H as f32);
     assert_eq!(x + w / 2.0, 320.0);
 }

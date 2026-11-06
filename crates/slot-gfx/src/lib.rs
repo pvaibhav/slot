@@ -15,6 +15,8 @@ mod grade;
 mod headless;
 #[cfg(feature = "host")]
 mod host;
+#[cfg(unix)]
+mod kms;
 mod layout;
 mod lcd3x;
 mod pipeline;
@@ -36,9 +38,11 @@ pub use grade::{
 pub use headless::HeadlessSurface;
 #[cfg(feature = "host")]
 pub use host::HostSurface;
-pub use layout::Canvas;
+#[cfg(unix)]
+pub use kms::{free_crtc, preferred_mode, KmsSurface, Panel, CONNECTOR_DSI, MODE_TYPE_PREFERRED};
+pub use layout::{canvas_scale, Canvas};
 pub use lcd3x::{lcd3x_factors, lcd3x_mask, ScreenEffect};
 pub use pipeline::{SCALE, SRC_H, SRC_W, WHOLE_TEXTURE};
-pub use placement::{game_layout, GameLayout, Sizing};
+pub use placement::{game_layout, table_placement, GameLayout, Sizing};
 pub use power::{screen_brightness, screen_rect_above, screen_scale, screen_width};
 pub use surface::{blit_rect, blit_rect_fit, fit_rect, fit_scale, GfxError, Surface, OUT_H, OUT_W};

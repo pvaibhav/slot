@@ -92,7 +92,10 @@ fn a_host_window_resized_to_4_by_3_lays_the_shelf_out_for_it() {
     f.render(&mut c, (1080, 720));
     assert_eq!(
         f.app().canvas(),
-        Canvas::FRAMED,
+        Canvas {
+            w: 1080.0,
+            h: 720.0
+        },
         "a 3:2 window kept the 4:3 layout"
     );
 }
@@ -131,7 +134,7 @@ fn a_title_shows_under_the_cart_when_titles_are_on() {
     f.compose(&mut c);
     let frame = c.read_frame();
     write_png("native-shelf-title", 640, 480, &frame);
-    let y = slot_ui::slot_name_y() as usize + 8;
+    let y = slot_ui::slot_name_y(slot_ui::Canvas::FRAMED) as usize + 8;
     let lit = (100..540)
         .filter(|&x| {
             let o = (y * 640 + x) * 4;
@@ -381,7 +384,7 @@ fn every_shortcut_row_keeps_its_label_clear_of_its_binding_on_a_4_by_3_panel() {
         assert_eq!(f.app().quick_menu(), Some(row));
         f.compose(&mut c);
         let px = c.read_frame();
-        let top = quick_row_top(row, &[]) as usize;
+        let top = quick_row_top(slot_ui::Canvas::FRAMED, row, &[]) as usize;
         let ink: Vec<usize> = (40..640)
             .filter(|&x| {
                 (top + 8..top + 44).any(|y| {
@@ -593,7 +596,7 @@ fn the_game_boy_page_lists_scale_and_stretch_on_both_panels() {
         };
         for &row in rows {
             assert!(!hidden.contains(&row), "{row:?} hidden on {panel:?}");
-            let top = quick_row_top(row, &hidden) as usize;
+            let top = quick_row_top(slot_ui::Canvas::FRAMED, row, &hidden) as usize;
             let w = panel.0 as usize;
             let lit = (top + 8..top + 40)
                 .any(|y| (0..w).any(|x| px[(y * w + x) * 4..][..3].iter().all(|c| *c > 0x80)));
@@ -748,7 +751,7 @@ fn tap(f: &mut Frontend, input: &mut Script, btn: Btn) {
 }
 
 fn row_gap(frame: &[u8], row: QuickRow, hidden: &[QuickRow]) -> (usize, usize) {
-    let top = slot_ui::quick_row_top_at(row, row, hidden) as usize;
+    let top = slot_ui::quick_row_top_at(slot_ui::Canvas::FRAMED, row, row, hidden) as usize;
     let at = |x: usize, y: usize| {
         let o = (y * 640 + x) * 4;
         frame[o..o + 3].iter().all(|c| *c > 0x80)

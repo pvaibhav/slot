@@ -49,7 +49,7 @@ fn the_box_holds_still_until_the_cart_is_clear() {
     for p in PLATFORMS {
         for canvas in canvases() {
             let [_, y, _, h] = cart_rect(cart, p, canvas);
-            assert!(y + h < rim_y(p), "{p:?}: bottom {} rim {}", y + h, rim_y(p));
+            assert!(y + h < rim_y(slot_ui::Canvas::FRAMED, p), "{p:?}: bottom {} rim {}", y + h, rim_y(slot_ui::Canvas::FRAMED, p));
             assert!(y > 0.0, "{p:?}: top {y}");
         }
     }
@@ -77,7 +77,7 @@ fn the_cart_starts_narrower_than_the_box() {
             let [x, y, w, _] = cart_rect(start, p, canvas);
             assert!(w < body_width(p), "{p:?}: {w}");
             assert!((x + w / 2.0 - canvas.w / 2.0).abs() < 0.5);
-            assert!(y >= rim_y(p), "{p:?}: top {y} above rim {}", rim_y(p));
+            assert!(y >= rim_y(slot_ui::Canvas::FRAMED, p), "{p:?}: top {y} above rim {}", rim_y(slot_ui::Canvas::FRAMED, p));
         }
     }
 }
@@ -91,7 +91,7 @@ fn the_cart_lands_exactly_on_its_shelf_spot() {
         let [x, y, rw, rh] = cart_rect(end, p, canvas);
         assert_eq!((rw, rh), (w as f32, h as f32));
         assert_eq!(x, (canvas.w - w as f32) / 2.0);
-        assert_eq!(y, slot_ui::rest_y(h as f32));
+        assert_eq!(y, slot_ui::rest_y(slot_ui::Canvas::FRAMED, h as f32));
     }
 }
 

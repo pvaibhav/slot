@@ -1,4 +1,4 @@
-use slot_gfx::{Canvas, OUT_H};
+use slot_gfx::Canvas;
 use slot_store::GbColors;
 
 use crate::hud::{HUD_INK, PLATE_H};
@@ -244,7 +244,7 @@ pub fn toast_rect_lines(canvas: Canvas, toast: Toast, lines: usize) -> (f32, f32
     let (w, h) = toast_box_lines(toast, lines);
     let (w, h) = (w as f32, h as f32);
     let middle = match toast.alarm() {
-        true => OUT_H as f32 / 2.0,
+        true => canvas.h / 2.0,
         false => toast_band(lines) / 2.0,
     };
     (canvas.centred(w), middle - h / 2.0, w, h)

@@ -44,7 +44,8 @@ mod toast;
 
 pub use art::decode as decode_png;
 pub use backdrop::{
-    bezel_face, blur_background, default_background, default_game_bezel_face, draw_backdrop,
+    bezel_face, blur_background, blur_background_at, default_background, default_background_at,
+    default_game_bezel_face, draw_backdrop, reference_ground_covers,
     draw_ground, game_bezel_face, wallpaper_face, BezelArt,
 };
 pub use barcode::{code39, CODE39_NARROW, CODE39_WIDE};
@@ -72,7 +73,7 @@ pub use clock::{
 };
 pub use draw::{Canvas, Draw, TexId, OUT_H, OUT_W};
 pub use footer::{
-    draw_corners, draw_footer, draw_kid_icon, draw_wifi_icon, Printed, FOOTER_Y, KID_ICON_PX,
+    draw_corners, draw_footer, draw_kid_icon, draw_wifi_icon, footer_y, Printed, FOOTER_Y, KID_ICON_PX,
 };
 pub use guide::{
     cell, fitting_zoom, guide_help_face, mono_font, page_box, Guide, GuideGlyphs, GuideView,
@@ -117,7 +118,7 @@ pub use quick_menu::{
     studio_legend,
     StudioGlyph, quick_description_face, quick_label_face, quick_legend_faces,
     quick_pointer_face, quick_row_top, quick_row_top_at, quick_scroll, quick_value_face,
-    quick_warning_value_face, quick_window, repair_legends, update_legends, QuickMenu,
+    quick_warning_value_face, quick_window, repair_legends, update_legends, visible_rows, QuickMenu,
     QuickMenuFaces, QuickRow, QuickScroll, QuickValue, QUICK_EDGE, QUICK_LABEL_X, QUICK_PITCH,
     QUICK_VISIBLE,
 };
@@ -136,7 +137,8 @@ pub use shot_viewer::{
 pub use silhouette::{gb_silhouette, silhouette, GbShell};
 pub use slot_chrome::{
     draw_empty_slot, draw_plugged_slot, draw_slot_back, draw_slot_front, draw_slot_title, ease,
-    edge, housing, opening, recess, slot_name_y, SlotChrome, ALERT_PX, LIP_H, MOUTH_H, MOUTH_W,
+    band_y, edge, housing, opening, recess, slot_name_y, SlotChrome, ALERT_PX, LIP_H, MOUTH_H,
+    MOUTH_W,
 };
 pub use sticker::{
     draw_sticker, head_rows, sticker_face, sticker_lines, sticker_rect, StickerFields, COPYRIGHT,

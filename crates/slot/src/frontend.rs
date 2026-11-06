@@ -38,6 +38,7 @@ const ALERT_INK: [u8; 3] = [0xf0, 0xb4, 0x3c];
 
 pub struct Frontend {
     session: Session,
+    grounds: Option<(TexId, Option<TexId>, (u32, u32))>,
     start: Instant,
     last: Instant,
     draws: Vec<Draw>,
@@ -570,6 +571,7 @@ impl Frontend {
             picking_faces: PickingSync::default(),
             game_bezel: BezelSync::default(),
             look: None,
+            grounds: None,
             link_shot: None,
             link_shot_size: (0, 0),
             link_shot_shown: false,
@@ -755,12 +757,32 @@ impl Frontend {
         let Some(rgba) = slot_ui::default_background() else {
             return;
         };
-        let id = compositor.create_texture(OUT_W, OUT_H, rgba);
-        self.session.app_mut().set_ground(id);
-        if let Some(rgba) = slot_ui::blur_background() {
+        let ground = compositor.create_texture(OUT_W, OUT_H, rgba);
+        self.session.app_mut().set_ground(ground);
+        let blur = slot_ui::blur_background().map(|rgba| {
             let id = compositor.create_texture(OUT_W, OUT_H, rgba);
             self.session.app_mut().set_blur(id);
+            id
+        });
+        self.grounds = Some((ground, blur, (OUT_W, OUT_H)));
+    }
+
+    fn sync_grounds(&mut self, compositor: &mut Compositor) {
+        let Some((ground, blur, size)) = self.grounds else {
+            return;
+        };
+        let want = self.session.app().wallpaper_size();
+        if want == size || (size == (OUT_W, OUT_H) && slot_ui::reference_ground_covers(want)) {
+            return;
         }
+        if let Some(rgba) = slot_ui::default_background_at(want.0, want.1) {
+            compositor.update_texture(ground, want.0, want.1, &rgba);
+        }
+        if let (Some(id), Some(rgba)) = (blur, slot_ui::blur_background_at(want.0, want.1)) {
+            compositor.update_texture(id, want.0, want.1, &rgba);
+        }
+        self.session.app_mut().set_ground_width(want.0);
+        self.grounds = Some((ground, blur, want));
     }
 
     fn apply_look(&mut self) {
@@ -960,8 +982,9 @@ impl Frontend {
         else {
             return;
         };
-        if let Some(rgba) = bezel_face(&path, panel.0, panel.1) {
-            let tex = compositor.create_texture(panel.0, panel.1, &rgba);
+        let (w, h) = self.session.app().game_bezel_size();
+        if let Some(rgba) = bezel_face(&path, w, h) {
+            let tex = compositor.create_texture(w, h, &rgba);
             self.session.app_mut().set_sp_strip(Some(tex));
             eprintln!("slot: bezel {}", path.display());
         }
@@ -1029,8 +1052,10 @@ impl Frontend {
         compositor.set_screen_footer(self.session.app().screen_footer());
         compositor.set_game_source_rect(self.session.app().source_rect());
         compositor.set_game_layout(self.session.app().game_layout());
+        compositor.set_placeholder_bezel(self.session.app().placeholder_bezel());
         self.grab_link_shot(compositor);
         compositor.begin_frame();
+        self.sync_grounds(compositor);
         if self.draw_rebuild(compositor) {
             return;
         }

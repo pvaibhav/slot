@@ -74,7 +74,7 @@ fn hud_ink(px: &[u8]) -> usize {
 fn name_window() -> (usize, usize, usize, usize) {
     (
         OUT_W as usize / 2 - 70,
-        slot_name_y() as usize,
+        slot_name_y(slot_ui::Canvas::FRAMED) as usize,
         140,
         HINT_H as usize,
     )
@@ -151,7 +151,7 @@ fn gb_rom(cgb: u8) -> Vec<u8> {
 fn on_the_lone_pak(down: u32) -> (usize, usize) {
     (
         (OUT_W / 2) as usize,
-        (rest_y(GB_CART_H as f32) + down as f32) as usize,
+        (rest_y(slot_ui::Canvas::FRAMED, GB_CART_H as f32) + down as f32) as usize,
     )
 }
 
@@ -806,13 +806,13 @@ fn both_cartridges_go_into_the_slot_at_their_own_size() {
             };
             if seat == 0.0 {
                 assert!(
-                    (top as f32 - rest_y(h as f32)).abs() < 1.5,
+                    (top as f32 - rest_y(slot_ui::Canvas::FRAMED, h as f32)).abs() < 1.5,
                     "{name} stands with its top edge at {top}, not at {} where the carousel \
                      centres a {h} px cartridge",
-                    rest_y(h as f32)
+                    rest_y(slot_ui::Canvas::FRAMED, h as f32)
                 );
                 let middle = (top + bottom) as f32 / 2.0;
-                let want = rest_y(h as f32) + h as f32 / 2.0;
+                let want = rest_y(slot_ui::Canvas::FRAMED, h as f32) + h as f32 / 2.0;
                 assert!(
                     (middle - want).abs() < 1.5,
                     "{name} stands {top}..{bottom}, centred on {middle} rather than on {want}"
