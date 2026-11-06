@@ -135,12 +135,13 @@ pub fn run() {
     let mut frontend = Frontend::boot_with(Box::new(platform), sink);
     slot::boot_time::mark("frontend");
     let target = slot::baseos::var("BASEOS_TARGET").unwrap_or_default();
-    frontend.set_left_stick(slot::input::evdev::has_left_stick(&target));
+    let keymap = slot::input::evdev::Keymap::of_system();
+    frontend.set_left_stick(keymap.has_stick(&target));
     frontend.upload_boot_faces(&mut compositor);
     slot::boot_time::mark("faces");
     frontend.upload_bezel(&mut compositor, window);
     slot::boot_time::mark("bezel");
-    let mut input = DeviceInput::open(&root);
+    let mut input = DeviceInput::open(keymap, &root);
     slot::boot_time::mark("input");
     if slot::kid::unlock_chord(input.held_at_open()) {
         frontend.app_mut().unlock_kid_mode();
