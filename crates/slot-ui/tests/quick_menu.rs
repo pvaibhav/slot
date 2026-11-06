@@ -94,6 +94,8 @@ fn the_rows_run_in_the_order_the_user_chose() {
             "Recents",
             "Game Titles",
             "Lid Power Off",
+            "Kid Mode",
+            "Kid Shelf",
             "Wi-Fi",
             "Date & Time"
         ]
@@ -301,6 +303,8 @@ fn the_values_read_as_the_menu_prints_them() {
             "HTTP",
             "All",
             "Collections",
+            "One Shelf",
+            "Shelves",
         ]
     );
     assert_eq!(QuickValue::flag(true), QuickValue::On);

@@ -114,6 +114,36 @@ pub fn to_raw(ev: Ev) -> Option<RawEvent> {
     }
 }
 
+pub fn held_from_bits(bits: &[u8]) -> Vec<Btn> {
+    bits.iter()
+        .enumerate()
+        .flat_map(|(i, byte)| {
+            (0..8)
+                .filter(move |b| byte & (1 << b) != 0)
+                .map(move |b| i * 8 + b)
+        })
+        .filter_map(|code| u16::try_from(code).ok().and_then(code_to_btn))
+        .collect()
+}
+
+const KEY_MAX: usize = 0x2ff;
+const EVIOCGKEY_NR: u64 = 0x18;
+
+pub fn held_keys(node: &Path) -> Vec<Btn> {
+    use std::os::unix::io::AsRawFd;
+    let Ok(file) = std::fs::File::open(node) else {
+        return Vec::new();
+    };
+    let mut bits = [0u8; KEY_MAX / 8 + 1];
+    let len = bits.len() as u64;
+    let request = (2u64 << 30) | (len << 16) | ((b'E' as u64) << 8) | EVIOCGKEY_NR;
+    let read = unsafe { libc::ioctl(file.as_raw_fd(), request as _, bits.as_mut_ptr()) };
+    match read < 0 {
+        true => Vec::new(),
+        false => held_from_bits(&bits),
+    }
+}
+
 pub fn code_to_btn(code: u16) -> Option<Btn> {
     Some(match code {
         0x130 => Btn::A,

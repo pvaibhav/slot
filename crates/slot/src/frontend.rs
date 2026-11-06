@@ -69,6 +69,7 @@ pub struct Frontend {
     quick_clock: QuickClock,
     quick_network: QuickClock,
     quick_romm: [QuickClock; 4],
+    quick_kid_shelf: QuickClock,
     networks: crate::network_faces::NetworkSync,
     quick_palette: QuickPalette,
     wallpaper: WallpaperSync,
@@ -562,6 +563,7 @@ impl Frontend {
             quick_clock: QuickClock::default(),
             quick_network: QuickClock::default(),
             quick_romm: Default::default(),
+            quick_kid_shelf: Default::default(),
             networks: Default::default(),
             quick_palette: QuickPalette::default(),
             wallpaper: WallpaperSync::default(),
@@ -731,6 +733,11 @@ impl Frontend {
             })
         });
         self.session.app_mut().set_wifi_faces(wifi);
+        let kid = [false, true].map(|light| {
+            let f = icon_face(Icon::Kid, slot_ui::KID_ICON_PX, footer_ink(light));
+            (compositor.create_texture(f.w, f.h, &f.rgba), f.w, f.h)
+        });
+        self.session.app_mut().set_kid_icon_faces(kid);
         self.look = Some(ShelfLook {
             slot,
             plugged,
@@ -866,6 +873,7 @@ impl Frontend {
         let repair = faces.repair.into_iter().map(&mut up).collect();
         let reset = faces.reset.into_iter().map(&mut up).collect();
         let delete = faces.delete.into_iter().map(&mut up).collect();
+        let kid = faces.kid.into_iter().map(&mut up).collect();
         let delete_shot = faces.delete_shot.into_iter().map(&mut up).collect();
         let labels = faces
             .quick_labels
@@ -917,6 +925,7 @@ impl Frontend {
             app.set_update_legends(update);
         }
         app.set_reset_faces(reset);
+        app.set_kid_faces(kid);
         app.set_delete_faces(delete);
         app.set_delete_shot_faces(delete_shot);
         app.set_quick_menu_faces(QuickMenuFaces {
@@ -1061,6 +1070,7 @@ impl Frontend {
         sync_quick_clock(self.session.app_mut(), compositor, &mut self.quick_clock);
         sync_quick_network(self.session.app_mut(), compositor, &mut self.quick_network);
         sync_quick_romm(self.session.app_mut(), compositor, &mut self.quick_romm);
+        sync_quick_kid_shelf(self.session.app_mut(), compositor, &mut self.quick_kid_shelf);
         self.networks.sync(self.session.app_mut(), compositor);
         sync_quick_palette(self.session.app_mut(), compositor, &mut self.quick_palette);
         sync_wallpaper(self.session.app_mut(), compositor, &mut self.wallpaper);
@@ -1384,6 +1394,7 @@ struct UiFaces {
     toasts: Vec<CartFace>,
     repair: Vec<UndoFace>,
     reset: Vec<UndoFace>,
+    kid: Vec<UndoFace>,
     delete: Vec<UndoFace>,
     delete_shot: Vec<UndoFace>,
     update_legends: [UndoFace; 3],
@@ -1475,6 +1486,17 @@ impl UiFaces {
                     menu_detail_face("It cannot be brought back."),
                     keep,
                     delete,
+                ]
+            },
+            kid: {
+                let [cancel, on] = prompt_legends(footer_ink(false), "Cancel", "Turn On");
+                vec![
+                    menu_face("Turn on Kid Mode?"),
+                    menu_detail_face("Settings and editing lock."),
+                    menu_detail_face("To unlock, hold START, SELECT, L2 and R2"),
+                    menu_detail_face("while turning on."),
+                    cancel,
+                    on,
                 ]
             },
             delete_shot: {
@@ -2115,6 +2137,25 @@ fn sync_quick_network(app: &mut App, compositor: &mut Compositor, state: &mut Qu
     let dim = upload(compositor, &mut state.dim, dim);
     let lit = upload(compositor, &mut state.lit, lit);
     app.set_quick_network_faces((dim, dim_size.0, dim_size.1), (lit, lit_size.0, lit_size.1));
+    state.shown = text;
+}
+
+fn sync_quick_kid_shelf(app: &mut App, compositor: &mut Compositor, state: &mut QuickClock) {
+    if app.quick_menu().is_none() {
+        return;
+    }
+    let text = app.kid_shelf_text();
+    if text == state.shown {
+        return;
+    }
+    let (dim, lit) = (
+        quick_value_face(&text, false),
+        quick_value_face(&text, true),
+    );
+    let (dim_size, lit_size) = ((dim.w, dim.h), (lit.w, lit.h));
+    let dim = upload(compositor, &mut state.dim, dim);
+    let lit = upload(compositor, &mut state.lit, lit);
+    app.set_quick_kid_shelf_faces((dim, dim_size.0, dim_size.1), (lit, lit_size.0, lit_size.1));
     state.shown = text;
 }
 

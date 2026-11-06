@@ -29,6 +29,8 @@ pub enum QuickRow {
     Recents,
     ShelfMode,
     ShowTitles,
+    KidMode,
+    KidShelf,
     WallpaperTint,
     GbcShader,
     GbcColourCorrection,
@@ -139,7 +141,7 @@ pub enum QuickRow {
 }
 
 impl QuickRow {
-    pub const ALL: [QuickRow; 127] = [
+    pub const ALL: [QuickRow; 129] = [
         QuickRow::FastForward,
         QuickRow::FastForwardSound,
         QuickRow::Screen,
@@ -160,6 +162,8 @@ impl QuickRow {
         QuickRow::Recents,
         QuickRow::ShelfMode,
         QuickRow::ShowTitles,
+        QuickRow::KidMode,
+        QuickRow::KidShelf,
         QuickRow::WallpaperTint,
         QuickRow::GbcShader,
         QuickRow::GbcColourCorrection,
@@ -278,7 +282,7 @@ impl QuickRow {
         QuickRow::About,
     ];
 
-    pub const GENERAL: [QuickRow; 9] = [
+    pub const GENERAL: [QuickRow; 11] = [
         QuickRow::Theme,
         QuickRow::Wallpaper,
         QuickRow::WallpaperTint,
@@ -286,6 +290,8 @@ impl QuickRow {
         QuickRow::Recents,
         QuickRow::ShowTitles,
         QuickRow::LidOff,
+        QuickRow::KidMode,
+        QuickRow::KidShelf,
         QuickRow::Wifi,
         QuickRow::DateTime,
     ];
@@ -516,6 +522,8 @@ impl QuickRow {
             | QuickRow::ShelfMode
             | QuickRow::ShowTitles
             | QuickRow::LidOff
+            | QuickRow::KidMode
+            | QuickRow::KidShelf
             | QuickRow::Wifi => &QuickRow::GENERAL,
             QuickRow::WifiPower | QuickRow::Networks => &QuickRow::WIFI,
             QuickRow::CheckUpdates
@@ -689,6 +697,8 @@ impl QuickRow {
             QuickRow::ExitGame => "Exit Game",
             QuickRow::General => "General",
             QuickRow::LidOff => "Lid Power Off",
+            QuickRow::KidMode => "Kid Mode",
+            QuickRow::KidShelf => "Kid Shelf",
             QuickRow::FetchArt => "Fetch Missing Art",
             QuickRow::Network => "Tools",
             QuickRow::Wifi | QuickRow::WifiPower => "Wi-Fi",
@@ -938,10 +948,12 @@ pub enum QuickValue {
     Http,
     All,
     Collections,
+    OneShelf,
+    Shelves,
 }
 
 impl QuickValue {
-    pub const ALL: [QuickValue; 52] = [
+    pub const ALL: [QuickValue; 54] = [
         QuickValue::Speed1_5,
         QuickValue::Speed2,
         QuickValue::Speed3,
@@ -994,6 +1006,8 @@ impl QuickValue {
         QuickValue::Http,
         QuickValue::All,
         QuickValue::Collections,
+        QuickValue::OneShelf,
+        QuickValue::Shelves,
     ];
 
     pub const LEVELS: [QuickValue; 16] = [
@@ -1048,6 +1062,8 @@ impl QuickValue {
             QuickValue::Hide => "Hide",
             QuickValue::All => "All",
             QuickValue::Collections => "Collections",
+            QuickValue::OneShelf => "One Shelf",
+            QuickValue::Shelves => "Shelves",
             QuickValue::Low => "25%",
             QuickValue::Medium => "45%",
             QuickValue::High => "65%",
@@ -1602,6 +1618,7 @@ pub struct QuickMenu<'a> {
     pub wallpaper: Option<[(TexId, u32, u32); 2]>,
     pub networks: Option<[(TexId, u32, u32); 2]>,
     pub romm: [Option<[(TexId, u32, u32); 2]>; 4],
+    pub kid_shelf: Option<[(TexId, u32, u32); 2]>,
     pub faces: Option<&'a QuickMenuFaces>,
     pub ground: Option<(TexId, u32)>,
     pub palette: Option<[(TexId, u32, u32); 2]>,
@@ -1677,6 +1694,7 @@ impl QuickMenu<'_> {
                 }
                 QuickRow::RommPort => self.romm[2].map(|c| c[lit as usize]),
                 QuickRow::RommStatus => self.romm[3].map(|c| c[lit as usize]),
+                QuickRow::KidShelf => self.kid_shelf.map(|c| c[lit as usize]),
                 QuickRow::Palette | QuickRow::GbPalette => self.palette.map(|c| c[lit as usize]),
                 QuickRow::GbaBezel => self.gba_bezel.map(|c| c[lit as usize]),
                 QuickRow::GbBezel => self.gb_bezel.map(|c| c[lit as usize]),

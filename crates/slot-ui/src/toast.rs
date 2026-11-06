@@ -35,12 +35,13 @@ pub enum Toast {
     CardRepairFailed,
     Forgotten,
     Collection,
+    KidUnlocked,
     Palette(GbColors),
     Duplicate(QuickRow),
 }
 
 impl Toast {
-    const FIXED: [Toast; 27] = [
+    const FIXED: [Toast; 28] = [
         Toast::StateSaved,
         Toast::StateLoaded,
         Toast::GameReset,
@@ -68,6 +69,7 @@ impl Toast {
         Toast::CardRepairFailed,
         Toast::Forgotten,
         Toast::Collection,
+        Toast::KidUnlocked,
     ];
 
     pub fn all() -> Vec<Toast> {
@@ -160,6 +162,7 @@ impl Toast {
             Toast::CardRepairFailed => "Card repair failed",
             Toast::Forgotten => "Network forgotten",
             Toast::Collection => "Collection",
+            Toast::KidUnlocked => "Kid Mode is off until restart",
             Toast::Palette(p) => p.label(),
             Toast::Duplicate(_) => "",
         }

@@ -8,7 +8,7 @@ use slot_power::{Battery, Charge, LedState, LidPolicy, Power, RepairResult};
 use slot_retro::LinkChannel;
 use slot_store::{
     format_stamp, parse_stamp, read_slot_state, scan, write_slot_state, BezelPick, Blending, Cart,
-    Collection, Core, GbColors, Platform, Recent, Scale, Shader, ShelfMode, ShotDir, ShotEntry,
+    Collection, Core, GbColors, KidMode, Platform, Recent, Scale, Shader, ShelfMode, ShotDir, ShotEntry,
     SlotState, StateEntry,
     StateRing, Stretch, WallpaperPick, WallpaperTint, BLUE_LIGHT_MAX, BRIGHTNESS_MAX, CONTRAST_MAX,
     DIM_MAX, FF_SPEEDS, RING_MAX, SATURATION_MAX, SUNLIGHT_MAX, VOLUME_MAX,
@@ -425,13 +425,14 @@ enum Rack {
     Favorites,
     Collection(usize),
     Of(Platform),
+    AllGames,
 }
 
 impl Rack {
     fn platform(self) -> Option<Platform> {
         match self {
             Rack::Of(p) => Some(p),
-            Rack::Recents | Rack::Favorites | Rack::Collection(_) => None,
+            Rack::Recents | Rack::Favorites | Rack::Collection(_) | Rack::AllGames => None,
         }
     }
 
@@ -441,6 +442,7 @@ impl Rack {
             Rack::Favorites => "favorites".into(),
             Rack::Collection(i) => format!("collection/{i}"),
             Rack::Of(p) => p.dir_name().to_ascii_lowercase(),
+            Rack::AllGames => slot_store::KID_SHELF_ALL.into(),
         }
     }
 
@@ -450,6 +452,7 @@ impl Rack {
             Rack::Favorites => "Favorites",
             Rack::Collection(_) => "",
             Rack::Of(p) => p.name(),
+            Rack::AllGames => "All Games",
         }
     }
 }
@@ -638,6 +641,12 @@ pub struct App {
     quick_wallpaper_faces: Option<[(TexId, u32, u32); 2]>,
     quick_network_faces: Option<[(TexId, u32, u32); 2]>,
     quick_romm_faces: [Option<[(TexId, u32, u32); 2]>; 4],
+    quick_kid_shelf_faces: Option<[(TexId, u32, u32); 2]>,
+    kid_faces: Vec<(TexId, u32, u32)>,
+    kid_prompt: Option<KidMode>,
+    kid_unlocked: bool,
+    seated_platform: Option<Platform>,
+    kid_icon_faces: Option<[(TexId, u32, u32); 2]>,
     pub romm: crate::romm::RommConf,
     quick_palette_faces: Option<[(TexId, u32, u32); 2]>,
     quick_bezel_faces: [Option<[(TexId, u32, u32); 2]>; 3],
@@ -826,6 +835,7 @@ fn shelves_of(carts: Vec<Cart>, collections: usize) -> Vec<(Rack, Shelf)> {
         .into_iter()
         .chain((0..collections).map(Rack::Collection))
         .chain(Platform::ALL.iter().map(|p| Rack::Of(*p)))
+        .chain(std::iter::once(Rack::AllGames))
         .map(|r| (r, Vec::new()))
         .collect();
     for cart in carts {
@@ -1117,6 +1127,12 @@ impl App {
             quick_wallpaper_faces: None,
             quick_network_faces: None,
             quick_romm_faces: [None; 4],
+            quick_kid_shelf_faces: None,
+            kid_faces: Vec::new(),
+            kid_prompt: None,
+            kid_unlocked: false,
+            seated_platform: None,
+            kid_icon_faces: None,
             romm: crate::romm::RommConf::default(),
             quick_palette_faces: None,
             quick_bezel_faces: [None, None, None],
@@ -1202,6 +1218,7 @@ impl App {
         app.install_collections(slot_store::read_collections(root));
         app.restock_recents();
         app.restock_favorites();
+        app.restock_all_games();
         app.restock_collections();
         if let Some((at, i)) = app.remembered_seat() {
             app.shelf_at = at;
@@ -1217,6 +1234,9 @@ impl App {
             if let Some(to) = (0..app.shelves.len()).find_map(|at| app.row_target(at)) {
                 app.shelf_at = to;
             }
+        }
+        if app.kid_one_shelf() {
+            app.shelf_at = app.kid_shelf_at();
         }
         if app.state.clock_set {
             app.start();
@@ -1470,7 +1490,11 @@ impl App {
 
     fn row_target(&self, at: usize) -> Option<usize> {
         let (rack, shelf) = &self.shelves[at];
+        if self.kid_one_shelf() {
+            return (at == self.kid_shelf_at()).then_some(at);
+        }
         match (self.state.shelf_mode, rack) {
+            (_, Rack::AllGames) => None,
             (ShelfMode::All, Rack::Collection(_)) => None,
             (ShelfMode::All, Rack::Favorites) => self.stack_landing(),
             (ShelfMode::Collections, Rack::Of(_)) if !self.shows_systems() => None,
@@ -2328,6 +2352,10 @@ impl App {
         self.collections.iter().map(|c| c.name.clone()).collect()
     }
 
+    pub fn shelf_key(&self) -> String {
+        self.rack_key(self.shelves[self.shelf_at].0)
+    }
+
     pub fn shelf_stems(&self) -> Vec<&str> {
         self.shelf().carts.iter().map(|c| c.stem.as_str()).collect()
     }
@@ -2675,6 +2703,11 @@ impl App {
                 ShelfMode::All => QuickValue::All,
                 ShelfMode::Collections => QuickValue::Collections,
             }),
+            QuickRow::KidMode => Some(match self.state.kid_mode {
+                KidMode::Off => QuickValue::Off,
+                KidMode::OneShelf => QuickValue::OneShelf,
+                KidMode::Shelves => QuickValue::Shelves,
+            }),
             QuickRow::ShowTitles => Some(if self.state.show_titles {
                 QuickValue::Show
             } else {
@@ -2702,6 +2735,7 @@ impl App {
             QuickRow::RommSelfSigned => Some(QuickValue::flag(self.romm.self_signed)),
             QuickRow::Romm
             | QuickRow::RommServer
+            | QuickRow::KidShelf
             | QuickRow::RommPort
             | QuickRow::RommPair
             | QuickRow::RommStatus
@@ -2803,6 +2837,162 @@ impl App {
 
     pub fn set_quick_romm_faces(&mut self, faces: [Option<[(TexId, u32, u32); 2]>; 4]) {
         self.quick_romm_faces = faces;
+    }
+
+    pub fn set_quick_kid_shelf_faces(&mut self, dim: (TexId, u32, u32), lit: (TexId, u32, u32)) {
+        self.quick_kid_shelf_faces = Some([dim, lit]);
+    }
+
+    pub fn set_kid_icon_faces(&mut self, faces: [(TexId, u32, u32); 2]) {
+        self.kid_icon_faces = Some(faces);
+    }
+
+    fn draw_kid_icon(&self, out: &mut Vec<Draw>) {
+        if !self.kid_locked() {
+            return;
+        }
+        let wifi = self.wifi_up().then(|| self.wifi_face()).flatten();
+        let face = self.kid_icon_faces.map(|f| f[usize::from(self.light())]);
+        slot_ui::draw_kid_icon(self.battery_percent, wifi, face, out);
+    }
+
+    pub fn set_kid_faces(&mut self, faces: Vec<(TexId, u32, u32)>) {
+        self.kid_faces = faces;
+    }
+
+    pub fn kid_locked(&self) -> bool {
+        self.state.kid_mode != KidMode::Off && !self.kid_unlocked
+    }
+
+    pub fn kid_prompt(&self) -> Option<KidMode> {
+        self.kid_prompt
+    }
+
+    pub fn unlock_kid_mode(&mut self) {
+        if self.state.kid_mode == KidMode::Off {
+            return;
+        }
+        self.kid_unlocked = true;
+        self.hud.toast(Toast::KidUnlocked, self.now());
+        let seated = match &self.phase {
+            Phase::Inserting { cart, .. }
+            | Phase::Playing { cart }
+            | Phase::Ejecting { cart, .. } => Some(cart.clone()),
+            _ => None,
+        };
+        if let Some(stem) = seated {
+            if let Some((at, i)) = self.seat_of(&stem, self.state.cart_platform) {
+                self.shelf_at = at;
+                self.shelves[at].1.select(i);
+                return;
+            }
+        }
+        if self.shelves[self.shelf_at].0 == Rack::AllGames {
+            if let Some(to) = (0..self.shelves.len()).find_map(|at| self.row_target(at)) {
+                self.land_on(to);
+            }
+        }
+    }
+
+    fn kid_one_shelf(&self) -> bool {
+        self.kid_locked() && self.state.kid_mode == KidMode::OneShelf
+    }
+
+    fn kid_shelf_at(&self) -> usize {
+        let all = self.rack_at(Rack::AllGames).unwrap_or(0);
+        (0..self.shelves.len())
+            .find(|&at| {
+                at != all
+                    && self.rack_key(self.shelves[at].0) == self.state.kid_shelf
+                    && !self.shelves[at].1.carts.is_empty()
+            })
+            .unwrap_or(all)
+    }
+
+    fn land_for_kid(&mut self) {
+        if !self.kid_one_shelf() {
+            return;
+        }
+        let to = self.kid_shelf_at();
+        if to != self.shelf_at {
+            self.land_on(to);
+        }
+    }
+
+    fn restock_all_games(&mut self) {
+        let Some(at) = self.rack_at(Rack::AllGames) else {
+            return;
+        };
+        let mut carts: Vec<Cart> = self.carts().cloned().collect();
+        carts.sort_by(|a, b| {
+            (slot_store::sort_key(&a.stem), a.platform as u8)
+                .cmp(&(slot_store::sort_key(&b.stem), b.platform as u8))
+        });
+        self.restock(at, carts);
+    }
+
+    pub fn kid_shelf_choices(&self) -> Vec<String> {
+        std::iter::once(slot_store::KID_SHELF_ALL.to_string())
+            .chain(
+                self.shelves
+                    .iter()
+                    .filter(|(r, s)| {
+                        !matches!(r, Rack::Of(Platform::Gbav) | Rack::AllGames)
+                            && !s.carts.is_empty()
+                    })
+                    .map(|(r, _)| self.rack_key(*r)),
+            )
+            .collect()
+    }
+
+    pub fn kid_shelf_text(&self) -> String {
+        self.shelves
+            .iter()
+            .find(|(r, _)| self.rack_key(*r) == self.state.kid_shelf)
+            .map(|(r, _)| self.rack_name(*r).to_string())
+            .unwrap_or_else(|| "All Games".to_string())
+    }
+
+    fn step_kid_mode(&mut self, right: bool) {
+        let order = [KidMode::Off, KidMode::OneShelf, KidMode::Shelves];
+        let at = order
+            .iter()
+            .position(|m| *m == self.state.kid_mode)
+            .unwrap_or(0);
+        let to = order[match right {
+            true => (at + 1) % order.len(),
+            false => (at + order.len() - 1) % order.len(),
+        }];
+        if self.state.kid_mode == KidMode::Off {
+            self.kid_prompt = Some(to);
+            return;
+        }
+        self.state.kid_mode = to;
+        self.persist();
+    }
+
+    fn step_kid_shelf(&mut self, right: bool) {
+        let choices = self.kid_shelf_choices();
+        let n = choices.len();
+        let at = choices
+            .iter()
+            .position(|c| *c == self.state.kid_shelf)
+            .unwrap_or(0);
+        self.state.kid_shelf = choices[match right {
+            true => (at + 1) % n,
+            false => (at + n - 1) % n,
+        }]
+        .clone();
+        self.persist();
+    }
+
+    fn confirm_kid_mode(&mut self, mode: KidMode) {
+        self.kid_prompt = None;
+        self.state.kid_mode = mode;
+        self.kid_unlocked = false;
+        self.persist();
+        self.phase = Phase::Shelf;
+        self.land_for_kid();
     }
 
     pub fn romm_texts(&self) -> [String; 4] {
@@ -3040,6 +3230,7 @@ impl App {
             WallpaperPick::Shelf => self
                 .shelves
                 .iter()
+                .filter(|(rack, _)| *rack != Rack::AllGames || self.kid_one_shelf())
                 .filter_map(|(rack, _)| wallpaper_of_rack(*rack, &files))
                 .collect(),
             WallpaperPick::File(_) => match self.resolved_wallpaper() {
@@ -3158,6 +3349,9 @@ impl App {
             WallpaperPick::File(_) | WallpaperPick::Random | WallpaperPick::Shelf
         );
         let mut hidden = Vec::new();
+        if self.state.kid_mode != KidMode::OneShelf {
+            hidden.push(QuickRow::KidShelf);
+        }
         if !own {
             hidden.push(QuickRow::WallpaperTint);
         }
@@ -3388,7 +3582,10 @@ impl App {
             Phase::Doze { cart: Some(cart) } => cart,
             _ => return None,
         };
-        self.shelf().carts.iter().find(|c| c.stem == *stem)
+        self.shelf()
+            .carts
+            .iter()
+            .find(|c| c.stem == *stem && self.seated_platform.is_none_or(|p| c.platform == p))
     }
 
     pub fn single_cart(&self) -> bool {
@@ -3785,6 +3982,15 @@ impl App {
     }
 
     pub fn binding_table(&self) -> crate::input::Table {
+        if self.kid_locked() {
+            return crate::input::Table::kid(
+                &self.controls,
+                &self.shortcuts,
+                &self.carousel,
+                self.state.kid_mode,
+                self.state.turbo,
+            );
+        }
         crate::input::Table::new(
             &self.controls,
             &self.shortcuts,
@@ -4294,7 +4500,7 @@ impl App {
     }
 
     pub fn repair_offered(&self) -> bool {
-        self.repair_possible() && self.charged_to_repair()
+        !self.kid_locked() && self.repair_possible() && self.charged_to_repair()
     }
 
     fn repair_possible(&self) -> bool {
@@ -4485,6 +4691,10 @@ impl App {
         self.refuse_seated();
     }
 
+    pub fn selected_cart(&self) -> Option<&Cart> {
+        self.shelf().carts.get(self.shelf().index)
+    }
+
     pub fn selected_stem(&self) -> Option<&str> {
         self.shelf()
             .carts
@@ -4524,6 +4734,12 @@ impl App {
             Action::PowerOff => return,
             _ => {}
         }
+        if matches!(self.phase, Phase::SetClock { .. }) && self.kid_locked() {
+            if matches!(action, Action::GbaDown(Btn::A | Btn::B)) {
+                self.confirm_clock();
+            }
+            return;
+        }
         if let Phase::SetClock { picker, .. } = &mut self.phase {
             match action {
                 Action::GbaDown(Btn::Left) | Action::ShelfLeft => picker.left(),
@@ -4536,6 +4752,21 @@ impl App {
             }
             return;
         }
+        let action = match self.kid_locked() {
+            true => {
+                let at = match self.phase {
+                    Phase::Shelf => crate::kid::KidWhere::Shelf,
+                    Phase::Playing { .. } => crate::kid::KidWhere::Playing,
+                    _ => crate::kid::KidWhere::Other,
+                };
+                match crate::kid::allowed(at, self.state.kid_mode, action) {
+                    Some(Action::Eject) if self.single_cart() => return,
+                    Some(kept) => kept,
+                    None => return,
+                }
+            }
+            false => action,
+        };
         let server_adjusts = matches!(
             action,
             Action::VolumeUp
@@ -4572,6 +4803,14 @@ impl App {
             match action {
                 Action::GbaDown(Btn::A) => self.begin_repair(),
                 Action::GbaDown(Btn::B) => self.repair_prompt = false,
+                _ => {}
+            }
+            return;
+        }
+        if let Some(mode) = self.kid_prompt {
+            match action {
+                Action::GbaDown(Btn::A) => self.confirm_kid_mode(mode),
+                Action::GbaDown(Btn::B) => self.kid_prompt = None,
                 _ => {}
             }
             return;
@@ -4699,12 +4938,16 @@ impl App {
             Phase::Inserting { .. } if action == Action::Eject => self.eject(),
             Phase::Playing { .. } => match action {
                 Action::GbaDown(Btn::L1)
-                    if self.slot_owns_the_shoulders() && !self.bound_to_game(Btn::L1) =>
+                    if self.slot_owns_the_shoulders()
+                        && !self.bound_to_game(Btn::L1)
+                        && !self.kid_locked() =>
                 {
                     self.set_picture(VideoMode::Stretch)
                 }
                 Action::GbaDown(Btn::R1)
-                    if self.slot_owns_the_shoulders() && !self.bound_to_game(Btn::R1) =>
+                    if self.slot_owns_the_shoulders()
+                        && !self.bound_to_game(Btn::R1)
+                        && !self.kid_locked() =>
                 {
                     self.set_picture(VideoMode::Actual)
                 }
@@ -4963,6 +5206,8 @@ impl App {
             | QuickRow::Recents
             | QuickRow::ShelfMode
             | QuickRow::ShowTitles
+            | QuickRow::KidMode
+            | QuickRow::KidShelf
             | QuickRow::Wallpaper
             | QuickRow::WallpaperTint
             | QuickRow::Resume
@@ -5150,6 +5395,12 @@ impl App {
             });
             return;
         }
+        if row == QuickRow::KidMode {
+            return self.step_kid_mode(right);
+        }
+        if row == QuickRow::KidShelf {
+            return self.step_kid_shelf(right);
+        }
         if row == QuickRow::ShowTitles {
             self.state.show_titles = !self.state.show_titles;
             self.persist();
@@ -5248,6 +5499,8 @@ impl App {
             | QuickRow::Recents
             | QuickRow::ShelfMode
             | QuickRow::ShowTitles
+            | QuickRow::KidMode
+            | QuickRow::KidShelf
             | QuickRow::DateTime
             | QuickRow::About
             | QuickRow::Screen
@@ -5719,6 +5972,9 @@ impl App {
         if let Some(phase) = next {
             self.phase = phase;
             self.refused_from = None;
+            if matches!(self.phase, Phase::Shelf) {
+                self.land_for_kid();
+            }
             let seated = match &self.phase {
                 Phase::Playing { cart } => Some(cart.clone()),
                 _ => None,
@@ -5997,12 +6253,16 @@ impl App {
             self.log_card(failing);
         }
         self.hud.set_alarm(failing, self.now());
-        self.hud
-            .set_alarm_toast(match (self.repair_possible(), self.charged_to_repair()) {
+        self.hud.set_alarm_toast(
+            match (
+                self.repair_possible() && !self.kid_locked(),
+                self.charged_to_repair(),
+            ) {
                 (true, true) => Toast::CardRepair,
                 (true, false) => Toast::CardRepairCharge,
                 (false, _) => Toast::CardUnwritable,
-            });
+            },
+        );
         if self.now() >= self.battery_at {
             self.battery_at = self.now() + BATTERY_POLL_MS;
             self.battery = self.power.as_ref().and_then(|p| p.battery());
@@ -6139,6 +6399,7 @@ impl App {
         self.state.toggle_favorite(platform, &stem);
         let shelf_at = self.shelf_at;
         self.restock_favorites();
+        self.restock_all_games();
         if self.shelf_at != shelf_at {
             self.shelf_platform = slot_ui::Printed::default();
             self.slot_letter = None;
@@ -6336,6 +6597,9 @@ impl App {
         if self.repair_prompt {
             return self.draw_prompt(&self.repair_faces, out);
         }
+        if self.kid_prompt.is_some() {
+            return self.draw_prompt(&self.kid_faces, out);
+        }
         if let Some(row) = self.reset_prompt {
             return self.draw_prompt(&self.reset_prompt_faces(row), out);
         }
@@ -6384,6 +6648,7 @@ impl App {
                 wallpaper: self.quick_wallpaper_faces,
                 networks: self.quick_network_faces,
                 romm: self.quick_romm_faces,
+                kid_shelf: self.quick_kid_shelf_faces,
                 faces: self.quick_menu_faces.as_ref(),
                 ground: self.menu_ground(),
                 palette: self.quick_palette_faces,
@@ -6459,6 +6724,7 @@ impl App {
                     if self.wifi_up() {
                         slot_ui::draw_wifi_icon(self.battery_percent, self.wifi_face(), out);
                     }
+                    self.draw_kid_icon(out);
                 }
                 if let Some(picker) = self.core_picker_shown() {
                     let lift = lift_of(picker.openness(self.now()));
@@ -6585,6 +6851,7 @@ impl App {
                 wallpaper: None,
                 networks: None,
                 romm: [None; 4],
+                kid_shelf: None,
                 faces: self.quick_menu_faces.as_ref(),
                 ground: None,
                 palette: self.quick_palette_faces,
@@ -6705,6 +6972,7 @@ impl App {
         if self.wifi_up() {
             slot_ui::draw_wifi_icon(self.battery_percent, self.wifi_face(), out);
         }
+        self.draw_kid_icon(out);
         shift_down(&mut out[start..], self.menu_footer_offset());
     }
 
@@ -8307,7 +8575,11 @@ impl App {
     }
 
     fn auto_link(&self, stem: &str) -> Option<(&Cart, LinkKind)> {
-        let cart = self.shelf().carts.iter().find(|c| c.stem == stem)?;
+        let cart = self
+            .shelf()
+            .carts
+            .iter()
+            .find(|c| c.stem == stem && self.seated_platform.is_none_or(|p| c.platform == p))?;
         let auto = link_kind(&cart.code, &cart.title, slot_store::header_clean(&cart.rom));
         Some((cart, auto))
     }
@@ -8329,12 +8601,13 @@ impl App {
             return;
         }
         let at = self.shelf().index;
-        let Some(cart) = self.shelf_mut().carts.get_mut(at).map(|c| {
+        let Some((cart, platform)) = self.shelf_mut().carts.get_mut(at).map(|c| {
             c.read_header();
-            c.stem.clone()
+            (c.stem.clone(), c.platform)
         }) else {
             return;
         };
+        self.seated_platform = Some(platform);
         eprintln!(
             "slot: launch: insert {cart} at {:.1} ms",
             crate::boot_time::ms()
@@ -8371,7 +8644,7 @@ impl App {
             return;
         }
         if self.now().saturating_sub(at) >= PLAY_HOLD_MS && !self.unwrap_seated() {
-            self.insert(true);
+            self.insert(!self.kid_locked() || !self.state.auto_load);
         }
     }
 
@@ -10422,6 +10695,7 @@ impl App {
             None => {
                 self.restock_recents();
                 self.restock_favorites();
+                self.restock_all_games();
             }
         }
         if self.powering_off {
@@ -10486,6 +10760,7 @@ impl App {
         }
         self.restock_recents();
         self.restock_favorites();
+        self.restock_all_games();
         self.restock_collections();
         for ((_, shelf), (index, seat)) in self.shelves.iter_mut().zip(seats) {
             let found = shelf

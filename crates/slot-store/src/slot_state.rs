@@ -58,6 +58,35 @@ impl ShelfMode {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
+pub enum KidMode {
+    #[default]
+    Off,
+    OneShelf,
+    Shelves,
+}
+
+impl KidMode {
+    pub fn key(self) -> &'static str {
+        match self {
+            KidMode::Off => "off",
+            KidMode::OneShelf => "one",
+            KidMode::Shelves => "shelves",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<KidMode> {
+        match value {
+            "off" => Some(KidMode::Off),
+            "one" => Some(KidMode::OneShelf),
+            "shelves" => Some(KidMode::Shelves),
+            _ => None,
+        }
+    }
+}
+
+pub const KID_SHELF_ALL: &str = "all";
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
 pub enum Appearance {
     #[default]
     Dark,
@@ -418,6 +447,8 @@ pub struct SlotState {
     pub shelf_cart: Option<Recent>,
     pub shelf_mode: ShelfMode,
     pub collection: Option<String>,
+    pub kid_mode: KidMode,
+    pub kid_shelf: String,
 }
 
 impl SlotState {
@@ -597,6 +628,8 @@ impl Default for SlotState {
             shelf_cart: None,
             shelf_mode: ShelfMode::All,
             collection: None,
+            kid_mode: KidMode::Off,
+            kid_shelf: KID_SHELF_ALL.to_string(),
         }
     }
 }
@@ -718,6 +751,8 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
         ))
     ));
     text.push_str(&format!("shelf_mode={}\n", s.shelf_mode.key()));
+    text.push_str(&format!("kid_mode={}\n", s.kid_mode.key()));
+    text.push_str(&format!("kid_shelf={}\n", s.kid_shelf));
     text.push_str(&format!(
         "collection={}\n",
         s.collection.as_deref().unwrap_or("")
@@ -783,6 +818,8 @@ fn parse(text: &str) -> Option<SlotState> {
     let mut shelf = None;
     let mut shelf_cart = None;
     let mut shelf_mode = None;
+    let mut kid_mode = None;
+    let mut kid_shelf = None;
     let mut collection = None;
     for line in text.lines().filter(|l| !l.is_empty()) {
         let Some((key, value)) = line.split_once('=') else {
@@ -842,6 +879,8 @@ fn parse(text: &str) -> Option<SlotState> {
             "shelf" => shelf = Some(value.to_string()).filter(|v| !v.is_empty()),
             "shelf_cart" => shelf_cart = recent_value(value),
             "shelf_mode" => shelf_mode = ShelfMode::parse(value),
+            "kid_mode" => kid_mode = KidMode::parse(value),
+            "kid_shelf" => kid_shelf = Some(value.to_string()).filter(|v| !v.is_empty()),
             "collection" => collection = Some(value.to_string()).filter(|v| !v.is_empty()),
             "shader_gb" => shader_gb = Shader::parse(value).filter(|s| Shader::GB.contains(s)),
             "shader_gbc" => shader_gbc = Shader::parse(value).filter(|s| Shader::GB.contains(s)),
@@ -913,6 +952,8 @@ fn parse(text: &str) -> Option<SlotState> {
         shelf,
         shelf_cart,
         shelf_mode: shelf_mode.unwrap_or(fallback.shelf_mode),
+        kid_mode: kid_mode.unwrap_or(KidMode::Off),
+        kid_shelf: kid_shelf.unwrap_or_else(|| KID_SHELF_ALL.to_string()),
         collection,
     })
 }

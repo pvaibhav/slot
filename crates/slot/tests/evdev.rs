@@ -397,3 +397,19 @@ fn only_the_skus_nextui_lists_with_a_left_stick_have_one() {
         assert!(!has_left_stick(t), "{t}");
     }
 }
+
+#[test]
+fn held_bits_map_to_buttons() {
+    let mut bits = vec![0u8; 0x300 / 8 + 1];
+    for code in [0x136u16, 0x137, 0x13a, 0x13b, 0x1ff] {
+        bits[(code / 8) as usize] |= 1 << (code % 8);
+    }
+    let mut held = slot::input::evdev::held_from_bits(&bits);
+    held.sort_by_key(|b| format!("{b:?}"));
+    assert_eq!(held, [Btn::L2, Btn::R2, Btn::Select, Btn::Start]);
+}
+
+#[test]
+fn an_unreadable_node_holds_nothing() {
+    assert!(slot::input::evdev::held_keys(Path::new("/nonexistent/event9")).is_empty());
+}

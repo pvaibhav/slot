@@ -137,6 +137,9 @@ pub fn run() {
     slot::boot_time::mark("bezel");
     let mut input = DeviceInput::open(&root);
     slot::boot_time::mark("input");
+    if slot::kid::unlock_chord(input.held_at_open()) {
+        frontend.app_mut().unlock_kid_mode();
+    }
     let card = root.clone();
     let _ = std::thread::Builder::new()
         .name("slot-bootlogo".into())

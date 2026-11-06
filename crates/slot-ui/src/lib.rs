@@ -71,7 +71,9 @@ pub use clock::{
     ClockScreen, Part,
 };
 pub use draw::{Canvas, Draw, TexId, OUT_H, OUT_W};
-pub use footer::{draw_corners, draw_footer, draw_wifi_icon, Printed, FOOTER_Y};
+pub use footer::{
+    draw_corners, draw_footer, draw_kid_icon, draw_wifi_icon, Printed, FOOTER_Y, KID_ICON_PX,
+};
 pub use guide::{
     cell, fitting_zoom, guide_help_face, mono_font, page_box, Guide, GuideGlyphs, GuideView,
     GUIDE_COLUMNS, GUIDE_HELP_HINT, GUIDE_HELP_TITLE, GUIDE_HINTS, GUIDE_ZOOMS, PAN_COLS,

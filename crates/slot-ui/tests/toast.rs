@@ -42,7 +42,7 @@ fn the_link_ending_says_who_ended_it() {
 fn the_banner_says_what_happened_and_never_what_is_on_screen() {
     let all = Toast::all();
     assert_eq!(
-        all[..27],
+        all[..28],
         [
             Toast::StateSaved,
             Toast::StateLoaded,
@@ -71,18 +71,19 @@ fn the_banner_says_what_happened_and_never_what_is_on_screen() {
             Toast::CardRepairFailed,
             Toast::Forgotten,
             Toast::Collection,
+            Toast::KidUnlocked,
         ],
         "a banner was added or dropped: every face is uploaded by its place in this list"
     );
     let palettes = GbColors::all().count();
     assert_eq!(palettes, 49);
     assert_eq!(
-        all[27..27 + palettes],
+        all[28..28 + palettes],
         GbColors::all().map(Toast::Palette).collect::<Vec<_>>()[..],
         "the palette banners do not follow the fixed ones in palette order"
     );
     assert_eq!(
-        all[27 + palettes..],
+        all[28 + palettes..],
         QuickRow::ALL
             .into_iter()
             .filter(|r| r.binds())
@@ -513,4 +514,11 @@ fn an_edit_heading_is_set_the_size_of_a_toast() {
     })[0]
     .1;
     assert_eq!(set, toast);
+}
+
+#[test]
+fn the_kid_mode_unlock_toast_stays_on_one_line() {
+    let f = toast_face(Toast::KidUnlocked);
+    assert_eq!(ink_bands(&f).len(), 1, "{:?}", ink_bands(&f));
+    assert_eq!(Toast::KidUnlocked.text(), "Kid Mode is off until restart");
 }

@@ -32,6 +32,7 @@ pub mod fetch_faces;
 pub mod frames;
 pub mod frontend;
 pub mod input;
+pub mod kid;
 pub mod label_cache;
 pub mod latency;
 pub mod link_art_builder;

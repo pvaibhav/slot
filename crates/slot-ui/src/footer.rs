@@ -57,6 +57,30 @@ pub fn draw_wifi_icon(percent: Printed, face: Option<(TexId, u32, u32)>, out: &m
     });
 }
 
+pub const KID_ICON_PX: f32 = 20.0;
+
+pub fn draw_kid_icon(
+    percent: Printed,
+    wifi: Option<(TexId, u32, u32)>,
+    face: Option<(TexId, u32, u32)>,
+    out: &mut Vec<Draw>,
+) {
+    let Some((tex, w, h)) = face else {
+        return;
+    };
+    let after_wifi = wifi.map_or(0.0, |(_, ww, _)| ww as f32 + WIFI_GAP);
+    let x = FOOTER_MARGIN + GAUGE_ROW_W + percent.w as f32 + WIFI_GAP + after_wifi;
+    let y = FOOTER_Y + (HINT_H as f32 - h as f32) / 2.0;
+    out.push(Draw::Tex {
+        x: x.round(),
+        y: y.round(),
+        w: w as f32,
+        h: h as f32,
+        tex,
+        alpha: 1.0,
+    });
+}
+
 pub fn draw_corners(
     canvas: Canvas,
     battery: Option<Battery>,

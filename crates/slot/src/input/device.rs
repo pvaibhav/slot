@@ -8,7 +8,8 @@ use std::time::Instant;
 use slot_input::{Btn, InputSource, Millis, RawEvent};
 
 use super::evdev::{
-    decode, device_name, pick_devices, to_raw, Ev, Hat, EVENT_BYTES, EV_ABS, EV_KEY, EV_SYN,
+    decode, device_name, held_keys, pick_devices, to_raw, Ev, Hat, EVENT_BYTES, EV_ABS, EV_KEY,
+    EV_SYN,
 };
 use super::trace;
 
@@ -19,6 +20,7 @@ const PSY: &str = "/sys/class/power_supply";
 const LID_POLL_MS: Millis = 150;
 
 pub struct DeviceInput {
+    held: Vec<Btn>,
     pending: Arc<Mutex<Vec<RawEvent>>>,
     stick: Arc<AtomicBool>,
     hall: Option<PathBuf>,
@@ -39,7 +41,13 @@ impl DeviceInput {
     fn open_traced(dev: &Path, sys: &Path, trace: Option<Arc<Trace>>) -> Self {
         let pending: Arc<Mutex<Vec<RawEvent>>> = Arc::new(Mutex::new(Vec::new()));
         let stick = Arc::new(AtomicBool::new(false));
+        let mut held = Vec::new();
         for node in pick_devices(dev, sys) {
+            for b in held_keys(&node) {
+                if !held.contains(&b) {
+                    held.push(b);
+                }
+            }
             eprintln!(
                 "slot: input {} ({})",
                 node.display(),
@@ -58,12 +66,17 @@ impl DeviceInput {
             }
         }
         DeviceInput {
+            held,
             pending,
             stick,
             hall: find_hall(Path::new(PSY)),
             lid_shut: None,
             next_lid_poll: 0,
         }
+    }
+
+    pub fn held_at_open(&self) -> &[Btn] {
+        &self.held
     }
 }
 
