@@ -2,6 +2,7 @@ use std::ffi::{c_char, c_void};
 use std::fs::File;
 use std::os::unix::io::AsRawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use libloading::Library;
 
@@ -28,7 +29,8 @@ const EGL_PLATFORM_GBM_KHR: u32 = 0x31D7;
 
 const POLLIN: i16 = 1;
 
-const GL_COLOR_BUFFER_BIT: u32 = 0x4000;
+const MASTER_TRIES: u32 = 500;
+const MASTER_WAIT: Duration = Duration::from_millis(10);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Panel {
@@ -149,6 +151,7 @@ struct Drm {
         unsafe extern "C" fn(i32, u32, u32, u32, u32, *const u32, i32, *const ModeInfo) -> i32,
     page_flip: unsafe extern "C" fn(i32, u32, u32, u32, *mut c_void) -> i32,
     handle_event: unsafe extern "C" fn(i32, *mut EventContext) -> i32,
+    set_master: unsafe extern "C" fn(i32) -> i32,
     _lib: Library,
 }
 
@@ -168,6 +171,7 @@ impl Drm {
                 set_crtc: sym(&lib, "drmModeSetCrtc")?,
                 page_flip: sym(&lib, "drmModePageFlip")?,
                 handle_event: sym(&lib, "drmHandleEvent")?,
+                set_master: sym(&lib, "drmSetMaster")?,
                 _lib: lib,
             })
         }
@@ -230,6 +234,19 @@ pub struct KmsSurface {
     outputs: [Output; 2],
     current: usize,
     card: File,
+    master: bool,
+}
+
+pub fn retry_until(mut f: impl FnMut() -> bool, tries: u32, wait: Duration) -> bool {
+    for i in 0..tries {
+        if f() {
+            return true;
+        }
+        if i + 1 < tries {
+            std::thread::sleep(wait);
+        }
+    }
+    false
 }
 
 pub fn preferred_mode(kinds: &[u32]) -> Option<usize> {
@@ -458,8 +475,8 @@ impl KmsSurface {
                 outputs: [top, bottom],
                 current: 0,
                 card,
+                master: false,
             };
-            surface.clear(Panel::Bottom)?;
             surface.select(Panel::Top)?;
             Ok(surface)
         }
@@ -474,20 +491,16 @@ impl KmsSurface {
         self.outputs[panel.index()].size
     }
 
-    fn clear(&mut self, panel: Panel) -> Result<(), GfxError> {
-        self.select(panel)?;
-        type ClearColor = unsafe extern "C" fn(f32, f32, f32, f32);
-        type Clear = unsafe extern "C" fn(u32);
-        let clear_color = self.proc_address("glClearColor");
-        let clear = self.proc_address("glClear");
-        if clear_color.is_null() || clear.is_null() {
-            return Err(GfxError::Context("glClear: not exported".into()));
+    fn take_master(&mut self) {
+        if self.master {
+            return;
         }
-        unsafe {
-            std::mem::transmute::<*const c_void, ClearColor>(clear_color)(0.0, 0.0, 0.0, 1.0);
-            std::mem::transmute::<*const c_void, Clear>(clear)(GL_COLOR_BUFFER_BIT);
+        let fd = self.card.as_raw_fd();
+        let set_master = self.drm.set_master;
+        if !retry_until(|| unsafe { set_master(fd) } == 0, MASTER_TRIES, MASTER_WAIT) {
+            eprintln!("slot: kms: the display is still held by another program");
         }
-        self.swap()
+        self.master = true;
     }
 
     fn fb_for(&mut self, bo: Ptr) -> Result<u32, GfxError> {
@@ -578,8 +591,9 @@ impl Surface for KmsSurface {
         }
         let fb = self.fb_for(bo)?;
         let fd = self.card.as_raw_fd();
-        let out = &mut self.outputs[self.current];
-        if !out.lit {
+        if !self.outputs[self.current].lit {
+            self.take_master();
+            let out = &mut self.outputs[self.current];
             let rc = unsafe {
                 (self.drm.set_crtc)(fd, out.crtc, fb, 0, 0, &out.connector, 1, &out.mode)
             };
@@ -593,6 +607,7 @@ impl Surface for KmsSurface {
             out.shown = bo;
             return Ok(());
         }
+        let out = &mut self.outputs[self.current];
         out.flipping.store(true, Ordering::Release);
         let data = &*out.flipping as *const AtomicBool as *mut c_void;
         let rc = unsafe { (self.drm.page_flip)(fd, out.crtc, fb, PAGE_FLIP_EVENT, data) };

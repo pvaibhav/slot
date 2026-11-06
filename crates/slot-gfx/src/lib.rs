@@ -39,7 +39,9 @@ pub use headless::HeadlessSurface;
 #[cfg(feature = "host")]
 pub use host::HostSurface;
 #[cfg(unix)]
-pub use kms::{free_crtc, preferred_mode, KmsSurface, Panel, CONNECTOR_DSI, MODE_TYPE_PREFERRED};
+pub use kms::{
+    free_crtc, preferred_mode, retry_until, KmsSurface, Panel, CONNECTOR_DSI, MODE_TYPE_PREFERRED,
+};
 pub use layout::{canvas_scale, Canvas};
 pub use lcd3x::{lcd3x_factors, lcd3x_mask, ScreenEffect};
 pub use pipeline::{SCALE, SRC_H, SRC_W, WHOLE_TEXTURE};

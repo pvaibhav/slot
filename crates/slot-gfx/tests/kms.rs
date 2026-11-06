@@ -1,4 +1,6 @@
-use slot_gfx::{free_crtc, preferred_mode, Panel, CONNECTOR_DSI, MODE_TYPE_PREFERRED};
+use std::time::Duration;
+
+use slot_gfx::{free_crtc, preferred_mode, retry_until, Panel, CONNECTOR_DSI, MODE_TYPE_PREFERRED};
 
 #[test]
 fn preferred_mode_wins_over_first() {
@@ -32,4 +34,34 @@ fn only_crtcs_the_encoder_can_drive() {
 fn top_is_dsi_2_and_bottom_is_dsi_1() {
     assert_eq!(Panel::Top.connector(), (CONNECTOR_DSI, 2));
     assert_eq!(Panel::Bottom.connector(), (CONNECTOR_DSI, 1));
+}
+
+#[test]
+fn waits_for_the_boot_logo_to_let_go_of_the_display() {
+    let mut calls = 0;
+    let got = retry_until(
+        || {
+            calls += 1;
+            calls == 3
+        },
+        10,
+        Duration::ZERO,
+    );
+    assert!(got);
+    assert_eq!(calls, 3);
+}
+
+#[test]
+fn gives_up_on_the_display_after_the_last_try() {
+    let mut calls = 0;
+    let got = retry_until(
+        || {
+            calls += 1;
+            false
+        },
+        4,
+        Duration::ZERO,
+    );
+    assert!(!got);
+    assert_eq!(calls, 4);
 }
