@@ -99,6 +99,7 @@ impl LidPolicy for Power {
         }
         self.closed = true;
         self.platform.set_backlight(0);
+        self.platform.sleep();
     }
 
     fn on_open(&mut self) {

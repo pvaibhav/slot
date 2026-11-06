@@ -71,6 +71,8 @@ pub trait Platform: Send {
         false
     }
 
+    fn sleep(&mut self) {}
+
     fn headphones(&self) -> bool {
         false
     }

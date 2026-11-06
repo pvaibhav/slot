@@ -5,7 +5,7 @@ use std::io::Write;
 #[cfg(unix)]
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Child, Command};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::{Battery, Charge, LedState, Platform, RepairResult};
@@ -105,11 +105,22 @@ pub struct DevicePlatform {
     rtc: Option<PathBuf>,
     motor: Option<Motor>,
     led: Option<Led>,
+    sleep_command: Option<PathBuf>,
+    sleeping: Option<Child>,
 }
 
 impl DevicePlatform {
     pub fn new(root: PathBuf) -> Self {
-        DevicePlatform::probe(Path::new("/sys"), root)
+        let platform = DevicePlatform::probe(Path::new("/sys"), root);
+        match std::env::var_os("DSOS_SLEEP") {
+            Some(cmd) if !cmd.is_empty() => platform.with_sleep(PathBuf::from(cmd)),
+            _ => platform,
+        }
+    }
+
+    pub fn with_sleep(mut self, command: PathBuf) -> Self {
+        self.sleep_command = Some(command);
+        self
     }
 
     pub fn probe(sysfs: &Path, root: PathBuf) -> Self {
@@ -154,6 +165,8 @@ impl DevicePlatform {
             rtc,
             motor,
             led,
+            sleep_command: None,
+            sleeping: None,
         }
     }
 
@@ -487,6 +500,21 @@ fn backlight_value(step: u8, max: u32) -> u32 {
 }
 
 impl Platform for DevicePlatform {
+    fn sleep(&mut self) {
+        let Some(command) = &self.sleep_command else {
+            return;
+        };
+        if let Some(child) = &mut self.sleeping {
+            if matches!(child.try_wait(), Ok(None)) {
+                return;
+            }
+        }
+        match Command::new(command).spawn() {
+            Ok(child) => self.sleeping = Some(child),
+            Err(e) => eprintln!("slot: sleep {}: {e}", command.display()),
+        }
+    }
+
     fn headphones(&self) -> bool {
         fs::read_to_string(self.sysfs.join("kernel/debug/gpio")).is_ok_and(|g| headphones_in(&g))
     }

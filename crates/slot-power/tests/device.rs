@@ -540,3 +540,60 @@ fn brightness_moves_both_screens_on_their_own_scales() {
     assert_eq!(brightness(&d), 255);
     assert_eq!(read_value(&top), 1666);
 }
+
+fn sleep_script(d: &TempDir, body: &str) -> PathBuf {
+    let script = d.path().join("sleep.sh");
+    fs::write(&script, format!("#!/bin/sh\n{body}\n")).unwrap();
+    let mut perms = fs::metadata(&script).unwrap().permissions();
+    std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
+    fs::set_permissions(&script, perms).unwrap();
+    script
+}
+
+fn lines_after(file: &Path, want: usize) -> usize {
+    for _ in 0..200 {
+        let n = fs::read_to_string(file)
+            .map(|t| t.lines().count())
+            .unwrap_or(0);
+        if n >= want {
+            return n;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    fs::read_to_string(file)
+        .map(|t| t.lines().count())
+        .unwrap_or(0)
+}
+
+#[test]
+fn sleep_runs_the_command_the_os_names() {
+    let d = sysfs("255", "87");
+    let mark = d.path().join("slept");
+    let script = sleep_script(&d, &format!("echo slept >> {}", mark.display()));
+    let mut p = platform(&d).with_sleep(script);
+    p.sleep();
+    assert_eq!(lines_after(&mark, 1), 1);
+}
+
+#[test]
+fn a_sleep_still_running_is_not_started_again() {
+    let d = sysfs("255", "87");
+    let mark = d.path().join("slept");
+    let script = sleep_script(&d, &format!("echo slept >> {}; sleep 0.3", mark.display()));
+    let mut p = platform(&d).with_sleep(script);
+    p.sleep();
+    lines_after(&mark, 1);
+    p.sleep();
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    assert_eq!(lines_after(&mark, 1), 1);
+    p.sleep();
+    assert_eq!(lines_after(&mark, 2), 2);
+    std::thread::sleep(std::time::Duration::from_millis(400));
+}
+
+#[test]
+fn without_an_os_sleep_command_sleep_does_nothing() {
+    let d = sysfs("255", "87");
+    let mut p = platform(&d);
+    p.sleep();
+}

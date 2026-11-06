@@ -7,6 +7,7 @@ use slot_power::{Battery, Charge, LedState, LidPolicy, Platform, Power};
 
 struct Panel {
     step: Arc<AtomicU8>,
+    sleeps: Arc<AtomicU8>,
     clock: i64,
 }
 
@@ -46,15 +47,30 @@ impl Platform for Panel {
     }
 
     fn set_rumble(&mut self, _strength: u16) {}
+
+    fn sleep(&mut self) {
+        self.sleeps.fetch_add(1, Ordering::Relaxed);
+    }
 }
 
 fn power() -> (Power, Arc<AtomicU8>) {
+    let (p, step, _) = sleepy();
+    (p, step)
+}
+
+fn sleepy() -> (Power, Arc<AtomicU8>, Arc<AtomicU8>) {
     let step = Arc::new(AtomicU8::new(0));
+    let sleeps = Arc::new(AtomicU8::new(0));
     let panel = Panel {
         step: step.clone(),
+        sleeps: sleeps.clone(),
         clock: 0,
     };
-    (Power::new(Box::new(panel), Duration::from_secs(60)), step)
+    (
+        Power::new(Box::new(panel), Duration::from_secs(60)),
+        step,
+        sleeps,
+    )
 }
 
 fn lit() -> (Power, Arc<AtomicU8>) {
@@ -90,4 +106,24 @@ fn a_level_set_while_shut_waits_for_the_open() {
     assert_eq!(step.load(Ordering::Relaxed), 0);
     p.on_open();
     assert_eq!(step.load(Ordering::Relaxed), 9);
+}
+
+#[test]
+fn closing_the_lid_puts_the_handheld_to_sleep_after_darkening_it() {
+    let (mut p, step, sleeps) = sleepy();
+    p.set_backlight(6);
+    p.on_close();
+    assert_eq!(step.load(Ordering::Relaxed), 0);
+    assert_eq!(sleeps.load(Ordering::Relaxed), 1);
+}
+
+#[test]
+fn a_second_close_does_not_ask_for_a_second_sleep() {
+    let (mut p, _, sleeps) = sleepy();
+    p.on_close();
+    p.on_close();
+    assert_eq!(sleeps.load(Ordering::Relaxed), 1);
+    p.on_open();
+    p.on_close();
+    assert_eq!(sleeps.load(Ordering::Relaxed), 2);
 }
