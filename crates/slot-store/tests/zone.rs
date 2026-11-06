@@ -136,3 +136,40 @@ fn an_old_offset_becomes_a_city_that_shows_the_same_time_now() {
         );
     }
 }
+
+extern "C" {
+    fn tzset();
+}
+
+fn libc_offset_min(utc: i64) -> i64 {
+    let t = utc as libc::time_t;
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    unsafe { libc::localtime_r(&t, &mut tm) };
+    tm.tm_gmtoff as i64 / 60
+}
+
+#[test]
+fn libc_reads_every_city_the_way_slot_does() {
+    let start = at("2026-01-01_00-00-00");
+    let end = at("2028-01-01_00-00-00");
+    for z in Zone::ALL {
+        std::env::set_var("TZ", z.posix());
+        unsafe { tzset() };
+        let mut utc = start;
+        while utc < end {
+            assert_eq!(
+                libc_offset_min(utc),
+                z.offset_min(utc),
+                "{} ({}) at {utc}",
+                z.name(),
+                z.posix()
+            );
+            utc += 900;
+        }
+    }
+}
+
+#[test]
+fn new_york_is_five_hours_behind_in_winter_for_libc() {
+    assert_eq!(zone("New York").posix(), "<-05>5<-04>,M3.2.0,M11.1.0");
+}

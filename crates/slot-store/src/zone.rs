@@ -155,6 +155,30 @@ impl Zone {
         c.std_min + if summer { 60 } else { 0 }
     }
 
+    pub fn posix(self) -> String {
+        let c = &CITIES[self.0];
+        let std = c.std_min;
+        let summer = std + 60;
+        let rules = match c.summer {
+            Summer::None => return format!("{}{}", posix_name(std), posix_offset(std)),
+            Summer::Us => ",M3.2.0,M11.1.0".to_string(),
+            Summer::Eu => format!(
+                ",M3.5.0/{},M10.5.0/{}",
+                posix_clock(60 + std),
+                posix_clock(60 + summer)
+            ),
+            Summer::Au => ",M10.1.0,M4.1.0/3".to_string(),
+            Summer::Nz => ",M9.5.0,M4.1.0/3".to_string(),
+        };
+        format!(
+            "{}{}{}{}",
+            posix_name(std),
+            posix_offset(std),
+            posix_name(summer),
+            rules
+        )
+    }
+
     pub fn local(self, utc: i64) -> i64 {
         utc + self.offset_min(utc) * 60
     }
@@ -162,6 +186,35 @@ impl Zone {
     pub fn utc(self, local: i64) -> i64 {
         let guess = local - self.offset_min(local - CITIES[self.0].std_min * 60) * 60;
         local - self.offset_min(guess) * 60
+    }
+}
+
+fn posix_name(min: i64) -> String {
+    let sign = if min < 0 { '-' } else { '+' };
+    let (h, m) = (min.abs() / 60, min.abs() % 60);
+    if m == 0 {
+        format!("<{sign}{h:02}>")
+    } else {
+        format!("<{sign}{h:02}{m:02}>")
+    }
+}
+
+fn posix_offset(min: i64) -> String {
+    let sign = if min > 0 { "-" } else { "" };
+    let (h, m) = (min.abs() / 60, min.abs() % 60);
+    if m == 0 {
+        format!("{sign}{h}")
+    } else {
+        format!("{sign}{h}:{m:02}")
+    }
+}
+
+fn posix_clock(min: i64) -> String {
+    let (h, m) = (min / 60, min.rem_euclid(60));
+    if m == 0 {
+        format!("{h}")
+    } else {
+        format!("{h}:{m:02}")
     }
 }
 

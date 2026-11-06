@@ -1193,6 +1193,7 @@ impl App {
         app.root = Some(root.to_path_buf());
         app.loading = loading;
         app.state = read_slot_state(root);
+        tell_libc_the_zone(app.state.zone);
         app.romm = crate::romm::RommConf::load(root);
         app.gifts = crate::romm::Gifts::load(root);
         app.carousel = read_carousel(root);
@@ -2420,6 +2421,7 @@ impl App {
             }
         }
         self.state.zone = zone;
+        tell_libc_the_zone(zone);
         self.state.clock_24h = clock_24h;
         self.state.network_time = network_time;
         self.state.clock_set = true;
@@ -13091,6 +13093,15 @@ fn clock_screen(utc: i64, state: &SlotState, networked: bool, from_menu: bool) -
         seed: utc - utc.rem_euclid(60),
         from_menu,
     }
+}
+
+extern "C" {
+    fn tzset();
+}
+
+fn tell_libc_the_zone(zone: slot_store::Zone) {
+    std::env::set_var("TZ", zone.posix());
+    unsafe { tzset() };
 }
 
 fn system_secs() -> i64 {
