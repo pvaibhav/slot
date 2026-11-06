@@ -87,7 +87,7 @@ const EVIOCSFF: c_ulong = 0x4030_4580;
 const DISPDBG_MAX: u32 = 255;
 
 enum Backlight {
-    Class(PathBuf),
+    Class(Vec<(PathBuf, u32)>),
     Dispdbg(PathBuf),
 }
 
@@ -113,16 +113,18 @@ impl DevicePlatform {
     }
 
     pub fn probe(sysfs: &Path, root: PathBuf) -> Self {
-        let class = first_dir(&sysfs.join("class/backlight"), |d| {
-            d.join("brightness").is_file()
-        });
-        let max_brightness = class
-            .as_ref()
-            .and_then(|d| read_number(&d.join("max_brightness")))
-            .unwrap_or(DISPDBG_MAX);
-        let backlight = match class {
-            Some(dir) => Some(Backlight::Class(dir)),
-            None => {
+        let class: Vec<(PathBuf, u32)> = all_dirs(&sysfs.join("class/backlight"))
+            .into_iter()
+            .filter(|d| d.join("brightness").is_file())
+            .map(|d| {
+                let max = read_number(&d.join("max_brightness")).unwrap_or(DISPDBG_MAX);
+                (d, max)
+            })
+            .collect();
+        let max_brightness = class.first().map_or(DISPDBG_MAX, |(_, max)| *max);
+        let backlight = match class.is_empty() {
+            false => Some(Backlight::Class(class)),
+            true => {
                 let dbg = sysfs.join("kernel/debug/dispdbg");
                 dbg.join("param")
                     .is_file()
@@ -184,7 +186,11 @@ impl DevicePlatform {
             None => absent.to_string(),
         };
         let backlight = match &self.backlight {
-            Some(Backlight::Class(dir)) => leaf(dir),
+            Some(Backlight::Class(dirs)) => dirs
+                .iter()
+                .map(|(dir, _)| leaf(dir))
+                .collect::<Vec<_>>()
+                .join(" and "),
             Some(Backlight::Dispdbg(_)) => "dispdbg".to_string(),
             None => "no backlight".to_string(),
         };
@@ -429,14 +435,16 @@ impl Drop for Motor {
     }
 }
 
-fn first_dir(parent: &Path, keep: impl Fn(&Path) -> bool) -> Option<PathBuf> {
+fn all_dirs(parent: &Path) -> Vec<PathBuf> {
     let mut names: Vec<PathBuf> = fs::read_dir(parent)
-        .ok()?
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .collect();
+        .map(|d| d.filter_map(|e| e.ok()).map(|e| e.path()).collect())
+        .unwrap_or_default();
     names.sort();
-    names.into_iter().find(|p| keep(p))
+    names
+}
+
+fn first_dir(parent: &Path, keep: impl Fn(&Path) -> bool) -> Option<PathBuf> {
+    all_dirs(parent).into_iter().find(|p| keep(p))
 }
 
 fn is_battery(dir: &Path) -> bool {
@@ -502,15 +510,22 @@ impl Platform for DevicePlatform {
         let Some(backlight) = &self.backlight else {
             return;
         };
-        let value = backlight_value(step, self.max_brightness);
         let write = |file: PathBuf, body: String| {
             if let Err(e) = fs::write(&file, body) {
                 eprintln!("slot: {}: {e}", file.display());
             }
         };
         match backlight {
-            Backlight::Class(dir) => write(dir.join("brightness"), value.to_string()),
+            Backlight::Class(dirs) => {
+                for (dir, max) in dirs {
+                    write(
+                        dir.join("brightness"),
+                        backlight_value(step, *max).to_string(),
+                    );
+                }
+            }
             Backlight::Dispdbg(dir) => {
+                let value = backlight_value(step, self.max_brightness);
                 write(dir.join("name"), "lcd0".to_string());
                 write(dir.join("command"), "setbl".to_string());
                 write(dir.join("param"), value.to_string());

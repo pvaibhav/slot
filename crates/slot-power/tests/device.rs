@@ -508,3 +508,35 @@ fn the_repair_result_is_read_once() {
         assert!(!file.exists(), "{text} was left to be shown again");
     }
 }
+
+fn second_panel(d: &TempDir, max: &str) -> PathBuf {
+    let bl = d.path().join("class/backlight/backlight-lcd1");
+    fs::create_dir_all(&bl).unwrap();
+    fs::write(bl.join("max_brightness"), format!("{max}\n")).unwrap();
+    fs::write(bl.join("brightness"), "7\n").unwrap();
+    bl.join("brightness")
+}
+
+fn read_value(file: &PathBuf) -> u32 {
+    fs::read_to_string(file).unwrap().trim().parse().unwrap()
+}
+
+#[test]
+fn closing_the_lid_darkens_both_screens() {
+    let d = sysfs("1666", "87");
+    let top = second_panel(&d, "1666");
+    let mut p = platform(&d);
+    p.set_backlight(0);
+    assert_eq!(brightness(&d), 0);
+    assert_eq!(read_value(&top), 0);
+}
+
+#[test]
+fn brightness_moves_both_screens_on_their_own_scales() {
+    let d = sysfs("255", "87");
+    let top = second_panel(&d, "1666");
+    let mut p = platform(&d);
+    p.set_backlight(10);
+    assert_eq!(brightness(&d), 255);
+    assert_eq!(read_value(&top), 1666);
+}
