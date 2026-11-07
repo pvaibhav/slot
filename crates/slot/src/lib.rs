@@ -25,6 +25,7 @@ pub mod crash {
     pub fn install() {}
 }
 pub mod drc;
+pub mod ds_view;
 pub mod emu;
 pub mod face_builder;
 pub mod fetch_art;
@@ -45,6 +46,7 @@ pub mod link_state;
 pub mod loading_mark;
 pub mod network_faces;
 pub mod networks;
+pub mod pacer;
 pub mod panel_turn;
 pub mod persist;
 pub mod editing;

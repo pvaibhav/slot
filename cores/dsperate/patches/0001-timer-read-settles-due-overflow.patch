@@ -1,0 +1,11 @@
+--- a/src/core/io/io.cpp
++++ b/src/core/io/io.cpp
+@@ -211,6 +211,8 @@
+ }
+ 
+ u16 Io::timer_value(Cpu cpu, int idx) {
++  const int first = static_cast<int>(cpu == Cpu::ARM9 ? EventId::Timer0 : EventId::Timer7_0);
++  for (int k = 0; k <= idx; ++k) nds_.sched.settle(static_cast<EventId>(first + k));
+   Timer& t = cpu_io[ci(cpu)].timers[idx];
+   if (!t.running() || t.count_up()) return t.counter;
+   u64 elapsed = (nds_.sched.now() - t.start_time) >> 1;   // 33 MHz system clock

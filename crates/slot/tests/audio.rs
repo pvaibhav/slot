@@ -463,3 +463,13 @@ fn the_speaker_is_let_go_before_the_power_is_cut() {
         );
     }
 }
+
+#[test]
+fn device_xruns_are_counted_until_the_faults_clear() {
+    let r = Ring::new(ring_capacity(48_000));
+    r.note_xrun();
+    r.note_xrun();
+    assert_eq!(r.xruns(), 2);
+    r.clear_faults();
+    assert_eq!(r.xruns(), 0);
+}

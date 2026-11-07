@@ -258,7 +258,26 @@ fn a_line_naming_a_core_the_platform_cannot_run_is_dropped() {
     );
 }
 
+#[cfg(not(feature = "nds"))]
 #[test]
 fn the_core_list_has_three_entries() {
     assert_eq!(Core::ALL.len(), 3);
+}
+
+#[cfg(feature = "nds")]
+#[test]
+fn nds_games_always_run_dsperate() {
+    let d = root_with(Some("x=mgba\n"));
+    assert_eq!(
+        core_for_platform(d.path(), "x", Platform::Nds, Core::Gambatte),
+        Core::Dsperate
+    );
+    assert_eq!(
+        core_for_platform(d.path(), "y", Platform::Nds, Core::Mgba),
+        Core::Dsperate
+    );
+    assert!(Core::Dsperate.runs(Platform::Nds));
+    assert!(!Core::Dsperate.runs(Platform::Gba));
+    assert!(!Core::Mgba.runs(Platform::Nds));
+    assert_eq!(Core::parse("dsperate"), Some(Core::Dsperate));
 }

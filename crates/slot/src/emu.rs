@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use crate::cable::{self, Cable};
 use slot_retro::{
-    ButtonMask, Link, LinkChannel, RetroCore, Rumble, GBA_H, GBA_W, NETPACKET_RELIABLE,
+    mask_for, ButtonMask, Link, LinkChannel, RetroCore, Rumble, NETPACKET_RELIABLE,
 };
 
 use crate::audio::Ring;
@@ -33,6 +33,8 @@ const SNAPSHOT_EVERY: u32 = 2;
 const STALL: Duration = Duration::from_millis(25);
 
 const RATE_WINDOW: u32 = 300;
+
+const MAX_CATCH_UP: u64 = 3;
 
 const TRACE_EVERY: u64 = 300;
 
@@ -90,6 +92,8 @@ enum Cmd {
 
 struct Shared {
     input: AtomicU16,
+    touch: AtomicU32,
+    lid: AtomicBool,
     speed: AtomicU8,
     observed: AtomicU8,
     state: AtomicU8,
@@ -162,9 +166,12 @@ impl EmuHandle {
     ) -> Self {
         let rumble = core.rumble();
         let link = core.net();
-        let frames = Frames::new((GBA_W * GBA_H * 4) as usize);
+        let (w, h) = core.video_size();
+        let frames = Frames::new((w * h * 4) as usize);
         let shared = Arc::new(Shared {
             input: AtomicU16::new(0),
+            touch: AtomicU32::new(NO_TOUCH),
+            lid: AtomicBool::new(false),
             speed: AtomicU8::new(Speed::Paused as u8),
             observed: AtomicU8::new(Speed::Paused as u8),
             state: AtomicU8::new(CoreState::Loading as u8),
@@ -283,6 +290,12 @@ impl EmuHandle {
         self.shared.clocked.notify_all();
     }
 
+    pub fn step_ahead(&self, present: Duration, timeout: Duration) -> bool {
+        let ready = self.wait_frame(timeout);
+        self.tick(present);
+        !ready && self.locked()
+    }
+
     pub fn wait_frame(&self, timeout: Duration) -> bool {
         let until = Instant::now() + timeout;
         let mut clock = self.shared.clock.lock().unwrap_or_else(|e| e.into_inner());
@@ -306,6 +319,14 @@ impl EmuHandle {
     pub fn set_input(&self, mask: ButtonMask) {
         let before = self.shared.input.swap(mask.0, Ordering::Relaxed);
         crate::latency::applied(before, mask.0);
+    }
+
+    pub fn set_touch(&self, at: Option<(u8, u8)>) {
+        self.shared.touch.store(pack_touch(at), Ordering::Relaxed);
+    }
+
+    pub fn set_lid(&self, shut: bool) {
+        self.shared.lid.store(shut, Ordering::Relaxed);
     }
 
     pub fn input(&self) -> ButtonMask {
@@ -594,7 +615,7 @@ impl Worker {
         let mut fast_span: Option<(Instant, Duration)> = None;
         let mut deadline = Instant::now();
         let mut served = 0u64;
-        let mut ticked = false;
+        let mut due = 0u32;
         let mut paced = 0u64;
         let mut scale = 0.0f64;
         let mut rate = TickRate::new(Instant::now(), 0);
@@ -678,11 +699,13 @@ impl Worker {
                 self.shared.clocked.notify_all();
             }
             let input = ButtonMask(self.shared.input.load(Ordering::Relaxed));
+            core.set_touch(unpack_touch(self.shared.touch.load(Ordering::Relaxed)));
+            core.set_lid(self.shared.lid.load(Ordering::Relaxed));
             crate::latency::emu_frame(input.0);
             let mut span = 1u32;
             let ceiling = match speed {
                 Speed::Paused => 0,
-                Speed::Normal if lock && !ticked => 0,
+                Speed::Normal if lock => due,
                 Speed::Normal => 1,
                 Speed::Fast => {
                     owed += self.shared.fast_quarters.load(Ordering::Relaxed);
@@ -712,16 +735,24 @@ impl Worker {
                 if speed == Speed::Fast {
                     span = cost.span(one, ceiling);
                 }
-                let ceiling = ceiling * span;
+                if lock && speed == Speed::Normal {
+                    span = ceiling;
+                }
+                let ceiling = match lock && speed == Speed::Normal {
+                    true => ceiling,
+                    false => ceiling * span,
+                };
                 let budget = one + PRESENT * (span - 1);
                 let began = Instant::now();
                 let mut ran = 0u32;
                 let (mut skipped, mut drawn) = (None::<Duration>, Duration::ZERO);
                 loop {
                     ran += 1;
-                    let last = ran >= ceiling || cost.last(began.elapsed(), budget);
+                    let last = ran >= ceiling
+                        || (speed == Speed::Fast && cost.last(began.elapsed(), budget));
                     let input = match self.shared.turbo.load(Ordering::Relaxed) {
-                        true => input.turbo(turbo_frame),
+                        true => mask_for(core.takes_xy(), input, turbo_frame),
+                        false if core.takes_xy() => input,
                         false => input.without_turbo(),
                     };
                     turbo_frame = turbo_frame.wrapping_add(1);
@@ -861,7 +892,8 @@ impl Worker {
                     if crate::session::trace() && paced.is_multiple_of(TRACE_EVERY) {
                         let (dropped, starved) = (ring.overruns(), ring.underruns());
                         eprintln!(
-                            "slot: audio: {queued}/{target} queued, {dropped} dropped, {starved} starved, locked {lock} at {scale:.5}"
+                            "slot: audio: {queued}/{target} queued, {dropped} dropped, {starved} starved, {} xruns, locked {lock} at {scale:.5}",
+                            ring.xruns()
                         );
                     }
                 }
@@ -877,6 +909,10 @@ impl Worker {
                 loop {
                     match self.next_tick(served, until) {
                         Wait::Tick(tick) => {
+                            due = match tick - served {
+                                n if n <= MAX_CATCH_UP => n as u32,
+                                _ => 1,
+                            };
                             served = tick;
                             stalled = false;
                             if let Some(measured) = rate.served(Instant::now(), tick) {
@@ -892,14 +928,14 @@ impl Worker {
                         Wait::Late => {
                             rate.stalled();
                             stalled = true;
+                            due = 1;
                         }
                     }
                     break;
                 }
-                ticked = true;
                 continue;
             }
-            ticked = false;
+            due = 0;
             deadline += PRESENT * span;
             let now = Instant::now();
             match deadline.checked_duration_since(now) {
@@ -912,9 +948,9 @@ impl Worker {
         }
         ring.set_muted(false);
         ring.set_idle(false);
-        let (dropped, starved) = (ring.overruns(), ring.underruns());
-        if dropped > 0 || starved > 0 || crate::session::trace() {
-            eprintln!("slot: audio: {dropped} samples dropped, {starved} starved");
+        let (dropped, starved, xruns) = (ring.overruns(), ring.underruns(), ring.xruns());
+        if dropped > 0 || starved > 0 || xruns > 0 || crate::session::trace() {
+            eprintln!("slot: audio: {dropped} samples dropped, {starved} starved, {xruns} xruns");
         }
     }
 
@@ -1060,6 +1096,16 @@ impl Worker {
     fn speed(&self) -> Speed {
         Speed::from_u8(self.shared.speed.load(Ordering::Relaxed))
     }
+}
+
+const NO_TOUCH: u32 = u32::MAX;
+
+fn pack_touch(at: Option<(u8, u8)>) -> u32 {
+    at.map_or(NO_TOUCH, |(x, y)| (x as u32) << 8 | y as u32)
+}
+
+fn unpack_touch(packed: u32) -> Option<(u8, u8)> {
+    (packed != NO_TOUCH).then_some(((packed >> 8) as u8, packed as u8))
 }
 
 fn flush_outbound(transport: &mut Option<Box<dyn LinkChannel>>, link: &Link) {

@@ -532,3 +532,12 @@ fn purge_removes_from_collections() {
     assert_eq!(read(d.path(), "Collections/Other.txt"), "gb/Beta\n");
     server.stop();
 }
+
+#[test]
+fn gamebit_does_not_serve_ds_games() {
+    let (d, server) = start();
+    put(d.path(), "Games/NDS/Mario Kart DS.nds", b"ds-rom");
+    let (status, body) = call(server.port(), "GET", "/api/games/NDS", b"");
+    assert_ne!(status, 200, "{body}");
+    server.stop();
+}

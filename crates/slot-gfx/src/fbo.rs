@@ -184,6 +184,14 @@ impl Compositor {
         self.sprites.update_texture(id, w, h, rgba);
     }
 
+    pub fn grade(&self) -> crate::grade::ColorGrade {
+        crate::grade::ColorGrade {
+            gain: self.gain.map(|g| g * self.dim),
+            saturation: self.saturation,
+            contrast: self.contrast,
+        }
+    }
+
     pub fn set_blue_light(&mut self, step: u8) {
         self.gain = blue_light_gain(step);
     }

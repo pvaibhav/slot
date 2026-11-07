@@ -13,7 +13,7 @@ pub mod volume;
 pub use alsa::AlsaSink;
 #[cfg(feature = "host")]
 pub use host::HostAudio;
-pub use jack::{follows_jack, Jack};
+pub use jack::{follows_jack, Jack, RouteWatch};
 pub use pacer::Pacer;
 pub use ring::{ring_capacity, Ring};
 pub use sfx::Sfx;

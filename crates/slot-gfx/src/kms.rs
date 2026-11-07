@@ -1,7 +1,7 @@
 use std::ffi::{c_char, c_void};
 use std::fs::File;
 use std::os::unix::io::AsRawFd;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::Duration;
 
 use libloading::Library;
@@ -14,6 +14,7 @@ use crate::fbdev::{
 use crate::surface::{GfxError, Surface};
 
 const CARD: &str = "/dev/dri/card0";
+const LEGACY_FLAG: &str = "/mnt/sdcard/System/kms-legacy.on";
 
 pub const CONNECTOR_DSI: u32 = 16;
 const CONNECTED: i32 = 1;
@@ -50,6 +51,14 @@ impl Panel {
         match self {
             Panel::Top => 0,
             Panel::Bottom => 1,
+        }
+    }
+
+    pub fn of_index(index: usize) -> Option<Panel> {
+        match index {
+            0 => Some(Panel::Top),
+            1 => Some(Panel::Bottom),
+            _ => None,
         }
     }
 }
@@ -235,6 +244,7 @@ pub struct KmsSurface {
     current: usize,
     card: File,
     master: bool,
+    atomic: Option<Atomic>,
 }
 
 pub fn retry_until(mut f: impl FnMut() -> bool, tries: u32, wait: Duration) -> bool {
@@ -267,6 +277,42 @@ pub fn free_crtc(current: u32, possible: u32, crtcs: &[u32], taken: &[u32]) -> O
         .map(|(_, c)| *c)
 }
 
+unsafe extern "C" fn flipped_one(_fd: i32, _seq: u32, _sec: u32, _usec: u32, data: *mut c_void) {
+    let left = &*(data as *const AtomicU32);
+    let _ = left.fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1));
+}
+
+struct Atomic {
+    api: crate::kms_atomic::AtomicApi,
+    ids: [crate::kms_atomic::AtomicIds; 2],
+    blobs: [u32; 2],
+    pending: [Option<(Ptr, u32)>; 2],
+    left: Box<AtomicU32>,
+}
+
+unsafe fn atomic_for(fd: i32, found: &[Found; 2]) -> Result<Atomic, GfxError> {
+    let api = crate::kms_atomic::AtomicApi::load()?;
+    api.enable(fd)?;
+    let planes = api.planes(fd);
+    let mut taken = Vec::new();
+    let mut ids = [crate::kms_atomic::AtomicIds::default(); 2];
+    let mut blobs = [0u32; 2];
+    for (i, f) in found.iter().enumerate() {
+        let plane = crate::kms_atomic::primary_plane_for(&planes, f.crtc_index, &taken)
+            .ok_or_else(|| GfxError::Context(format!("no primary plane for crtc {}", f.crtc)))?;
+        taken.push(plane);
+        ids[i] = api.ids(fd, plane, f.crtc, f.connector)?;
+        blobs[i] = api.mode_blob(fd, &f.mode)?;
+    }
+    Ok(Atomic {
+        api,
+        ids,
+        blobs,
+        pending: [None, None],
+        left: Box::new(AtomicU32::new(0)),
+    })
+}
+
 unsafe extern "C" fn flipped(_fd: i32, _seq: u32, _sec: u32, _usec: u32, data: *mut c_void) {
     (*(data as *const AtomicBool)).store(false, Ordering::Release);
 }
@@ -274,6 +320,7 @@ unsafe extern "C" fn flipped(_fd: i32, _seq: u32, _sec: u32, _usec: u32, data: *
 struct Found {
     connector: u32,
     crtc: u32,
+    crtc_index: usize,
     mode: ModeInfo,
 }
 
@@ -327,6 +374,7 @@ unsafe fn find(drm: &Drm, fd: i32) -> Result<[Found; 2], GfxError> {
                     found[panel.index()] = Some(Found {
                         connector: cid,
                         crtc,
+                        crtc_index: crtcs.iter().position(|&c| c == crtc).unwrap_or(0),
                         mode,
                     });
                 }
@@ -397,6 +445,21 @@ impl KmsSurface {
         let gles = open("libGLESv2.so.2").or_else(|_| open("libGLESv2.so"))?;
         unsafe {
             let found = find(&drm, fd)?;
+            let legacy = std::path::Path::new(LEGACY_FLAG).is_file();
+            let atomic = match legacy {
+                true => Err(GfxError::Context(format!("{LEGACY_FLAG} is set"))),
+                false => atomic_for(fd, &found),
+            };
+            let atomic = match atomic {
+                Ok(a) => {
+                    eprintln!("slot: kms: both panels flip in one atomic commit");
+                    Some(a)
+                }
+                Err(e) => {
+                    eprintln!("slot: kms: atomic unavailable ({e}), flipping each panel on its own");
+                    None
+                }
+            };
             let device = (gbm.create_device)(fd);
             if device.is_null() {
                 return Err(GfxError::Context("gbm_create_device failed".into()));
@@ -476,6 +539,7 @@ impl KmsSurface {
                 current: 0,
                 card,
                 master: false,
+                atomic,
             };
             surface.select(Panel::Top)?;
             Ok(surface)
@@ -530,6 +594,132 @@ impl KmsSurface {
         Ok(fb)
     }
 
+    fn wait_atomic(&mut self) -> Result<(), GfxError> {
+        let fd = self.card.as_raw_fd();
+        let Some(atomic) = self.atomic.as_ref() else {
+            return Ok(());
+        };
+        while atomic.left.load(Ordering::Acquire) > 0 {
+            let mut pfd = PollFd {
+                fd,
+                events: POLLIN,
+                revents: 0,
+            };
+            if unsafe { poll(&mut pfd, 1, -1) } < 0 {
+                let e = std::io::Error::last_os_error();
+                if e.kind() == std::io::ErrorKind::Interrupted {
+                    continue;
+                }
+                return Err(GfxError::Context(format!("poll {CARD}: {e}")));
+            }
+            let mut ctx = EventContext {
+                version: 2,
+                vblank_handler: None,
+                page_flip_handler: Some(flipped_one),
+            };
+            unsafe { (self.drm.handle_event)(fd, &mut ctx) };
+        }
+        for out in self.outputs.iter_mut() {
+            if !out.queued.is_null() {
+                if !out.shown.is_null() {
+                    unsafe { (self.gbm.release_buffer)(out.gbm_surface, out.shown) };
+                }
+                out.shown = std::mem::replace(&mut out.queued, std::ptr::null_mut());
+            }
+        }
+        Ok(())
+    }
+
+    fn commit_atomic(&mut self) -> Result<(), GfxError> {
+        self.take_master();
+        self.wait_atomic()?;
+        let fd = self.card.as_raw_fd();
+        let Some(atomic) = self.atomic.as_mut() else {
+            return Ok(());
+        };
+        let mut plan = Vec::new();
+        let mut modeset = false;
+        let mut taking = Vec::new();
+        for (i, out) in self.outputs.iter().enumerate() {
+            let Some((bo, fb)) = atomic.pending[i].take() else {
+                continue;
+            };
+            let first = !out.lit;
+            modeset |= first;
+            plan.extend(crate::kms_atomic::atomic_plan(
+                &[(atomic.ids[i], fb, out.size, atomic.blobs[i])],
+                first,
+            ));
+            taking.push((i, bo));
+        }
+        if taking.is_empty() {
+            return Ok(());
+        }
+        let left = &*atomic.left as *const AtomicU32 as *mut c_void;
+        let flags = match modeset {
+            true => crate::kms_atomic::ATOMIC_ALLOW_MODESET,
+            false => crate::kms_atomic::ATOMIC_NONBLOCK | crate::kms_atomic::PAGE_FLIP_EVENT,
+        };
+        if !modeset {
+            atomic.left.store(taking.len() as u32, Ordering::Release);
+        }
+        if let Err(e) = atomic.api.commit(fd, &plan, flags, left) {
+            atomic.left.store(0, Ordering::Release);
+            for (i, bo) in taking {
+                unsafe { (self.gbm.release_buffer)(self.outputs[i].gbm_surface, bo) };
+            }
+            return Err(e);
+        }
+        for (i, bo) in taking {
+            let out = &mut self.outputs[i];
+            match modeset {
+                true => {
+                    if !out.shown.is_null() {
+                        unsafe { (self.gbm.release_buffer)(out.gbm_surface, out.shown) };
+                    }
+                    out.shown = bo;
+                    out.lit = true;
+                }
+                false => out.queued = bo,
+            }
+        }
+        Ok(())
+    }
+
+    fn swap_atomic(&mut self) -> Result<(), GfxError> {
+        let s = self.outputs[self.current].egl_surface;
+        if unsafe { (self.egl.swap_buffers)(self.display, s) } == 0 {
+            return Err(self.egl.fail("eglSwapBuffers"));
+        }
+        let already = self
+            .atomic
+            .as_ref()
+            .is_some_and(|a| a.pending[self.current].is_some());
+        if already {
+            self.commit_atomic()?;
+        }
+        let gbm_surface = self.outputs[self.current].gbm_surface;
+        let bo = unsafe { (self.gbm.lock_front_buffer)(gbm_surface) };
+        if bo.is_null() {
+            return Err(GfxError::Context(
+                "gbm_surface_lock_front_buffer failed".into(),
+            ));
+        }
+        let fb = self.fb_for(bo)?;
+        let current = self.current;
+        let full = match self.atomic.as_mut() {
+            Some(a) => {
+                a.pending[current] = Some((bo, fb));
+                a.pending.iter().all(Option::is_some)
+            }
+            None => false,
+        };
+        if full {
+            self.commit_atomic()?;
+        }
+        Ok(())
+    }
+
     fn wait_flip(&mut self) -> Result<(), GfxError> {
         let fd = self.card.as_raw_fd();
         let out = &mut self.outputs[self.current];
@@ -577,6 +767,9 @@ impl Surface for KmsSurface {
     }
 
     fn swap(&mut self) -> Result<(), GfxError> {
+        if self.atomic.is_some() {
+            return self.swap_atomic();
+        }
         let s = self.outputs[self.current].egl_surface;
         if unsafe { (self.egl.swap_buffers)(self.display, s) } == 0 {
             return Err(self.egl.fail("eglSwapBuffers"));
@@ -623,10 +816,27 @@ impl Surface for KmsSurface {
     fn proc_address(&self, name: &str) -> *const c_void {
         gl_proc(&self.egl, &self.gles, name)
     }
+
+    fn panel_count(&self) -> usize {
+        self.outputs.len()
+    }
+
+    fn refresh_period(&self) -> Option<std::time::Duration> {
+        let m = &self.outputs[Panel::Top.index()].mode;
+        crate::surface::mode_period(m.clock, m.htotal, m.vtotal)
+    }
+
+    fn select_panel(&mut self, index: usize) -> Result<(), GfxError> {
+        match Panel::of_index(index) {
+            Some(panel) => self.select(panel),
+            None => Err(GfxError::Context(format!("no panel {index}"))),
+        }
+    }
 }
 
 impl Drop for KmsSurface {
     fn drop(&mut self) {
+        let _ = self.wait_atomic();
         for i in 0..self.outputs.len() {
             self.current = i;
             let _ = self.wait_flip();

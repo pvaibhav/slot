@@ -17,6 +17,8 @@ pub const GB_H: u32 = 901;
 pub fn size(platform: Platform) -> (u32, u32) {
     match platform {
         Platform::Gba | Platform::Gbav => (W, H),
+        #[cfg(feature = "nds")]
+        Platform::Nds => (W, H),
         Platform::Gb | Platform::Gbc => (GB_W, GB_H),
     }
 }

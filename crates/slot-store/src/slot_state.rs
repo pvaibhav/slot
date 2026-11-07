@@ -356,6 +356,8 @@ impl Blending {
             Core::Mgba => &Blending::MGBA,
             Core::Gpsp => &Blending::GPSP,
             Core::Gambatte => &Blending::MGBA,
+            #[cfg(feature = "nds")]
+            Core::Dsperate => &[Blending::Off],
         }
     }
 

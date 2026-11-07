@@ -42,3 +42,26 @@ fn only_dsos_reopens_audio_for_the_jack() {
     assert!(!follows_jack(Some("0")));
     assert!(!follows_jack(Some("")));
 }
+
+#[test]
+fn the_route_watch_sees_dsos_replace_its_audio_config() {
+    use slot::audio::RouteWatch;
+    let d = tempfile::tempdir().unwrap();
+    let conf = d.path().join("asound.conf");
+    std::fs::write(&conf, "speaker").unwrap();
+    let paths = format!("/usr/share/alsa/alsa.conf:{}", conf.display());
+    let mut watch = RouteWatch::new(Some(&paths));
+    assert!(!watch.changed(), "the first look is not a change");
+    assert!(!watch.changed());
+    let next = d.path().join("asound.conf.new");
+    std::fs::write(&next, "headphones").unwrap();
+    std::fs::rename(&next, &conf).unwrap();
+    assert!(watch.changed(), "a replaced config went unnoticed");
+    assert!(!watch.changed());
+}
+
+#[test]
+fn no_config_path_never_changes() {
+    let mut watch = slot::audio::RouteWatch::new(None);
+    assert!(!watch.changed());
+}

@@ -25,6 +25,10 @@ fn screen_width_over(w: f32, t: f32) -> f32 {
     1.0 - (1.0 - LINE_PX / w) * left
 }
 
+pub fn screen_squash(w: f32, h: f32, t: f32) -> (f32, f32) {
+    (screen_width_over(w, t), screen_scale_over(h, t))
+}
+
 pub fn screen_brightness(t: f32) -> f32 {
     let left = 1.0 - t.clamp(0.0, 1.0);
     1.0 + OVERSHOOT * left * left

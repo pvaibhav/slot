@@ -10,6 +10,7 @@ default = ["host"]
 host = ["dep:winit", "dep:cpal", "dep:gilrs", "slot-gfx/host"]
 device = ["slot-gfx/device"]
 romm = []
+nds = ["slot-store/nds", "slot-ui/nds"]
 
 [dependencies]
 slot-gfx = { path = "../slot-gfx", default-features = false }

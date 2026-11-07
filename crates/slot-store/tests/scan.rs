@@ -157,3 +157,21 @@ fn the_same_stem_on_two_platforms_is_two_carts_with_two_labels() {
         "the GBA cart borrowed the Game Boy label"
     );
 }
+
+#[test]
+fn nds_roms_are_scanned_only_with_the_feature() {
+    let d = tmp_root();
+    std::fs::create_dir_all(d.path().join("Games/NDS")).unwrap();
+    std::fs::write(d.path().join("Games/NDS/Mario Kart DS.nds"), vec![0u8; 0x200]).unwrap();
+    write_rom(&d, "GBA/Emerald.gba", "POKEMON EMER");
+    let carts = scan(d.path()).unwrap();
+    let stems: Vec<&str> = carts.iter().map(|c| c.stem.as_str()).collect();
+    if cfg!(feature = "nds") {
+        assert_eq!(carts.len(), 2, "{stems:?}");
+        assert!(carts
+            .iter()
+            .any(|c| c.stem == "Mario Kart DS" && c.platform.dir_name() == "NDS"));
+    } else {
+        assert_eq!(stems, vec!["Emerald"]);
+    }
+}

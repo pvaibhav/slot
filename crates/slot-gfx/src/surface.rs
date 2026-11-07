@@ -28,6 +28,15 @@ pub trait Surface {
     fn window_size(&self) -> (u32, u32);
     fn swap(&mut self) -> Result<(), GfxError>;
     fn proc_address(&self, name: &str) -> *const c_void;
+    fn panel_count(&self) -> usize {
+        1
+    }
+    fn refresh_period(&self) -> Option<std::time::Duration> {
+        None
+    }
+    fn select_panel(&mut self, _index: usize) -> Result<(), GfxError> {
+        Ok(())
+    }
 }
 
 pub fn fit_scale(win_w: u32, win_h: u32) -> u32 {
@@ -65,4 +74,9 @@ pub fn blit_rect(window: (u32, u32), shake: f32) -> (i32, i32, i32, i32) {
     let (x, y, w, h) = fit_rect(window.0, window.1);
     let dx = shake * fit_scale(window.0, window.1) as f32;
     (x + dx.round() as i32, y, w, h)
+}
+
+pub fn mode_period(clock_khz: u32, htotal: u16, vtotal: u16) -> Option<std::time::Duration> {
+    let dots = htotal as u64 * vtotal as u64;
+    (clock_khz > 0 && dots > 0).then(|| std::time::Duration::from_nanos(dots * 1_000_000 / clock_khz as u64))
 }

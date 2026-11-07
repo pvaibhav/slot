@@ -2,9 +2,10 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use slot::frontend::Frontend;
+use slot::pacer::Pacer;
 use slot::input::DeviceInput;
 use slot::panel_turn::{panel_turn, PanelTurn};
-use slot_gfx::{Compositor, FbdevSurface, KmsSurface, Surface};
+use slot_gfx::{Compositor, DsPass, DsScreen, FbdevSurface, KmsSurface, Surface};
 use slot_power::{trace_first_frame, DevicePlatform};
 
 const CARD: &str = "/mnt/sdcard";
@@ -13,58 +14,8 @@ const MIN_FRAME: Duration = Duration::from_millis(12);
 
 const STEP_TIMEOUT: Duration = Duration::from_millis(12);
 
-const MARGIN: Duration = Duration::from_micros(1500);
 
 const LOG_SYNC: Duration = Duration::from_secs(1);
-
-struct Pacer {
-    last_return: Option<Instant>,
-    period: Duration,
-    work: Duration,
-    works: [Duration; WORK_WINDOW],
-    next: usize,
-}
-
-const WORK_WINDOW: usize = 32;
-
-impl Pacer {
-    fn new() -> Self {
-        Pacer {
-            last_return: None,
-            period: Duration::from_micros(16_760),
-            work: Duration::from_millis(4),
-            works: [Duration::from_millis(4); WORK_WINDOW],
-            next: 0,
-        }
-    }
-
-    fn wait(&self) {
-        let Some(last) = self.last_return else {
-            return;
-        };
-        let delay = self.period.saturating_sub(self.work + MARGIN);
-        if let Some(left) = (last + delay).checked_duration_since(Instant::now()) {
-            std::thread::sleep(left);
-        }
-    }
-
-    fn swapped(&mut self, work: Duration, blocked: bool) -> bool {
-        let now = Instant::now();
-        let mut missed = false;
-        if let Some(last) = self.last_return {
-            let seen = now - last;
-            missed = seen > self.period.mul_f64(1.5);
-            if blocked && seen > Duration::from_millis(12) && seen < Duration::from_millis(22) {
-                self.period = self.period.mul_f64(0.95) + seen.mul_f64(0.05);
-            }
-        }
-        self.works[self.next] = work;
-        self.next = (self.next + 1) % WORK_WINDOW;
-        self.work = self.works.iter().copied().max().unwrap_or(work);
-        self.last_return = Some(now);
-        missed
-    }
-}
 
 pub fn run() {
     slot::boot_time::mark("start");
@@ -157,14 +108,28 @@ pub fn run() {
         .name("slot-logsync".into())
         .spawn(sync_log_writes);
     let mut drawn = false;
+    let mut ds = match surface.panel_count() > 1 {
+        true => DsPass::new().map_err(|e| eprintln!("slot: ds pass: {e}")).ok(),
+        false => None,
+    };
+    let show_fps = root.join(SHOW_FPS).is_file();
+    let mut fps = Fps::default();
     frontend.drive_emulator();
-    let mut pacer = Pacer::new();
+    let mut pacer = match surface.refresh_period() {
+        Some(period) => {
+            eprintln!("slot: pace: fixed at the panel's {:.3} ms", period.as_secs_f64() * 1e3);
+            Pacer::fixed(period)
+        }
+        None => Pacer::new(),
+    };
     let (mut frames, mut missed, mut early, mut stale) = (0u32, 0u32, 0u32, 0u32);
+    let mut stages = Stages::default();
     loop {
         pacer.wait();
         let began = Instant::now();
         input.steer_with_stick(frontend.app().left_stick_dpad());
         frontend.advance(&mut input);
+        frontend.set_ds_touch(input.touch());
         if frontend.restarting() {
             frontend.restart();
         }
@@ -184,8 +149,25 @@ pub fn run() {
             frontend.stop();
             return;
         }
-        let late = frontend.step_emulator(pacer.period, STEP_TIMEOUT);
-        frontend.render(&mut compositor, window);
+        let late = frontend.step_emulator(pacer.period(), STEP_TIMEOUT);
+        let stepped = Instant::now();
+        let menu_below = ds.is_some() && frontend.ds_frame().is_some() && frontend.ds_menu_below();
+        if !menu_below {
+            frontend.render(&mut compositor, window);
+        }
+        let rendered = Instant::now();
+        let ds_frame = frontend.ds_frame();
+        if let (Some(pass), Some(frame)) = (ds.as_mut(), ds_frame) {
+            pass.set_grade(compositor.grade());
+            pass.upload(frame);
+            if menu_below {
+                pass.draw_screen(DsScreen::Top, surface.window_size());
+            }
+            if frontend.ds_direct() && show_fps {
+                let shown = fps.sample(frontend.frames_published(), Instant::now());
+                pass.draw_fps(shown, surface.window_size());
+            }
+        }
         let swap = Instant::now();
         let work = swap - began;
         if let Err(e) = surface.swap() {
@@ -194,20 +176,36 @@ pub fn run() {
             return;
         }
         let swap_took = swap.elapsed();
+        let bottom_began = Instant::now();
+        if let Some(pass) = ds.as_ref() {
+            let power = frontend.ds_frame().map(|_| frontend.screen_power());
+            let drawn = match menu_below {
+                true => draw_menu_below(&mut *surface, &mut frontend, &mut compositor, window),
+                false => draw_bottom(&mut *surface, pass, power),
+            };
+            if let Err(e) = drawn {
+                eprintln!("slot: bottom panel: {e}");
+                ds = None;
+            }
+        }
+        let bottom_took = bottom_began.elapsed();
         slot::latency::swapped(swap_took.as_secs_f64() * 1000.0);
         let dropped = pacer.swapped(work, swap_took > Duration::from_millis(1));
         if slot::latency::tracing() {
             frames += 1;
             missed += u32::from(dropped);
-            early += u32::from(swap_took > pacer.period / 2);
+            early += u32::from(swap_took > pacer.period() / 2);
             stale += u32::from(late);
+            stages.add([stepped - began, rendered - stepped, swap - rendered, swap_took, bottom_took]);
             if frames == 600 {
                 eprintln!(
-                    "slot: pace: 600 frames, {missed} missed a latch, {early} drawn early, {stale} stale, work {:.1} ms, period {:.2} ms",
-                    pacer.work.as_secs_f64() * 1e3,
-                    pacer.period.as_secs_f64() * 1e3
+                    "slot: pace: 600 frames, {missed} missed a latch, {early} drawn early, {stale} stale, work {:.1} ms, period {:.2} ms, {}",
+                    pacer.work().as_secs_f64() * 1e3,
+                    pacer.period().as_secs_f64() * 1e3,
+                    stages.report()
                 );
                 (frames, missed, early, stale) = (0, 0, 0, 0);
+                stages = Stages::default();
             }
         }
         if !drawn {
@@ -219,6 +217,88 @@ pub fn run() {
             std::thread::sleep(left);
         }
     }
+}
+
+const SHOW_FPS: &str = "System/show-fps.on";
+const FPS_EVERY: Duration = Duration::from_millis(500);
+
+#[derive(Default)]
+struct Fps {
+    since: Option<(Instant, u64)>,
+    shown: f32,
+}
+
+impl Fps {
+    fn sample(&mut self, published: u64, now: Instant) -> f32 {
+        match self.since {
+            Some((at, from)) if now - at >= FPS_EVERY => {
+                self.shown = published.saturating_sub(from) as f32 / (now - at).as_secs_f32();
+                self.since = Some((now, published));
+            }
+            Some(_) => {}
+            None => self.since = Some((now, published)),
+        }
+        self.shown
+    }
+}
+
+#[derive(Default)]
+struct Stages {
+    sum: [Duration; 5],
+    max: [Duration; 5],
+    n: u32,
+}
+
+impl Stages {
+    fn add(&mut self, took: [Duration; 5]) {
+        for (i, t) in took.into_iter().enumerate() {
+            self.sum[i] += t;
+            self.max[i] = self.max[i].max(t);
+        }
+        self.n += 1;
+    }
+
+    fn report(&self) -> String {
+        let names = ["emu wait", "render", "ds draw", "top swap", "bottom"];
+        let n = self.n.max(1);
+        names
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                format!(
+                    "{name} {:.1}/{:.1}",
+                    (self.sum[i] / n).as_secs_f64() * 1e3,
+                    self.max[i].as_secs_f64() * 1e3
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+}
+
+fn draw_menu_below(
+    surface: &mut dyn Surface,
+    frontend: &mut Frontend,
+    compositor: &mut Compositor,
+    window: (u32, u32),
+) -> Result<(), slot_gfx::GfxError> {
+    surface.select_panel(1)?;
+    frontend.render(compositor, window);
+    let swapped = surface.swap();
+    surface.select_panel(0)?;
+    swapped
+}
+
+fn draw_bottom(surface: &mut dyn Surface, pass: &DsPass, power: Option<f32>) -> Result<(), slot_gfx::GfxError> {
+    surface.select_panel(1)?;
+    let panel = surface.window_size();
+    match power {
+        Some(t) => pass.draw_screen_powered(DsScreen::Bottom, panel, t),
+        None => pass.clear(panel),
+    }
+    let swapped = surface.swap();
+    surface.select_panel(0)?;
+    swapped
 }
 
 fn sync_log_writes() {

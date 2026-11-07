@@ -34,3 +34,21 @@ fn other_buttons_pass_through_and_x_y_never_reach_the_core() {
         assert_eq!(m & (ButtonMask::X | ButtonMask::Y), 0);
     }
 }
+
+#[test]
+fn a_core_that_takes_xy_gets_x_and_y_untouched() {
+    let held = ButtonMask::X | ButtonMask::Y | ButtonMask::L;
+    for f in 0..6 {
+        assert_eq!(slot_retro::mask_for(true, ButtonMask(held), f).0, held);
+    }
+}
+
+#[test]
+fn other_cores_still_get_turbo_from_mask_for() {
+    for f in 0..6 {
+        assert_eq!(
+            slot_retro::mask_for(false, ButtonMask(ButtonMask::X), f),
+            ButtonMask(ButtonMask::X).turbo(f)
+        );
+    }
+}

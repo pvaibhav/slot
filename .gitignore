@@ -20,6 +20,7 @@
 /target-device
 /target-verify
 /dist-device
+/dist-device-ds
 /site/public
 /site/.cache
 

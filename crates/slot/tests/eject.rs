@@ -142,11 +142,19 @@ fn eject_preserves_the_levels() {
 }
 
 #[test]
-fn ejecting_a_playing_cart_flushes_before_the_animation_starts() {
+fn ejecting_a_playing_cart_is_durable_before_the_cart_is_out() {
     let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
     let mut a = app_playing_in(d.path(), "Emerald");
     a.apply(Action::Eject);
     assert!(matches!(a.phase(), Phase::Ejecting { .. }));
+    for _ in 0..600 {
+        if !matches!(a.phase(), Phase::Ejecting { .. }) {
+            break;
+        }
+        a.update(1.0 / 60.0);
+    }
+    assert!(matches!(a.phase(), Phase::Shelf), "{:?}", a.phase());
+    a.settle_saves();
     let r = StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald");
     assert_eq!(
         r.read_resume().unwrap().expect("nothing was flushed").len(),
@@ -355,6 +363,18 @@ fn an_eject_the_card_refuses_puts_up_a_banner() {
     let _ = std::fs::remove_dir_all(&states);
     std::fs::write(&states, b"").unwrap();
     a.apply(Action::Eject);
+    a.settle_saves();
     a.tick_ms(10);
     assert!(a.card_alarm(), "a refused eject raised no alarm");
+}
+
+#[test]
+fn an_eject_is_on_the_card_once_saves_settle() {
+    let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
+    let mut a = app_playing_in(d.path(), "Emerald");
+    a.apply(Action::Eject);
+    a.settle_saves();
+    let r = StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald");
+    assert_eq!(r.read_resume().unwrap().expect("the eject wrote no resume").len(), 1024);
+    assert_eq!(read_slot_state(d.path()).cart, None);
 }

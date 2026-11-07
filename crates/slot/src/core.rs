@@ -13,6 +13,10 @@ pub const SUNLIGHT_OPTION: &str = "mgba_solar_sensor_level";
 const SUNLIGHT_NOON: i64 = 8;
 
 pub fn dylib_name(core: Core) -> String {
+    #[cfg(feature = "nds")]
+    if core == Core::Dsperate {
+        return format!("slot_ds.{}", std::env::consts::DLL_EXTENSION);
+    }
     format!(
         "{}_libretro.{}",
         core.as_str(),
@@ -54,6 +58,10 @@ pub fn open_core(
     link: Option<u8>,
 ) -> Opened {
     let paths = candidates(root, core);
+    #[cfg(feature = "nds")]
+    if core == Core::Dsperate {
+        return open_ds(root, &paths);
+    }
     match open_named(
         root, core, platform, serial, colour, blending, palette, link, &paths,
     ) {
@@ -65,6 +73,28 @@ pub fn open_core(
                 named: false,
             }
         }
+    }
+}
+
+#[cfg(feature = "nds")]
+fn open_ds(root: &Path, paths: &[PathBuf]) -> Opened {
+    let bios = root::bios_dir(root);
+    for path in paths.iter().filter(|p| p.exists()) {
+        match slot_retro::DsperateCore::open(path, &bios) {
+            Ok(core) => {
+                eprintln!("slot: core {}", path.display());
+                return Opened {
+                    core: Box::new(core),
+                    named: true,
+                };
+            }
+            Err(e) => eprintln!("slot: {}: {e}", path.display()),
+        }
+    }
+    report_missing(Core::Dsperate, paths);
+    Opened {
+        core: Box::new(MockCore::with_size(slot_retro::DS_W, slot_retro::DS_H)),
+        named: false,
     }
 }
 
@@ -181,6 +211,8 @@ pub fn colour_option(
     on: bool,
 ) -> Option<(&'static str, &'static str)> {
     match which {
+        #[cfg(feature = "nds")]
+        Core::Dsperate => None,
         Core::Mgba => Some((
             "mgba_color_correction",
             if on && platform == Platform::Gb {
@@ -240,6 +272,8 @@ pub fn blend_option(which: Core, blending: Blending) -> (&'static str, &'static 
         (Core::Gambatte, Blending::Off) => ("gambatte_mix_frames", "disabled"),
         (Core::Gambatte, Blending::Mix) => ("gambatte_mix_frames", "mix"),
         (Core::Gambatte, Blending::Ghosting) => ("gambatte_mix_frames", "lcd_ghosting"),
+        #[cfg(feature = "nds")]
+        (Core::Dsperate, _) => ("dsperate_blending", "off"),
     }
 }
 

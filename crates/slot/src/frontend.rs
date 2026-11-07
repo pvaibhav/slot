@@ -42,6 +42,7 @@ pub struct Frontend {
     start: Instant,
     last: Instant,
     draws: Vec<Draw>,
+    ds: crate::ds_view::DsView,
     polaroid_texes: Vec<TexId>,
     title_tex: Option<TexId>,
     faces: FaceBuilder,
@@ -536,6 +537,7 @@ impl Frontend {
             start: now,
             last: now,
             draws: Vec::new(),
+            ds: Default::default(),
             polaroid_texes: Vec::new(),
             title_tex: None,
             faces: FaceBuilder::spawn(lid_root),
@@ -1062,7 +1064,10 @@ impl Frontend {
         if let Some([r, g, b]) = self.session.app().blank_panel() {
             let px = (slot_gfx::SRC_W * slot_gfx::SRC_H) as usize;
             compositor.upload_game(&[b, g, r, 0xff].repeat(px));
-        } else if let Some(frame) = self.session.frame() {
+        } else if let Some(frame) = (!crate::ds_view::seated(&self.session))
+            .then(|| self.session.frame())
+            .flatten()
+        {
             compositor.upload_game(&frame);
             crate::latency::taken();
         }
@@ -1161,6 +1166,7 @@ impl Frontend {
         sync_guide(self.session.app_mut(), compositor, &mut self.guide_page);
         self.draws.clear();
         self.session.app().draw(&mut self.draws);
+        self.ds.swap_game(&mut self.draws, &self.session, compositor);
         compositor.draw_list(&self.draws);
         if let Some((w, h, rgba)) = compositor.take_capture() {
             self.session.app_mut().shot_taken(w, h, rgba);
@@ -1289,6 +1295,30 @@ impl Frontend {
 
     pub fn app(&self) -> &crate::app::App {
         self.session.app()
+    }
+
+    pub fn ds_frame(&self) -> Option<&[u8]> {
+        self.ds.last_frame()
+    }
+
+    pub fn ds_direct(&self) -> bool {
+        crate::ds_view::direct(&self.session)
+    }
+
+    pub fn screen_power(&self) -> f32 {
+        self.session.app().screen_power()
+    }
+
+    pub fn ds_menu_below(&self) -> bool {
+        crate::ds_view::playing(&self.session) && !crate::ds_view::direct(&self.session)
+    }
+
+    pub fn frames_published(&self) -> u64 {
+        self.session.frames_published()
+    }
+
+    pub fn set_ds_touch(&self, at: Option<(u8, u8)>) {
+        crate::ds_view::set_touch(&self.session, at);
     }
 
     pub fn app_mut(&mut self) -> &mut crate::app::App {

@@ -25,3 +25,35 @@ impl Jack {
 pub fn follows_jack(is_dsos: Option<&str>) -> bool {
     is_dsos == Some("1")
 }
+
+type Seen = Option<(u64, std::time::SystemTime, u64)>;
+
+pub struct RouteWatch {
+    paths: Vec<std::path::PathBuf>,
+    seen: Option<Vec<Seen>>,
+}
+
+impl RouteWatch {
+    pub fn new(alsa_config_path: Option<&str>) -> Self {
+        let paths = alsa_config_path
+            .map(|p| p.split(':').filter(|s| !s.is_empty()).map(Into::into).collect())
+            .unwrap_or_default();
+        RouteWatch { paths, seen: None }
+    }
+
+    pub fn changed(&mut self) -> bool {
+        use std::os::unix::fs::MetadataExt;
+        let now: Vec<Seen> = self
+            .paths
+            .iter()
+            .map(|p| {
+                let m = std::fs::metadata(p).ok()?;
+                Some((m.ino(), m.modified().ok()?, m.len()))
+            })
+            .collect();
+        match self.seen.replace(now) {
+            Some(before) => self.seen.as_ref() != Some(&before),
+            None => false,
+        }
+    }
+}

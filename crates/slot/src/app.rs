@@ -693,6 +693,7 @@ pub struct App {
     marked: bool,
     playing_since: Option<Millis>,
     pending_save: Option<std::thread::JoinHandle<()>>,
+    eject_write: Option<std::thread::JoinHandle<bool>>,
     card_writes: Arc<crate::card_log::CardWrites>,
     resume_unread: bool,
     card_read_only: bool,
@@ -1182,6 +1183,7 @@ impl App {
             marked: false,
             playing_since: None,
             pending_save: None,
+            eject_write: None,
             card_writes,
             resume_unread: false,
             card_read_only: false,
@@ -2540,6 +2542,15 @@ impl App {
         if self.playing_platform().hardware() != Platform::Gba {
             hidden.extend([QuickRow::GameL, QuickRow::GameR]);
         }
+        #[cfg(feature = "nds")]
+        if self.playing_platform() == Platform::Nds {
+            hidden.extend([
+                QuickRow::FastForward,
+                QuickRow::FastForwardSound,
+                QuickRow::Rewind,
+                QuickRow::Shader,
+            ]);
+        }
         if !self.left_stick {
             hidden.push(QuickRow::LeftStick);
         }
@@ -2639,7 +2650,12 @@ impl App {
     }
 
     fn playing_row(&self, row: QuickRow) -> QuickRow {
-        match (row, self.playing_platform().hardware()) {
+        let hardware = match self.playing_platform().hardware() {
+            #[cfg(feature = "nds")]
+            Platform::Nds => Platform::Gba,
+            p => p,
+        };
+        match (row, hardware) {
             (QuickRow::Shader, Platform::Gba) => QuickRow::GbaShader,
             (QuickRow::Shader, Platform::Gb) => QuickRow::GbShader,
             (QuickRow::Shader, Platform::Gbc) => QuickRow::GbcShader,
@@ -3078,6 +3094,8 @@ impl App {
     fn bezel_pick(&mut self, platform: Platform) -> &mut BezelPick {
         match platform {
             Platform::Gba | Platform::Gbav => &mut self.state.bezel_gba,
+            #[cfg(feature = "nds")]
+            Platform::Nds => &mut self.state.bezel_gba,
             Platform::Gb => &mut self.state.bezel_gb,
             Platform::Gbc => &mut self.state.bezel_gbc,
         }
@@ -3086,6 +3104,8 @@ impl App {
     pub fn resolved_bezel(&self, platform: Platform) -> BezelPick {
         let pick = match platform {
             Platform::Gba | Platform::Gbav => &self.state.bezel_gba,
+            #[cfg(feature = "nds")]
+            Platform::Nds => &self.state.bezel_gba,
             Platform::Gb => &self.state.bezel_gb,
             Platform::Gbc => &self.state.bezel_gbc,
         };
@@ -3735,6 +3755,8 @@ impl App {
     fn scale_of(&self, platform: Platform) -> Scale {
         match platform {
             Platform::Gba | Platform::Gbav => self.state.scale_gba,
+            #[cfg(feature = "nds")]
+            Platform::Nds => self.state.scale_gba,
             Platform::Gb => self.state.scale_gb,
             Platform::Gbc => self.state.scale_gbc,
         }
@@ -3745,6 +3767,8 @@ impl App {
             Platform::Gb => self.state.stretch_gb,
             Platform::Gbc => self.state.stretch_gbc,
             Platform::Gba | Platform::Gbav => Stretch::Classic,
+            #[cfg(feature = "nds")]
+            Platform::Nds => Stretch::Classic,
         }
     }
 
@@ -3754,6 +3778,10 @@ impl App {
     }
 
     fn layout_of(&self, platform: Platform, sizing: Sizing, source: [f32; 4]) -> GameLayout {
+        #[cfg(feature = "nds")]
+        if platform == Platform::Nds {
+            return slot_gfx::game_layout(self.panel, platform.picture(), sizing);
+        }
         let picture = match source == WHOLE_TEXTURE {
             true => (slot_gfx::SRC_W, slot_gfx::SRC_H),
             false => platform.picture(),
@@ -3876,6 +3904,8 @@ impl App {
         }];
         match platform {
             Platform::Gba | Platform::Gbav => self.state.scale_gba = to,
+            #[cfg(feature = "nds")]
+            Platform::Nds => self.state.scale_gba = to,
             Platform::Gb => self.state.scale_gb = to,
             Platform::Gbc => self.state.scale_gbc = to,
         }
@@ -4277,6 +4307,10 @@ impl App {
     }
 
     pub fn records_rewind(&self) -> bool {
+        #[cfg(feature = "nds")]
+        if self.playing_platform() == Platform::Nds {
+            return false;
+        }
         self.state.rewind
     }
 
@@ -4292,6 +4326,10 @@ impl App {
     }
 
     pub fn may_fast_forward(&self) -> bool {
+        #[cfg(feature = "nds")]
+        if self.playing_platform() == Platform::Nds {
+            return false;
+        }
         self.state.ff_speed != 0 && !self.link_active()
     }
 
@@ -4469,6 +4507,8 @@ impl App {
     pub fn screen_shader(&self) -> Shader {
         match self.playing_platform() {
             Platform::Gba | Platform::Gbav => self.gba_shader(),
+            #[cfg(feature = "nds")]
+            Platform::Nds => Shader::Off,
             Platform::Gb => self.state.shader_gb,
             Platform::Gbc => self.state.shader_gbc,
         }
@@ -4485,6 +4525,8 @@ impl App {
     pub fn colour_correction_for(&self, platform: Platform) -> bool {
         match platform {
             Platform::Gba | Platform::Gbav => self.state.colour_correction_gba,
+            #[cfg(feature = "nds")]
+            Platform::Nds => false,
             Platform::Gb => self.state.colour_correction_gb,
             Platform::Gbc => self.state.colour_correction_gbc,
         }
@@ -4493,6 +4535,8 @@ impl App {
     pub fn blending_for(&self, platform: Platform) -> Blending {
         match platform {
             Platform::Gba | Platform::Gbav => self.state.blending_gba,
+            #[cfg(feature = "nds")]
+            Platform::Nds => Blending::Off,
             Platform::Gb => self.state.blending_gb,
             Platform::Gbc => self.state.blending_gbc,
         }
@@ -5101,7 +5145,8 @@ impl App {
             QuickRow::ExitGame => self.eject(),
             _ => {
                 if let Some(child) = row.child() {
-                    self.in_game_menu = Some(child);
+                    let first = child.shown(&self.in_game_hidden()).first().copied();
+                    self.in_game_menu = Some(first.unwrap_or(child));
                 }
             }
         }
@@ -5638,6 +5683,8 @@ impl App {
         let gba_shaders = self.gba_shaders();
         let (shader, choices) = match self.playing_platform() {
             Platform::Gba | Platform::Gbav => (&mut self.state.shader_gba, gba_shaders),
+            #[cfg(feature = "nds")]
+            Platform::Nds => (&mut self.state.shader_gba, gba_shaders),
             Platform::Gb => (&mut self.state.shader_gb, &Shader::GB[..]),
             Platform::Gbc => (&mut self.state.shader_gbc, &Shader::GB[..]),
         };
@@ -5691,6 +5738,8 @@ impl App {
         if action == Action::ColourCorrectionToggle {
             let row = match self.playing_platform() {
                 Platform::Gba | Platform::Gbav => QuickRow::GbaColourCorrection,
+                #[cfg(feature = "nds")]
+                Platform::Nds => QuickRow::GbaColourCorrection,
                 Platform::Gb => QuickRow::GbColourCorrection,
                 Platform::Gbc => QuickRow::GbcColourCorrection,
             };
@@ -5912,6 +5961,7 @@ impl App {
 
     pub fn update(&mut self, dt: f32) {
         self.clock += dt as f64 * 1000.0;
+        self.take_eject_write(false);
         if self.name_pending && self.shelf_platform.face.is_some() {
             self.name_pending = false;
             self.shelf_named = Some(self.now());
@@ -8641,6 +8691,7 @@ impl App {
         if !self.on_shelf() {
             return;
         }
+        self.settle_saves();
         let at = self.shelf().index;
         let Some((cart, platform)) = self.shelf_mut().carts.get_mut(at).map(|c| {
             c.read_header();
@@ -8720,6 +8771,7 @@ impl App {
         let (Some(root), Some(snapshot)) = (&self.root, &self.snapshot) else {
             return;
         };
+        let began = std::time::Instant::now();
         let (state, sav) = match snapshot.state() {
             Some(state) => trusted_write(snapshot.as_ref(), state, "eject"),
             None => {
@@ -8727,25 +8779,56 @@ impl App {
                 (None, None)
             }
         };
+        let got = began.elapsed();
         let state = state.filter(|_| self.state.eject_save);
         self.state_writer.flush();
-        match persist::eject(
-            root,
+        let flushed = began.elapsed();
+        let (root, platform, core, stem, slot) = (
+            root.clone(),
             self.platform,
             self.core,
-            stem,
-            state.as_deref(),
-            sav.as_deref(),
-            &self.state,
-        ) {
-            Ok(()) => {
+            stem.to_owned(),
+            self.state.clone(),
+        );
+        let card_writes = self.card_writes.clone();
+        let write = move || {
+            let written = persist::eject(
+                &root,
+                platform,
+                core,
+                &stem,
+                state.as_deref(),
+                sav.as_deref(),
+                &slot,
+            );
+            eprintln!(
+                "slot: eject: state {} bytes in {:.0} ms, writer flushed at {:.0} ms, written at {:.0} ms",
+                state.as_ref().map_or(0, |s| s.len()),
+                got.as_secs_f64() * 1e3,
+                flushed.as_secs_f64() * 1e3,
+                began.elapsed().as_secs_f64() * 1e3
+            );
+            if let Err(e) = &written {
+                eprintln!("slot: eject: {e}");
+            }
+            card_writes.wrote("eject", &written);
+            written.is_ok()
+        };
+        match std::thread::Builder::new().name("slot-eject".into()).spawn(write) {
+            Ok(h) => self.eject_write = Some(h),
+            Err(e) => eprintln!("slot: eject: no writer thread: {e}"),
+        }
+    }
+
+    fn take_eject_write(&mut self, wait: bool) {
+        let done = self.eject_write.as_ref().is_some_and(|h| wait || h.is_finished());
+        if !done {
+            return;
+        }
+        if let Some(h) = self.eject_write.take() {
+            if h.join().unwrap_or(false) {
                 self.state.cart = None;
                 self.state.cart_platform = None;
-                self.card_writes.ok("eject");
-            }
-            Err(e) => {
-                eprintln!("slot: eject: {e}");
-                self.card_writes.failed("eject", &e);
             }
         }
     }
@@ -10401,6 +10484,11 @@ impl App {
         };
         let (scale, well) = match scene.cart.platform {
             Platform::Gba | Platform::Gbav => (
+                1.0,
+                [slot_ui::LABEL_X, slot_ui::LABEL_Y, slot_ui::LABEL_W, slot_ui::LABEL_H],
+            ),
+            #[cfg(feature = "nds")]
+            Platform::Nds => (
                 1.0,
                 [slot_ui::LABEL_X, slot_ui::LABEL_Y, slot_ui::LABEL_W, slot_ui::LABEL_H],
             ),
@@ -12570,6 +12658,7 @@ impl App {
     }
 
     pub fn settle_saves(&mut self) {
+        self.take_eject_write(true);
         self.state_writer.flush();
         self.shot_writer.flush();
         if let Some(h) = self.pending_save.take() {
@@ -13458,6 +13547,8 @@ fn free_stamp(taken: &[String], now: i64) -> String {
 fn bezel_slot(platform: Platform) -> usize {
     match platform {
         Platform::Gba | Platform::Gbav => 0,
+        #[cfg(feature = "nds")]
+        Platform::Nds => 0,
         Platform::Gb => 1,
         Platform::Gbc => 2,
     }

@@ -26,8 +26,15 @@ pub(super) fn ok() -> Reply {
     Reply::json(json!({ "ok": true }))
 }
 
+fn served() -> impl Iterator<Item = Platform> {
+    #[cfg(feature = "nds")]
+    return Platform::ALL.into_iter().filter(|p| *p != Platform::Nds);
+    #[cfg(not(feature = "nds"))]
+    Platform::ALL.into_iter()
+}
+
 fn platform_for(tag: &str) -> Option<Platform> {
-    Platform::ALL.into_iter().find(|p| p.dir_name().eq_ignore_ascii_case(tag))
+    served().find(|p| p.dir_name().eq_ignore_ascii_case(tag))
 }
 
 fn parse_id(text: &str) -> Option<usize> {
@@ -43,7 +50,7 @@ pub fn tags(req: Request) -> Reply {
     if req.method != "GET" && req.method != "HEAD" {
         return Reply::error(405, "method not allowed");
     }
-    let tags: Vec<&str> = Platform::ALL.iter().map(|p| p.dir_name()).collect();
+    let tags: Vec<&str> = served().map(|p| p.dir_name()).collect();
     Reply::json(json!({ "tags": tags, "groups": {} }))
 }
 

@@ -7,6 +7,7 @@ vars:
   MGBA_COMMIT: e31759b24e7a4e3899285ff720d7b573ac328ae7
   GPSP_COMMIT: 7b2dd37394e2822110cacef321e9bb291a305b77
   GAMBATTE_COMMIT: 77f2567d718b8973d02caa2daa8dce4953faf811
+  DSPERATE_COMMIT: 99618eb956c66083618395dbae9bb5cbf0241d16
   EXFATPROGS_VERSION: 1.4.3
   EXFATPROGS_SHA256: 4b5052cba6ff9f6dcb1c63eeeac328620472c5b0b3caf3d38e4ada50e75469d3
   SLOT_IN_PROCESS: >-
@@ -327,6 +328,42 @@ tasks:
         vendor/gpsp-src.sha vendor/gpsp-src.meta
       - task: core:gpsp
 
+  core:dsperate:
+    desc: >-
+      Build the aarch64 DSperate core as slot_ds.so for the RG DS+, from its pinned source
+      archive, which ships beside it as its GPL-3.0 corresponding source
+    status:
+      - test -f vendor/slot_ds.so
+      - test -f vendor/dsperate-src.tar.gz
+      - test "$(cat vendor/dsperate-src.sha 2>/dev/null)" = "{{.DSPERATE_COMMIT}}"
+      - test "$(sed '$d' vendor/slot_ds.so.meta 2>/dev/null)" = "$(sh cores/dsperate/build.sh stamp {{.DSPERATE_COMMIT}})"
+    cmds:
+      - |
+        set -euo pipefail
+        mkdir -p vendor
+        rm -f vendor/slot_ds.so vendor/slot_ds.so.meta vendor/dsperate-headless \
+              vendor/dsperate-src.tar.gz vendor/dsperate-src.sha
+        curl -fsSL -o vendor/dsperate-src.tar.gz \
+          "https://github.com/beebono/DSperate/archive/{{.DSPERATE_COMMIT}}.tar.gz"
+        tar -tzf vendor/dsperate-src.tar.gz | grep -q "^DSperate-{{.DSPERATE_COMMIT}}/src/core/nds.h$"
+      - |
+        set -eu
+        build="sh cores/dsperate/build.sh build {{.DSPERATE_COMMIT}} vendor/dsperate-src.tar.gz target-device/dsperate vendor"
+        if [ "$(uname -s)-$(uname -m)" = "Linux-aarch64" ]; then
+          $build
+        else
+          docker run --rm --platform linux/arm64 -v "$PWD":/src -w /src debian:bookworm $build
+        fi
+      - file vendor/slot_ds.so | grep -q aarch64
+      - echo "{{.DSPERATE_COMMIT}}" > vendor/dsperate-src.sha
+      - 'echo "built vendor/slot_ds.so from vendor/dsperate-src.tar.gz @ {{.DSPERATE_COMMIT}}"'
+
+  core:dsperate:update:
+    desc: Refetch DSperate's source archive and rebuild slot_ds.so from it, even if the set is current
+    cmds:
+      - rm -f vendor/slot_ds.so vendor/slot_ds.so.meta vendor/dsperate-src.tar.gz vendor/dsperate-src.sha
+      - task: core:dsperate
+
   core:gambatte:
     desc: >-
       Build the aarch64 linux Gambatte core from its pinned source archive, which ships beside it
@@ -421,6 +458,19 @@ tasks:
       - file target-device/device/slot | grep -q aarch64
       - 'echo "built target-device/device/slot"'
 
+  build:device:ds:
+    desc: Build for the RG DS+, the device build plus the nds feature, copied to target-device/device-ds/slot
+    cmds:
+      - task: device:sh
+        vars:
+          CMD: >-
+            cargo build --profile device --target-dir target-device
+            -p slot --no-default-features --features device,nds
+      - mkdir -p target-device/device-ds
+      - cp target-device/device/slot target-device/device-ds/slot
+      - file target-device/device-ds/slot | grep -q aarch64
+      - 'echo "built target-device/device-ds/slot"'
+
   bench:device:
     desc: Build core_bench, slot-retro's headless core benchmark, for the H700. It never ships
     cmds:
@@ -479,6 +529,62 @@ tasks:
           cp "$p" "{{.OUT}}/System/licenses/mgba-$(basename "$p")"
         done
       - 'echo "device tree ready at {{.OUT}}, copy its contents to SD2"'
+
+  dist:device:ds:
+    desc: Build the SD2 tree for the RG DS+, OUT defaults to ./dist-device-ds
+    deps: [ core:device, core:gpsp, core:gambatte, core:dsperate, fsck:exfat, build:device:ds, web ]
+    vars:
+      OUT: '{{.OUT | default "dist-device-ds"}}'
+    cmds:
+      - rm -rf {{.OUT}}
+      - task: device:sh
+        vars:
+          CMD: ./target-device/device-ds/slot --init-root {{.OUT}}
+      - cp target-device/device-ds/slot {{.OUT}}/System/slot
+      - cp -R card/System/* {{.OUT}}/System/
+      - cp -R web/dist {{.OUT}}/System/web
+      - for d in Bezels Labels Wallpapers; do cp card/$d/README.txt {{.OUT}}/$d/; done
+      - file vendor/mgba_libretro.so | grep -q aarch64
+      - file vendor/gpsp_libretro.so | grep -q aarch64
+      - file vendor/gambatte_libretro.so | grep -q aarch64
+      - cp vendor/mgba_libretro.so {{.OUT}}/System/
+      - cp vendor/gpsp_libretro.so {{.OUT}}/System/
+      - cp vendor/gambatte_libretro.so {{.OUT}}/System/
+      - file vendor/slot_ds.so | grep -q aarch64
+      - cp vendor/slot_ds.so {{.OUT}}/System/
+      - cp vendor/fsck.exfat {{.OUT}}/System/
+      - cp -r licenses {{.OUT}}/System/licenses
+      - cp vendor/exfatprogs-{{.EXFATPROGS_VERSION}}.tar.gz {{.OUT}}/System/licenses/
+      - |
+        set -euo pipefail
+        sha="$(cat vendor/gpsp-src.sha)"
+        cp vendor/gpsp-src.tar.gz "{{.OUT}}/System/licenses/gpsp-${sha}.tar.gz"
+        cp vendor/gpsp-src.meta "{{.OUT}}/System/licenses/gpsp-${sha}.meta"
+        for p in cores/gpsp/*.patch; do
+          cp "$p" "{{.OUT}}/System/licenses/gpsp-$(basename "$p")"
+        done
+      - |
+        set -euo pipefail
+        sha="$(cat vendor/gambatte-src.sha)"
+        cp vendor/gambatte-src.tar.gz "{{.OUT}}/System/licenses/gambatte-${sha}.tar.gz"
+        cp vendor/gambatte-src.meta "{{.OUT}}/System/licenses/gambatte-${sha}.meta"
+        for p in cores/gambatte/*.patch; do
+          cp "$p" "{{.OUT}}/System/licenses/gambatte-$(basename "$p")"
+        done
+      - |
+        set -euo pipefail
+        commit="$(grep '^commit=' vendor/mgba_libretro.so.meta | cut -d= -f2)"
+        cp vendor/mgba_libretro.so.meta "{{.OUT}}/System/licenses/mgba-${commit}.meta"
+        for p in cores/mgba/*.patch; do
+          cp "$p" "{{.OUT}}/System/licenses/mgba-$(basename "$p")"
+        done
+      - |
+        set -euo pipefail
+        sha="$(cat vendor/dsperate-src.sha)"
+        cp vendor/dsperate-src.tar.gz "{{.OUT}}/System/licenses/dsperate-${sha}.tar.gz"
+        cp vendor/slot_ds.so.meta "{{.OUT}}/System/licenses/dsperate-${sha}.meta"
+        tar -cf - -C cores/dsperate shim patches | gzip -n > "{{.OUT}}/System/licenses/dsperate-shim.tar.gz"
+      - 'echo "RG DS+ tree ready at {{.OUT}}, copy its contents to the card"'
 
   deploy:device:
     desc: Build and push onto a device over adb, then restart it. SD defaults to /mnt/sdcard
