@@ -10,13 +10,17 @@ fn render_about() {
     let paper = std::env::var("SCRATCH_WALL")
         .ok()
         .and_then(|p| wallpaper_face(std::path::Path::new(&p), OUT_W, OUT_H));
-    let label = sticker_face(&StickerFields {
+    let fields = StickerFields {
         battery: Some(87),
         serial: "04738857",
         version: "0.1.0",
         baseos: Some("1.5.2"),
         model: &model,
-    });
+    };
+    let label = match std::env::var("SCRATCH_DS").is_ok() {
+        true => slot_ui::ds_sticker_face(&fields),
+        false => sticker_face(&fields),
+    };
 
     let mut list = Vec::new();
     draw_backdrop(
@@ -24,7 +28,11 @@ fn render_about() {
         paper.as_ref().map(|_| (TexId::from_raw(0), OUT_W)),
         &mut list,
     );
-    draw_sticker(Canvas::FRAMED, Some(TexId::from_raw(1)), &mut list);
+    draw_sticker(
+        Canvas::FRAMED,
+        Some((TexId::from_raw(1), label.w, label.h)),
+        &mut list,
+    );
 
     let (w, h) = (OUT_W as usize, OUT_H as usize);
     let mut px = vec![0u8; w * h * 4];

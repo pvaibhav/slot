@@ -2332,15 +2332,22 @@ fn sync_about(app: &mut App, compositor: &mut Compositor, state: &mut AboutFace)
     }
     state.battery = battery;
     let build = Build::current();
-    let face = sticker_face(&StickerFields {
+    let baseos = crate::baseos::var("BASEOS_VERSION");
+    let model = crate::baseos::var("BASEOS_MODEL").unwrap_or_default();
+    let fields = StickerFields {
         battery,
         serial: &build.serial(),
         version: build.version,
-        baseos: crate::baseos::var("BASEOS_VERSION").as_deref(),
-        model: &crate::baseos::var("BASEOS_MODEL").unwrap_or_default(),
-    });
+        baseos: baseos.as_deref(),
+        model: &model,
+    };
+    let face = match crate::baseos::var("BASEOS_TARGET").as_deref() {
+        Some("rgdsplus") => slot_ui::ds_sticker_face(&fields),
+        _ => sticker_face(&fields),
+    };
+    let (w, h) = (face.w, face.h);
     let id = upload(compositor, &mut state.tex, face);
-    app.set_sticker_face(id);
+    app.set_sticker_face(id, w, h);
 }
 
 #[derive(Default)]

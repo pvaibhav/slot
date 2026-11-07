@@ -656,7 +656,7 @@ pub struct App {
     footer_row: Option<QuickRow>,
     states_from_menu: bool,
     menu_tap: Option<(Millis, Option<QuickRow>)>,
-    sticker_face: Option<TexId>,
+    sticker_face: Option<(TexId, u32, u32)>,
     ground: Option<TexId>,
     ground_w: u32,
     blur: Option<TexId>,
@@ -3437,8 +3437,8 @@ impl App {
         matches!(self.random_wallpaper, Some(Some(_)))
     }
 
-    pub fn set_sticker_face(&mut self, face: TexId) {
-        self.sticker_face = Some(face);
+    pub fn set_sticker_face(&mut self, face: TexId, w: u32, h: u32) {
+        self.sticker_face = Some((face, w, h));
     }
 
     pub fn set_clock_faces(&mut self, faces: ClockFaces) {

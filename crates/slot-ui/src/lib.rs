@@ -141,7 +141,8 @@ pub use slot_chrome::{
     MOUTH_W,
 };
 pub use sticker::{
-    draw_sticker, head_rows, sticker_face, sticker_lines, sticker_rect, StickerFields, COPYRIGHT,
-    CREDITS, DC, HOME, ORIGIN, STICKER_H, STICKER_W,
+    draw_sticker, ds_head_rows, ds_sticker_face, ds_sticker_lines, head_rows, sticker_face,
+    sticker_lines, sticker_rect, sticker_rect_sized, StickerFields, COPYRIGHT, CREDITS, DC,
+    DS_CREDITS, DS_STICKER_H, DS_STICKER_W, HOME, ORIGIN, STICKER_H, STICKER_W,
 };
 pub use toast::{toast_box, toast_face, toast_face_text, toast_rect, Toast};
