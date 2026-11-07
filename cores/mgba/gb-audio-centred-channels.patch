@@ -1,6 +1,6 @@
 --- a/src/gb/audio.c
 +++ b/src/gb/audio.c
-@@ -767,10 +767,91 @@
+@@ -767,10 +767,97 @@
  			}
  		}
  		break;
@@ -49,9 +49,15 @@
 +	if (!audio->forceDisableCh[2] && audio->playingCh3) {
 +		int shift = _waveShift(audio->ch3.volume);
 +		int sum = 0;
++		bool flat = true;
 +		int i;
 +		for (i = 0; i < 16; ++i) {
-+			sum += (audio->ch3.wavedata8[i] >> 4 >> shift) + ((audio->ch3.wavedata8[i] & 0xF) >> shift);
++			uint8_t byte = audio->ch3.wavedata8[i];
++			sum += (byte >> 4 >> shift) + ((byte & 0xF) >> shift);
++			flat = flat && byte == audio->ch3.wavedata8[0] && (byte >> 4) == (byte & 0xF);
++		}
++		if (flat) {
++			sum = 0;
 +		}
 +		int sample = (audio->ch3.sample << 3) - (sum >> 2);
 +		if (sample > 120) {
