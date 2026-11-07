@@ -199,7 +199,7 @@ fn a_palette_picked_behind_the_menu_outlasts_the_menu() {
     for btn in [Btn::Down, Btn::A, Btn::A] {
         tap(&mut s, &mut now, btn);
     }
-    for _ in 0..QuickRow::Palette.position(&s.app().hidden_rows()) {
+    for _ in 0..QuickRow::Palette.position(&s.app().in_game_hidden()) {
         tap(&mut s, &mut now, Btn::Down);
     }
     assert_eq!(s.app().in_game_menu(), Some(QuickRow::Palette));
