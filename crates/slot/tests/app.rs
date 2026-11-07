@@ -833,7 +833,7 @@ fn start_on_the_shelf_opens_the_core_picker_on_the_carts_current_core() {
     app.apply(Action::GbaDown(Btn::B));
     let_it_close(&mut app);
 
-    slot_store::write_selected_core(d.path(), "Emerald", Core::Gpsp).unwrap();
+    slot_store::write_selected_core(d.path(), Platform::Gba, "Emerald", Core::Gpsp).unwrap();
     app.apply(Action::GbaDown(Btn::Start));
     assert_eq!(
         app.core_picker(),

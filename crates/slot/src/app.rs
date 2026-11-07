@@ -571,7 +571,7 @@ pub struct App {
     core_board_face: Option<TexId>,
     core_interior_face: Option<TexId>,
     core_lid_face: Option<TexId>,
-    core_faces_stem: Option<String>,
+    core_faces_for: Option<(Platform, String)>,
     core_socket_faces: Vec<TexId>,
     core_chip_faces: Vec<TexId>,
     core_blank_chip_face: Option<TexId>,
@@ -1061,7 +1061,7 @@ impl App {
             core_board_face: None,
             core_interior_face: None,
             core_lid_face: None,
-            core_faces_stem: None,
+            core_faces_for: None,
             core_socket_faces: Vec::new(),
             core_chip_faces: Vec::new(),
             core_blank_chip_face: None,
@@ -8285,7 +8285,7 @@ impl App {
     pub fn set_core_board_faces(&mut self, board: TexId, lid: TexId) {
         self.core_board_face = Some(board);
         self.core_lid_face = Some(lid);
-        self.core_faces_stem = self.selected_stem().map(str::to_string);
+        self.core_faces_for = self.selected_cart().map(|c| (c.platform, c.stem.clone()));
     }
 
     pub fn set_core_part_faces(
@@ -8962,9 +8962,10 @@ impl App {
     }
 
     fn core_faces_ready(&self) -> bool {
-        self.core_faces_stem
-            .as_deref()
-            .is_some_and(|stem| self.selected_stem() == Some(stem))
+        let (Some((platform, stem)), Some(cart)) = (&self.core_faces_for, self.selected_cart()) else {
+            return false;
+        };
+        cart.platform == *platform && cart.stem == *stem
     }
 
     fn core_picker_input(&mut self, action: Action) {
@@ -12609,7 +12610,7 @@ impl App {
         ) else {
             return;
         };
-        if let Err(e) = slot_store::write_selected_core(&root, &cart.stem, core) {
+        if let Err(e) = slot_store::write_selected_core(&root, cart.platform, &cart.stem, core) {
             eprintln!("slot: core: could not write selected_core.txt: {e}");
         }
     }

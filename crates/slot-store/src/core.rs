@@ -86,7 +86,10 @@ pub fn read_selected_cores(root: &Path) -> HashMap<String, Core> {
 }
 
 pub fn core_for_platform(root: &Path, stem: &str, platform: Platform, gb_core: Core) -> Core {
-    crate::ini::value(root, SELECTED_CORE_FILE, stem)
+    let mut lines = crate::ini::read(root, SELECTED_CORE_FILE);
+    lines
+        .remove(&core_key(platform, stem))
+        .or_else(|| lines.remove(stem))
         .as_deref()
         .and_then(Core::parse)
         .filter(|core| core.runs(platform))
@@ -98,6 +101,26 @@ pub fn core_for_platform(root: &Path, stem: &str, platform: Platform, gb_core: C
         })
 }
 
-pub fn write_selected_core(root: &Path, stem: &str, core: Core) -> std::io::Result<()> {
-    crate::ini::write(root, SELECTED_CORE_FILE, stem, core.as_str())
+pub fn write_selected_core(
+    root: &Path,
+    platform: Platform,
+    stem: &str,
+    core: Core,
+) -> std::io::Result<()> {
+    let path = root.join(SELECTED_CORE_FILE);
+    let existing = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(e),
+    };
+    let bare = crate::ini::set(&existing, stem, None)?;
+    let out = crate::ini::set(&bare, &core_key(platform, stem), Some(core.as_str()))?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    crate::atomic::atomic_write(&path, out.as_bytes())
+}
+
+fn core_key(platform: Platform, stem: &str) -> String {
+    format!("{}/{stem}", platform.dir_name())
 }

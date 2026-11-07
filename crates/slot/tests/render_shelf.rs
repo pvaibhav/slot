@@ -28,6 +28,11 @@ fn tex(c: &mut Compositor, w: u32, h: u32, rgba: &[u8]) -> TexId {
 }
 
 fn upload_faces(app: &mut App, c: &mut Compositor) {
+    upload_shelf_faces(app, c);
+    upload_board_faces(app, c);
+}
+
+fn upload_shelf_faces(app: &mut App, c: &mut Compositor) {
     let row: Vec<TexId> = app
         .carts()
         .map(|cart| {
@@ -93,13 +98,10 @@ fn upload_faces(app: &mut App, c: &mut Compositor) {
     };
     let plugged = tex(c, slot_ui::SLOT_W, slot_ui::SLOT_H, strip);
     app.set_plugged_face(plugged);
+}
 
-    let highlighted = app.selected_stem().map(str::to_string);
-    let Some(cart) = app
-        .carts()
-        .find(|c| highlighted.as_deref() == Some(c.stem.as_str()))
-        .cloned()
-    else {
+fn upload_board_faces(app: &mut App, c: &mut Compositor) {
+    let Some(cart) = app.selected_cart().cloned() else {
         return;
     };
     let interior = slot_ui::cart_interior(&cart);
@@ -202,6 +204,65 @@ fn start_opens_the_picker_on_a_game_boy_cart() {
         let open = shot(&pressed, &mut c, &format!("{name}-open"));
         assert!(open != after, "the picker did not finish opening");
     }
+}
+
+fn twin_named_root() -> TempDir {
+    let d = common::tmp_root_with_carts(&["Harry Potter"]);
+    let mut rom = vec![0u8; 0x150];
+    rom[0x134..0x134 + 11].copy_from_slice(b"HARRYPOTTER");
+    rom[0x143] = 0x80;
+    let dir = d.path().join("Games").join(Platform::Gbc.dir_name());
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("Harry Potter.gbc"), rom).unwrap();
+    d
+}
+
+fn onto_shelf(app: &mut App, name: &str) {
+    for _ in 0..8 {
+        if app.shelf_platform_name() == Some(name) {
+            return;
+        }
+        common::through(app, Btn::R1);
+        for _ in 0..120 {
+            app.update(1.0 / 60.0);
+        }
+    }
+    panic!("never reached the {name} shelf");
+}
+
+#[test]
+fn a_color_cart_never_opens_onto_the_board_of_its_gba_namesake() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        eprintln!("no GL on this host, skipping");
+        return;
+    };
+    let d = twin_named_root();
+    let twin = twin_named_root();
+    let mut stale = shelf(&d, &mut c);
+    assert_eq!(stale.shelf_platform_name(), Some("Game Boy Advance"));
+    write_slot_state(
+        twin.path(),
+        &SlotState {
+            clock_set: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let mut fresh = App::boot(twin.path());
+    upload_shelf_faces(&mut fresh, &mut c);
+
+    for app in [&mut stale, &mut fresh] {
+        onto_shelf(app, "Game Boy Color");
+        assert_eq!(app.selected_stem(), Some("Harry Potter"));
+        app.apply(Action::GbaDown(Btn::Start));
+        let_it_hop(app);
+    }
+    let stale_px = shot(&stale, &mut c, "twin-stale");
+    let fresh_px = shot(&fresh, &mut c, "twin-fresh");
+    assert!(
+        stale_px == fresh_px,
+        "the GBC picker opened onto the board built for the GBA cart of the same name"
+    );
 }
 
 fn colour_only_root(stem: &str) -> TempDir {

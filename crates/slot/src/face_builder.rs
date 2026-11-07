@@ -2,12 +2,13 @@ use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
-use slot_store::Cart;
+use slot_store::{Cart, Platform};
 use slot_ui::{board_face, cart_face_with, cart_interior, padded, CartFace, TURN_PAD};
 
 use crate::label_cache::label_art;
 
 pub struct BuiltFaces {
+    pub platform: Platform,
     pub stem: String,
     pub interior: CartFace,
     pub board: CartFace,
@@ -31,6 +32,7 @@ impl FaceBuilder {
                         cart = newer;
                     }
                     let faces = BuiltFaces {
+                        platform: cart.platform,
                         stem: cart.stem.clone(),
                         interior: cart_interior(&cart),
                         board: board_face(&cart),
