@@ -73,3 +73,38 @@ fn a_ds_game_has_no_screen_shader_and_hides_the_row() {
     assert_eq!(a.screen_shader(), slot_store::Shader::Off);
     assert!(a.in_game_hidden().contains(&slot_ui::QuickRow::Shader), "the Shader row is still offered in a DS game");
 }
+
+fn overlay_tile(root: &std::path::Path, dir: &str, name: &str, n: u32) {
+    let dir = root.join("Overlays").join(dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut out = Vec::new();
+    let mut enc = png::Encoder::new(&mut out, n, n);
+    enc.set_color(png::ColorType::Rgba);
+    let mut writer = enc.write_header().unwrap();
+    writer.write_image_data(&vec![0u8; (n * n * 4) as usize]).unwrap();
+    drop(writer);
+    std::fs::write(dir.join(name), out).unwrap();
+}
+
+#[test]
+fn the_in_game_overlay_row_picks_the_ds_overlay_and_leaves_the_gba_one() {
+    use slot_input::Btn;
+    use slot_ui::QuickRow;
+    let (d, mut a) = playing_ds();
+    overlay_tile(d.path(), "NDS", "grid_tile.png", 4);
+    overlay_tile(d.path(), "GBA", "lcd_tile.png", 3);
+    assert!(!a.in_game_hidden().contains(&QuickRow::Overlay), "no Overlay row in a DS game");
+    a.apply(slot_input::Action::QuickMenu);
+    for _ in 0..QuickRow::Settings.position(&a.in_game_hidden()) {
+        press(&mut a, Btn::Down);
+    }
+    press(&mut a, Btn::A);
+    press(&mut a, Btn::A);
+    for _ in 0..QuickRow::Overlay.position(&a.in_game_hidden()) {
+        press(&mut a, Btn::Down);
+    }
+    assert_eq!(a.in_game_menu(), Some(QuickRow::Overlay));
+    press(&mut a, Btn::Right);
+    assert_eq!(a.resolved_overlay(Platform::Nds).map(|e| e.name).as_deref(), Some("grid"));
+    assert_eq!(a.resolved_overlay(Platform::Gba), None);
+}

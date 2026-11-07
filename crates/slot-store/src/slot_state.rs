@@ -435,6 +435,11 @@ pub struct SlotState {
     pub bezel_gba: BezelPick,
     pub bezel_gb: BezelPick,
     pub bezel_gbc: BezelPick,
+    pub overlay_gba: Option<String>,
+    pub overlay_gb: Option<String>,
+    pub overlay_gbc: Option<String>,
+    #[cfg(feature = "nds")]
+    pub overlay_nds: Option<String>,
     pub scale_gba: Scale,
     pub scale_gb: Scale,
     pub scale_gbc: Scale,
@@ -617,6 +622,11 @@ impl Default for SlotState {
             bezel_gba: BezelPick::Ags102,
             bezel_gb: BezelPick::Ags102,
             bezel_gbc: BezelPick::Ags102,
+            overlay_gba: None,
+            overlay_gb: None,
+            overlay_gbc: None,
+            #[cfg(feature = "nds")]
+            overlay_nds: None,
             scale_gba: Scale::Fit,
             scale_gb: Scale::SpFrame,
             scale_gbc: Scale::SpFrame,
@@ -737,6 +747,11 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
     text.push_str(&format!("bezel_gba={}\n", s.bezel_gba.key()));
     text.push_str(&format!("bezel_gb={}\n", s.bezel_gb.key()));
     text.push_str(&format!("bezel_gbc={}\n", s.bezel_gbc.key()));
+    text.push_str(&format!("overlay_gba={}\n", s.overlay_gba.as_deref().unwrap_or_default()));
+    text.push_str(&format!("overlay_gb={}\n", s.overlay_gb.as_deref().unwrap_or_default()));
+    text.push_str(&format!("overlay_gbc={}\n", s.overlay_gbc.as_deref().unwrap_or_default()));
+    #[cfg(feature = "nds")]
+    text.push_str(&format!("overlay_nds={}\n", s.overlay_nds.as_deref().unwrap_or_default()));
     text.push_str(&format!("scale_gba={}\n", s.scale_gba.name()));
     text.push_str(&format!("scale_gb={}\n", s.scale_gb.name()));
     text.push_str(&format!("scale_gbc={}\n", s.scale_gbc.name()));
@@ -812,6 +827,11 @@ fn parse(text: &str) -> Option<SlotState> {
     let mut bezel_gba = None;
     let mut bezel_gb = None;
     let mut bezel_gbc = None;
+    let mut overlay_gba = None;
+    let mut overlay_gb = None;
+    let mut overlay_gbc = None;
+    #[cfg(feature = "nds")]
+    let mut overlay_nds = None;
     let mut scale_gba = None;
     let mut scale_gb = None;
     let mut scale_gbc = None;
@@ -874,6 +894,11 @@ fn parse(text: &str) -> Option<SlotState> {
             "bezel_gba" => bezel_gba = Some(BezelPick::parse(value)),
             "bezel_gb" => bezel_gb = Some(BezelPick::parse(value)),
             "bezel_gbc" => bezel_gbc = Some(BezelPick::parse(value)),
+            "overlay_gba" => overlay_gba = overlay_name(value),
+            "overlay_gb" => overlay_gb = overlay_name(value),
+            "overlay_gbc" => overlay_gbc = overlay_name(value),
+            #[cfg(feature = "nds")]
+            "overlay_nds" => overlay_nds = overlay_name(value),
             "scale_gba" => scale_gba = Scale::parse(value),
             "scale_gb" => scale_gb = Scale::parse(value),
             "scale_gbc" => scale_gbc = Scale::parse(value),
@@ -946,6 +971,11 @@ fn parse(text: &str) -> Option<SlotState> {
         bezel_gba: bezel_gba.unwrap_or(fallback.bezel_gba),
         bezel_gb: bezel_gb.unwrap_or(fallback.bezel_gb),
         bezel_gbc: bezel_gbc.unwrap_or(fallback.bezel_gbc),
+        overlay_gba,
+        overlay_gb,
+        overlay_gbc,
+        #[cfg(feature = "nds")]
+        overlay_nds,
         scale_gba: scale_gba.unwrap_or(fallback.scale_gba),
         scale_gb: scale_gb.unwrap_or(fallback.scale_gb),
         scale_gbc: scale_gbc.unwrap_or(fallback.scale_gbc),
@@ -1006,6 +1036,10 @@ fn ff_speed_text(speed: u8) -> &'static str {
 
 fn level(value: &str, max: u8) -> Option<u8> {
     value.parse().ok().filter(|n| *n <= max)
+}
+
+fn overlay_name(value: &str) -> Option<String> {
+    (!value.is_empty()).then(|| value.to_string())
 }
 
 fn flag(value: &str) -> Option<bool> {

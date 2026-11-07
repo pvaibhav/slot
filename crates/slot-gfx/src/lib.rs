@@ -22,6 +22,7 @@ mod kms;
 mod kms_atomic;
 mod layout;
 mod lcd3x;
+mod overlay;
 mod pipeline;
 mod placement;
 mod power;
@@ -31,7 +32,7 @@ mod surface;
 
 pub use bezel::{bezel_column, framed, game_rect, hole_on_top, lifted_rect, screen_rect};
 pub use ds::{
-    ds_rect, ds_rect_powered, fps_text, DsPass, DsScreen, DS_SCREEN_H, DS_SCREEN_W,
+    ds_rect, ds_rect_powered, fps_text, DsOverlay, DsPass, DsScreen, DS_SCREEN_H, DS_SCREEN_W,
 };
 pub use draw::{paper_bounds, paper_flap_shows, Draw, TexId};
 pub use fbdev::{egl_error, panel_mode, panel_size, FbdevSurface};
@@ -50,8 +51,9 @@ pub use kms_atomic::{atomic_plan, primary_plane_for, AtomicIds, PlaneInfo, PLANE
 pub use kms::{
     free_crtc, preferred_mode, retry_until, KmsSurface, Panel, CONNECTOR_DSI, MODE_TYPE_PREFERRED,
 };
-pub use layout::{canvas_scale, panel_pixels, Canvas};
+pub use layout::{canvas_scale, fills, panel_pixels, Canvas};
 pub use lcd3x::{lcd3x_factors, lcd3x_mask, ScreenEffect};
+pub use overlay::{Overlay, OverlayPass};
 pub use pipeline::{SCALE, SRC_H, SRC_W, WHOLE_TEXTURE};
 pub use placement::{game_layout, table_placement, GameLayout, Sizing};
 pub use power::{screen_brightness, screen_rect_above, screen_scale, screen_width};

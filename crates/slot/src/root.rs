@@ -29,6 +29,12 @@ pub const DIRS: &[&str] = &[
     #[cfg(feature = "nds")]
     "Labels/NDS",
     "Logs",
+    "Overlays",
+    "Overlays/GBA",
+    "Overlays/GB",
+    "Overlays/GBC",
+    #[cfg(feature = "nds")]
+    "Overlays/NDS",
     "Saves",
     "Saves/GBA",
     "Saves/GBAV",

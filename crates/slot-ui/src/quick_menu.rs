@@ -138,10 +138,14 @@ pub enum QuickRow {
     RommStatus,
     RommPairedServer,
     RommDisconnect,
+    GbaOverlay,
+    GbOverlay,
+    GbcOverlay,
+    Overlay,
 }
 
 impl QuickRow {
-    pub const ALL: [QuickRow; 129] = [
+    pub const ALL: [QuickRow; 133] = [
         QuickRow::FastForward,
         QuickRow::FastForwardSound,
         QuickRow::Screen,
@@ -271,6 +275,10 @@ impl QuickRow {
         QuickRow::RommStatus,
         QuickRow::RommPairedServer,
         QuickRow::RommDisconnect,
+        QuickRow::GbaOverlay,
+        QuickRow::GbOverlay,
+        QuickRow::GbcOverlay,
+        QuickRow::Overlay,
     ];
 
     pub const MAIN: [QuickRow; 6] = [
@@ -400,16 +408,18 @@ impl QuickRow {
         QuickRow::Contrast,
     ];
 
-    pub const SCREEN_GBA: [QuickRow; 5] = [
+    pub const SCREEN_GBA: [QuickRow; 6] = [
         QuickRow::GbaShader,
+        QuickRow::GbaOverlay,
         QuickRow::GbaColourCorrection,
         QuickRow::GbaBlending,
         QuickRow::GbaBezel,
         QuickRow::GbaScale,
     ];
 
-    pub const SCREEN_GBC: [QuickRow; 6] = [
+    pub const SCREEN_GBC: [QuickRow; 7] = [
         QuickRow::GbcShader,
+        QuickRow::GbcOverlay,
         QuickRow::GbcColourCorrection,
         QuickRow::GbcBlending,
         QuickRow::GbcBezel,
@@ -417,8 +427,9 @@ impl QuickRow {
         QuickRow::GbcStretch,
     ];
 
-    pub const SCREEN_GB: [QuickRow; 7] = [
+    pub const SCREEN_GB: [QuickRow; 8] = [
         QuickRow::GbShader,
+        QuickRow::GbOverlay,
         QuickRow::GbColourCorrection,
         QuickRow::GbBlending,
         QuickRow::GbPalette,
@@ -456,8 +467,9 @@ impl QuickRow {
         QuickRow::PlayControls,
     ];
 
-    pub const PLAY_SCREEN: [QuickRow; 11] = [
+    pub const PLAY_SCREEN: [QuickRow; 12] = [
         QuickRow::Shader,
+        QuickRow::Overlay,
         QuickRow::Bezel,
         QuickRow::Scale,
         QuickRow::Stretch,
@@ -489,17 +501,20 @@ impl QuickRow {
             | QuickRow::PlaySaturation
             | QuickRow::PlayContrast => &QuickRow::PLAY_SCREEN,
             QuickRow::GbaShader
+            | QuickRow::GbaOverlay
             | QuickRow::GbaColourCorrection
             | QuickRow::GbaBlending
             | QuickRow::GbaBezel
             | QuickRow::GbaScale => &QuickRow::SCREEN_GBA,
             QuickRow::GbcShader
+            | QuickRow::GbcOverlay
             | QuickRow::GbcColourCorrection
             | QuickRow::GbcBlending
             | QuickRow::GbcBezel
             | QuickRow::GbcScale
             | QuickRow::GbcStretch => &QuickRow::SCREEN_GBC,
             QuickRow::GbShader
+            | QuickRow::GbOverlay
             | QuickRow::GbColourCorrection
             | QuickRow::GbBlending
             | QuickRow::GbPalette
@@ -563,6 +578,7 @@ impl QuickRow {
             | QuickRow::ColourCorrection
             | QuickRow::Palette
             | QuickRow::Bezel
+            | QuickRow::Overlay
             | QuickRow::Scale
             | QuickRow::Stretch
             | QuickRow::Blending => &QuickRow::PLAY_SCREEN,
@@ -776,6 +792,10 @@ impl QuickRow {
             | QuickRow::Blending => "Frame Blending",
             QuickRow::GbaBezel => "Bezel",
             QuickRow::Bezel => "Bezel",
+            QuickRow::GbaOverlay
+            | QuickRow::GbOverlay
+            | QuickRow::GbcOverlay
+            | QuickRow::Overlay => "Overlay",
         }
     }
 
@@ -1626,6 +1646,10 @@ pub struct QuickMenu<'a> {
     pub gb_bezel: Option<[(TexId, u32, u32); 2]>,
     pub gbc_bezel: Option<[(TexId, u32, u32); 2]>,
     pub bezel: Option<[(TexId, u32, u32); 2]>,
+    pub gba_overlay: Option<[(TexId, u32, u32); 2]>,
+    pub gb_overlay: Option<[(TexId, u32, u32); 2]>,
+    pub gbc_overlay: Option<[(TexId, u32, u32); 2]>,
+    pub overlay: Option<[(TexId, u32, u32); 2]>,
     pub bound: Option<&'a [Option<FacePair>]>,
     pub description: Option<(TexId, u32, u32)>,
     pub over_game: bool,
@@ -1700,6 +1724,10 @@ impl QuickMenu<'_> {
                 QuickRow::GbBezel => self.gb_bezel.map(|c| c[lit as usize]),
                 QuickRow::GbcBezel => self.gbc_bezel.map(|c| c[lit as usize]),
                 QuickRow::Bezel => self.bezel.map(|c| c[lit as usize]),
+                QuickRow::GbaOverlay => self.gba_overlay.map(|c| c[lit as usize]),
+                QuickRow::GbOverlay => self.gb_overlay.map(|c| c[lit as usize]),
+                QuickRow::GbcOverlay => self.gbc_overlay.map(|c| c[lit as usize]),
+                QuickRow::Overlay => self.overlay.map(|c| c[lit as usize]),
                 _ if row.binds() => self
                     .bound
                     .and_then(|b| b.get(row.index()).copied().flatten())

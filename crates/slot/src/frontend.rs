@@ -77,6 +77,7 @@ pub struct Frontend {
     wallpaper: WallpaperSync,
     picking_faces: PickingSync,
     game_bezel: BezelSync,
+    overlay: OverlaySync,
     look: Option<ShelfLook>,
     link_shot: Option<TexId>,
     link_shot_size: (u32, u32),
@@ -113,6 +114,27 @@ struct BezelSync {
     image: Option<BezelImage>,
     labels: [String; 3],
     faces: [(Option<TexId>, Option<TexId>); 3],
+}
+
+#[derive(Default)]
+struct OverlaySync {
+    want: Option<(Console, Option<slot_store::OverlayEntry>)>,
+    serial: u64,
+    loader: Option<crate::overlay::OverlayLoader>,
+    tile: Option<TexId>,
+    full: Option<TexId>,
+    full_bottom: Option<TexId>,
+    shown: Option<ShownOverlay>,
+    ds: Option<crate::overlay::DecodedOverlay>,
+    labels: [String; 4],
+    faces: [(Option<TexId>, Option<TexId>); 4],
+}
+
+#[derive(Clone, Copy)]
+struct ShownOverlay {
+    tile: Option<(TexId, u32, u32)>,
+    top: Option<(TexId, u32, u32)>,
+    bottom: Option<(TexId, u32, u32)>,
 }
 
 #[derive(Default)]
@@ -572,6 +594,7 @@ impl Frontend {
             wallpaper: WallpaperSync::default(),
             picking_faces: PickingSync::default(),
             game_bezel: BezelSync::default(),
+            overlay: OverlaySync::default(),
             look: None,
             grounds: None,
             link_shot: None,
@@ -1096,6 +1119,8 @@ impl Frontend {
             self.wallpaper.shelf_asked.clear();
             self.game_bezel.image = None;
             self.game_bezel.labels = Default::default();
+            self.overlay.want = None;
+            self.overlay.labels = Default::default();
         }
         sync_quick_clock(self.session.app_mut(), compositor, &mut self.quick_clock);
         sync_quick_network(self.session.app_mut(), compositor, &mut self.quick_network);
@@ -1107,6 +1132,7 @@ impl Frontend {
         sync_picking(self.session.app_mut(), compositor, &mut self.picking_faces);
         sync_game_bezel(self.session.app_mut(), compositor, &mut self.game_bezel);
         compositor.set_game_bezel(self.session.app().shown_game_bezel());
+        sync_overlay(self.session.app_mut(), compositor, &mut self.overlay, self.ds.showing_top());
         compositor.set_sp_frame(self.session.app().picture_on_top());
         sync_core_picker(
             self.session.app_mut(),
@@ -1295,6 +1321,10 @@ impl Frontend {
 
     pub fn app(&self) -> &crate::app::App {
         self.session.app()
+    }
+
+    pub fn ds_overlay(&self) -> Option<&crate::overlay::DecodedOverlay> {
+        self.overlay.ds.as_ref()
     }
 
     pub fn ds_frame(&self) -> Option<&[u8]> {
@@ -1961,6 +1991,88 @@ fn sync_game_bezel(app: &mut App, compositor: &mut Compositor, state: &mut Bezel
         let dim = upload(compositor, &mut state.faces[at].0, dim);
         let lit = upload(compositor, &mut state.faces[at].1, lit);
         app.set_quick_bezel_faces(
+            platform,
+            (dim, dim_size.0, dim_size.1),
+            (lit, lit_size.0, lit_size.1),
+        );
+        state.labels[at] = label;
+    }
+}
+
+fn sync_overlay(app: &mut App, compositor: &mut Compositor, state: &mut OverlaySync, ds_top: bool) {
+    let platform = app.playing_platform();
+    let entry = app.resolved_overlay(platform);
+    let want = Some((platform, entry.clone()));
+    if state.want != want {
+        state.want = want;
+        state.serial += 1;
+        let dir = app.root().map(|root| crate::overlay::folder(root, platform));
+        match (entry, dir) {
+            (Some(e), Some(dir)) => {
+                let path = |name: &Option<String>| name.as_ref().map(|n| dir.join(n));
+                state
+                    .loader
+                    .get_or_insert_with(crate::overlay::OverlayLoader::spawn)
+                    .request(crate::overlay::OverlayRequest {
+                        serial: state.serial,
+                        tile: path(&e.tile),
+                        both: path(&e.both),
+                        top: path(&e.top),
+                        bottom: path(&e.bottom),
+                    });
+            }
+            _ => {
+                state.shown = None;
+                state.ds = Some(crate::overlay::DecodedOverlay {
+                    serial: state.serial,
+                    ..Default::default()
+                });
+            }
+        }
+    }
+    if let Some(done) = state.loader.as_ref().and_then(|l| l.latest()) {
+        if done.serial == state.serial {
+            let tile = done
+                .tile
+                .as_ref()
+                .map(|(w, h, rgba)| (upload_rgba(compositor, &mut state.tile, *w, *h, rgba), *w, *h));
+            let two = crate::overlay::two_screens(platform);
+            let (top, bottom) = match two {
+                true => (done.top.as_ref().or(done.both.as_ref()), done.bottom.as_ref().or(done.both.as_ref())),
+                false => (done.both.as_ref(), None),
+            };
+            let top = top.map(|(w, h, rgba)| (upload_rgba(compositor, &mut state.full, *w, *h, rgba), *w, *h));
+            let bottom = bottom
+                .map(|(w, h, rgba)| (upload_rgba(compositor, &mut state.full_bottom, *w, *h, rgba), *w, *h));
+            state.shown = Some(ShownOverlay { tile, top, bottom });
+            state.ds = Some(done);
+        }
+    }
+    let ds_top = ds_top || !crate::overlay::two_screens(platform);
+    compositor.set_overlay(state.shown.map(|s| slot_gfx::Overlay {
+        full: if ds_top { s.top } else { s.bottom },
+        tile: s.tile,
+    }));
+    if app.quick_menu().is_none() && app.in_game_menu().is_none() {
+        return;
+    }
+    for platform in [
+        Console::Gba,
+        Console::Gb,
+        Console::Gbc,
+        #[cfg(feature = "nds")]
+        Console::Nds,
+    ] {
+        let at = crate::app::overlay_slot(platform);
+        let label = app.overlay_label(platform);
+        if state.labels[at] == label {
+            continue;
+        }
+        let (dim, lit) = (quick_value_face(&label, false), quick_value_face(&label, true));
+        let (dim_size, lit_size) = ((dim.w, dim.h), (lit.w, lit.h));
+        let dim = upload(compositor, &mut state.faces[at].0, dim);
+        let lit = upload(compositor, &mut state.faces[at].1, lit);
+        app.set_quick_overlay_faces(
             platform,
             (dim, dim_size.0, dim_size.1),
             (lit, lit_size.0, lit_size.1),

@@ -77,6 +77,10 @@ impl DsView {
         }
     }
 
+    pub fn showing_top(&self) -> bool {
+        self.top
+    }
+
     pub fn last_frame(&self) -> Option<&[u8]> {
         (!self.last.is_empty()).then_some(&self.last[..])
     }

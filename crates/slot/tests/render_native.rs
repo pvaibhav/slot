@@ -932,3 +932,76 @@ fn a_suffixed_bezel_with_no_file_for_the_scale_draws_no_bezel() {
         assert_ne!(edge, [colour[0], colour[1], colour[2]]);
     }
 }
+
+fn card_png(path: &std::path::Path, w: usize, h: usize, paint: impl Fn(usize, usize) -> [u8; 4]) {
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut px = vec![0u8; w * h * 4];
+    for (i, p) in px.chunks_mut(4).enumerate() {
+        p.copy_from_slice(&paint(i % w, i / w));
+    }
+    let file = std::fs::File::create(path).unwrap();
+    let mut e = png::Encoder::new(std::io::BufWriter::new(file), w as u32, h as u32);
+    e.set_color(png::ColorType::Rgba);
+    e.set_depth(png::BitDepth::Eight);
+    e.write_header().unwrap().write_image_data(&px).unwrap();
+}
+
+#[test]
+fn a_card_overlay_draws_over_the_game_and_under_the_bezel() {
+    let Ok(surface) = HeadlessSurface::new() else {
+        return;
+    };
+    let Ok(mut c) = Compositor::new(&surface) else {
+        return;
+    };
+    let d = common::tmp_root_with_carts(&["Emerald"]);
+    clocked(d.path());
+    card_png(&d.path().join("Bezels/GBA/edges.png"), 640, 480, |x, y| {
+        hole_on_top(x, y, 640, 480)
+    });
+    card_png(&d.path().join("Overlays/GBA/grid.png"), 640, 480, |_, _| [255, 0, 0, 255]);
+    card_png(&d.path().join("Overlays/GBA/grid_tile.png"), 2, 1, |x, _| match x {
+        1 => [0, 255, 0, 255],
+        _ => [0, 0, 0, 0],
+    });
+    let state = slot_store::read_slot_state(d.path());
+    slot_store::write_slot_state(
+        d.path(),
+        &slot_store::SlotState {
+            bezel_gba: slot_store::BezelPick::File("edges.png".into()),
+            overlay_gba: Some("grid".into()),
+            ..state
+        },
+    )
+    .unwrap();
+    let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+    f.upload_faces(&mut c);
+    f.upload_bezel(&mut c, (640, 480));
+    c.fit((640, 480));
+    let mut input = Script(VecDeque::new());
+    input.0.push_back(vec![RawEvent::Down(slot_input::Btn::A)]);
+    input.0.push_back(vec![RawEvent::Up(slot_input::Btn::A)]);
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(4);
+    while std::time::Instant::now() < until {
+        f.advance(&mut input);
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    let mut panel = Vec::new();
+    for _ in 0..100 {
+        f.compose(&mut c);
+        panel = c.read_window((640, 480));
+        if panel_at(&panel, 101, 200) == [0, 255, 0] {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    write_png("native-overlay-gba", 640, 480, &panel);
+    let at = |x, y| panel_at(&panel, x, y);
+    for x in [101, 103, 321, 639] {
+        assert_eq!(at(x, 200), [0, 255, 0], "tile column at x {x}");
+    }
+    for x in [100, 102, 320, 638] {
+        assert_eq!(at(x, 200), [255, 0, 0], "full image at x {x}");
+    }
+    assert_eq!(at(320, 479), [255, 0, 255], "the bezel covers the overlay");
+}

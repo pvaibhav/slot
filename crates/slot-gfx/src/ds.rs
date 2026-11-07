@@ -89,6 +89,13 @@ fn fps_pixels(text: &str) -> Vec<u8> {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct DsOverlay {
+    pub tile: Option<(gl::types::GLuint, u32, u32)>,
+    pub top: Option<gl::types::GLuint>,
+    pub bottom: Option<gl::types::GLuint>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DsScreen {
     Top,
     Bottom,
@@ -126,6 +133,8 @@ pub struct DsPass {
     grade: crate::grade::ColorGrade,
     fps_prog: gl::types::GLuint,
     fps_tex: gl::types::GLuint,
+    overlay: Option<DsOverlay>,
+    overlay_pass: crate::overlay::OverlayPass,
 }
 
 impl DsPass {
@@ -155,6 +164,8 @@ impl DsPass {
             gl::Uniform1i(crate::gl::uniform_location(fps_prog, "u_tex"), 0);
         }
         Ok(DsPass {
+            overlay: None,
+            overlay_pass: crate::overlay::OverlayPass::new()?,
             fps_prog,
             fps_tex,
             rect: crate::gl::uniform_location(prog, "u_rect"),
@@ -201,6 +212,41 @@ impl DsPass {
         }
     }
 
+    pub fn set_overlay(&mut self, overlay: Option<DsOverlay>) {
+        self.overlay = overlay;
+    }
+
+    pub fn create_overlay_texture(&mut self, w: u32, h: u32, rgba: &[u8]) -> gl::types::GLuint {
+        crate::gl::texture(w, h, gl::NEAREST, gl::CLAMP_TO_EDGE, gl::RGBA, Some(rgba))
+    }
+
+    pub fn delete_overlay_texture(&mut self, tex: gl::types::GLuint) {
+        unsafe { gl::DeleteTextures(1, &tex) };
+    }
+
+    fn draw_overlay(&self, screen: DsScreen, panel: (u32, u32)) {
+        let Some(overlay) = self.overlay else {
+            return;
+        };
+        let full = match screen {
+            DsScreen::Top => overlay.top,
+            DsScreen::Bottom => overlay.bottom,
+        };
+        if let Some(tex) = full {
+            self.overlay_pass.draw_full(tex, panel, &self.quad);
+        }
+        if let Some((tex, w, h)) = overlay.tile {
+            let [x, y, rw, rh] = ds_rect(panel);
+            self.overlay_pass.draw_tile(
+                tex,
+                (w, h),
+                [x as f32, y as f32, rw as f32, rh as f32],
+                panel,
+                &self.quad,
+            );
+        }
+    }
+
     pub fn set_grade(&mut self, grade: crate::grade::ColorGrade) {
         self.grade = grade;
     }
@@ -236,6 +282,9 @@ impl DsPass {
             );
         }
         self.quad.draw();
+        if t >= 1.0 {
+            self.draw_overlay(screen, panel);
+        }
     }
 }
 

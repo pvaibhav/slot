@@ -649,6 +649,8 @@ pub struct App {
     pub romm: crate::romm::RommConf,
     quick_palette_faces: Option<[(TexId, u32, u32); 2]>,
     quick_bezel_faces: [Option<[(TexId, u32, u32); 2]>; 3],
+    quick_overlay_faces: [Option<[(TexId, u32, u32); 2]>; 4],
+    overlay_cache: std::sync::Mutex<Vec<OverlayScan>>,
     game_bezel: Option<TexId>,
     bezel_column: Vec<u8>,
     in_game_menu: Option<QuickRow>,
@@ -1139,6 +1141,8 @@ impl App {
             romm: crate::romm::RommConf::default(),
             quick_palette_faces: None,
             quick_bezel_faces: [None, None, None],
+            quick_overlay_faces: [None; 4],
+            overlay_cache: std::sync::Mutex::new(Vec::new()),
             game_bezel: None,
             bezel_column: Vec::new(),
             in_game_menu: None,
@@ -2530,6 +2534,9 @@ impl App {
         if no_bezel {
             hidden.push(QuickRow::Bezel);
         }
+        if self.overlay_entries(self.playing_platform()).is_empty() {
+            hidden.push(QuickRow::Overlay);
+        }
         if self.scale_choices(self.playing_platform()).len() < 2 {
             hidden.push(QuickRow::Scale);
         }
@@ -2808,6 +2815,10 @@ impl App {
             | QuickRow::ScreenGb
             | QuickRow::GbBezel
             | QuickRow::GbcBezel
+            | QuickRow::GbaOverlay
+            | QuickRow::GbOverlay
+            | QuickRow::GbcOverlay
+            | QuickRow::Overlay
             | QuickRow::GbaBezel
             | QuickRow::Bezel
             | QuickRow::General
@@ -3122,6 +3133,88 @@ impl App {
             .unwrap_or(BezelPick::None)
     }
 
+    pub fn overlay_frame(&self) -> (u32, u32) {
+        match slot_gfx::fills(self.panel) {
+            true => slot_gfx::panel_pixels(self.panel),
+            false => (slot_gfx::OUT_W, slot_gfx::OUT_H),
+        }
+    }
+
+    pub fn overlay_entries(&self, platform: Platform) -> Vec<slot_store::OverlayEntry> {
+        let frame = self.overlay_frame();
+        let Some(root) = self.root() else {
+            return Vec::new();
+        };
+        let now = std::time::Instant::now();
+        let mut cache = self
+            .overlay_cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(scan) = cache.iter().find(|s| {
+            s.platform == platform.hardware()
+                && s.frame == frame
+                && now.duration_since(s.at) < OVERLAY_RESCAN
+        }) {
+            return scan.entries.clone();
+        }
+        let entries = crate::overlay::usable(root, platform, frame, frame);
+        cache.retain(|s| s.platform != platform.hardware());
+        cache.push(OverlayScan {
+            platform: platform.hardware(),
+            frame,
+            at: now,
+            entries: entries.clone(),
+        });
+        entries
+    }
+
+    fn overlay_pick(&mut self, platform: Platform) -> &mut Option<String> {
+        match platform {
+            Platform::Gba | Platform::Gbav => &mut self.state.overlay_gba,
+            #[cfg(feature = "nds")]
+            Platform::Nds => &mut self.state.overlay_nds,
+            Platform::Gb => &mut self.state.overlay_gb,
+            Platform::Gbc => &mut self.state.overlay_gbc,
+        }
+    }
+
+    pub fn resolved_overlay(&self, platform: Platform) -> Option<slot_store::OverlayEntry> {
+        let pick = match platform {
+            Platform::Gba | Platform::Gbav => &self.state.overlay_gba,
+            #[cfg(feature = "nds")]
+            Platform::Nds => &self.state.overlay_nds,
+            Platform::Gb => &self.state.overlay_gb,
+            Platform::Gbc => &self.state.overlay_gbc,
+        };
+        let name = pick.as_deref()?;
+        self.overlay_entries(platform)
+            .into_iter()
+            .find(|e| e.name == name)
+    }
+
+    pub fn overlay_label(&self, platform: Platform) -> String {
+        self.resolved_overlay(platform)
+            .map_or_else(|| "Off".to_string(), |e| e.name)
+    }
+
+    fn cycle_overlay(&mut self, platform: Platform, right: bool) {
+        let mut choices: Vec<Option<String>> = vec![None];
+        choices.extend(self.overlay_entries(platform).into_iter().map(|e| Some(e.name)));
+        let now = self.resolved_overlay(platform).map(|e| e.name);
+        let at = choices.iter().position(|c| *c == now).unwrap_or(0);
+        let n = choices.len();
+        *self.overlay_pick(platform) = choices[if right { (at + 1) % n } else { (at + n - 1) % n }].clone();
+    }
+
+    pub fn set_quick_overlay_faces(
+        &mut self,
+        platform: Platform,
+        dim: (TexId, u32, u32),
+        lit: (TexId, u32, u32),
+    ) {
+        self.quick_overlay_faces[overlay_slot(platform)] = Some([dim, lit]);
+    }
+
     fn cycle_bezel(&mut self, platform: Platform, right: bool) {
         let choices = self.bezel_choices(platform);
         let key = self.resolved_bezel(platform).key();
@@ -3399,6 +3492,15 @@ impl App {
         }
         if !self.framed_panel() {
             hidden.push(QuickRow::GbaBezel);
+        }
+        for (row, platform) in [
+            (QuickRow::GbaOverlay, Platform::Gba),
+            (QuickRow::GbOverlay, Platform::Gb),
+            (QuickRow::GbcOverlay, Platform::Gbc),
+        ] {
+            if self.overlay_entries(platform).is_empty() {
+                hidden.push(row);
+            }
         }
         for (row, platform) in [
             (QuickRow::GbaScale, Platform::Gba),
@@ -5297,6 +5399,10 @@ impl App {
             | QuickRow::Palette
             | QuickRow::GbBezel
             | QuickRow::GbcBezel
+            | QuickRow::GbaOverlay
+            | QuickRow::GbOverlay
+            | QuickRow::GbcOverlay
+            | QuickRow::Overlay
             | QuickRow::GbaBezel
             | QuickRow::GbaScale
             | QuickRow::GbScale
@@ -5383,6 +5489,11 @@ impl App {
             self.persist();
             return;
         }
+        if row == QuickRow::Overlay {
+            self.cycle_overlay(self.playing_platform(), right);
+            self.persist();
+            return;
+        }
         let row = self.playing_row(row);
         if let QuickRow::Saturation | QuickRow::Contrast = row {
             let (level, max) = match row {
@@ -5435,6 +5546,16 @@ impl App {
                 _ => Platform::Gbc,
             };
             self.cycle_stretch(platform, right);
+            self.persist();
+            return;
+        }
+        if let QuickRow::GbaOverlay | QuickRow::GbOverlay | QuickRow::GbcOverlay = row {
+            let platform = match row {
+                QuickRow::GbaOverlay => Platform::Gba,
+                QuickRow::GbOverlay => Platform::Gb,
+                _ => Platform::Gbc,
+            };
+            self.cycle_overlay(platform, right);
             self.persist();
             return;
         }
@@ -5596,6 +5717,10 @@ impl App {
             | QuickRow::ScreenGb
             | QuickRow::GbBezel
             | QuickRow::GbcBezel
+            | QuickRow::GbaOverlay
+            | QuickRow::GbOverlay
+            | QuickRow::GbcOverlay
+            | QuickRow::Overlay
             | QuickRow::GbaBezel
             | QuickRow::GbaScale
             | QuickRow::GbScale
@@ -6738,6 +6863,10 @@ impl App {
                 gb_bezel: self.quick_bezel_faces[bezel_slot(Platform::Gb)],
                 gbc_bezel: self.quick_bezel_faces[bezel_slot(Platform::Gbc)],
                 bezel: None,
+                gba_overlay: self.quick_overlay_faces[overlay_slot(Platform::Gba)],
+                gb_overlay: self.quick_overlay_faces[overlay_slot(Platform::Gb)],
+                gbc_overlay: self.quick_overlay_faces[overlay_slot(Platform::Gbc)],
+                overlay: None,
                 over_game: false,
                 footer_top: self.canvas().h,
                 canvas: self.canvas(),
@@ -6941,6 +7070,10 @@ impl App {
                 gb_bezel: None,
                 gbc_bezel: None,
                 bezel: self.quick_bezel_faces[bezel_slot(self.playing_platform())],
+                gba_overlay: None,
+                gb_overlay: None,
+                gbc_overlay: None,
+                overlay: self.quick_overlay_faces[overlay_slot(self.playing_platform())],
                 over_game: true,
                 footer_top: self.canvas().h - MOUTH_H + self.menu_footer_offset(),
                 canvas: self.canvas(),
@@ -13543,6 +13676,25 @@ fn free_stamp(taken: &[String], now: i64) -> String {
         stamp = format_stamp(secs);
     }
     stamp
+}
+
+const OVERLAY_RESCAN: std::time::Duration = std::time::Duration::from_secs(1);
+
+struct OverlayScan {
+    platform: Platform,
+    frame: (u32, u32),
+    at: std::time::Instant,
+    entries: Vec<slot_store::OverlayEntry>,
+}
+
+pub fn overlay_slot(platform: Platform) -> usize {
+    match platform {
+        Platform::Gba | Platform::Gbav => 0,
+        Platform::Gb => 1,
+        Platform::Gbc => 2,
+        #[cfg(feature = "nds")]
+        Platform::Nds => 3,
+    }
 }
 
 fn bezel_slot(platform: Platform) -> usize {

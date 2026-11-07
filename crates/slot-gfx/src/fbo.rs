@@ -36,6 +36,9 @@ pub struct Compositor {
     game: GamePass,
     sprites: Sprites,
     game_bezel: Option<TexId>,
+    overlay: Option<crate::overlay::Overlay>,
+    overlay_pass: crate::overlay::OverlayPass,
+    overlay_full_drawn: bool,
     placeholder: Option<[f32; 4]>,
     sp_frame: bool,
     game_panel: bool,
@@ -95,6 +98,9 @@ impl Compositor {
                 game: GamePass::new()?,
                 sprites: Sprites::new()?,
                 game_bezel: None,
+                overlay: None,
+                overlay_pass: crate::overlay::OverlayPass::new()?,
+                overlay_full_drawn: false,
                 placeholder: None,
                 sp_frame: true,
                 game_panel: false,
@@ -142,6 +148,7 @@ impl Compositor {
                     self.in_game_rect(|c| {
                         c.draw_placeholder_bezel();
                         c.game.draw(&c.quad);
+                        c.draw_overlay();
                         if c.panel_bezel().is_none() {
                             c.draw_game_bezel();
                         }
@@ -153,7 +160,10 @@ impl Compositor {
                 Draw::Shot { tex } => {
                     self.sprites.draw(&items[from..i], &self.quad);
                     if let Some(tex) = self.sprites.source(tex) {
-                        self.in_game_rect(|c| c.game.draw_still(tex, &c.quad));
+                        self.in_game_rect(|c| {
+                            c.game.draw_still(tex, &c.quad);
+                            c.draw_overlay();
+                        });
                     }
                 }
                 Draw::Capture => {
@@ -214,6 +224,35 @@ impl Compositor {
 
     pub fn set_picture(&mut self, rect: [f32; 4]) {
         self.game.set_picture(rect);
+    }
+
+    pub fn set_overlay(&mut self, overlay: Option<crate::overlay::Overlay>) {
+        self.overlay = overlay;
+    }
+
+    fn draw_overlay(&mut self) {
+        let Some(overlay) = self.overlay.filter(|_| self.screen >= 1.0) else {
+            return;
+        };
+        if let Some(tex) = overlay
+            .full
+            .filter(|_| !self.overlay_full_drawn)
+            .and_then(|(id, _, _)| self.sprites.source(id))
+        {
+            self.overlay_pass.draw_full(tex, self.size, &self.quad);
+            self.overlay_full_drawn = true;
+        }
+        if let Some((tex, w, h)) = overlay
+            .tile
+            .and_then(|(id, w, h)| Some((self.sprites.source(id)?, w, h)))
+        {
+            let [x, y, pw, ph] = self.game.picture_out();
+            let [sx, sy] = self.game.fbo_scale();
+            let [ox, oy] = self.game.origin();
+            let top = self.size.1 as f32 - oy - sy * OUT_H as f32;
+            let px = [ox + x * sx, top + y * sy, pw * sx, ph * sy];
+            self.overlay_pass.draw_tile(tex, (w, h), px, self.size, &self.quad);
+        }
     }
 
     pub fn set_game_bezel(&mut self, tex: Option<TexId>) {
@@ -396,6 +435,7 @@ impl Compositor {
     }
 
     pub fn begin_frame(&mut self) {
+        self.overlay_full_drawn = false;
         self.resize(frame_size_for(self.window));
         self.sprites.set_target(Canvas::of(self.window));
         self.game.set_fbo_scale(

@@ -161,3 +161,51 @@ fn a_ds_picture_keeps_its_shape_while_the_cart_ejects() {
     let (lo, hi) = (*reds.iter().min().unwrap(), *reds.iter().max().unwrap());
     assert!(hi - lo <= 6, "red runs {lo}..{hi} down one column: the DS picture is sheared while ejecting");
 }
+
+#[test]
+fn a_ds_overlay_stays_on_the_top_screen_while_the_game_plays() {
+    std::env::remove_var("SLOT_CORE");
+    let surface = HeadlessSurface::new().expect("headless gl");
+    let mut c = Compositor::new(&surface).expect("compositor");
+    let d = tmp_root_with_carts(&[]);
+    std::fs::create_dir_all(d.path().join("Games/NDS")).unwrap();
+    std::fs::write(d.path().join("Games/NDS/Kart.nds"), vec![0u8; 0x200]).unwrap();
+    let tile = d.path().join("Overlays/NDS/grid_tile.png");
+    std::fs::create_dir_all(tile.parent().unwrap()).unwrap();
+    let mut out = Vec::new();
+    let mut enc = png::Encoder::new(&mut out, 2, 2);
+    enc.set_color(png::ColorType::Rgba);
+    let mut writer = enc.write_header().unwrap();
+    let mut px = vec![0u8; 16];
+    px[..4].copy_from_slice(&[0, 255, 0, 255]);
+    writer.write_image_data(&px).unwrap();
+    drop(writer);
+    std::fs::write(&tile, out).unwrap();
+    let state = slot_store::read_slot_state(d.path());
+    slot_store::write_slot_state(
+        d.path(),
+        &slot_store::SlotState {
+            overlay_nds: Some("grid".into()),
+            ..state
+        },
+    )
+    .unwrap();
+    clocked(d.path());
+    let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+    f.upload_faces(&mut c);
+    let mut input = Script(VecDeque::new());
+    tap(&mut f, &mut input, Btn::A);
+    run_for(&mut f, &mut input, 4.0);
+    assert!(f.ds_direct());
+    let mut green = 0;
+    for _ in 0..50 {
+        f.compose(&mut c);
+        let px = c.read_frame();
+        green = px.chunks_exact(4).filter(|p| p[..3] == [0, 255, 0]).count();
+        if green > 0 {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(green > 1000, "only {green} overlay pixels on the top screen while the DS game plays");
+}

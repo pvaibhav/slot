@@ -1,6 +1,6 @@
 #![cfg(target_os = "macos")]
 
-use slot_gfx::{ds_rect, Compositor, DsPass, DsScreen, HeadlessSurface};
+use slot_gfx::{ds_rect, Compositor, DsOverlay, DsPass, DsScreen, HeadlessSurface};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 static GL: Mutex<()> = Mutex::new(());
@@ -199,4 +199,72 @@ fn both_ds_screens_take_the_compositors_blue_light() {
     let px = t.read();
     let green = t.at(&px, 512, 384);
     assert!(green[1] < 230, "the bottom screen is untouched by blue light: {green:?}");
+}
+
+fn column_black_tile(ds: &mut DsPass, n: u32, column: u32) -> (u32, u32, u32) {
+    let mut rgba = vec![0u8; (n * n * 4) as usize];
+    for y in 0..n {
+        rgba[((y * n + column) * 4 + 3) as usize] = 255;
+    }
+    (ds.create_overlay_texture(n, n, &rgba), n, n)
+}
+
+fn solid(ds: &mut DsPass, w: u32, h: u32, px: [u8; 4]) -> u32 {
+    let rgba: Vec<u8> = (0..w * h).flat_map(|_| px).collect();
+    ds.create_overlay_texture(w, h, &rgba)
+}
+
+#[test]
+fn a_ds_overlay_tile_lines_up_with_every_ds_pixel_at_4x() {
+    let (_g, _s, _c, mut ds) = setup();
+    let tile = column_black_tile(&mut ds, 4, 3);
+    ds.set_overlay(Some(DsOverlay { tile: Some(tile), top: None, bottom: None }));
+    let t = Target::new((1024, 768));
+    ds.draw_screen(DsScreen::Top, (1024, 768));
+    let px = t.read();
+    assert_eq!(t.at(&px, 3, 0), [0, 0, 0]);
+    assert_eq!(t.at(&px, 7, 100), [0, 0, 0]);
+    assert_eq!(t.at(&px, 2, 0), RED);
+    assert_eq!(t.at(&px, 4, 0), BLUE);
+}
+
+#[test]
+fn a_ds_overlay_tile_starts_at_the_screen_corner_on_a_smaller_panel() {
+    let (_g, _s, _c, mut ds) = setup();
+    let tile = column_black_tile(&mut ds, 3, 2);
+    ds.set_overlay(Some(DsOverlay { tile: Some(tile), top: None, bottom: None }));
+    let t = Target::new((640, 480));
+    ds.draw_screen(DsScreen::Bottom, (640, 480));
+    let px = t.read();
+    assert_eq!(t.at(&px, 66, 240), [0, 0, 0]);
+    assert_eq!(t.at(&px, 65, 240), GREEN);
+    assert_eq!(t.at(&px, 63, 240), [0, 0, 0]);
+    assert_eq!(t.at(&px, 62, 240), [0, 0, 0]);
+}
+
+#[test]
+fn a_top_only_ds_overlay_leaves_the_bottom_bare() {
+    let (_g, _s, _c, mut ds) = setup();
+    let top = solid(&mut ds, 1024, 768, [255, 0, 255, 255]);
+    ds.set_overlay(Some(DsOverlay { tile: None, top: Some(top), bottom: None }));
+    let t = Target::new((1024, 768));
+    ds.draw_screen(DsScreen::Top, (1024, 768));
+    assert_eq!(t.at(&t.read(), 512, 384), [255, 0, 255]);
+    ds.draw_screen(DsScreen::Bottom, (1024, 768));
+    assert_eq!(t.at(&t.read(), 512, 384), GREEN);
+}
+
+#[test]
+fn no_ds_overlay_while_the_screen_powers_on() {
+    let (_g, _s, _c, mut ds) = setup();
+    let top = solid(&mut ds, 1024, 768, [255, 0, 255, 255]);
+    ds.set_overlay(Some(DsOverlay { tile: None, top: Some(top), bottom: Some(top) }));
+    let t = Target::new((1024, 768));
+    ds.draw_screen_powered(DsScreen::Bottom, (1024, 768), 0.5);
+    let px = t.read();
+    for y in (0..768).step_by(11) {
+        for x in (0..1024).step_by(13) {
+            assert_ne!(t.at(&px, x, y), [255, 0, 255], "overlay drawn mid power-on at {x},{y}");
+        }
+    }
 }

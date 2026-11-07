@@ -290,15 +290,16 @@ fn the_game_boy_page_shows_the_palette_by_name() {
         tap(&mut f, &mut input, Btn::Down);
     }
     tap(&mut f, &mut input, Btn::A);
-    for _ in 0..QuickRow::GbPalette.position(&[]) {
+    let hidden = [QuickRow::GbaOverlay, QuickRow::GbOverlay, QuickRow::GbcOverlay];
+    for _ in 0..QuickRow::GbPalette.position(&hidden) {
         tap(&mut f, &mut input, Btn::Down);
     }
     let px = composed(&mut f, &mut c, "screen-page");
 
-    let top = quick_row_top(slot_ui::Canvas::FRAMED, QuickRow::GbPalette, &[]) as usize;
+    let top = quick_row_top(slot_ui::Canvas::FRAMED, QuickRow::GbPalette, &hidden) as usize;
     beside("Palette", pointer(&px, top));
-    for row in QuickRow::SCREEN_GB {
-        let top = quick_row_top(slot_ui::Canvas::FRAMED, row, &[]) as usize;
+    for row in QuickRow::SCREEN_GB.into_iter().filter(|r| !hidden.contains(r)) {
+        let top = quick_row_top(slot_ui::Canvas::FRAMED, row, &hidden) as usize;
         if row != QuickRow::GbPalette {
             assert!(pointer(&px, top).is_none(), "a pointer at {row:?} as well");
         }

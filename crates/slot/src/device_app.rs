@@ -113,6 +113,7 @@ pub fn run() {
         false => None,
     };
     let show_fps = root.join(SHOW_FPS).is_file();
+    let mut ds_overlay = DsOverlayTextures::default();
     let mut fps = Fps::default();
     frontend.drive_emulator();
     let mut pacer = match surface.refresh_period() {
@@ -159,6 +160,7 @@ pub fn run() {
         let ds_frame = frontend.ds_frame();
         if let (Some(pass), Some(frame)) = (ds.as_mut(), ds_frame) {
             pass.set_grade(compositor.grade());
+            ds_overlay.sync(pass, frontend.ds_overlay());
             pass.upload(frame);
             if menu_below {
                 pass.draw_screen(DsScreen::Top, surface.window_size());
@@ -273,6 +275,37 @@ impl Stages {
             })
             .collect::<Vec<_>>()
             .join(", ")
+    }
+}
+
+#[derive(Default)]
+struct DsOverlayTextures {
+    serial: u64,
+    textures: Vec<u32>,
+}
+
+impl DsOverlayTextures {
+    fn sync(&mut self, pass: &mut DsPass, decoded: Option<&slot::overlay::DecodedOverlay>) {
+        let Some(decoded) = decoded.filter(|d| d.serial != self.serial) else {
+            return;
+        };
+        self.serial = decoded.serial;
+        for tex in self.textures.drain(..) {
+            pass.delete_overlay_texture(tex);
+        }
+        let mut upload = |image: &Option<slot::overlay::Rgba>| {
+            image.as_ref().map(|(w, h, rgba)| {
+                let tex = pass.create_overlay_texture(*w, *h, rgba);
+                self.textures.push(tex);
+                (tex, *w, *h)
+            })
+        };
+        let tile = upload(&decoded.tile);
+        let both = upload(&decoded.both).map(|(tex, _, _)| tex);
+        let top = upload(&decoded.top).map(|(tex, _, _)| tex).or(both);
+        let bottom = upload(&decoded.bottom).map(|(tex, _, _)| tex).or(both);
+        let shown = tile.is_some() || top.is_some() || bottom.is_some();
+        pass.set_overlay(shown.then_some(slot_gfx::DsOverlay { tile, top, bottom }));
     }
 }
 

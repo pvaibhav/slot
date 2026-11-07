@@ -1,6 +1,6 @@
 use slot_gfx::{
     blue_light_gain, canvas_size, contrast_boost, dim_gain, game_layout, lcd3x_factors, lcd3x_mask,
-    saturation_boost, Compositor, Draw, GameLayout, HeadlessSurface, ScreenEffect, Sizing, OUT_H,
+    saturation_boost, Compositor, Draw, GameLayout, HeadlessSurface, Overlay, ScreenEffect, Sizing, OUT_H,
     OUT_W, SRC_H, SRC_W,
 };
 use std::sync::{Mutex, MutexGuard, PoisonError};
@@ -1208,4 +1208,173 @@ fn a_still_over_a_panel_layout_leaves_no_live_game_around_it() {
             .count();
         assert_eq!(live, 0, "{sizing:?} left live game around the still");
     }
+}
+
+fn tile_column_2_black(c: &mut Compositor) -> Overlay {
+    let mut rgba = vec![0u8; 3 * 3 * 4];
+    for y in 0..3 {
+        rgba[(y * 3 + 2) * 4 + 3] = 255;
+    }
+    let id = c.create_texture_nearest(3, 3, &rgba);
+    Overlay {
+        full: None,
+        tile: Some((id, 3, 3)),
+    }
+}
+
+fn full_overlay(c: &mut Compositor, rgba_px: [u8; 4]) -> Overlay {
+    let (w, h) = c.frame_size();
+    let rgba: Vec<u8> = (0..w * h).flat_map(|_| rgba_px).collect();
+    let id = c.create_texture_nearest(w, h, &rgba);
+    Overlay {
+        full: Some((id, w, h)),
+        tile: None,
+    }
+}
+
+fn gb_at_3x(c: &mut Compositor, overlay: impl FnOnce(&mut Compositor) -> Option<Overlay>) -> Vec<u8> {
+    c.fit((640, 480));
+    let o = overlay(c);
+    c.set_overlay(o);
+    laid_out(c, (640, 480), game_layout((640, 480), (160, 144), Sizing::Integer), 1.0)
+}
+
+#[test]
+fn an_overlay_tile_darkens_its_cell_and_leaves_the_rest() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    let f = gb_at_3x(&mut c, |c| Some(tile_column_2_black(c)));
+    assert_eq!(at(&f, 640, 82, 100), [0, 0, 0]);
+    assert_eq!(at(&f, 640, 81, 100)[2], 200);
+}
+
+#[test]
+fn an_overlay_tile_starts_at_the_picture_corner() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    let f = gb_at_3x(&mut c, |c| Some(tile_column_2_black(c)));
+    assert_eq!(at(&f, 640, 80, 100)[2], 200);
+    assert_eq!(at(&f, 640, 79 + 3, 100), [0, 0, 0]);
+}
+
+#[test]
+fn an_overlay_tile_of_three_pixels_repeats_every_three() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    let f = gb_at_3x(&mut c, |c| Some(tile_column_2_black(c)));
+    for x in 80..140 {
+        let black = at(&f, 640, x, 200) == [0, 0, 0];
+        assert_eq!(black, (x - 80) % 3 == 2, "x {x}");
+    }
+}
+
+#[test]
+fn an_overlay_tile_stays_inside_the_picture() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    let plain = gb_at_3x(&mut c, |_| None);
+    let f = gb_at_3x(&mut c, |c| Some(tile_column_2_black(c)));
+    for (x, y) in [(79, 100), (40, 100), (300, 10), (300, 470)] {
+        assert_eq!(at(&f, 640, x, y), at(&plain, 640, x, y), "({x}, {y})");
+    }
+}
+
+#[test]
+fn no_overlay_leaves_the_frame_unchanged() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    let before = laid_out(&mut c, (640, 480), game_layout((640, 480), (160, 144), Sizing::Integer), 1.0);
+    let after = gb_at_3x(&mut c, |_| None);
+    assert!(before == after);
+}
+
+#[test]
+fn a_translucent_overlay_blends_by_its_alpha() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    let plain = gb_at_3x(&mut c, |_| None);
+    let f = gb_at_3x(&mut c, |c| Some(full_overlay(c, [0, 0, 0, 128])));
+    let (p, o) = (at(&plain, 640, 320, 240)[2] as i32, at(&f, 640, 320, 240)[2] as i32);
+    assert!((o - p * 127 / 255).abs() <= 2, "plain {p} overlaid {o}");
+}
+
+#[test]
+fn a_full_overlay_covers_the_whole_frame() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    let f = gb_at_3x(&mut c, |c| Some(full_overlay(c, [255, 0, 0, 255])));
+    assert_eq!(at(&f, 640, 320, 240), [255, 0, 0]);
+    assert_eq!(at(&f, 640, 2, 2), [255, 0, 0]);
+    assert_eq!(at(&f, 640, 637, 477), [255, 0, 0]);
+}
+
+#[test]
+fn the_bezel_draws_over_the_overlay() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    let blue: Vec<u8> = (0..640 * 480).flat_map(|_| [0u8, 0, 255, 255]).collect();
+    let bezel = c.create_texture(640, 480, &blue);
+    c.set_game_bezel(Some(bezel));
+    let f = gb_at_3x(&mut c, |c| Some(full_overlay(c, [255, 0, 0, 255])));
+    assert_eq!(at(&f, 640, 320, 240), [0, 0, 255]);
+}
+
+#[test]
+fn a_still_carries_the_overlay_like_the_live_picture() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    let live = gb_at_3x(&mut c, |c| Some(tile_column_2_black(c)));
+    let mut rgba = Vec::with_capacity((SRC_W * SRC_H * 4) as usize);
+    for p in gb_shaped(coded, [255, 0, 255]).chunks_exact(4) {
+        rgba.extend_from_slice(&[p[2], p[1], p[0], 255]);
+    }
+    let still = c.create_texture_nearest(SRC_W, SRC_H, &rgba);
+    c.begin_frame();
+    c.draw_list(&[Draw::Shot { tex: still }]);
+    let shot = c.read_frame();
+    assert_eq!(at(&shot, 640, 82, 100), [0, 0, 0]);
+    assert_eq!(at(&shot, 640, 82, 100), at(&live, 640, 82, 100));
+}
+
+#[test]
+fn a_still_after_the_game_does_not_lay_the_full_overlay_over_the_bezel() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    let mut bezel = vec![0u8; 640 * 480 * 4];
+    for (i, p) in bezel.chunks_exact_mut(4).enumerate() {
+        if i % 640 < 20 {
+            p.copy_from_slice(&[0, 0, 255, 255]);
+        }
+    }
+    let bezel = c.create_texture(640, 480, &bezel);
+    c.set_game_bezel(Some(bezel));
+    let game = gb_at_3x(&mut c, |c| Some(full_overlay(c, [255, 0, 0, 128])));
+    let still = c.create_texture_nearest(SRC_W, SRC_H, &vec![255u8; (SRC_W * SRC_H * 4) as usize]);
+    c.begin_frame();
+    c.draw_list(&[Draw::Game, Draw::Shot { tex: still }]);
+    let both = c.read_frame();
+    assert_eq!(at(&both, 640, 5, 240), at(&game, 640, 5, 240), "the bezel strip changed under a still");
+}
+
+#[test]
+fn no_overlay_while_the_screen_powers_on() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    c.fit((640, 480));
+    let o = full_overlay(&mut c, [255, 0, 0, 255]);
+    c.set_overlay(Some(o));
+    let f = laid_out(&mut c, (640, 480), game_layout((640, 480), (160, 144), Sizing::Integer), 0.5);
+    let red = f.chunks_exact(4).filter(|p| p[0] == 255 && p[1] == 0 && p[2] == 0).count();
+    assert_eq!(red, 0, "the overlay drew over a screen still powering on");
 }
