@@ -1171,6 +1171,7 @@ const POINTER: [&str; 11] = [
 ];
 pub(crate) const POINTER_BLEED: u32 = 4;
 const GROUND_SCRIM: f32 = 0.65;
+const GAME_SCRIM: f32 = 0.8;
 pub(crate) const TYPE_DROP: f32 = 4.0;
 pub(crate) const LEGEND_Y: f32 = 427.0;
 pub(crate) const DIM_INK: [u8; 3] = [0x9a, 0x9a, 0xa4];
@@ -1673,7 +1674,7 @@ impl QuickMenu<'_> {
                     y,
                     w: self.canvas.w,
                     h: bottom - y,
-                    colour: [0.0, 0.0, 0.0, GROUND_SCRIM],
+                    colour: [0.0, 0.0, 0.0, GAME_SCRIM],
                 });
             }
         }

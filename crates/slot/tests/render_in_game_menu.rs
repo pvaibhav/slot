@@ -100,7 +100,7 @@ fn the_in_game_menu_darkens_the_game_and_screen_leaves_it_bare() {
                 "({x}, {y}): the menu drew inside the double tap window"
             );
             for ch in 0..3 {
-                let want = f32::from(bare[ch]) * 0.35;
+                let want = f32::from(bare[ch]) * 0.2;
                 assert!(
                     (f32::from(dark[ch]) - want).abs() <= 3.0,
                     "({x}, {y}) channel {ch}: bare {} drew {} under the scrim, want about {want}",
