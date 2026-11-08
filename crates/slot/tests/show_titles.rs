@@ -5,8 +5,8 @@ use std::path::Path;
 use common::{tmp_root_with_carts, write_gb_cart};
 use slot::app::{App, Phase};
 use slot_gfx::{Draw, TexId};
-use slot_input::{Action, Btn};
-use slot_store::{read_slot_state, write_slot_state, SlotState};
+use slot_input::{Action, Btn, FAVORITE_HOLD_MS};
+use slot_store::{read_slot_state, write_slot_state, Platform, Recent, SlotState};
 use slot_ui::{QuickRow, QuickValue};
 use tempfile::TempDir;
 
@@ -151,5 +151,82 @@ fn the_title_hides_while_a_cart_goes_in() {
         title_alpha(&a),
         None,
         "the title showed over a cart going in"
+    );
+}
+
+fn collection_card() -> (TempDir, App) {
+    let d = card();
+    let dir = d.path().join("Collections");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("Puzzlers.txt"), "gba/Fusion\n").unwrap();
+    std::fs::write(dir.join("order.txt"), "Puzzlers\n").unwrap();
+    write_slot_state(
+        d.path(),
+        &SlotState {
+            clock_set: true,
+            show_titles: true,
+            favorites: vec![Recent {
+                platform: Platform::Gba,
+                stem: "Emerald (USA, Europe)".into(),
+            }],
+            ..SlotState::default()
+        },
+    )
+    .expect("write slot.state");
+    let mut a = App::boot(d.path());
+    a.set_shelf_title_face(TexId::from_raw(TITLE), 120);
+    a.set_shelf_platform_face(TexId::from_raw(RACK), 80);
+    (d, a)
+}
+
+fn go_to(a: &mut App, shelf: &str) {
+    tick(a, 1.0);
+    for _ in 0..12 {
+        if a.shelf_platform_name() == Some(shelf) {
+            tick(a, 4.0);
+            return;
+        }
+        press(a, Btn::R1);
+        a.set_shelf_platform_face(TexId::from_raw(RACK), 80);
+        tick(a, 0.5);
+    }
+    panic!("never reached the {shelf} shelf: {:?}", a.shelf_platform_name());
+}
+
+fn hidden(alpha: Option<f32>) -> bool {
+    alpha.unwrap_or(0.0) < 0.01
+}
+
+#[test]
+fn the_title_fades_out_behind_the_add_to_collection_screen() {
+    let (_d, mut a) = collection_card();
+    go_to(&mut a, "Game Boy Advance");
+    assert!(!hidden(title_alpha(&a)), "no title to fade on the shelf");
+    common::hold(&mut a, Btn::Y, FAVORITE_HOLD_MS);
+    assert!(matches!(a.edit(), Some(slot::editing::Edit::Choosing { .. })));
+    tick(&mut a, 2.0);
+    assert!(
+        hidden(title_alpha(&a)),
+        "the title showed over the add screen at {:?}",
+        title_alpha(&a)
+    );
+}
+
+#[test]
+fn the_title_fades_out_behind_the_remove_from_collection_screen() {
+    let (_d, mut a) = collection_card();
+    go_to(&mut a, "Favorites");
+    press(&mut a, Btn::R2);
+    assert_eq!(a.shelf_platform_name(), Some("Puzzlers"));
+    a.set_shelf_platform_face(TexId::from_raw(RACK), 80);
+    tick(&mut a, 4.0);
+    assert!(!hidden(title_alpha(&a)), "no title to fade on the collection");
+    common::hold(&mut a, Btn::Y, FAVORITE_HOLD_MS);
+    assert!(matches!(a.edit(), Some(slot::editing::Edit::Removing { .. })));
+    tick(&mut a, 2.0);
+    assert!(
+        hidden(title_alpha(&a)),
+        "the title showed over the remove screen at {:?}",
+        title_alpha(&a)
     );
 }

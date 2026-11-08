@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.15.1](https://github.com/slot-cfw/slot/releases/tag/v1.15.1)
+
+- With Game Titles on, the game's title now fades out instead of staying on top.
+
 ## [1.15.0](https://github.com/slot-cfw/slot/releases/tag/v1.15.0)
 
 - Collections let you group games across systems. Hold Y on a game to add it to one, or hold SELECT to pick several and press START. Collections stack behind Favorites on L2 / R2, or set Settings → Shelf Mode to Collections to give each its own spot in the row. On a collection, hold Y to take a game out, press X to move a game, and hold X to move the whole collection. ([#190](https://github.com/slot-cfw/slot/issues/190))

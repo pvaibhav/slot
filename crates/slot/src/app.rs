@@ -3694,7 +3694,17 @@ impl App {
         if named.is_some_and(|t| t < SLOT_NAME_IN_MS + SLOT_NAME_HOLD_MS) {
             return 0.0;
         }
-        1.0 - self.slot_name_alpha() / SLOT_NAME_ALPHA
+        (1.0 - self.slot_name_alpha() / SLOT_NAME_ALPHA) * (1.0 - self.edit_dim())
+    }
+
+    fn edit_dim(&self) -> f32 {
+        use crate::editing::{ease_in_out, progress, Edit, ENTER_MOVE_MS};
+        match &self.edit {
+            Some(Edit::Choosing { since, .. }) | Some(Edit::Removing { since, .. }) => {
+                ease_in_out(progress(self.now(), *since, ENTER_MOVE_MS))
+            }
+            _ => 0.0,
+        }
     }
 
     pub fn shelf_platform_name(&self) -> Option<&str> {
