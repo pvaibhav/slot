@@ -22,7 +22,7 @@ Skeuomorphic UI
 <div class="keys" markdown>
 
 Emulation
-:   [mGBA](https://mgba.io) and [gpSP](https://github.com/libretro/gpsp)
+:   [mGBA](https://mgba.io), [gpSP](https://github.com/libretro/gpsp) and [Gambatte](https://github.com/libretro/gambatte-libretro)
 
 Underlying OS
 :   [BaseOS](https://github.com/pvaibhav/BaseOS) by [Prashant Vaibhav](https://github.com/pvaibhav)
@@ -33,7 +33,7 @@ Underlying OS
 
 <div class="keys" markdown>
 
-Panel mask
+LCD shader
 :   Derived from LCD3x, a public-domain shader by Gigaherz in the libretro shader collection
 
 Dot shader

@@ -273,7 +273,7 @@ fn stop_during_rip_finishes_leaving_the_screen() {
     let mut t = stop;
     while !s.done(t) {
         t += 1;
-        assert!(s.frame(t).paper.map_or(true, |p| !p.bow), "at {t}");
+        assert!(s.frame(t).paper.is_none_or(|p| !p.bow), "at {t}");
     }
     smooth_from(&s, stop);
     let mut cues = Vec::new();
@@ -382,4 +382,49 @@ fn a_stopped_scene_is_not_held() {
     let f = s.frame(PRINT_AT + 300);
     s.hold_print(PRINT_AT + 300);
     assert_eq!(s.frame(PRINT_AT + 300), f);
+}
+
+#[test]
+fn a_skip_during_print_jumps_to_rest_and_silences_the_buzz() {
+    let mut s = PrintScene::new(0);
+    let rest = PrintScene::new(0).frame(REST_AT);
+    assert_eq!(s.cues(PRINT_AT + 100), vec![Cue::Buzz]);
+    s.skip(PRINT_AT + 100);
+    assert_eq!(s.frame(PRINT_AT + 100), rest);
+    let mut after = Vec::new();
+    for t in PRINT_AT + 100..PRINT_AT + 10_000 {
+        after.extend(s.cues(t));
+    }
+    assert_eq!(after, vec![Cue::BuzzOff]);
+}
+
+#[test]
+fn a_skip_before_the_print_never_buzzes() {
+    let mut s = PrintScene::new(0);
+    s.skip(300);
+    let mut all = Vec::new();
+    for t in 300..10_000 {
+        all.extend(s.cues(t));
+    }
+    assert!(all.is_empty(), "{all:?}");
+}
+
+#[test]
+fn a_skip_at_rest_changes_nothing() {
+    let mut s = PrintScene::new(0);
+    for t in 0..REST_AT + 10 {
+        s.cues(t);
+    }
+    let rest = s.frame(REST_AT + 10);
+    s.skip(REST_AT + 10);
+    assert_eq!(s.frame(REST_AT + 10), rest);
+    assert!(s.cues(REST_AT + 20).is_empty());
+}
+
+#[test]
+fn a_skipped_print_still_closes_after_b() {
+    let mut s = PrintScene::new(0);
+    s.skip(PRINT_AT + 100);
+    s.stop(PRINT_AT + 200);
+    assert!(s.done(PRINT_AT + 10_000));
 }

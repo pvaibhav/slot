@@ -92,7 +92,10 @@ fn a_host_window_resized_to_4_by_3_lays_the_shelf_out_for_it() {
     f.render(&mut c, (1080, 720));
     assert_eq!(
         f.app().canvas(),
-        Canvas::FRAMED,
+        Canvas {
+            w: 1080.0,
+            h: 720.0
+        },
         "a 3:2 window kept the 4:3 layout"
     );
 }
@@ -131,7 +134,7 @@ fn a_title_shows_under_the_cart_when_titles_are_on() {
     f.compose(&mut c);
     let frame = c.read_frame();
     write_png("native-shelf-title", 640, 480, &frame);
-    let y = slot_ui::slot_name_y() as usize + 8;
+    let y = slot_ui::slot_name_y(slot_ui::Canvas::FRAMED) as usize + 8;
     let lit = (100..540)
         .filter(|&x| {
             let o = (y * 640 + x) * 4;
@@ -375,13 +378,15 @@ fn every_shortcut_row_keeps_its_label_clear_of_its_binding_on_a_4_by_3_panel() {
         tap(&mut f, Btn::Down);
     }
     tap(&mut f, Btn::A);
-    tap(&mut f, Btn::Down);
+    for _ in 0..QuickRow::Shortcuts.position(&[]) {
+        tap(&mut f, Btn::Down);
+    }
     tap(&mut f, Btn::A);
     for row in QuickRow::SHORTCUTS {
         assert_eq!(f.app().quick_menu(), Some(row));
         f.compose(&mut c);
         let px = c.read_frame();
-        let top = quick_row_top(row, &[]) as usize;
+        let top = quick_row_top(slot_ui::Canvas::FRAMED, row, &[]) as usize;
         let ink: Vec<usize> = (40..640)
             .filter(|&x| {
                 (top + 8..top + 44).any(|y| {
@@ -417,6 +422,9 @@ fn link_screen_on(panel: (u32, u32)) -> Option<Vec<u8>> {
     let mut c = Compositor::new(&surface).ok()?;
     let d = common::tmp_root_with_gb_carts(&["Tetris"]);
     clocked(d.path());
+    let mut state = slot_store::read_slot_state(d.path());
+    state.gb_core = slot_store::Core::Mgba;
+    slot_store::write_slot_state(d.path(), &state).unwrap();
     let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
     f.upload_faces(&mut c);
     f.upload_bezel(&mut c, panel);
@@ -593,7 +601,7 @@ fn the_game_boy_page_lists_scale_and_stretch_on_both_panels() {
         };
         for &row in rows {
             assert!(!hidden.contains(&row), "{row:?} hidden on {panel:?}");
-            let top = quick_row_top(row, &hidden) as usize;
+            let top = quick_row_top(slot_ui::Canvas::FRAMED, row, &hidden) as usize;
             let w = panel.0 as usize;
             let lit = (top + 8..top + 40)
                 .any(|y| (0..w).any(|x| px[(y * w + x) * 4..][..3].iter().all(|c| *c > 0x80)));
@@ -748,7 +756,7 @@ fn tap(f: &mut Frontend, input: &mut Script, btn: Btn) {
 }
 
 fn row_gap(frame: &[u8], row: QuickRow, hidden: &[QuickRow]) -> (usize, usize) {
-    let top = slot_ui::quick_row_top_at(row, row, hidden) as usize;
+    let top = slot_ui::quick_row_top_at(slot_ui::Canvas::FRAMED, row, row, hidden) as usize;
     let at = |x: usize, y: usize| {
         let o = (y * 640 + x) * 4;
         frame[o..o + 3].iter().all(|c| *c > 0x80)
@@ -818,7 +826,7 @@ fn long_menu_values_keep_clear_of_their_labels_on_a_4_by_3_panel() {
     tap(&mut f, &mut input, Btn::Menu);
     down_to(&mut f, &mut input, QuickRow::Controls);
     tap(&mut f, &mut input, Btn::A);
-    tap(&mut f, &mut input, Btn::Down);
+    down_to(&mut f, &mut input, QuickRow::Shortcuts);
     tap(&mut f, &mut input, Btn::A);
     check(&mut f, &mut c, &mut input, QuickRow::ScColour);
     check(&mut f, &mut c, &mut input, QuickRow::ScFastForwardToggle);
@@ -928,4 +936,84 @@ fn a_suffixed_bezel_with_no_file_for_the_scale_draws_no_bezel() {
     for colour in [WOOD, SHELL_FIT, SHELL_INTEGER] {
         assert_ne!(edge, [colour[0], colour[1], colour[2]]);
     }
+}
+
+fn card_png(path: &std::path::Path, w: usize, h: usize, paint: impl Fn(usize, usize) -> [u8; 4]) {
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut px = vec![0u8; w * h * 4];
+    for (i, p) in px.chunks_mut(4).enumerate() {
+        p.copy_from_slice(&paint(i % w, i / w));
+    }
+    let file = std::fs::File::create(path).unwrap();
+    let mut e = png::Encoder::new(std::io::BufWriter::new(file), w as u32, h as u32);
+    e.set_color(png::ColorType::Rgba);
+    e.set_depth(png::BitDepth::Eight);
+    e.write_header().unwrap().write_image_data(&px).unwrap();
+}
+
+#[test]
+fn a_card_overlay_draws_over_the_game_and_under_the_bezel() {
+    let Ok(surface) = HeadlessSurface::new() else {
+        return;
+    };
+    let Ok(mut c) = Compositor::new(&surface) else {
+        return;
+    };
+    let d = common::tmp_root_with_carts(&["Emerald"]);
+    clocked(d.path());
+    card_png(&d.path().join("Bezels/GBA/edges.png"), 640, 480, |x, y| {
+        hole_on_top(x, y, 640, 480)
+    });
+    card_png(&d.path().join("Overlays/GBA/grid.png"), 640, 480, |_, _| {
+        [255, 0, 0, 255]
+    });
+    card_png(
+        &d.path().join("Overlays/GBA/grid_tile.png"),
+        2,
+        1,
+        |x, _| match x {
+            1 => [0, 255, 0, 255],
+            _ => [0, 0, 0, 0],
+        },
+    );
+    let state = slot_store::read_slot_state(d.path());
+    slot_store::write_slot_state(
+        d.path(),
+        &slot_store::SlotState {
+            bezel_gba: slot_store::BezelPick::File("edges.png".into()),
+            overlay_gba: Some("grid".into()),
+            ..state
+        },
+    )
+    .unwrap();
+    let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+    f.upload_faces(&mut c);
+    f.upload_bezel(&mut c, (640, 480));
+    c.fit((640, 480));
+    let mut input = Script(VecDeque::new());
+    input.0.push_back(vec![RawEvent::Down(slot_input::Btn::A)]);
+    input.0.push_back(vec![RawEvent::Up(slot_input::Btn::A)]);
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(4);
+    while std::time::Instant::now() < until {
+        f.advance(&mut input);
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    let mut panel = Vec::new();
+    for _ in 0..100 {
+        f.compose(&mut c);
+        panel = c.read_window((640, 480));
+        if panel_at(&panel, 101, 200) == [0, 255, 0] {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    write_png("native-overlay-gba", 640, 480, &panel);
+    let at = |x, y| panel_at(&panel, x, y);
+    for x in [101, 103, 321, 639] {
+        assert_eq!(at(x, 200), [0, 255, 0], "tile column at x {x}");
+    }
+    for x in [100, 102, 320, 638] {
+        assert_eq!(at(x, 200), [255, 0, 0], "full image at x {x}");
+    }
+    assert_eq!(at(320, 479), [255, 0, 255], "the bezel covers the overlay");
 }

@@ -229,3 +229,101 @@ fn a_bezel_column_is_the_alpha_down_the_middle() {
     assert_eq!(column[0], 0);
     assert!(bezel_column(&rgba, (720, 480)).is_empty());
 }
+
+#[test]
+fn every_panel_gets_its_own_canvas() {
+    for (panel, canvas) in [
+        ((720, 480), (720.0, 480.0)),
+        ((640, 480), (640.0, 480.0)),
+        ((720, 720), (720.0, 720.0)),
+        ((1024, 768), (800.0, 600.0)),
+        ((1440, 960), (720.0, 480.0)),
+        ((1280, 960), (640.0, 480.0)),
+        ((1440, 1440), (720.0, 720.0)),
+        ((2048, 1536), (800.0, 600.0)),
+        ((1920, 1080), (960.0, 540.0)),
+        ((1000, 700), (1000.0, 700.0)),
+    ] {
+        let c = Canvas::of(panel);
+        assert_eq!((c.w, c.h), canvas, "{panel:?}");
+    }
+}
+
+#[test]
+fn a_panel_smaller_than_640_by_480_keeps_the_fitted_reference() {
+    assert_eq!(Canvas::of((600, 400)), Canvas::FRAMED);
+}
+
+#[test]
+fn only_640_by_480_canvases_are_framed() {
+    assert!(slot_gfx::framed((640, 480)));
+    assert!(slot_gfx::framed((1280, 960)));
+    assert!(!slot_gfx::framed((1024, 768)));
+    assert!(!slot_gfx::framed((720, 720)));
+    assert!(!slot_gfx::framed((720, 480)));
+}
+
+#[test]
+fn the_host_scale_is_whole() {
+    assert_eq!(slot_gfx::canvas_scale((1440, 960)), 2);
+    assert_eq!(slot_gfx::canvas_scale((2048, 1536)), 2);
+    assert_eq!(slot_gfx::canvas_scale((1024, 768)), 1);
+}
+
+#[test]
+fn fitting_a_panel_sizes_the_frame_once() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    for panel in [(720, 720), (1024, 768), (640, 480)] {
+        c.fit(panel);
+        let fitted = c.frame_size();
+        c.begin_frame();
+        assert_eq!(fitted, c.frame_size(), "{panel:?}");
+    }
+}
+
+fn placeholder_frame(c: &mut Compositor, power: f32) -> Vec<u8> {
+    c.fit((720, 720));
+    c.set_game_layout(slot_gfx::game_layout(
+        (720, 720),
+        (240, 160),
+        slot_gfx::Sizing::Integer,
+    ));
+    c.set_placeholder_bezel(Some([50.0 / 255.0, 205.0 / 255.0, 50.0 / 255.0, 1.0]));
+    c.set_screen_power(power);
+    c.begin_frame();
+    c.upload_game(&pattern());
+    c.draw_list(&[Draw::Game]);
+    c.read_frame()
+}
+
+#[test]
+fn the_placeholder_bezel_collapses_with_the_screen() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    let at = |px: &[u8], y: usize| {
+        let o = (y * 720 + 360) * 4;
+        [px[o], px[o + 1], px[o + 2]]
+    };
+    let lime = [50, 205, 50];
+    let on = placeholder_frame(&mut c, 1.0);
+    assert_eq!(at(&on, 30), lime);
+    let opening = placeholder_frame(&mut c, 0.5);
+    assert_ne!(at(&opening, 30), lime, "lime shows outside the opening screen");
+    assert_eq!(at(&opening, 130), lime, "lime is missing around the opening picture");
+}
+
+#[test]
+fn the_ds_plus_draws_its_800_by_600_layout_on_the_whole_panel() {
+    assert_eq!(slot_gfx::panel_pixels((1024, 768)), (1024, 768));
+    assert_eq!(slot_gfx::panel_pixels((2048, 1536)), (1024, 768));
+    assert_eq!(slot_gfx::panel_pixels((720, 720)), (720, 720));
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    c.fit((1024, 768));
+    c.begin_frame();
+    assert_eq!(c.frame_size(), (1024, 768));
+}

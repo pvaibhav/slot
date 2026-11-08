@@ -1,4 +1,4 @@
-use slot_ui::{sticker_face, StickerFields, STICKER_H, STICKER_W};
+use slot_ui::{sticker_face, StickerFields};
 
 fn write(path: &str, px: &[u8], w: usize, h: usize) {
     let f = std::fs::File::create(path).unwrap();
@@ -14,14 +14,18 @@ fn render_sticker() {
         return;
     };
     let model = std::env::var("SCRATCH_MODEL").unwrap_or_default();
-    let face = sticker_face(&StickerFields {
+    let fields = StickerFields {
         battery: Some(87),
         serial: "04738857",
         version: "0.1.0",
         baseos: Some("1.5.2"),
         model: &model,
-    });
-    let (w, h) = (STICKER_W as usize, STICKER_H as usize);
+    };
+    let face = match std::env::var("SCRATCH_DS").is_ok() {
+        true => slot_ui::ds_sticker_face(&fields),
+        false => sticker_face(&fields),
+    };
+    let (w, h) = (face.w as usize, face.h as usize);
     write(&out, &face.rgba, w, h);
 
     if let Ok(crop) = std::env::var("SCRATCH_CROP") {

@@ -18,11 +18,20 @@ pub enum ScreenEffect {
     Simpletex,
     Shimmerless,
     Authentic,
+    LcdGrid,
 }
 
 impl ScreenEffect {
     pub fn mode(self) -> f32 {
         self as u8 as f32
+    }
+
+    pub fn lcd_for(panel: (u32, u32)) -> ScreenEffect {
+        let (w, h) = panel;
+        match w > 0 && w * 2 == h * 3 {
+            true => ScreenEffect::Lcd3x,
+            false => ScreenEffect::LcdGrid,
+        }
     }
 }
 

@@ -133,7 +133,7 @@ fn the_networks_list_renders() {
     let px = frame(&mut f, &mut c);
     dump(&px, "saved");
     let canvas = f.app().canvas();
-    let value = [canvas.w - 250.0, net_row_top(2, 0, 0) + 8.0, 210.0, 36.0];
+    let value = [canvas.w - 250.0, net_row_top(slot_ui::Canvas::FRAMED, 2, 0, 0) + 8.0, 210.0, 36.0];
     assert!(
         count_in(&px, value, inked) > 50,
         "Home has no Connected value"
@@ -147,7 +147,7 @@ fn the_networks_list_renders() {
     let px = frame(&mut f, &mut c);
     dump(&px, "list");
     let canvas = f.app().canvas();
-    let top = |i| net_row_top(count, at, i);
+    let top = |i| net_row_top(slot_ui::Canvas::FRAMED, count, at, i);
     assert!(pointer_at(&px, top(at)), "no pointer on the selected row");
     assert!(!pointer_at(&px, top(0)), "a pointer on an unselected row");
     let mut fills = Vec::new();
@@ -196,9 +196,9 @@ fn a_network_page_renders() {
     let px = frame(&mut f, &mut c);
     dump(&px, "page");
     let canvas = f.app().canvas();
-    assert!(pointer_at(&px, net_row_top(count, 0, 0)));
+    assert!(pointer_at(&px, net_row_top(slot_ui::Canvas::FRAMED, count, 0, 0)));
     for i in [0, 1, 3] {
-        let top = net_row_top(count, 0, i);
+        let top = net_row_top(slot_ui::Canvas::FRAMED, count, 0, i);
         let value = [canvas.w - 250.0, top + 8.0, 210.0, 36.0];
         assert!(count_in(&px, value, inked) > 50, "row {i} has no value");
     }
@@ -375,7 +375,7 @@ fn the_list_says_it_is_scanning_until_results_arrive_then_offers_other() {
         assert!(s.lines.is_empty(), "{panel:?}: rows before the scan");
         let px = frame(&mut f, &mut c);
         dump(&px, &format!("scanning-{}", panel.0));
-        let top = net_row_top(1, 0, 0);
+        let top = net_row_top(slot_ui::Canvas::FRAMED, 1, 0, 0);
         let (left, right, n) = ink_span(&px, top).expect("no scanning message");
         assert!(n > 100, "{panel:?}: message too faint");
         let mid = (left + right) as f32 / 2.0;
@@ -392,7 +392,7 @@ fn the_list_says_it_is_scanning_until_results_arrive_then_offers_other() {
         let px = frame(&mut f, &mut c);
         dump(&px, &format!("scanned-{}", panel.0));
         let count = s.lines.len();
-        let below = net_row_top(count, s.selected, count.min(5));
+        let below = net_row_top(slot_ui::Canvas::FRAMED, count, s.selected, count.min(5));
         assert!(
             count >= 5 || ink_span(&px, below).is_none(),
             "{panel:?}: message still drawn"
@@ -694,5 +694,38 @@ mod romm_pages {
         let (px, size) = seen(&mut f, &mut c);
         shot(&px, size, "expired");
         assert!(decode(&px, size).is_none());
+    }
+}
+
+#[test]
+fn the_no_network_notice_fits_the_screen() {
+    for panel in [(640, 480), (720, 480)] {
+        let Some((_d, mut f, mut c, _s)) = setup() else {
+            return;
+        };
+        f.app_mut().set_panel(panel);
+        f.app_mut().wifi_send(Cmd::Disconnect);
+        settle(&mut f);
+        assert!(!f.app().wifi_up());
+        let canvas = f.app().canvas();
+        f.app_mut().apply(Action::QuickMenu);
+        while f.app().quick_menu() != Some(QuickRow::Network) {
+            press(&mut f, Btn::Down);
+        }
+        press(&mut f, Btn::A);
+        assert!(f.app().update_text().is_some(), "{panel:?}: no notice");
+        let px = frame(&mut f, &mut c);
+        dump(&px, &format!("no-network-{}", panel.0));
+        let (left, right, n) = [150.0, 202.0, 254.0]
+            .into_iter()
+            .filter_map(|top| ink_span(&px, top))
+            .reduce(|a, b| (a.0.min(b.0), a.1.max(b.1), a.2 + b.2))
+            .expect("no notice drawn");
+        assert!(n > 100, "{panel:?}: notice too faint");
+        assert!(
+            left >= 12 && (right as f32) < canvas.w - 12.0,
+            "{panel:?}: notice spans {left}..{right} on a {} canvas",
+            canvas.w
+        );
     }
 }

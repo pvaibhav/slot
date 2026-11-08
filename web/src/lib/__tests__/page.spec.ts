@@ -188,6 +188,20 @@ describe('states', () => {
     expect(tab).not.toContain('accept')
   })
 
+  it('picks a custom label with an input on the page and no type filter', () => {
+    const view = src('views/GameDetailView.vue')
+    expect(view).toContain('type="file"')
+    expect(view).not.toContain("createElement('input')")
+    expect(view).not.toContain('accept')
+  })
+
+  it('picks a guide with an input on the page and no type filter', () => {
+    const tab = src('components/game/GuidesTab.vue')
+    expect(tab).toContain('type="file"')
+    expect(tab).not.toContain("createElement('input')")
+    expect(tab).not.toContain('accept')
+  })
+
   it('has no state upload control', () => {
     expect('uploadGameState' in client).toBe(false)
     const tab = src('components/game/StatesTab.vue')

@@ -68,11 +68,26 @@ struct Spec {
 enum Shape {
     Gba,
     Gb(GbShell),
+    #[cfg(feature = "nds")]
+    Ds,
 }
+
+#[cfg(feature = "nds")]
+pub const DS_LABEL_X: u32 = 15;
+#[cfg(feature = "nds")]
+pub const DS_LABEL_Y: u32 = 23;
+#[cfg(feature = "nds")]
+pub const DS_LABEL_W: u32 = 170;
+#[cfg(feature = "nds")]
+pub const DS_LABEL_H: u32 = 184;
+#[cfg(feature = "nds")]
+const DS_LABEL: (u32, u32, u32, u32) = (DS_LABEL_X, DS_LABEL_Y, DS_LABEL_W, DS_LABEL_H);
 
 pub fn folder_gb_shell(cart: &Cart) -> Option<GbShell> {
     match cart.platform {
         Platform::Gba | Platform::Gbav => None,
+        #[cfg(feature = "nds")]
+        Platform::Nds => None,
         Platform::Gb | Platform::Gbc => Some(match cart.shell.map(|c| c.outline) {
             Some(Outline::Notched) => GbShell::Notched,
             Some(Outline::Rounded) => GbShell::Rounded,
@@ -96,6 +111,8 @@ pub fn shelf_shape(cart: &Cart) -> (Option<GbShell>, bool) {
     let outline = cart.shell.map(|c| c.outline);
     let shape = match (cart.platform, outline) {
         (Platform::Gba | Platform::Gbav, _) => None,
+        #[cfg(feature = "nds")]
+        (Platform::Nds, _) => None,
         (_, Some(Outline::Notched)) => Some(GbShell::Notched),
         (_, Some(Outline::Rounded)) => Some(GbShell::Rounded),
         _ => match slot_store::header_index::peek_gb_header(&cart.rom).flatten() {
@@ -110,6 +127,8 @@ pub fn shelf_shape(cart: &Cart) -> (Option<GbShell>, bool) {
 pub fn gb_shell_of(cart: &Cart) -> Option<GbShell> {
     match cart.platform {
         Platform::Gba | Platform::Gbav => None,
+        #[cfg(feature = "nds")]
+        Platform::Nds => None,
         Platform::Gb | Platform::Gbc => Some(match cart.shell.map(|c| c.outline) {
             Some(Outline::Notched) => GbShell::Notched,
             Some(Outline::Rounded) => GbShell::Rounded,
@@ -151,6 +170,10 @@ pub fn label_rect(shell: Option<GbShell>) -> (f32, f32, f32, f32) {
 }
 
 fn shape_of(cart: &Cart) -> Shape {
+    #[cfg(feature = "nds")]
+    if cart.platform == Platform::Nds {
+        return Shape::Ds;
+    }
     match gb_shell_of(cart) {
         None => Shape::Gba,
         Some(shell) => Shape::Gb(shell),
@@ -184,6 +207,15 @@ fn spec(shape: Shape) -> Spec {
                 GbShell::Rounded => bitmaps::gbc_cart(),
             },
         },
+        #[cfg(feature = "nds")]
+        Shape::Ds => Spec {
+            w: bitmaps::DS_CART_W,
+            h: bitmaps::DS_CART_H,
+            label: DS_LABEL,
+            mask: bitmaps::ds_cart_mask(),
+            mould: Mould::Ds,
+            paint: bitmaps::ds_cart(),
+        },
     }
 }
 
@@ -194,6 +226,11 @@ const GB_SEATED_H: u32 = 259;
 pub fn seated_box(platform: Platform) -> (u32, u32) {
     match platform {
         Platform::Gba | Platform::Gbav => (SEATED_W, SEATED_H),
+        #[cfg(feature = "nds")]
+        Platform::Nds => (
+            (SEATED_H * bitmaps::DS_CART_W + bitmaps::DS_CART_H / 2) / bitmaps::DS_CART_H,
+            SEATED_H,
+        ),
         Platform::Gb | Platform::Gbc => (SEATED_W, GB_SEATED_H),
     }
 }
@@ -201,6 +238,8 @@ pub fn seated_box(platform: Platform) -> (u32, u32) {
 pub fn cart_box(platform: Platform) -> (u32, u32) {
     let s = spec(match platform {
         Platform::Gba | Platform::Gbav => Shape::Gba,
+        #[cfg(feature = "nds")]
+        Platform::Nds => Shape::Ds,
         Platform::Gb | Platform::Gbc => Shape::Gb(GbShell::Notched),
     });
     (s.w, s.h)
@@ -316,6 +355,8 @@ pub fn cart_face_with(cart: &Cart, art: Option<Vec<u8>>) -> CartFace {
     let mut face = shell_face(&s, &shell_for(cart));
     let label = match art {
         Some(rgba) => rgba,
+        #[cfg(feature = "nds")]
+        None if cart.platform == Platform::Nds => banner_label(&s, cart),
         None => {
             let title = label_text(cart);
             generated_label(&s, &title, label_colour(&title))
@@ -443,6 +484,8 @@ pub fn neutral_shell(mould: Mould, clear: bool) -> Vec<u8> {
         Mould::Gba => Shape::Gba,
         Mould::Notched => Shape::Gb(GbShell::Notched),
         Mould::Rounded => Shape::Gb(GbShell::Rounded),
+        #[cfg(feature = "nds")]
+        Mould::Ds => Shape::Ds,
     };
     let s = spec(shape);
     assert_eq!(
@@ -506,6 +549,8 @@ fn dress(s: &Spec, rgba: &mut [u8]) {
         Mould::Gba => "GAME BOY ADVANCE",
         Mould::Notched => "GAME BOY",
         Mould::Rounded => "GAME BOY COLOR",
+        #[cfg(feature = "nds")]
+        Mould::Ds => "NINTENDO DS",
     };
     stamp_console(rgba, s.w, s.h, title, y0);
 }
@@ -671,7 +716,7 @@ fn generated_label(s: &Spec, title: &str, bg: [u8; 3]) -> Vec<u8> {
     if let Some(font) = text::label_font() {
         let (max_px, max_h) = match s.mould {
             Mould::Gba => (lh as f32 / (MAX_LINES as f32 * 1.36), f32::INFINITY),
-            Mould::Notched | Mould::Rounded => {
+            _ => {
                 let room = (lh - 2 * PAD) as f32;
                 (room / MAX_LINES as f32, room)
             }
@@ -686,6 +731,48 @@ fn generated_label(s: &Spec, title: &str, bg: [u8; 3]) -> Vec<u8> {
             MIN_PX,
         );
         text::draw_centred(&mut rgba, lw, lh, &layout, ink(bg));
+    }
+    rgba
+}
+
+#[cfg(feature = "nds")]
+fn banner_label(s: &Spec, cart: &Cart) -> Vec<u8> {
+    let banner = slot_store::read_banner(&cart.rom);
+    let title = banner
+        .as_ref()
+        .map(|b| b.title.clone())
+        .filter(|t| !t.is_empty())
+        .unwrap_or_else(|| label_text(cart));
+    let bg = label_colour(&title);
+    let (_, _, lw, lh) = s.label;
+    let icon_room = lh * 3 / 5;
+    let top = Spec {
+        label: (0, 0, lw, lh - icon_room),
+        ..spec(Shape::Ds)
+    };
+    let text = generated_label(&top, &title, bg);
+    let mut rgba = Vec::with_capacity((lw * lh * 4) as usize);
+    for _ in 0..lw * icon_room {
+        rgba.extend_from_slice(&[bg[0], bg[1], bg[2], 255]);
+    }
+    rgba.extend_from_slice(&text);
+    if let Some(b) = banner {
+        let scale = ((icon_room - PAD) / 32).min((lw - 2 * PAD) / 32).max(1);
+        let (x0, y0) = (
+            (lw - 32 * scale) / 2,
+            (icon_room - 32 * scale) / 2 + PAD / 2,
+        );
+        for y in 0..32 * scale {
+            for x in 0..32 * scale {
+                let src = (((y / scale) * 32 + x / scale) * 4) as usize;
+                let px = &b.icon_rgba[src..src + 4];
+                if px[3] == 0 {
+                    continue;
+                }
+                let dst = (((y0 + y) * lw + x0 + x) * 4) as usize;
+                rgba[dst..dst + 4].copy_from_slice(px);
+            }
+        }
     }
     rgba
 }

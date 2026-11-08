@@ -1,5 +1,7 @@
 use slot_input::{anywhere, Action, Contexts, Entry};
-use slot_store::{Binding, CarouselAction, CarouselKeys, Controls, Modifier, ShortcutKeys};
+use slot_store::{
+    Binding, CarouselAction, CarouselKeys, Controls, Device, KidMode, Modifier, ShortcutKeys,
+};
 use slot_ui::QuickRow;
 
 use super::bind::{chord, shortcut_action};
@@ -63,6 +65,56 @@ impl Table {
         Table { rows }
     }
 
+    pub fn kid(
+        controls: &Controls,
+        shortcuts: &ShortcutKeys,
+        carousel: &CarouselKeys,
+        mode: KidMode,
+        turbo: bool,
+    ) -> Table {
+        let mut rows: Vec<Row> = Table::new(controls, shortcuts, carousel, turbo)
+            .rows
+            .into_iter()
+            .filter(|r| match (r.action, r.contexts == Contexts::SHELF) {
+                (None, _) => true,
+                (Some(a), true) => {
+                    mode == KidMode::Shelves
+                        && matches!(
+                            a,
+                            Action::PreviousShelf
+                                | Action::NextShelf
+                                | Action::PreviousCollection
+                                | Action::NextCollection
+                        )
+                }
+                (Some(_), false) => false,
+            })
+            .collect();
+        for (button, row, action) in [
+            (Device::L2, QuickRow::ScBrightDown, Action::BrightnessDown),
+            (Device::R2, QuickRow::ScBrightUp, Action::BrightnessUp),
+        ] {
+            let Some(binding) = Binding::plain(button) else {
+                continue;
+            };
+            let taken = rows
+                .iter()
+                .any(|r| r.action.is_none() && r.binding == binding);
+            if !taken {
+                rows.push(Row {
+                    row,
+                    binding,
+                    action: Some(action),
+                    contexts: match mode {
+                        KidMode::OneShelf => Contexts::GAME.with(Contexts::SHELF),
+                        _ => Contexts::GAME,
+                    },
+                });
+            }
+        }
+        Table { rows }
+    }
+
     pub fn entries(&self) -> Vec<Entry> {
         self.rows
             .iter()
@@ -98,6 +150,8 @@ fn shelf_action(a: CarouselAction) -> Action {
         CarouselAction::NextShelf => Action::NextShelf,
         CarouselAction::Favorite => Action::Favorite,
         CarouselAction::ForgetRecent => Action::ForgetRecent,
+        CarouselAction::PreviousCollection => Action::PreviousCollection,
+        CarouselAction::NextCollection => Action::NextCollection,
     }
 }
 

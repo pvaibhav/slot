@@ -10,10 +10,11 @@ mod states;
 
 pub use carts::render_once;
 pub use files::{move_path, rename_via_temp};
+pub use games::sweep_names;
 pub use http::{generate_pin, parse_target, Body, Handler, Reply, Request, Server};
 pub use net::{
-    announcement, answer, claims, conflicts, heard, model_name, names, probe, respond, mdns_off, wifi_ip,
-    Heard, Responder,
+    announcement, answer, claims, conflicts, heard, mdns_off, model_name, names, probe, respond,
+    wifi_ip, Heard, Responder,
 };
 pub use paths::{card_name, resolve, Refused};
 pub use session::{ServerNet, ServerPaper, ServerSession, NO_WIFI, SERVER_FAILED};
@@ -57,7 +58,11 @@ fn static_page(root: &Path, req: &Request) -> Reply {
     if req.method != "GET" && req.method != "HEAD" {
         return Reply::error(405, "method not allowed");
     }
-    if req.path.iter().any(|s| s == ".." || s.contains(['/', '\\', '\0'])) {
+    if req
+        .path
+        .iter()
+        .any(|s| s == ".." || s.contains(['/', '\\', '\0']))
+    {
         return Reply::error(403, "forbidden");
     }
     if let Some(file) = web_file(root, &req.path) {

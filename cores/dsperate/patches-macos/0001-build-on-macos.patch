@@ -1,0 +1,125 @@
+diff -ru a/src/core/cheat/analog_db.cpp b/src/core/cheat/analog_db.cpp
+--- a/src/core/cheat/analog_db.cpp
++++ b/src/core/cheat/analog_db.cpp
+@@ -7,11 +7,11 @@
+ 
+ // The directory comes from CMake (DSPERATE_ANALOG_DB_DIR), absolute.
+ __asm__(
+-  "\t.section .rodata.dsperate_analog_db,\"a\",%progbits\n"
++  "\t.section __TEXT,__const\n"
+   "\t.balign 4\n"
+-  "\t.globl dsperate_analog_db_begin\ndsperate_analog_db_begin:\n"
++  "\t.globl _dsperate_analog_db_begin\n_dsperate_analog_db_begin:\n"
+   "\t.incbin \"" DSPERATE_ANALOG_DB_DIR "/usrcheat-analog.dat\"\n"
+-  "\t.globl dsperate_analog_db_end\ndsperate_analog_db_end:\n"
++  "\t.globl _dsperate_analog_db_end\n_dsperate_analog_db_end:\n"
+   "\t.previous\n");
+ extern "C" const ds::u8 dsperate_analog_db_begin[], dsperate_analog_db_end[];
+ 
+diff -ru a/src/core/crypto/aes.c b/src/core/crypto/aes.c
+--- a/src/core/crypto/aes.c
++++ b/src/core/crypto/aes.c
+@@ -399,7 +399,7 @@
+  * them (every RK356x core; x86-64 with AES-NI), the table-free C above
+  * elsewhere. Same round keys, same result: the DSi AES engine and the NAND
+  * reader run whole titles through this, a block at a time. */
+-#if defined(__aarch64__) && defined(__GNUC__)
++#if defined(__aarch64__) && defined(__GNUC__) && defined(__linux__)
+ #include <arm_neon.h>
+ #include <sys/auxv.h>
+ #define HWCAP_AES_BIT (1UL << 3)
+diff -ru a/src/core/gpu/gl/gl_shaders.cpp b/src/core/gpu/gl/gl_shaders.cpp
+--- a/src/core/gpu/gl/gl_shaders.cpp
++++ b/src/core/gpu/gl/gl_shaders.cpp
+@@ -7,13 +7,13 @@
+ // GLSL ES text linked in with .incbin, as vk_shaders.cpp links the SPIR-V.
+ 
+ #define DS_INCBIN(sym, file)                                     \
+-  __asm__(".section .rodata\n"                                   \
++  __asm__(".section __TEXT,__const\n"                                   \
+           ".balign 4\n"                                          \
+-          ".globl " #sym "_data\n"                               \
+-          #sym "_data:\n"                                        \
++          ".globl _" #sym "_data\n"                               \
++          "_" #sym "_data:\n"                                        \
+           ".incbin \"" file "\"\n"                               \
+-          ".globl " #sym "_end\n"                                \
+-          #sym "_end:\n"                                         \
++          ".globl _" #sym "_end\n"                                \
++          "_" #sym "_end:\n"                                         \
+           ".byte 0\n"                                            \
+           ".previous\n");                                        \
+   extern "C" const char sym##_data[], sym##_end[]
+diff -ru a/src/core/gpu/kernels_neon.cpp b/src/core/gpu/kernels_neon.cpp
+--- a/src/core/gpu/kernels_neon.cpp
++++ b/src/core/gpu/kernels_neon.cpp
+@@ -767,7 +767,7 @@
+     const u32 cs = seam[s];
+     switch (n) {
+     case 1: dst[x] = cs; break;
+-    case 2: vst1_u32(dst + x, uint32x2_t{c, cs}); break;
++    case 2: vst1_u32(dst + x, (uint32x2_t{c, cs})); break;
+     case 3: vst1_u32(dst + x, vdup_n_u32(c)); dst[x + 2] = cs; break;
+     default: {
+       const u32 last = end - 1;
+@@ -898,7 +898,7 @@
+       continue;
+     }
+     switch (n) {
+-    case 2: vst1_u32(dst + x, uint32x2_t{cd, c}); break;
++    case 2: vst1_u32(dst + x, (uint32x2_t{cd, c})); break;
+     case 3: dst[x] = cd; vst1_u32(dst + x + 1, vdup_n_u32(c)); break;
+     default: {
+       dst[x++] = cd;
+diff -ru a/src/core/gpu/render3d.cpp b/src/core/gpu/render3d.cpp
+--- a/src/core/gpu/render3d.cpp
++++ b/src/core/gpu/render3d.cpp
+@@ -1332,7 +1332,7 @@
+   u32* col = sb.tcol + off; u32* alp = sb.talp + off;
+   // Only the live groups of the pass plane (see live_runs): a dead group's
+   // texels are never read, by the shader (which skips it too) or the resolve.
+-  if (const GatherNFn g = reinterpret_cast<GatherNFn>(sh.gather4)) {
++  if (const GatherNFn g = reinterpret_cast<GatherNFn>(const_cast<void*>(sh.gather4))) {
+     const prof::Counter c = sh.texels ? prof::C_TEX_FAST : (sh.fmt == 5 ? prof::C_TEX_SLOW_FMT5 : prof::C_TEX_FAST);
+     live_runs(sb.pass + off, n, [&](u32 k, u32 len) {
+       const u32 len4 = (len + 3) & ~3u;
+diff -ru a/src/core/gpu/vk/vk_shaders.cpp b/src/core/gpu/vk/vk_shaders.cpp
+--- a/src/core/gpu/vk/vk_shaders.cpp
++++ b/src/core/gpu/vk/vk_shaders.cpp
+@@ -5,13 +5,13 @@
+ // Compute shaders linked in as SPIR-V via .incbin; no shader compiler needed to build.
+ 
+ #define DS_INCBIN(sym, file)                                     \
+-  __asm__(".section .rodata\n"                                   \
++  __asm__(".section __TEXT,__const\n"                                   \
+           ".balign 4\n"                                          \
+-          ".globl " #sym "_data\n"                               \
+-          #sym "_data:\n"                                        \
++          ".globl _" #sym "_data\n"                               \
++          "_" #sym "_data:\n"                                        \
+           ".incbin \"" DSPERATE_VK_SHADER_DIR "/" file "\"\n"    \
+-          ".globl " #sym "_end\n"                                \
+-          #sym "_end:\n"                                         \
++          ".globl _" #sym "_end\n"                                \
++          "_" #sym "_end:\n"                                         \
+           ".previous\n");                                        \
+   extern "C" const unsigned char sym##_data[], sym##_end[]
+ 
+diff -ru a/src/core/io/dsi_font.cpp b/src/core/io/dsi_font.cpp
+--- a/src/core/io/dsi_font.cpp
++++ b/src/core/io/dsi_font.cpp
+@@ -9,11 +9,11 @@
+ // The directory comes from CMake (DSPERATE_DSI_FONT_DIR), absolute.
+ #define DSPERATE_FONT_BLOB(sym, file)          \
+   "\t.balign 4\n"                              \
+-  "\t.globl " sym "_begin\n" sym "_begin:\n"    \
++  "\t.globl _" sym "_begin\n_" sym "_begin:\n"    \
+   "\t.incbin \"" DSPERATE_DSI_FONT_DIR "/" file "\"\n" \
+-  "\t.globl " sym "_end\n" sym "_end:\n"
++  "\t.globl _" sym "_end\n_" sym "_end:\n"
+ __asm__(
+-  "\t.section .rodata.dsperate_dsi_font,\"a\",%progbits\n"
++  "\t.section __TEXT,__const\n"
+   DSPERATE_FONT_BLOB("dsperate_dsi_font", "TWLFontTable.dat")
+   DSPERATE_FONT_BLOB("dsperate_dsi_font_cn", "TWLFontTable-cn.dat")
+   DSPERATE_FONT_BLOB("dsperate_dsi_font_kr", "TWLFontTable-kr.dat")

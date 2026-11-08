@@ -138,7 +138,6 @@ fn bring_up(root: PathBuf, net: ServerNet) -> Up {
     }
 }
 
-/// The receipt's text with `host`, when that differs from the host it shows.
 fn renamed(paper: &mut ServerPaper, host: Option<String>) -> Option<ReceiptText> {
     let ServerPaper::Code { host: shown, ip, pin, .. } = paper else {
         return None;
@@ -250,8 +249,6 @@ impl ServerSession {
         }
     }
 
-    /// A conflict can move the responder to another name while Gamebit runs. The receipt is then
-    /// printed again with the name it answers to now.
     fn follow_rename(&mut self) {
         if self.stop_asked {
             return;
@@ -349,6 +346,12 @@ impl ServerSession {
         self.art = None;
         if let Some(scene) = &mut self.scene {
             scene.stop(now);
+        }
+    }
+
+    pub fn skip(&mut self, now: Millis) {
+        if let Some(scene) = self.scene.as_mut().filter(|_| self.paper_up) {
+            scene.skip(now);
         }
     }
 

@@ -1029,7 +1029,7 @@ fn holding_a_on_delete_keeps_deleting() {
     while a.keyboard().unwrap().row() != 0 {
         press(&mut a, Btn::Up);
     }
-    while a.keyboard().unwrap().on_delete() == false {
+    while !a.keyboard().unwrap().on_delete() {
         press(&mut a, Btn::Right);
     }
     hold(&mut a, Btn::A, 1000);

@@ -53,9 +53,9 @@ impl Building {
         self.outdated.remove(&key);
     }
 
-    fn finish(&mut self, key: Key) -> bool {
-        self.carts.remove(&key);
-        !self.outdated.remove(&key)
+    fn finish(&mut self, key: Key, seated: Option<&Cart>) -> bool {
+        let built = self.carts.remove(&key);
+        !self.outdated.remove(&key) && built.as_ref() == seated
     }
 }
 
@@ -162,7 +162,7 @@ impl CartFaces {
     fn settle(&mut self, app: &App, key: Key) -> Settled {
         self.asked.retain(|w| (w.shelf, w.index) != key);
         let drawn = self.building.carts.get(&key).cloned();
-        let current = self.building.finish(key);
+        let current = self.building.finish(key, app.face_cart(key.0, key.1));
         let drawn = drawn.filter(|_| current);
         if self.redraw_if_stale(app, key, drawn.as_ref()) {
             Settled::Redrawn
@@ -262,9 +262,9 @@ mod tests {
         new.label = Some("new.png".into());
         assert!(b.start((0, 0), &old));
         assert!(!b.start((0, 0), &new));
-        assert!(!b.finish((0, 0)));
+        assert!(!b.finish((0, 0), Some(&new)));
         assert!(b.start((0, 0), &new));
-        assert!(b.finish((0, 0)));
+        assert!(b.finish((0, 0), Some(&new)));
     }
 
     #[test]
@@ -272,7 +272,16 @@ mod tests {
         let mut b = Building::default();
         assert!(b.start((0, 0), &cart("A")));
         assert!(!b.start((0, 0), &cart("A")));
-        assert!(b.finish((0, 0)));
+        assert!(b.finish((0, 0), Some(&cart("A"))));
+    }
+
+    #[test]
+    fn a_face_whose_seat_now_holds_another_cart_is_thrown_away() {
+        let mut b = Building::default();
+        assert!(b.start((3, 0), &cart("A")));
+        assert!(!b.finish((3, 0), Some(&cart("B"))));
+        assert!(b.start((3, 1), &cart("A")));
+        assert!(!b.finish((3, 1), None));
     }
 
     fn faces() -> CartFaces {
@@ -334,7 +343,10 @@ mod tests {
         assert!(faces.building.start(key, &old));
         app.attach_label(Path::new("/x/Moved.gba"), "/l/Moved.png".into());
         let now = app.face_cart(key.0, key.1).unwrap().clone();
-        assert!(!faces.building.start(key, &now), "marked outdated, not queued");
+        assert!(
+            !faces.building.start(key, &now),
+            "marked outdated, not queued"
+        );
         assert!(queued(&faces).is_empty());
         assert_eq!(faces.settle(&app, key), Settled::Redrawn);
         let jobs = queued(&faces);

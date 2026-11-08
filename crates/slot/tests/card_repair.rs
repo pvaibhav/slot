@@ -301,3 +301,22 @@ fn the_prompt_pauses_the_game_and_not_now_runs_it_again() {
         "not now left the game paused"
     );
 }
+
+#[test]
+fn a_locked_kid_mode_card_shows_the_plain_toast_and_no_repair() {
+    let d = tmp_root_with_carts(&["Emerald", "Ruby"]);
+    slot_store::write_slot_state(
+        d.path(),
+        &slot_store::SlotState {
+            kid_mode: slot_store::KidMode::Shelves,
+            ..slot_store::SlotState::default()
+        },
+    )
+    .unwrap();
+    let (mut a, read_only) = shelf(d.path());
+    read_only_now(&mut a, &read_only);
+    assert_eq!(a.alarm_toast(), Some(Toast::CardUnwritable));
+    assert!(!a.repair_offered());
+    a.apply(Action::RepairCard);
+    assert!(!a.repair_prompt());
+}

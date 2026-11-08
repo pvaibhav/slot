@@ -173,3 +173,56 @@ fn a_model_baseos_gives_two_names_shows_the_first() {
     });
     assert!(both.rgba == plus.rgba);
 }
+
+#[test]
+fn the_ds_label_carries_the_same_facts_as_the_sp_label() {
+    let all = slot_ui::ds_sticker_lines(&StickerFields {
+        baseos: Some("0.0.1"),
+        ..fields()
+    })
+    .join("\n");
+    for owed in [
+        "NTR-002",
+        "5V",
+        "1.5A",
+        "87%",
+        "0473885 7",
+        "VERSION 0.1.0",
+        "DSOS 0.0.1",
+        "DSPERATE",
+        "MARKUS",
+        "LCD3X",
+        "MADE IN ITHACA",
+        "S/LOT-USA",
+        "RUSS APPROVED",
+        "FOR CONSUMER SERVICE: SLOT-CFW.FYI",
+        "BRANDON T. KOWALSKI",
+    ] {
+        assert!(
+            all.to_uppercase().contains(owed),
+            "the DS label is missing {owed}: {all}"
+        );
+    }
+    assert!(all.contains(slot_ui::DC));
+    assert!(!all.contains("UNDERLYING OS"), "{all}");
+}
+
+#[test]
+fn the_ds_label_is_its_own_shape() {
+    let face = slot_ui::ds_sticker_face(&fields());
+    assert_eq!(
+        (face.w, face.h),
+        (slot_ui::DS_STICKER_W, slot_ui::DS_STICKER_H)
+    );
+    let alpha = |x: u32, y: u32| face.rgba[((y * face.w + x) * 4 + 3) as usize];
+    assert_eq!(alpha(0, 0), 0, "the corners are not rounded off");
+    assert_eq!(alpha(face.w / 2, face.h / 2), 255);
+}
+
+#[test]
+fn the_sp_label_is_not_the_ds_label() {
+    assert_ne!(
+        slot_ui::sticker_face(&fields()).w,
+        slot_ui::ds_sticker_face(&fields()).w
+    );
+}

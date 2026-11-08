@@ -86,6 +86,12 @@ pub fn layout(canvas_w: f32, platform: Platform) -> Layout {
             if narrow { 268.0 } else { slot_ui::CART_W as f32 },
             slot_ui::CART_H as f32 / slot_ui::CART_W as f32,
         ),
+        #[cfg(feature = "nds")]
+        Platform::Nds => (
+            (if narrow { 268.0 } else { slot_ui::CART_W as f32 }) * slot_ui::DS_CART_W as f32
+                / slot_ui::CART_W as f32,
+            slot_ui::DS_CART_H as f32 / slot_ui::DS_CART_W as f32,
+        ),
         Platform::Gb | Platform::Gbc => (
             if narrow { 248.0 } else { GB_CART_W as f32 },
             GB_CART_H as f32 / GB_CART_W as f32,
@@ -93,6 +99,8 @@ pub fn layout(canvas_w: f32, platform: Platform) -> Layout {
     };
     let inset = match platform {
         Platform::Gba | Platform::Gbav => 0.0,
+        #[cfg(feature = "nds")]
+        Platform::Nds => 0.0,
         Platform::Gb | Platform::Gbc => w * GB_ART_INSET / GB_CART_W as f32,
     };
     let h = w * ratio;
@@ -100,6 +108,8 @@ pub fn layout(canvas_w: f32, platform: Platform) -> Layout {
     let wide = (w - 2.0 * inset) * cos + h * sin;
     let sticker = match platform {
         Platform::Gba | Platform::Gbav => slot_ui::LABEL_W as f32 / slot_ui::CART_W as f32,
+        #[cfg(feature = "nds")]
+        Platform::Nds => slot_ui::DS_LABEL_W as f32 / slot_ui::DS_CART_W as f32,
         Platform::Gb | Platform::Gbc => slot_ui::GB_LABEL_W as f32 / GB_CART_W as f32,
     };
     let printer = w * sticker + 2.0 * (SLIP_PAD + PRINTER_LIP);
@@ -445,7 +455,11 @@ pub fn turned(rect: [f32; 4], centre: [f32; 2], deg: f32) -> [[f32; 2]; 4] {
 pub fn tray(canvas_w: f32, cart: &slot_store::Cart) -> Tray {
     let l = layout(canvas_w, cart.platform);
     let well = well_of(cart);
-    let scale = l.cart_w / shelf_rect(canvas_w, cart)[2];
+    let reference = slot_gfx::Canvas {
+        w: canvas_w,
+        h: slot_gfx::OUT_H as f32,
+    };
+    let scale = l.cart_w / shelf_rect(reference, cart)[2];
     let (sticker_w, sticker_h) = (well[2] as f32 * scale, well[3] as f32 * scale);
     let (slip_w, slip_h) = (sticker_w + 2.0 * SLIP_PAD, sticker_h + 2.0 * SLIP_PAD);
     let printer_w = (slip_w + 2.0 * PRINTER_LIP).ceil();
@@ -463,6 +477,10 @@ pub fn tray(canvas_w: f32, cart: &slot_store::Cart) -> Tray {
 }
 
 pub fn well_of(cart: &slot_store::Cart) -> [u32; 4] {
+    #[cfg(feature = "nds")]
+    if cart.platform == Platform::Nds {
+        return [slot_ui::DS_LABEL_X, slot_ui::DS_LABEL_Y, slot_ui::DS_LABEL_W, slot_ui::DS_LABEL_H];
+    }
     match slot_ui::gb_shell_of(cart) {
         None => [slot_ui::LABEL_X, slot_ui::LABEL_Y, slot_ui::LABEL_W, slot_ui::LABEL_H],
         Some(slot_ui::GbShell::Notched) => [
@@ -480,10 +498,12 @@ pub fn well_of(cart: &slot_store::Cart) -> [u32; 4] {
     }
 }
 
-pub fn shelf_rect(canvas_w: f32, cart: &slot_store::Cart) -> [f32; 4] {
+pub fn shelf_rect(canvas: slot_gfx::Canvas, cart: &slot_store::Cart) -> [f32; 4] {
     let (w, h) = match cart.platform {
         Platform::Gba | Platform::Gbav => (slot_ui::CART_W as f32, slot_ui::CART_H as f32),
+        #[cfg(feature = "nds")]
+        Platform::Nds => (slot_ui::DS_CART_W as f32, slot_ui::DS_CART_H as f32),
         Platform::Gb | Platform::Gbc => (GB_CART_W as f32, GB_CART_H as f32),
     };
-    [(canvas_w - w) / 2.0, slot_ui::rest_y(h), w, h]
+    [(canvas.w - w) / 2.0, slot_ui::rest_y(canvas, h), w, h]
 }

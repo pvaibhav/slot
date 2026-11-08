@@ -90,20 +90,23 @@ fn the_rows_run_in_the_order_the_user_chose() {
             "Theme",
             "Wallpaper",
             "Wallpaper Tint",
+            "Shelf Mode",
             "Recents",
             "Game Titles",
             "Lid Power Off",
-            "Date & Time",
-            "Wi-Fi"
+            "Kid Mode",
+            "Kid Shelf",
+            "Wi-Fi",
+            "Date & Time"
         ]
     );
     assert_eq!(
-        QuickRow::NETWORK.map(QuickRow::label),
-        ["Gamebit", "RomM", "Fetch Missing Art", "Check for Updates"]
+        QuickRow::NETWORK.map(QuickRow::label).to_vec(),
+        tools_labels()
     );
     assert_eq!(
         QuickRow::CONTROL_PAGES.map(QuickRow::label),
-        ["Shelf", "Shortcuts", "In-Game"]
+        ["Shelf", "Collections", "Shortcuts", "In-Game"]
     );
     assert_eq!(
         QuickRow::SHELF_KEYS.map(QuickRow::label),
@@ -121,6 +124,7 @@ fn the_rows_run_in_the_order_the_user_chose() {
         QuickRow::SCREEN_GBA.map(QuickRow::label),
         [
             "Shader",
+            "Overlay",
             "Color Correction",
             "Frame Blending",
             "Bezel",
@@ -131,6 +135,7 @@ fn the_rows_run_in_the_order_the_user_chose() {
         QuickRow::SCREEN_GBC.map(QuickRow::label),
         [
             "Shader",
+            "Overlay",
             "Color Correction",
             "Frame Blending",
             "Bezel",
@@ -143,6 +148,7 @@ fn the_rows_run_in_the_order_the_user_chose() {
         [
             "Shader",
             "Model",
+            "Overlay",
             "Color Correction",
             "Frame Blending",
             "Palette",
@@ -160,8 +166,8 @@ fn the_rows_run_in_the_order_the_user_chose() {
             "Turbo Buttons",
             "Rumble",
             "Left Stick as D-Pad",
-            "Load State on Insert",
-            "Save State on Eject"
+            "Auto Load State",
+            "Eject Save State"
         ]
     );
     let opens: Vec<QuickRow> = QuickRow::ALL.into_iter().filter(|r| r.opens()).collect();
@@ -187,8 +193,11 @@ fn the_rows_run_in_the_order_the_user_chose() {
             QuickRow::PlayControls,
             QuickRow::Shortcuts,
             QuickRow::FetchArt,
+            #[cfg(feature = "nds")]
+            QuickRow::FetchBoxArt,
             QuickRow::Controls,
             QuickRow::ControlsShelf,
+            QuickRow::ControlsCollections,
             QuickRow::ControlsInGame,
             QuickRow::ScreenGeneral,
             QuickRow::UndoSave,
@@ -232,15 +241,15 @@ fn the_rows_run_in_the_order_the_user_chose() {
 #[test]
 fn a_hidden_row_is_stepped_over_and_takes_no_place() {
     let hidden = [QuickRow::WallpaperTint, QuickRow::DateTime];
-    assert_eq!(QuickRow::Wallpaper.down(&hidden), QuickRow::Recents);
-    assert_eq!(QuickRow::Recents.up(&hidden), QuickRow::Wallpaper);
+    assert_eq!(QuickRow::Wallpaper.down(&hidden), QuickRow::ShelfMode);
+    assert_eq!(QuickRow::ShelfMode.up(&hidden), QuickRow::Wallpaper);
     assert_eq!(QuickRow::Theme.up(&hidden), QuickRow::Wifi);
-    assert_eq!(QuickRow::Recents.position(&hidden), 2);
+    assert_eq!(QuickRow::ShelfMode.position(&hidden), 2);
     assert_eq!(QuickRow::Wallpaper.down(&[]), QuickRow::WallpaperTint);
-    assert_eq!(QuickRow::Recents.position(&[]), 3);
+    assert_eq!(QuickRow::ShelfMode.position(&[]), 3);
     assert_eq!(
-        slot_ui::quick_row_top(QuickRow::Recents, &hidden)
-            - slot_ui::quick_row_top(QuickRow::Wallpaper, &hidden),
+        slot_ui::quick_row_top(slot_ui::Canvas::FRAMED, QuickRow::ShelfMode, &hidden)
+            - slot_ui::quick_row_top(slot_ui::Canvas::FRAMED, QuickRow::Wallpaper, &hidden),
         slot_ui::QUICK_PITCH
     );
 }
@@ -257,7 +266,7 @@ fn the_values_read_as_the_menu_prints_them() {
             "6×",
             "On",
             "Off",
-            "LCD3x",
+            "LCD",
             "Grid",
             "Dot",
             "Simpletex",
@@ -303,6 +312,13 @@ fn the_values_read_as_the_menu_prints_them() {
             "Ghosting",
             "HTTPS",
             "HTTP",
+            "All",
+            "Collections",
+            "One Shelf",
+            "Shelves",
+            "Always",
+            "Power On",
+            "Never",
         ]
     );
     assert_eq!(QuickValue::flag(true), QuickValue::On);
@@ -409,6 +425,7 @@ fn the_in_game_pages_hold_their_rows_in_order() {
         [
             QuickRow::Shader,
             QuickRow::Model,
+            QuickRow::Overlay,
             QuickRow::Bezel,
             QuickRow::Scale,
             QuickRow::Stretch,
@@ -482,7 +499,12 @@ fn in_game_rows_read_as_the_menu_shows_them() {
 
 #[test]
 fn a_hidden_palette_and_bezel_leave_nine_screen_rows() {
-    let hidden = [QuickRow::Palette, QuickRow::Bezel, QuickRow::Model];
+    let hidden = [
+        QuickRow::Palette,
+        QuickRow::Bezel,
+        QuickRow::Overlay,
+        QuickRow::Model,
+    ];
     assert_eq!(
         QuickRow::Shader.shown(&hidden),
         vec![
@@ -503,36 +525,65 @@ fn a_hidden_palette_and_bezel_leave_nine_screen_rows() {
 #[test]
 fn the_in_game_screen_panel_shows_three_rows_and_scrolls_the_rest() {
     assert_eq!(
-        slot_ui::quick_window(QuickRow::Shader, &[QuickRow::Model]),
+        slot_ui::quick_window(
+            slot_ui::Canvas::FRAMED,
+            QuickRow::Shader,
+            &[QuickRow::Overlay, QuickRow::Model]
+        ),
         (0, 3)
     );
     assert_eq!(
-        slot_ui::quick_window(QuickRow::Bezel, &[QuickRow::Model]),
+        slot_ui::quick_window(
+            slot_ui::Canvas::FRAMED,
+            QuickRow::Bezel,
+            &[QuickRow::Overlay, QuickRow::Model]
+        ),
         (0, 3)
     );
     assert_eq!(
-        slot_ui::quick_window(QuickRow::Scale, &[QuickRow::Model]),
+        slot_ui::quick_window(
+            slot_ui::Canvas::FRAMED,
+            QuickRow::Scale,
+            &[QuickRow::Overlay, QuickRow::Model]
+        ),
         (1, 3)
     );
     assert_eq!(
-        slot_ui::quick_window(QuickRow::Stretch, &[QuickRow::Model]),
+        slot_ui::quick_window(
+            slot_ui::Canvas::FRAMED,
+            QuickRow::Stretch,
+            &[QuickRow::Overlay, QuickRow::Model]
+        ),
         (2, 3)
     );
     assert_eq!(
-        slot_ui::quick_window(QuickRow::PlayContrast, &[QuickRow::Model]),
+        slot_ui::quick_window(
+            slot_ui::Canvas::FRAMED,
+            QuickRow::PlayContrast,
+            &[QuickRow::Overlay, QuickRow::Model]
+        ),
         (8, 3)
     );
-    let hidden = [QuickRow::Palette, QuickRow::Bezel, QuickRow::Model];
+    let hidden = [
+        QuickRow::Palette,
+        QuickRow::Bezel,
+        QuickRow::Overlay,
+        QuickRow::Model,
+    ];
     assert_eq!(
-        slot_ui::quick_window(QuickRow::PlayContrast, &hidden),
+        slot_ui::quick_window(slot_ui::Canvas::FRAMED, QuickRow::PlayContrast, &hidden),
         (6, 3)
     );
 }
 
 #[test]
 fn a_scroll_bar_shows_only_on_a_page_with_rows_out_of_sight() {
-    let top =
-        slot_ui::quick_scroll(QuickRow::Shader, &[QuickRow::Model]).expect("eleven rows in three");
+    let top = slot_ui::quick_scroll(
+        slot_ui::Canvas::FRAMED,
+        QuickRow::Shader,
+        &[QuickRow::Overlay, QuickRow::Model],
+    )
+    .expect("eleven rows in three");
     assert!(
         (top.thumb_y - top.y).abs() < 0.5,
         "the thumb is not at the top"
@@ -541,18 +592,30 @@ fn a_scroll_bar_shows_only_on_a_page_with_rows_out_of_sight() {
         (top.thumb_h - top.h / 11.0).abs() < 0.5,
         "the thumb is not one row of eleven"
     );
-    let end = slot_ui::quick_scroll(QuickRow::PlayContrast, &[QuickRow::Model])
-        .expect("eleven rows in three");
+    let end = slot_ui::quick_scroll(
+        slot_ui::Canvas::FRAMED,
+        QuickRow::PlayContrast,
+        &[QuickRow::Overlay, QuickRow::Model],
+    )
+    .expect("eleven rows in three");
     assert!(
         (end.thumb_y + end.thumb_h - (end.y + end.h)).abs() < 0.5,
         "the thumb is not at the bottom"
     );
     assert!(
-        slot_ui::quick_scroll(QuickRow::Shader, &[QuickRow::Palette, QuickRow::Bezel]).is_some(),
+        slot_ui::quick_scroll(
+            slot_ui::Canvas::FRAMED,
+            QuickRow::Shader,
+            &[QuickRow::Palette, QuickRow::Bezel, QuickRow::Overlay]
+        )
+        .is_some(),
         "nine rows in three still scroll"
     );
-    assert_eq!(slot_ui::quick_scroll(QuickRow::Rumble, &[]), None);
-    assert!(slot_ui::quick_scroll(QuickRow::GameUp, &[]).is_some());
+    assert_eq!(
+        slot_ui::quick_scroll(slot_ui::Canvas::FRAMED, QuickRow::Rumble, &[]),
+        None
+    );
+    assert!(slot_ui::quick_scroll(slot_ui::Canvas::FRAMED, QuickRow::GameUp, &[]).is_some());
 }
 
 #[test]
@@ -560,7 +623,8 @@ fn the_thumb_reaches_the_bottom_only_on_the_last_row() {
     let rows = QuickRow::CONTROLS;
     let mut last_y = f32::MIN;
     for (i, row) in rows.iter().enumerate() {
-        let bar = slot_ui::quick_scroll(*row, &[]).expect("the controls page scrolls");
+        let bar = slot_ui::quick_scroll(slot_ui::Canvas::FRAMED, *row, &[])
+            .expect("the controls page scrolls");
         let at_bottom = (bar.thumb_y + bar.thumb_h - (bar.y + bar.h)).abs() < 0.5;
         assert_eq!(at_bottom, i == rows.len() - 1, "{row:?} at {i}");
         assert!(bar.thumb_y > last_y, "{row:?}: the thumb did not move down");
@@ -595,14 +659,14 @@ fn screen_opens_a_page_per_console_and_each_backs_out_to_its_console() {
 #[test]
 fn screen_rows_in_game_sit_in_a_panel_at_the_bottom() {
     let hidden = [QuickRow::Palette];
-    let shader = slot_ui::quick_row_top(QuickRow::Shader, &hidden);
-    let bezel = slot_ui::quick_row_top(QuickRow::Bezel, &hidden);
+    let shader = slot_ui::quick_row_top(slot_ui::Canvas::FRAMED, QuickRow::Shader, &hidden);
+    let bezel = slot_ui::quick_row_top(slot_ui::Canvas::FRAMED, QuickRow::Bezel, &hidden);
     assert_eq!(bezel - shader, slot_ui::QUICK_PITCH);
     assert!(
         shader > slot_ui::OUT_H as f32 / 2.0,
         "the panel starts at {shader}, covering more than three rows of the game"
     );
-    assert!(slot_ui::quick_row_top(QuickRow::FastForward, &[]) < shader);
+    assert!(slot_ui::quick_row_top(slot_ui::Canvas::FRAMED, QuickRow::FastForward, &[]) < shader);
 }
 
 #[test]
@@ -667,7 +731,7 @@ fn server_sits_first_on_the_tools_page() {
     assert!(!QuickRow::MAIN.contains(&QuickRow::Server));
     assert_eq!(QuickRow::Server.parent(), Some(QuickRow::Network));
     assert_eq!(QuickRow::MAIN.len(), 6);
-    assert_eq!(QuickRow::NETWORK.len(), 4);
+    assert_eq!(QuickRow::NETWORK.len(), tools_labels().len());
     assert_eq!(QuickRow::Server.label(), "Gamebit");
     assert!(QuickRow::Server.opens());
     assert!(QuickRow::Server.page() == QuickRow::NETWORK);
@@ -677,11 +741,18 @@ fn server_sits_first_on_the_tools_page() {
 
 #[test]
 fn the_wifi_row_holds_its_place_when_the_rest_of_the_network_page_hides() {
-    let all = slot_ui::quick_row_top(QuickRow::WifiPower, &[]);
+    let all = slot_ui::quick_row_top(slot_ui::Canvas::FRAMED, QuickRow::WifiPower, &[]);
     let off: Vec<QuickRow> = QuickRow::NETWORK[1..].to_vec();
-    assert_eq!(slot_ui::quick_row_top(QuickRow::WifiPower, &off), all);
     assert_eq!(
-        slot_ui::quick_row_top(QuickRow::WifiPower, &[QuickRow::Server]),
+        slot_ui::quick_row_top(slot_ui::Canvas::FRAMED, QuickRow::WifiPower, &off),
+        all
+    );
+    assert_eq!(
+        slot_ui::quick_row_top(
+            slot_ui::Canvas::FRAMED,
+            QuickRow::WifiPower,
+            &[QuickRow::Server]
+        ),
         all
     );
 }
@@ -696,4 +767,57 @@ fn the_romm_page_holds_both_sets_in_row_order() {
         assert_eq!(QuickRow::ALL[row.index()], row);
     }
     assert_eq!(QuickRow::ALL[QuickRow::Romm.index()], QuickRow::Romm);
+}
+
+#[test]
+fn collections_sits_after_shelf_in_controls() {
+    assert_eq!(
+        QuickRow::CONTROL_PAGES,
+        [
+            QuickRow::ControlsShelf,
+            QuickRow::ControlsCollections,
+            QuickRow::Shortcuts,
+            QuickRow::ControlsInGame,
+        ]
+    );
+    assert_eq!(QuickRow::ControlsCollections.label(), "Collections");
+    assert_eq!(
+        QuickRow::ControlsCollections.child(),
+        Some(QuickRow::CollPrev)
+    );
+    assert_eq!(
+        QuickRow::CollNext.parent(),
+        Some(QuickRow::ControlsCollections)
+    );
+}
+
+#[test]
+fn the_collections_page_lists_previous_and_next() {
+    let labels: Vec<&str> = QuickRow::COLLECTION_KEYS
+        .iter()
+        .map(|r| r.label())
+        .collect();
+    assert_eq!(labels, ["Previous", "Next"]);
+    assert_eq!(QuickRow::CollNext.page(), &QuickRow::COLLECTION_KEYS[..]);
+}
+
+#[test]
+fn a_taller_canvas_shows_more_rows_at_the_same_height() {
+    let short = slot_ui::visible_rows(slot_ui::Canvas { w: 720.0, h: 480.0 });
+    let tall = slot_ui::visible_rows(slot_ui::Canvas { w: 720.0, h: 720.0 });
+    let ds = slot_ui::visible_rows(slot_ui::Canvas {
+        w: 1024.0,
+        h: 768.0,
+    });
+    assert_eq!(short, slot_ui::QUICK_VISIBLE);
+    assert!(tall > short && ds > tall, "{short} {tall} {ds}");
+}
+
+fn tools_labels() -> Vec<&'static str> {
+    let mut labels = vec!["Gamebit", "RomM", "Fetch Missing Art"];
+    if cfg!(feature = "nds") {
+        labels.push("Fetch Box Art");
+    }
+    labels.push("Check for Updates");
+    labels
 }

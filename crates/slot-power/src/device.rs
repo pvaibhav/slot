@@ -5,7 +5,7 @@ use std::io::Write;
 #[cfg(unix)]
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Child, Command};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::refresh::PanelRefresh;
@@ -30,6 +30,8 @@ const FSCK_EXFAT: &str = "fsck.exfat";
 const REPAIR_STAGE: &str = "/tmp/slot-repair";
 
 const REPAIR_RESULT: &str = "/data/slot-repair.result";
+
+const TIMEDATECTL: &str = "/usr/bin/timedatectl";
 
 const WIFI_MODULE: &str = "8821cs";
 
@@ -86,7 +88,7 @@ const EVIOCSFF: c_ulong = 0x4030_4580;
 const DISPDBG_MAX: u32 = 255;
 
 enum Backlight {
-    Class(PathBuf),
+    Class(Vec<(PathBuf, u32)>),
     Dispdbg(PathBuf),
 }
 
@@ -105,34 +107,43 @@ pub struct DevicePlatform {
     motor: Option<Motor>,
     led: Option<Led>,
     refresh: Option<PanelRefresh>,
+    sleep_command: Option<PathBuf>,
+    sleeping: Option<Child>,
 }
 
 impl DevicePlatform {
     pub fn new(root: PathBuf) -> Self {
         let exported = std::env::var("BASEOS_TARGET").ok();
-        let release = if exported.is_none() {
-            fs::read_to_string("/etc/baseos-release").unwrap_or_default()
-        } else {
-            String::new()
-        };
-        DevicePlatform::probe(
+        let release = fs::read_to_string("/etc/baseos-release").unwrap_or_default();
+        let platform = DevicePlatform::probe(
             Path::new("/sys"),
             root,
             device_target(exported.as_deref(), &release),
-        )
+        );
+        match std::env::var_os("DSOS_SLEEP") {
+            Some(cmd) if !cmd.is_empty() => platform.with_sleep(PathBuf::from(cmd)),
+            _ => platform,
+        }
+    }
+
+    pub fn with_sleep(mut self, command: PathBuf) -> Self {
+        self.sleep_command = Some(command);
+        self
     }
 
     pub fn probe(sysfs: &Path, root: PathBuf, target: Option<&str>) -> Self {
-        let class = first_dir(&sysfs.join("class/backlight"), |d| {
-            d.join("brightness").is_file()
-        });
-        let max_brightness = class
-            .as_ref()
-            .and_then(|d| read_number(&d.join("max_brightness")))
-            .unwrap_or(DISPDBG_MAX);
-        let backlight = match class {
-            Some(dir) => Some(Backlight::Class(dir)),
-            None => {
+        let class: Vec<(PathBuf, u32)> = all_dirs(&sysfs.join("class/backlight"))
+            .into_iter()
+            .filter(|d| d.join("brightness").is_file())
+            .map(|d| {
+                let max = read_number(&d.join("max_brightness")).unwrap_or(DISPDBG_MAX);
+                (d, max)
+            })
+            .collect();
+        let max_brightness = class.first().map_or(DISPDBG_MAX, |(_, max)| *max);
+        let backlight = match class.is_empty() {
+            false => Some(Backlight::Class(class)),
+            true => {
                 let dbg = sysfs.join("kernel/debug/dispdbg");
                 dbg.join("param")
                     .is_file()
@@ -143,7 +154,10 @@ impl DevicePlatform {
         let rtc = first_dir(&sysfs.join("class/rtc"), |_| true);
         let motor = Motor::open(sysfs);
         let led = first_dir(&sysfs.join("class/leds"), |d| {
-            d.join("multi_intensity").is_file() || d.join("brightness").is_file()
+            let charging = d
+                .file_name()
+                .is_some_and(|n| n.to_string_lossy().contains("charging"));
+            !charging && (d.join("multi_intensity").is_file() || d.join("brightness").is_file())
         })
         .map(|dir| {
             if dir.join("multi_intensity").is_file() {
@@ -163,6 +177,8 @@ impl DevicePlatform {
             motor,
             led,
             refresh: target.and_then(|target| PanelRefresh::probe(sysfs, target)),
+            sleep_command: None,
+            sleeping: None,
         }
     }
 
@@ -195,7 +211,11 @@ impl DevicePlatform {
             None => absent.to_string(),
         };
         let backlight = match &self.backlight {
-            Some(Backlight::Class(dir)) => leaf(dir),
+            Some(Backlight::Class(dirs)) => dirs
+                .iter()
+                .map(|(dir, _)| leaf(dir))
+                .collect::<Vec<_>>()
+                .join(" and "),
             Some(Backlight::Dispdbg(_)) => "dispdbg".to_string(),
             None => "no backlight".to_string(),
         };
@@ -450,14 +470,16 @@ impl Drop for Motor {
     }
 }
 
-fn first_dir(parent: &Path, keep: impl Fn(&Path) -> bool) -> Option<PathBuf> {
+fn all_dirs(parent: &Path) -> Vec<PathBuf> {
     let mut names: Vec<PathBuf> = fs::read_dir(parent)
-        .ok()?
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .collect();
+        .map(|d| d.filter_map(|e| e.ok()).map(|e| e.path()).collect())
+        .unwrap_or_default();
     names.sort();
-    names.into_iter().find(|p| keep(p))
+    names
+}
+
+fn first_dir(parent: &Path, keep: impl Fn(&Path) -> bool) -> Option<PathBuf> {
+    all_dirs(parent).into_iter().find(|p| keep(p))
 }
 
 fn is_battery(dir: &Path) -> bool {
@@ -518,6 +540,21 @@ impl Platform for DevicePlatform {
         }
     }
 
+    fn sleep(&mut self) {
+        let Some(command) = &self.sleep_command else {
+            return;
+        };
+        if let Some(child) = &mut self.sleeping {
+            if matches!(child.try_wait(), Ok(None)) {
+                return;
+            }
+        }
+        match Command::new(command).spawn() {
+            Ok(child) => self.sleeping = Some(child),
+            Err(e) => eprintln!("slot: sleep {}: {e}", command.display()),
+        }
+    }
+
     fn headphones(&self) -> bool {
         fs::read_to_string(self.sysfs.join("kernel/debug/gpio")).is_ok_and(|g| headphones_in(&g))
     }
@@ -541,15 +578,22 @@ impl Platform for DevicePlatform {
         let Some(backlight) = &self.backlight else {
             return;
         };
-        let value = backlight_value(step, self.max_brightness);
         let write = |file: PathBuf, body: String| {
             if let Err(e) = fs::write(&file, body) {
                 eprintln!("slot: {}: {e}", file.display());
             }
         };
         match backlight {
-            Backlight::Class(dir) => write(dir.join("brightness"), value.to_string()),
+            Backlight::Class(dirs) => {
+                for (dir, max) in dirs {
+                    write(
+                        dir.join("brightness"),
+                        backlight_value(step, *max).to_string(),
+                    );
+                }
+            }
             Backlight::Dispdbg(dir) => {
+                let value = backlight_value(step, self.max_brightness);
                 write(dir.join("name"), "lcd0".to_string());
                 write(dir.join("command"), "setbl".to_string());
                 write(dir.join("param"), value.to_string());
@@ -669,29 +713,8 @@ impl Platform for DevicePlatform {
         write_clock(secs);
     }
 
-    // BaseOS runs ntpd once the network is up, keeps the clock right while it stays up, and
-    // writes the RTC as it goes.
-    fn network_time(&self) -> Option<bool> {
-        let out = Command::new(TIMEDATECTL)
-            .args(["show", "-p", "NTP", "--value"])
-            .output()
-            .ok()
-            .filter(|o| o.status.success())?;
-        match String::from_utf8_lossy(&out.stdout).trim() {
-            "yes" => Some(true),
-            "no" => Some(false),
-            _ => None,
-        }
-    }
-
     fn set_network_time(&mut self, on: bool) {
-        let value = if on { "true" } else { "false" };
-        std::thread::spawn(move || {
-            ran(
-                "timedatectl",
-                Command::new(TIMEDATECTL).args(["set-ntp", value]).status(),
-            );
-        });
+        std::thread::spawn(move || set_ntp(on));
     }
 
     fn relink_adb(&mut self) -> bool {
@@ -820,7 +843,21 @@ pub fn take_repair_result(file: &Path) -> Option<RepairResult> {
     })
 }
 
-const TIMEDATECTL: &str = "/usr/bin/timedatectl";
+fn set_ntp(on: bool) {
+    let want = if on { "yes" } else { "no" };
+    let now = Command::new(TIMEDATECTL)
+        .args(["show", "-p", "NTP", "--value"])
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+    if now.as_deref() == Some(want) {
+        return;
+    }
+    ran(
+        "timedatectl set-ntp",
+        Command::new(TIMEDATECTL).args(["set-ntp", want]).status(),
+    );
+}
 
 fn write_clock(secs: i64) {
     ran(

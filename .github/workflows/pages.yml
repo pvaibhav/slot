@@ -24,7 +24,7 @@ concurrency:
 jobs:
   deploy:
     name: site
-    if: github.repository == 'BrandonKowalski/slot'
+    if: github.repository == 'slot-cfw/slot'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

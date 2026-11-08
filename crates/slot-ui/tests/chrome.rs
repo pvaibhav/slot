@@ -1,8 +1,8 @@
 use slot_store::{Cart, Platform};
 use slot_ui::{
-    cart_box, edge, foot_y, housing, icon_box, opening, recess, seated_box,
-    Canvas, Draw, Shelf, SlotChrome, TexId, ALERT_PX, CART_H, CART_W, GB_LABEL_H, GB_LABEL_Y,
-    LABEL_H, LABEL_Y, MOUTH_H, OUT_H, OUT_W,
+    cart_box, edge, foot_y, housing, icon_box, opening, recess, seated_box, Canvas, Draw, Shelf,
+    SlotChrome, TexId, ALERT_PX, CART_H, CART_W, GB_LABEL_H, GB_LABEL_Y, LABEL_H, LABEL_Y, MOUTH_H,
+    OUT_H, OUT_W,
 };
 
 const CENTRED: f32 = (OUT_W - CART_W) as f32 / 2.0;
@@ -64,12 +64,14 @@ fn quad(d: &Draw) -> Quad {
         | Draw::Tex { x, y, w, h, .. }
         | Draw::Part { x, y, w, h, .. }
         | Draw::Turned { x, y, w, h, .. } => Quad { x, y, w, h },
-        Draw::Game | Draw::Shot { .. } | Draw::Capture | Draw::Quad { .. } | Draw::Paper { .. } => Quad {
-            x: 0.0,
-            y: 0.0,
-            w: OUT_W as f32,
-            h: OUT_H as f32,
-        },
+        Draw::Game | Draw::Shot { .. } | Draw::Capture | Draw::Quad { .. } | Draw::Paper { .. } => {
+            Quad {
+                x: 0.0,
+                y: 0.0,
+                w: OUT_W as f32,
+                h: OUT_H as f32,
+            }
+        }
     }
 }
 
@@ -113,7 +115,7 @@ fn alpha(d: &Draw) -> f32 {
         | Draw::Part { alpha, .. }
         | Draw::Turned { alpha, .. }
         | Draw::Quad { alpha, .. } => alpha,
-        Draw::Game | Draw::Shot { .. } | Draw::Capture | Draw::Quad { .. } | Draw::Paper { .. } => 1.0,
+        Draw::Game | Draw::Shot { .. } | Draw::Capture | Draw::Paper { .. } => 1.0,
     }
 }
 
@@ -199,7 +201,7 @@ fn a_cart_the_row_had_not_finished_moving_slides_across_as_it_goes_in() {
         "the cart starts at {start:?} rather than in the quad the row had it in"
     );
     assert!(
-        (start.y + start.h - foot_y(CART_H as f32)).abs() < 0.01,
+        (start.y + start.h - foot_y(slot_ui::Canvas::FRAMED, CART_H as f32)).abs() < 0.01,
         "the cart starts with its foot at {} rather than on the row's floor",
         start.y + start.h
     );

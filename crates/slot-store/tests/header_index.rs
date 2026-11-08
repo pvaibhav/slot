@@ -91,7 +91,7 @@ fn entries_for_roms_no_longer_on_the_card_are_dropped() {
     gb_header(&gone);
     save(d.path()).unwrap();
     load(d.path());
-    slot_store::header_index::retain(&[kept.clone()]);
+    slot_store::header_index::retain(std::slice::from_ref(&kept));
     assert!(
         dirty(),
         "dropping an entry did not mark the index for saving"

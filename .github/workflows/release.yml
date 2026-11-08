@@ -76,7 +76,7 @@ jobs:
 
       # The fork's devices read versions.json from the latest release, not from the site.
       - name: Attach versions.json for the updater
-        if: github.repository != 'BrandonKowalski/slot'
+        if: github.repository != 'slot-cfw/slot'
         env:
           GH_TOKEN: ${{ github.token }}
           SLOT_REPO: ${{ github.repository }}
@@ -88,7 +88,7 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" versions.json --repo "$GITHUB_REPOSITORY"
 
       - name: Publish versions.json with the site
-        if: github.repository == 'BrandonKowalski/slot'
+        if: github.repository == 'slot-cfw/slot'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main

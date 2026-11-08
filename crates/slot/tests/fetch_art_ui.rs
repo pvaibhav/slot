@@ -496,3 +496,61 @@ fn already_connected_skips_the_connecting_line() {
         vec!["Fetching Art".to_string()]
     );
 }
+
+#[cfg(feature = "nds")]
+#[test]
+fn fetch_box_art_is_hidden_on_one_panel() {
+    let (_d, mut a) = booted(true);
+    common::connect(&mut a);
+    assert!(a.hidden_rows().contains(&QuickRow::FetchBoxArt));
+}
+
+#[cfg(feature = "nds")]
+fn box_run() -> (TempDir, App, FakeArt) {
+    let (d, mut a) = booted(true);
+    a.set_two_panels(true);
+    common::connect(&mut a);
+    let art = FakeArt::default();
+    a.set_art_jobs(Box::new(art.clone()));
+    assert!(!a.hidden_rows().contains(&QuickRow::FetchBoxArt));
+    open_tools(&mut a);
+    while a.quick_menu() != Some(QuickRow::FetchBoxArt) {
+        press(&mut a, Btn::Down);
+    }
+    press(&mut a, Btn::A);
+    (d, a, art)
+}
+
+#[cfg(feature = "nds")]
+#[test]
+fn fetch_box_art_shows_on_two_panels_and_asks_for_the_job() {
+    let (_d, a, art) = box_run();
+    assert_eq!(art.asked(), vec![ArtJob::FetchBoxArt]);
+    assert!(matches!(a.fetch_art(), Some(FetchArt::Running(run)) if run.boxes), "{:?}", a.fetch_art());
+}
+
+#[cfg(feature = "nds")]
+#[test]
+fn fetch_box_art_counts_up_and_ends_on_a_summary() {
+    let (_d, mut a, art) = box_run();
+    art.send(&mut a, ArtEvent::Counted(2));
+    art.send(&mut a, ArtEvent::BoxLanded { stem: "Emerald".into(), platform: Platform::Gba });
+    let lines = a.fetch_art_lines();
+    assert_eq!(lines, vec!["Fetching Box Art".to_string(), "1 of 2".to_string()]);
+    art.send(&mut a, ArtEvent::Missed { stem: "Fusion".into() });
+    art.send(&mut a, ArtEvent::Done { landed: 1, missed: vec!["Fusion".into()] });
+    advance(&mut a, 100.0);
+    assert!(
+        matches!(a.fetch_art(), Some(FetchArt::Summary { landed: 1, featured: None, .. })),
+        "{:?}",
+        a.fetch_art()
+    );
+}
+
+#[cfg(feature = "nds")]
+#[test]
+fn b_stops_fetch_box_art() {
+    let (_d, mut a, art) = box_run();
+    press(&mut a, Btn::B);
+    assert_eq!(art.asked(), vec![ArtJob::FetchBoxArt, ArtJob::Cancel]);
+}

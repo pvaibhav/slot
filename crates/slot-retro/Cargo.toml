@@ -7,3 +7,6 @@ license.workspace = true
 
 [dependencies]
 libloading.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

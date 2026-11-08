@@ -31,3 +31,20 @@ pub fn blue_light_gain(step: u8) -> [f32; 3] {
     }
     gain
 }
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct ColorGrade {
+    pub gain: [f32; 3],
+    pub saturation: f32,
+    pub contrast: f32,
+}
+
+impl Default for ColorGrade {
+    fn default() -> Self {
+        ColorGrade {
+            gain: [1.0; 3],
+            saturation: 0.0,
+            contrast: 0.0,
+        }
+    }
+}

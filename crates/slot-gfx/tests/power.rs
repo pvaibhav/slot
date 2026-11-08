@@ -25,7 +25,7 @@ fn the_brightness_overshoots_before_it_settles() {
 #[test]
 fn the_picture_scales_above_a_footer_and_leaves_the_strip_alone() {
     let footer = 58.0;
-    let (x, y, w, h) = screen_rect_above(1.0, footer);
+    let (x, y, w, h) = screen_rect_above(slot_gfx::Canvas::FRAMED, 1.0, footer);
     assert!(
         (x - 0.0).abs() < 0.01 && (y - 0.0).abs() < 0.01,
         "a full picture above the footer starts at the origin, at {x},{y}"
@@ -35,7 +35,7 @@ fn the_picture_scales_above_a_footer_and_leaves_the_strip_alone() {
         (h - (OUT_H as f32 - footer)).abs() < 0.01,
         "the open picture is {h}px, the footer was included"
     );
-    let (_, mid_y, _, mid_h) = screen_rect_above(0.5, footer);
+    let (_, mid_y, _, mid_h) = screen_rect_above(slot_gfx::Canvas::FRAMED, 0.5, footer);
     let view = OUT_H as f32 - footer;
     assert!(
         (mid_y + mid_h / 2.0 - view / 2.0).abs() < 0.5,
@@ -46,7 +46,7 @@ fn the_picture_scales_above_a_footer_and_leaves_the_strip_alone() {
         "the picture enters the footer at {}",
         mid_y + mid_h
     );
-    let (_, full_y, _, full_h) = screen_rect_above(0.5, 0.0);
+    let (_, full_y, _, full_h) = screen_rect_above(slot_gfx::Canvas::FRAMED, 0.5, 0.0);
     assert!(
         (full_y + full_h / 2.0 - OUT_H as f32 / 2.0).abs() < 0.5,
         "without a footer the picture still centres on the whole frame"
@@ -60,4 +60,18 @@ fn the_line_closes_to_a_dot_at_the_very_end() {
         screen_width(0.5) > 0.99,
         "the collapse eats the whole animation"
     );
+}
+
+#[test]
+fn power_off_collapses_to_the_canvas_center() {
+    let c = slot_gfx::Canvas {
+        w: 1024.0,
+        h: 768.0,
+    };
+    assert_eq!(
+        slot_gfx::screen_rect_above(c, 1.0, 58.0),
+        (0.0, 0.0, 1024.0, 710.0)
+    );
+    let (x, y, w, h) = slot_gfx::screen_rect_above(c, 0.5, 58.0);
+    assert_eq!((x + w / 2.0, y + h / 2.0), (512.0, 355.0));
 }

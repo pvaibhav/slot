@@ -162,7 +162,7 @@ impl GamePass {
         let foot = self.bottom;
         match self.fills {
             true => (0.0, 0.0, OUT_W as f32, OUT_H as f32 - foot),
-            false => screen_rect_above(self.power, foot),
+            false => screen_rect_above(crate::Canvas::FRAMED, self.power, foot),
         }
     }
 
@@ -176,6 +176,25 @@ impl GamePass {
 
     pub fn set_picture(&mut self, rect: [f32; 4]) {
         self.pic = rect;
+    }
+
+    pub fn fbo_scale(&self) -> [f32; 2] {
+        self.fbo_scale
+    }
+
+    pub fn origin(&self) -> [f32; 2] {
+        self.origin
+    }
+
+    pub fn picture_out(&self) -> [f32; 4] {
+        let (rx, ry, rw, rh) = placed_in(self.frame(), self.layout);
+        let [sx, sy, sw, sh] = self.src;
+        let [p0, q0, p1, q1] = self.pic;
+        let (u0, v0) = (p0.max(sx), q0.max(sy));
+        let (u1, v1) = (p1.min(sx + sw), q1.min(sy + sh));
+        let x = rx + (u0 - sx) / sw * rw;
+        let y = ry + (v0 - sy) / sh * rh;
+        [x, y, (u1 - u0) / sw * rw, (v1 - v0) / sh * rh]
     }
 
     pub fn set_fbo_scale(&mut self, x: f32, y: f32) {

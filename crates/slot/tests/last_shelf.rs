@@ -131,3 +131,18 @@ fn a_game_powered_off_from_its_own_shelf_ejects_back_onto_that_shelf() {
     assert_eq!(a.selected_stem(), Some("Fusion"));
     assert_eq!(read_slot_state(d.path()).cart, None);
 }
+
+#[test]
+fn l1_r1_alone_is_remembered_without_a_clean_power_off() {
+    let d = card();
+    let mut a = boot_with(d.path(), SlotState::default());
+    assert_eq!(a.shelf_platform_name(), Some("Game Boy Advance"));
+    press(&mut a, Btn::R1);
+    assert_eq!(a.shelf_platform_name(), Some("Game Boy"));
+    a.flush_state();
+    drop(a);
+
+    let a = App::boot(d.path());
+    assert_eq!(a.shelf_platform_name(), Some("Game Boy"));
+    assert_eq!(a.selected_stem(), Some("Tetris"));
+}

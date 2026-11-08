@@ -156,6 +156,7 @@ fn the_whole_pass_from_boot_to_resume() {
         !matches!(s.app().phase(), Phase::Playing { .. })
     });
     p.event(RawEvent::Up(Btn::Menu));
+    p.until("the shelf", |s| matches!(s.app().phase(), Phase::Shelf));
     assert!(p
         .ring("Emerald")
         .read_resume()

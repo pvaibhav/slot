@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use slot::art::index::ArtIndex;
-use slot::art::jobs::{fetch_missing_with, load_index, ArtEvent, IndexFetch};
+use slot::art::jobs::{box_art_paths, fetch_box_art_with, fetch_missing_with, load_index, ArtEvent, IndexFetch};
 use slot::art::make::Kind;
 use slot::update::UpdateFail;
 
@@ -583,4 +583,87 @@ fn a_lost_connection_on_the_webp_does_not_try_the_png() {
     };
     fetch_missing_with(d.path(), Kind::Real, &index, &fetch, &|| false, &mut |_| {});
     assert_eq!(asked.into_inner(), 1);
+}
+
+#[cfg(feature = "nds")]
+#[test]
+fn fetch_missing_art_labels_a_ds_game() {
+    let a = rom(9);
+    let d = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(d.path().join("Games/NDS")).unwrap();
+    std::fs::write(d.path().join("Games/NDS/Kart.nds"), &a).unwrap();
+    let index = index_for(&[(crc32fast::hash(&a), r#""support-texture":"NDS/support-texture/k.png""#)]);
+    let scan = encode(541, 600, &[200, 40, 40, 255].repeat(541 * 600));
+    let served = HashMap::from([(format!("{ART}NDS/support-texture/k.png"), scan)]);
+    let events = run(d.path(), Kind::Real, &index, served, None);
+    assert!(matches!(&events[1], ArtEvent::Landed { stem, .. } if stem == "Kart"), "{events:?}");
+    let (w, h) = size_of(&d.path().join("Labels/NDS/Kart.png"));
+    assert!((0.85..1.0).contains(&(w as f32 / h as f32)), "a DS label came out {w}x{h}, not nearly square");
+}
+
+fn boxes(root: &Path, index: &ArtIndex, served: &HashMap<String, Vec<u8>>, cancel: bool) -> (Vec<ArtEvent>, usize) {
+    let mut events = Vec::new();
+    let asked = AtomicUsize::new(0);
+    let fetch = |url: &str| {
+        asked.fetch_add(1, Ordering::SeqCst);
+        served.get(url).cloned().ok_or(UpdateFail::Download)
+    };
+    fetch_box_art_with(root, index, &fetch, &|| cancel, &mut |e| events.push(e));
+    (events, asked.load(Ordering::SeqCst))
+}
+
+fn labelled_card(seed: u8) -> (tempfile::TempDir, Vec<u8>) {
+    let a = rom(seed);
+    let d = card(&[("A.gba", &a)]);
+    std::fs::create_dir_all(d.path().join("Labels/GBA")).unwrap();
+    std::fs::write(d.path().join("Labels/GBA/A.png"), scan_png()).unwrap();
+    (d, a)
+}
+
+fn box_served() -> HashMap<String, Vec<u8>> {
+    HashMap::from([
+        (format!("{ART}GBA/box-3D/a.png"), encode(40, 50, &[200, 0, 0, 255].repeat(40 * 50))),
+        (format!("{ART}GBA/wheel/a.png"), encode(60, 30, &[255, 255, 255, 255].repeat(60 * 30))),
+    ])
+}
+
+#[test]
+fn fetch_box_art_saves_box_and_logo_for_a_labelled_cart() {
+    let (d, a) = labelled_card(11);
+    let index = index_for(&[(crc32fast::hash(&a), r#""box-3D":"GBA/box-3D/a.png","wheel":"GBA/wheel/a.png""#)]);
+    let (events, _) = boxes(d.path(), &index, &box_served(), false);
+    let cart = slot_store::scan(d.path()).unwrap().remove(0);
+    let (boxed, logo) = box_art_paths(d.path(), &cart);
+    assert_eq!(size_of(&boxed), (40, 50));
+    assert_eq!(size_of(&logo), (60, 30));
+    assert!(matches!(events[0], ArtEvent::Counted(1)), "{events:?}");
+    assert!(matches!(&events[1], ArtEvent::BoxLanded { stem, .. } if stem == "A"), "{events:?}");
+    assert!(matches!(&events[2], ArtEvent::Done { landed: 1, missed } if missed.is_empty()), "{events:?}");
+}
+
+#[test]
+fn fetch_box_art_skips_a_cart_it_already_has() {
+    let (d, a) = labelled_card(12);
+    let index = index_for(&[(crc32fast::hash(&a), r#""box-3D":"GBA/box-3D/a.png","wheel":"GBA/wheel/a.png""#)]);
+    boxes(d.path(), &index, &box_served(), false);
+    let (events, asked) = boxes(d.path(), &index, &box_served(), false);
+    assert_eq!(asked, 0, "the second run fetched again");
+    assert!(matches!(events[0], ArtEvent::Counted(0)), "{events:?}");
+}
+
+#[test]
+fn fetch_box_art_misses_a_cart_the_server_does_not_have() {
+    let (d, _) = labelled_card(13);
+    let index = index_for(&[]);
+    let (events, _) = boxes(d.path(), &index, &box_served(), false);
+    assert!(matches!(&events.last().unwrap(), ArtEvent::Done { landed: 0, missed } if missed == &vec!["A".to_string()]), "{events:?}");
+}
+
+#[test]
+fn fetch_box_art_stops_when_cancelled() {
+    let (d, a) = labelled_card(14);
+    let index = index_for(&[(crc32fast::hash(&a), r#""box-3D":"GBA/box-3D/a.png""#)]);
+    let (events, asked) = boxes(d.path(), &index, &box_served(), true);
+    assert_eq!(asked, 0);
+    assert!(matches!(&events.last().unwrap(), ArtEvent::Done { landed: 0, .. }), "{events:?}");
 }

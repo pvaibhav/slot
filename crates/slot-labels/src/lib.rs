@@ -64,6 +64,8 @@ pub fn label_size(platform: Platform) -> (u32, u32) {
         Platform::Gba | Platform::Gbav => (264, 136),
         Platform::Gb => (223, 199),
         Platform::Gbc => (223, 199),
+        #[cfg(feature = "nds")]
+        Platform::Nds => (170, 184),
     }
 }
 
@@ -71,6 +73,10 @@ pub fn label_size(platform: Platform) -> (u32, u32) {
 /// background worker. An existing label is never replaced. `Ok(None)` when the card has no pack,
 /// the pack does not know this dump, or the pack is damaged.
 pub fn from_pack(root: &Path, cart: &Cart) -> Result<Option<PathBuf>, Error> {
+    #[cfg(feature = "nds")]
+    if cart.platform == Platform::Nds {
+        return Ok(None);
+    }
     // Use the actual filename, retaining every tag and punctuation mark.
     let filename = cart
         .rom

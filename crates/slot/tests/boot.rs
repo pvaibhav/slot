@@ -3,7 +3,7 @@ mod common;
 use common::{boot, tmp_root_with_carts};
 use slot::app::{App, Phase};
 use slot_input::{Action, Btn};
-use slot_store::{read_slot_state, write_slot_state, Platform, SlotState};
+use slot_store::{read_slot_state, write_slot_state, AutoLoad, Platform, SlotState};
 
 fn seated(cart: &str) -> SlotState {
     SlotState {
@@ -25,8 +25,8 @@ fn boot_with_a_seated_cart_never_shows_the_shelf() {
 }
 
 #[test]
-fn boot_reseats_the_cart_fresh_only_with_auto_load_off() {
-    for auto_load in [true, false] {
+fn boot_reseats_the_cart_fresh_only_when_auto_load_state_is_never() {
+    for auto_load in AutoLoad::ALL {
         let d = tmp_root_with_carts(&["Emerald"]);
         let s = SlotState {
             auto_load,
@@ -35,7 +35,34 @@ fn boot_reseats_the_cart_fresh_only_with_auto_load_off() {
         write_slot_state(d.path(), &s).unwrap();
         let a = App::boot(d.path());
         assert!(matches!(a.phase(), Phase::Inserting { .. }));
-        assert_eq!(a.starting_clean(), !auto_load, "auto_load {auto_load}");
+        assert_eq!(
+            a.starting_clean(),
+            auto_load == AutoLoad::Never,
+            "{auto_load:?}"
+        );
+    }
+}
+
+#[test]
+fn an_old_on_or_off_auto_load_still_reads_from_the_card() {
+    for (value, want, clean) in [
+        ("1", AutoLoad::Always, false),
+        ("0", AutoLoad::Never, true),
+        ("power", AutoLoad::PowerOn, false),
+    ] {
+        let d = tmp_root_with_carts(&["Emerald"]);
+        write_slot_state(d.path(), &seated("Emerald")).unwrap();
+        let path = d.path().join("Config/slot.state");
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("auto_load=1\n"), "{text}");
+        std::fs::write(
+            &path,
+            text.replace("auto_load=1\n", &format!("auto_load={value}\n")),
+        )
+        .unwrap();
+        assert_eq!(read_slot_state(d.path()).auto_load, want, "{value}");
+        let a = App::boot(d.path());
+        assert_eq!(a.starting_clean(), clean, "{value}");
     }
 }
 

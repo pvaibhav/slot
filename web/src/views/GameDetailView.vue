@@ -92,18 +92,12 @@ async function reloadRow() {
   game.value = await getGame(props.tag, romId.value)
 }
 
-function pickImage(): Promise<File | null> {
-  return new Promise(resolve => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = 'image/png'
-    input.onchange = () => resolve(input.files?.[0] ?? null)
-    input.click()
-  })
-}
+const labelInput = ref<HTMLInputElement | null>(null)
 
-async function onUploadArt() {
-  const file = await pickImage()
+async function onLabelPicked(event: Event) {
+  const el = event.target as HTMLInputElement
+  const file = el.files?.[0]
+  el.value = ''
   if (!file) return
   try {
     await uploadGameArt(props.tag, romId.value, file)
@@ -157,7 +151,7 @@ const actionItems = computed<DropdownItem[]>(() => {
   ]
   items.push(
     { label: t('game.fetchLabel'), icon: CloudDownload, onSelect: onFetchArt },
-    { label: t('game.customLabel'), icon: ImagePlus, onSelect: onUploadArt },
+    { label: t('game.customLabel'), icon: ImagePlus, onSelect: () => labelInput.value?.click() },
   )
   if (game.value?.hasArt) {
     items.push({ label: t('game.removeArt'), icon: ImageOff, danger: true, onSelect: onDeleteArt })
@@ -182,6 +176,7 @@ onMounted(loadGame)
 
 <template>
   <div class="mx-auto max-w-[1600px] p-6">
+    <input ref="labelInput" type="file" class="hidden" @change="onLabelPicked" />
     <p v-if="loading" class="text-base text-foreground/75 py-8 text-center">{{ $t('common.loading') }}</p>
     <div v-else-if="error" class="text-base py-8 text-center space-y-2">
       <p class="text-destructive">{{ error }}</p>

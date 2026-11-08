@@ -67,6 +67,41 @@ pub fn fit_box(
     }
 }
 
+pub fn fit_even(font: &Font, text: &str, max_w: f32, max_px: f32, min_px: f32) -> Layout {
+    let upper = text.to_uppercase();
+    let words: Vec<&str> = upper.split_whitespace().collect();
+    let mut px = max_px;
+    while px >= min_px {
+        let tracking = tracking_for(px);
+        let width = |ws: &[&str]| line_width(font, &ws.join(" "), px, tracking);
+        if width(&words) <= max_w {
+            return Layout {
+                lines: vec![words.join(" ")],
+                px,
+                tracking,
+            };
+        }
+        let alone = |i: usize| words.len() > 2 && i == words.len() - 1;
+        let split = (1..words.len())
+            .filter(|&i| width(&words[..i]) <= max_w && width(&words[i..]) <= max_w)
+            .min_by(|&a, &b| {
+                let longer = |i: usize| width(&words[..i]).max(width(&words[i..]));
+                (alone(a), longer(a))
+                    .partial_cmp(&(alone(b), longer(b)))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+        if let Some(i) = split {
+            return Layout {
+                lines: vec![words[..i].join(" "), words[i..].join(" ")],
+                px,
+                tracking,
+            };
+        }
+        px -= 1.0;
+    }
+    fit(font, text, max_w, 2, min_px, min_px)
+}
+
 pub fn draw_centred(dst: &mut [u8], dst_w: u32, dst_h: u32, layout: &Layout, colour: [u8; 3]) {
     for (i, a) in coverage(dst_w, dst_h, layout).into_iter().enumerate() {
         if a > 0 {

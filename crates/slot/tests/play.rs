@@ -8,7 +8,7 @@ use slot::app::Phase;
 use slot::persist;
 use slot::session::Session;
 use slot_input::{Action, Btn, RawEvent};
-use slot_store::{write_slot_state, Core, Platform, SlotState, StateRing};
+use slot_store::{write_slot_state, AutoLoad, Core, Platform, SlotState, StateRing};
 
 #[test]
 fn a_tap_resumes_and_a_hold_starts_clean() {
@@ -35,7 +35,11 @@ fn a_tap_resumes_and_a_hold_starts_clean() {
 
 #[test]
 fn auto_load_alone_decides_whether_a_tap_resumes() {
-    for (auto_load, eject_save) in [(false, true), (true, false)] {
+    for (auto_load, eject_save) in [
+        (AutoLoad::Never, true),
+        (AutoLoad::PowerOn, true),
+        (AutoLoad::Always, false),
+    ] {
         let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
         StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
             .write_resume(&[7u8; 64])
@@ -52,8 +56,8 @@ fn auto_load_alone_decides_whether_a_tap_resumes() {
         a.apply_at(Action::GbaUp(Btn::A), 120);
         assert_eq!(
             a.starting_clean(),
-            !auto_load,
-            "auto_load {auto_load} eject_save {eject_save}"
+            auto_load != AutoLoad::Always,
+            "{auto_load:?} eject_save {eject_save}"
         );
     }
 }

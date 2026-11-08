@@ -113,6 +113,28 @@ fn the_ground_is_a_green_cutting_mat() {
 }
 
 #[test]
+fn the_mat_slides_in_over_black_with_wallpaper_none() {
+    let Some(surface) = HeadlessSurface::new().ok() else {
+        return;
+    };
+    let Some(mut c) = Compositor::new(&surface).ok() else {
+        return;
+    };
+    let d = tmp_root_with_gb_carts(&["Kirby", "Tetris"]);
+    let mut s = slot_store::read_slot_state(d.path());
+    s.clock_set = true;
+    s.wallpaper = slot_store::WallpaperPick::None;
+    slot_store::write_slot_state(d.path(), &s).unwrap();
+    let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+    f.compose(&mut c);
+    f.app_mut().apply(Action::SelectTap);
+    f.compose(&mut c);
+    let img = c.read_frame();
+    let [r, g, b] = px(&img, 6, 6);
+    assert!(r < 20 && g < 20 && b < 20, "mat drawn before it slid in: {r} {g} {b}");
+}
+
+#[test]
 fn chips_render() {
     let Some((_d, mut f, mut c, _s)) = setup() else {
         return;

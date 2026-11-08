@@ -54,7 +54,29 @@ pub enum UpdateFail {
     Rejected(String),
 }
 
-pub fn parse_release(json: &str) -> Result<Release, UpdateFail> {
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Device {
+    H700,
+    RgDsPlus,
+}
+
+impl Device {
+    pub fn of_target(target: &str) -> Device {
+        match target {
+            "rgdsplus" => Device::RgDsPlus,
+            _ => Device::H700,
+        }
+    }
+
+    fn zip_suffix(self) -> &'static str {
+        match self {
+            Device::H700 => "h700",
+            Device::RgDsPlus => "rgdsplus",
+        }
+    }
+}
+
+pub fn parse_release(json: &str, device: Device) -> Result<Release, UpdateFail> {
     let v: serde_json::Value = serde_json::from_str(json).map_err(|_| UpdateFail::Bad)?;
     let stable = &v["stable"];
     let version = stable["version"]
@@ -62,12 +84,16 @@ pub fn parse_release(json: &str) -> Result<Release, UpdateFail> {
         .ok_or(UpdateFail::Bad)?
         .to_string();
     let tag = stable["tag"].as_str().ok_or(UpdateFail::Bad)?;
-    let zip = stable["zip"].as_str().ok_or(UpdateFail::Bad)?;
-    if zip != format!("slot-v{version}-h700.zip") {
+    let asset = match device {
+        Device::H700 => stable,
+        Device::RgDsPlus => &stable["rgdsplus"],
+    };
+    let zip = asset["zip"].as_str().ok_or(UpdateFail::Bad)?;
+    if zip != format!("slot-v{version}-{}.zip", device.zip_suffix()) {
         return Err(UpdateFail::Bad);
     }
-    let size = stable["size"].as_u64().ok_or(UpdateFail::Bad)?;
-    let sha256 = stable["sha256"]
+    let size = asset["size"].as_u64().ok_or(UpdateFail::Bad)?;
+    let sha256 = asset["sha256"]
         .as_str()
         .and_then(hex32)
         .ok_or(UpdateFail::Bad)?;
@@ -353,7 +379,8 @@ pub fn check_with(
         Ok(body) => body,
         Err(e) => return UpdateEvent::Failed(e),
     };
-    let slot = match parse_release(&body) {
+    let device = Device::of_target(running.baseos.map_or("", |(target, _)| target));
+    let slot = match parse_release(&body, device) {
         Ok(r) => Release {
             running: running.slot.to_string(),
             ..r
@@ -768,7 +795,11 @@ fn fetch_until(
     )
 }
 
-pub(crate) fn fetch(url: &str, timeout: Duration, report: &mut dyn FnMut(u64)) -> Result<Vec<u8>, UpdateFail> {
+pub(crate) fn fetch(
+    url: &str,
+    timeout: Duration,
+    report: &mut dyn FnMut(u64),
+) -> Result<Vec<u8>, UpdateFail> {
     let mut body = open(url, timeout, DOWNLOAD_LIMIT)?;
     read_counted(&mut body, DOWNLOAD_LIMIT, report)
 }

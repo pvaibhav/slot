@@ -3,6 +3,9 @@ use crate::{Btn, Millis, RawEvent};
 pub const SELECT_CHORD_MS: Millis = 600;
 
 pub const SELECT_TAP_MS: Millis = 50;
+pub const SELECT_HOLD_MS: Millis = 600;
+pub const FAVORITE_HOLD_MS: Millis = 485;
+pub const LIFT_HOLD_MS: Millis = 450;
 pub const MENU_TAP_MS: Millis = 250;
 pub const MENU_DOUBLE_TAP_MS: Millis = 350;
 pub const MENU_HOLD_MS: Millis = 1000;
@@ -65,6 +68,11 @@ pub enum Action {
     NextShelf,
     Favorite,
     ForgetRecent,
+    SelectHold,
+    FavoriteHold,
+    ForgetRecentHold,
+    PreviousCollection,
+    NextCollection,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
@@ -136,6 +144,7 @@ enum Select {
         since: Millis,
         chorded: bool,
         sent: Option<Millis>,
+        quiet: bool,
     },
     ReleaseDue(Millis),
 }
@@ -168,6 +177,7 @@ pub struct Gestures {
     r2_refused: bool,
     r2_last_release: Option<Millis>,
     rewinding: bool,
+    held_tap: Option<(Btn, Action, Millis, bool)>,
 }
 
 pub fn anywhere(action: Action) -> bool {
@@ -318,10 +328,36 @@ impl Gestures {
             since,
             chorded: false,
             sent: None,
+            ..
         } = self.select
         {
             if now.saturating_sub(since) >= SELECT_CHORD_MS {
                 out.extend(self.hand_over_select(now));
+            }
+        }
+        if let Select::Held {
+            since,
+            chorded: false,
+            quiet: quiet @ true,
+            ..
+        } = &mut self.select
+        {
+            if self.context == Context::Shelf && now.saturating_sub(*since) >= SELECT_HOLD_MS {
+                *quiet = false;
+                out.push(Action::SelectHold);
+            }
+        }
+        if let Some((_, action, since, fired @ false)) = &mut self.held_tap {
+            let hold = match action {
+                Action::Favorite => FAVORITE_HOLD_MS,
+                _ => LIFT_HOLD_MS,
+            };
+            if now.saturating_sub(*since) >= hold {
+                *fired = true;
+                out.push(match action {
+                    Action::Favorite => Action::FavoriteHold,
+                    _ => Action::ForgetRecentHold,
+                });
             }
         }
         if let Some(d) = self.menu_down_at {
@@ -350,6 +386,11 @@ impl Gestures {
     }
 
     fn down(&mut self, b: Btn, now: Millis) -> Vec<Action> {
+        if let Select::Held { quiet, .. } = &mut self.select {
+            if b != Btn::Select {
+                *quiet = false;
+            }
+        }
         if !matches!(b, Btn::Menu | Btn::Select) && self.menu_held() {
             self.menu_chorded = true;
             self.menu_down_at = None;
@@ -393,8 +434,16 @@ impl Gestures {
                 self.deferred.push(b);
                 return Vec::new();
             }
-            let actions = self.matches(None, b);
-            if !actions.is_empty() {
+            let mut actions = self.matches(None, b);
+            if self.context == Context::Shelf {
+                if actions.contains(&Action::Favorite) {
+                    actions.retain(|a| *a != Action::Favorite);
+                    self.held_tap = Some((b, Action::Favorite, now, false));
+                } else if actions.contains(&Action::ForgetRecent) {
+                    self.held_tap = Some((b, Action::ForgetRecent, now, false));
+                }
+            }
+            if !actions.is_empty() || self.held_tap.is_some_and(|(f, ..)| f == b) {
                 let mut out = self.hand_over_select(now);
                 out.extend(actions);
                 out.push(Action::GbaDown(b));
@@ -442,6 +491,17 @@ impl Gestures {
         }
         if self.rewind_button == Some(b) && self.rewinding {
             return self.rewind_stop();
+        }
+        if let Some((f, action, _, fired)) = self.held_tap {
+            if f == b {
+                self.held_tap = None;
+                let mut out = Vec::new();
+                if action == Action::Favorite && !fired {
+                    out.push(Action::Favorite);
+                }
+                out.push(Action::GbaUp(b));
+                return out;
+            }
         }
         match b {
             Btn::Select => self.select_up(now),
@@ -516,6 +576,7 @@ impl Gestures {
                 since: now,
                 chorded: false,
                 sent: None,
+                quiet: true,
             };
         }
         out

@@ -2,8 +2,8 @@ use std::io::{Cursor, Read, Write};
 
 use slot::update::{
     check_with, clean_baseos, clock_is_wrong, install_baseos_with, install_with, newer,
-    parse_baseos, parse_release, read_counted, stage, verify, wifi_conf, will_apply, Kind, Release,
-    Running, Stoppable, Ticket, UpdateEvent, UpdateFail,
+    parse_baseos, parse_release, read_counted, stage, verify, wifi_conf, will_apply, Device, Kind,
+    Release, Running, Stoppable, Ticket, UpdateEvent, UpdateFail,
 };
 
 const DIGEST: &str = "e78b2771abbc41a07774fe870e08d3d870c1a06c6db42a1d799626190156aba5";
@@ -162,7 +162,7 @@ fn release_zip(extra: &[(&str, &[u8])]) -> Vec<u8> {
 
 #[test]
 fn parse_release_reads_the_version_url_and_digest() {
-    let r = parse_release(&v1_11()).unwrap();
+    let r = parse_release(&v1_11(), Device::H700).unwrap();
     assert_eq!(r.version, "1.11.0");
     assert_eq!(
         r.url,
@@ -175,18 +175,21 @@ fn parse_release_reads_the_version_url_and_digest() {
 #[test]
 fn parse_release_refuses_a_release_without_the_h700_zip() {
     let json = release_json("v1.11.0", "slot-v1.11.0-other.zip", DIGEST);
-    assert_eq!(parse_release(&json), Err(UpdateFail::Bad));
+    assert_eq!(parse_release(&json, Device::H700), Err(UpdateFail::Bad));
 }
 
 #[test]
 fn parse_release_refuses_a_manifest_without_stable() {
-    assert_eq!(parse_release(r#"{"beta": {}}"#), Err(UpdateFail::Bad));
+    assert_eq!(
+        parse_release(r#"{"beta": {}}"#, Device::H700),
+        Err(UpdateFail::Bad)
+    );
 }
 
 #[test]
 fn parse_release_refuses_a_release_with_a_short_digest() {
     let json = release_json("v1.11.0", "slot-v1.11.0-h700.zip", "e78b27");
-    assert_eq!(parse_release(&json), Err(UpdateFail::Bad));
+    assert_eq!(parse_release(&json, Device::H700), Err(UpdateFail::Bad));
 }
 
 #[test]
@@ -217,7 +220,7 @@ fn a_fork_release_is_found_in_this_forks_releases() {
         "slot-v1.14.0-pvaibhav.1-h700.zip",
         &"ab".repeat(32),
     );
-    let release = parse_release(&json).unwrap();
+    let release = parse_release(&json, Device::H700).unwrap();
     assert_eq!(release.version, "1.14.0-pvaibhav.1");
     assert_eq!(
         release.url,
@@ -623,16 +626,14 @@ fn clean_baseos_removes_only_our_stale_files() {
     }
 }
 
-fn ranged(
-    body: &[u8],
-    chunk: u64,
-    short_at: Option<u64>,
-) -> (
+type RangedResult = (
     Result<[u8; 32], UpdateFail>,
     Vec<u8>,
     Vec<(u64, u64)>,
     Vec<u64>,
-) {
+);
+
+fn ranged(body: &[u8], chunk: u64, short_at: Option<u64>) -> RangedResult {
     let mut asked = Vec::new();
     let mut out = Vec::new();
     let mut seen = Vec::new();
@@ -713,5 +714,92 @@ fn a_cancelled_install_reports_cancelled_not_its_failure() {
     assert_eq!(
         t.settle(UpdateEvent::Failed(UpdateFail::Download)),
         UpdateEvent::Failed(UpdateFail::Download)
+    );
+}
+
+const DS_DIGEST: &str = "aa8b27c0e8d3f1b2a4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b";
+
+fn both_zips() -> String {
+    format!(
+        r#"{{
+  "stable": {{
+    "version": "1.11.0",
+    "tag": "v1.11.0",
+    "zip": "slot-v1.11.0-h700.zip",
+    "size": 6919551,
+    "sha256": "{DIGEST}",
+    "rgdsplus": {{
+      "zip": "slot-v1.11.0-rgdsplus.zip",
+      "size": 8000000,
+      "sha256": "{DS_DIGEST}"
+    }}
+  }}
+}}"#
+    )
+}
+
+#[test]
+fn parse_release_gives_the_ds_plus_its_own_zip() {
+    let r = parse_release(&both_zips(), Device::RgDsPlus).unwrap();
+    assert_eq!(r.version, "1.11.0");
+    assert_eq!(
+        r.url,
+        "https://github.com/pvaibhav/slot/releases/download/v1.11.0/slot-v1.11.0-rgdsplus.zip"
+    );
+    assert_eq!(r.size, 8000000);
+    assert_eq!(&r.sha256[..2], &[0xaa, 0x8b]);
+}
+
+#[test]
+fn parse_release_keeps_the_h700_zip_for_the_sps() {
+    let r = parse_release(&both_zips(), Device::H700).unwrap();
+    assert!(
+        r.url.ends_with("/v1.11.0/slot-v1.11.0-h700.zip"),
+        "{}",
+        r.url
+    );
+    assert_eq!(r.size, 6919551);
+}
+
+#[test]
+fn a_ds_plus_refuses_a_manifest_without_its_zip() {
+    assert_eq!(
+        parse_release(&v1_11(), Device::RgDsPlus),
+        Err(UpdateFail::Bad)
+    );
+}
+
+#[test]
+fn a_ds_plus_refuses_a_zip_named_for_another_device() {
+    let json = both_zips().replace("slot-v1.11.0-rgdsplus.zip", "slot-v1.11.0-h700.zip");
+    assert_eq!(parse_release(&json, Device::RgDsPlus), Err(UpdateFail::Bad));
+}
+
+#[test]
+fn device_of_target_reads_rgdsplus() {
+    assert_eq!(Device::of_target("rgdsplus"), Device::RgDsPlus);
+    assert_eq!(Device::of_target("rg35xxsp"), Device::H700);
+    assert_eq!(Device::of_target(""), Device::H700);
+}
+
+#[test]
+fn a_check_on_the_ds_plus_offers_the_ds_plus_zip() {
+    let json = both_zips();
+    let mut fetch = |_: &str| Ok(json.clone().into_bytes());
+    let event = check_with(
+        u64::MAX / 2,
+        &mut fetch,
+        Running {
+            slot: "1.10.0",
+            baseos: Some(("rgdsplus", "0.0.1")),
+        },
+    );
+    let UpdateEvent::Available(offers) = event else {
+        panic!("no offer: {event:?}");
+    };
+    assert!(
+        offers[0].url.ends_with("slot-v1.11.0-rgdsplus.zip"),
+        "{}",
+        offers[0].url
     );
 }

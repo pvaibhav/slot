@@ -552,3 +552,44 @@ fn left_and_right_flip_network_time_too() {
 fn the_network_row_is_called_set_automatically() {
     assert_eq!(ClockRow::NetworkTime.label(), "Set Automatically");
 }
+
+fn libc_offset_min(utc: i64) -> i64 {
+    let t = utc as libc::time_t;
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    unsafe { libc::localtime_r(&t, &mut tm) };
+    tm.tm_gmtoff as i64 / 60
+}
+
+#[test]
+fn the_cores_read_the_cart_clock_in_the_city_on_the_card() {
+    std::env::set_var("TZ", "<+13>-13");
+    let d = tmp_root_with_carts(&["Boktai"]);
+    write_slot_state(
+        d.path(),
+        &SlotState {
+            clock_set: true,
+            zone: city("New York"),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let _a = App::boot(d.path());
+    assert_eq!(libc_offset_min(at("2026-01-15_15-50-00")), -300);
+    assert_eq!(libc_offset_min(at("2026-07-15_14-50-00")), -240);
+}
+
+#[test]
+fn picking_a_new_city_moves_the_cart_clock_with_it() {
+    std::env::set_var("TZ", "<+13>-13");
+    let d = tmp_root_with_carts(&["Boktai"]);
+    let (mut a, _clock) = app_booting_at(d.path(), 1_700_000_000);
+    a.apply(Action::GbaDown(Btn::Down));
+    a.apply(Action::GbaDown(Btn::Down));
+    a.apply(Action::GbaDown(Btn::A));
+    a.apply(Action::GbaDown(Btn::Down));
+    a.apply(Action::GbaDown(Btn::A));
+    a.confirm_clock();
+    let zone = read_slot_state(d.path()).zone;
+    assert_ne!(zone, Zone::default());
+    assert_eq!(libc_offset_min(1_700_000_000), zone.offset_min(1_700_000_000));
+}

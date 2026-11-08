@@ -5,6 +5,9 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+nds = []
+
 [dependencies]
 unicode-normalization.workspace = true
 
@@ -13,3 +16,4 @@ libc.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+libc.workspace = true

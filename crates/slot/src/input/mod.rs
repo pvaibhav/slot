@@ -9,6 +9,7 @@ mod mask;
 #[cfg(feature = "host")]
 mod pad;
 mod table;
+pub mod touch;
 pub mod trace;
 
 pub use bind::{btn_device, device_btn};

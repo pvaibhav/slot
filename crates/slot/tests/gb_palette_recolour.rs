@@ -7,7 +7,7 @@ use common::{repo_root, session_with_platform, tmp_root_with_gb_carts};
 use slot::app::Phase;
 use slot::session::Session;
 use slot_input::{Btn, Millis, RawEvent};
-use slot_store::{write_selected_core, write_slot_state, Core, SlotState};
+use slot_store::{write_selected_core, write_slot_state, Core, Platform, SlotState};
 use slot_ui::QuickRow;
 use tempfile::TempDir;
 
@@ -85,7 +85,7 @@ fn the_chord_recolours_the_running_game() {
         eprintln!("no Catrap on this machine's card, skipping");
         return;
     };
-    write_selected_core(d.path(), "Catrap", Core::Mgba).expect("write core");
+    write_selected_core(d.path(), Platform::Gb, "Catrap", Core::Mgba).expect("write core");
     write_slot_state(
         d.path(),
         &SlotState {
@@ -131,7 +131,7 @@ fn the_chord_recolours_the_running_game_on_gambatte() {
         eprintln!("no Catrap on this machine's card, skipping");
         return;
     };
-    write_selected_core(d.path(), "Catrap", Core::Gambatte).expect("write core");
+    write_selected_core(d.path(), Platform::Gb, "Catrap", Core::Gambatte).expect("write core");
     write_slot_state(
         d.path(),
         &SlotState {
@@ -179,7 +179,7 @@ fn a_palette_picked_behind_the_menu_outlasts_the_menu() {
         eprintln!("no Catrap on this machine's card, skipping");
         return;
     };
-    write_selected_core(d.path(), "Catrap", Core::Mgba).expect("write core");
+    write_selected_core(d.path(), Platform::Gb, "Catrap", Core::Mgba).expect("write core");
     write_slot_state(
         d.path(),
         &SlotState {
@@ -199,7 +199,7 @@ fn a_palette_picked_behind_the_menu_outlasts_the_menu() {
     for btn in [Btn::Down, Btn::A, Btn::A] {
         tap(&mut s, &mut now, btn);
     }
-    for _ in 0..QuickRow::Palette.position(&s.app().hidden_rows()) {
+    for _ in 0..QuickRow::Palette.position(&s.app().in_game_hidden()) {
         tap(&mut s, &mut now, Btn::Down);
     }
     assert_eq!(s.app().in_game_menu(), Some(QuickRow::Palette));

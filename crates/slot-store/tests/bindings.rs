@@ -311,3 +311,36 @@ fn reset_starts_unbound_and_round_trips_through_the_file() {
     let text = std::fs::read_to_string(d.path().join("Config/shortcuts.txt")).unwrap();
     assert!(text.contains("reset=r1"), "{text}");
 }
+
+#[test]
+fn collection_rows_default_to_the_triggers() {
+    let keys = CarouselKeys::default();
+    assert_eq!(keys.get(CarouselAction::PreviousCollection), plain(Device::L2));
+    assert_eq!(keys.get(CarouselAction::NextCollection), plain(Device::R2));
+    assert_eq!(CarouselAction::ALL.len(), 6);
+}
+
+#[test]
+fn an_old_carousel_file_gets_the_collection_defaults() {
+    let d = card();
+    std::fs::write(
+        d.path().join("Config/carousel.txt"),
+        "previous_shelf=l1\nnext_shelf=r1\nfavorite=y\nremove_recent=x\n",
+    )
+    .unwrap();
+    assert_eq!(read_carousel(d.path()), CarouselKeys::default());
+}
+
+#[test]
+fn collection_rows_round_trip() {
+    let d = card();
+    let mut keys = CarouselKeys::default();
+    keys.set(CarouselAction::NextCollection, with(Modifier::Select, Device::Left));
+    write_carousel(d.path(), &keys).unwrap();
+    let back = read_carousel(d.path());
+    assert_eq!(
+        back.get(CarouselAction::NextCollection),
+        with(Modifier::Select, Device::Left)
+    );
+    assert_eq!(back, keys);
+}

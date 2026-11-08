@@ -5,6 +5,9 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+nds = ["slot-store/nds"]
+
 [dependencies]
 slot-store = { path = "../slot-store" }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }

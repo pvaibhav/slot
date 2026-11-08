@@ -46,6 +46,10 @@ pub fn picture_for(
     scale: Scale,
     stretch: Stretch,
 ) -> (Sizing, [f32; 4]) {
+    #[cfg(feature = "nds")]
+    if platform == Platform::Nds {
+        return (Sizing::Fit, WHOLE_TEXTURE);
+    }
     let (w, h) = platform.picture();
     let x = SRC_W.saturating_sub(w) as f32 / 2.0 / SRC_W as f32;
     let y = SRC_H.saturating_sub(h) as f32 / 2.0 / SRC_H as f32;

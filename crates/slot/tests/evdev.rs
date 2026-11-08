@@ -1,8 +1,16 @@
 use std::fs;
 use std::path::Path;
 
-use slot::input::evdev::{decode, has_bit, pick_devices, to_raw, EVENT_BYTES};
+use slot::input::evdev::{decode, has_bit, Ev, Keymap, EVENT_BYTES};
 use slot_input::{Btn, RawEvent};
+
+fn to_raw(ev: Ev) -> Option<RawEvent> {
+    Keymap::BaseOs.to_raw(ev)
+}
+
+fn pick_devices(dev: &Path, sys: &Path) -> Vec<std::path::PathBuf> {
+    Keymap::BaseOs.pick_devices(dev, sys)
+}
 
 fn packet(kind: u16, code: u16, value: i32) -> [u8; EVENT_BYTES] {
     let mut b = [0x11u8; EVENT_BYTES];
@@ -125,6 +133,7 @@ fn an_input_node_with_no_sysfs_entry_is_skipped_rather_than_opened() {
 fn the_survey_reports_the_nodes_that_were_not_opened_too() {
     let d = input_tree();
     let lines = slot::input::trace::survey(
+        Keymap::BaseOs,
         &d.path().join("dev/input"),
         &d.path().join("sys/class/input"),
     );
@@ -152,9 +161,9 @@ fn an_unmapped_code_is_traced_by_number_rather_than_dropped() {
         code,
         value: 1,
     };
-    let mapped = slot::input::trace::event_line("event1", 12, ev(CODE_R1));
+    let mapped = slot::input::trace::event_line(Keymap::BaseOs, "event1", 12, ev(CODE_R1));
     assert!(mapped.contains("R1"), "{mapped}");
-    let unmapped = slot::input::trace::event_line("event1", 13, ev(0x2ff));
+    let unmapped = slot::input::trace::event_line(Keymap::BaseOs, "event1", 13, ev(0x2ff));
     assert!(unmapped.contains("0x2ff"), "{unmapped}");
     assert!(
         unmapped.contains("unmapped"),
@@ -167,6 +176,7 @@ fn a_trace_writes_the_survey_to_the_card() {
     let d = input_tree();
     let card = tempfile::tempdir().unwrap();
     let input = slot::input::DeviceInput::open_in(
+        Keymap::BaseOs,
         &d.path().join("dev/input"),
         &d.path().join("sys/class/input"),
         card.path(),
@@ -185,6 +195,7 @@ fn no_trace_file_is_written_unless_one_was_asked_for() {
     let d = input_tree();
     let card = tempfile::tempdir().unwrap();
     let input = slot::input::DeviceInput::open_in(
+        Keymap::BaseOs,
         &d.path().join("dev/input"),
         &d.path().join("sys/class/input"),
         card.path(),
@@ -201,8 +212,13 @@ fn the_pad_is_polled_as_fast_as_the_kernel_tick_allows() {
     write(&sys.join("event1/device/poll"), "20\n");
     write(&sys.join("event0/device/poll"), "20\n");
     let card = tempfile::tempdir().unwrap();
-    let input =
-        slot::input::DeviceInput::open_in(&d.path().join("dev/input"), &sys, card.path(), false);
+    let input = slot::input::DeviceInput::open_in(
+        Keymap::BaseOs,
+        &d.path().join("dev/input"),
+        &sys,
+        card.path(),
+        false,
+    );
     drop(input);
     let poll = |node: &str| std::fs::read_to_string(sys.join(node).join("device/poll")).unwrap();
     assert_eq!(
@@ -224,6 +240,7 @@ fn a_pad_already_polled_faster_is_left_alone() {
     write(&sys.join("event1/device/poll"), "5\n");
     let card = tempfile::tempdir().unwrap();
     drop(slot::input::DeviceInput::open_in(
+        Keymap::BaseOs,
         &d.path().join("dev/input"),
         &sys,
         card.path(),
@@ -252,17 +269,13 @@ fn the_pad_maps_by_the_codes_the_device_sends() {
         (116, Btn::Power),
     ];
     for (code, want) in expected {
-        assert_eq!(
-            slot::input::evdev::code_to_btn(code),
-            Some(want),
-            "code {code:#x}"
-        );
+        assert_eq!(Keymap::BaseOs.btn(code), Some(want), "code {code:#x}");
     }
 }
 
 #[test]
 fn the_menu_buttons_second_code_is_swallowed() {
-    assert_eq!(slot::input::evdev::code_to_btn(0x162), None);
+    assert_eq!(Keymap::BaseOs.btn(0x162), None);
 }
 
 #[test]
@@ -319,6 +332,7 @@ fn the_node_carrying_only_the_power_key_is_opened() {
 #[test]
 fn a_hat_axis_is_traced_as_the_axis_it_is() {
     let line = slot::input::trace::event_line(
+        Keymap::BaseOs,
         "event1",
         9,
         slot::input::evdev::Ev {
@@ -396,4 +410,22 @@ fn only_the_skus_nextui_lists_with_a_left_stick_have_one() {
     for t in ["rgsp", "rg35xxsp", "rg35xxplus", "rg34xx", "rg28xx", ""] {
         assert!(!has_left_stick(t), "{t}");
     }
+}
+
+#[test]
+fn held_bits_map_to_buttons() {
+    let mut bits = vec![0u8; 0x300 / 8 + 1];
+    for code in [0x136u16, 0x137, 0x13a, 0x13b, 0x1ff] {
+        bits[(code / 8) as usize] |= 1 << (code % 8);
+    }
+    let mut held = Keymap::BaseOs.held_from_bits(&bits);
+    held.sort_by_key(|b| format!("{b:?}"));
+    assert_eq!(held, [Btn::L2, Btn::R2, Btn::Select, Btn::Start]);
+}
+
+#[test]
+fn an_unreadable_node_holds_nothing() {
+    assert!(Keymap::BaseOs
+        .held_keys(Path::new("/nonexistent/event9"))
+        .is_empty());
 }

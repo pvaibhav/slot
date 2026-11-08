@@ -30,7 +30,7 @@ hide:
 3.  Download the latest release
     { .step-title role="heading" aria-level="3" }
 
-    Go fetch the [latest slot release](https://github.com/BrandonKowalski/slot/releases/latest) from GitHub.
+    Go fetch the [latest slot release](https://github.com/slot-cfw/slot/releases/latest) from GitHub.
 
 4.  Copy it onto your SD card
     { .step-title role="heading" aria-level="3" }
@@ -73,7 +73,7 @@ hide:
 2.  Download the latest release
     { .step-title role="heading" aria-level="3" }
 
-    Go fetch the [latest slot release](https://github.com/BrandonKowalski/slot/releases/latest) from GitHub.
+    Go fetch the [latest slot release](https://github.com/slot-cfw/slot/releases/latest) from GitHub.
 
 3.  Copy it onto SD2
     { .step-title role="heading" aria-level="3" }

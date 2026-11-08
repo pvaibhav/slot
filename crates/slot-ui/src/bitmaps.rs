@@ -9,6 +9,8 @@ pub enum Mould {
     Gba,
     Notched,
     Rounded,
+    #[cfg(feature = "nds")]
+    Ds,
 }
 
 pub const GBA_CART_W: u32 = 360;
@@ -210,6 +212,65 @@ pub fn chip() -> &'static [u8] {
     load(CHIP_PNG, CHIP_W, CHIP_H, &P)
 }
 
+#[cfg(feature = "nds")]
+const MOUTH_SPAN: (usize, usize) = (232, 488);
+#[cfg(feature = "nds")]
+const MOUTH_CUTS: [(usize, usize); 2] = [(276, 329), (391, 445)];
+#[cfg(feature = "nds")]
+pub const DS_MOUTH_W: u32 = 149;
+
+#[cfg(feature = "nds")]
+fn narrowed(src: &[u8]) -> Vec<u8> {
+    let w = SLOT_W as usize;
+    let (left, right) = MOUTH_SPAN;
+    let kept: Vec<usize> = (left..right)
+        .filter(|x| !MOUTH_CUTS.iter().any(|(a, b)| (*a..*b).contains(x)))
+        .collect();
+    let start = (left + right - kept.len()) / 2;
+    let gap = start - left;
+    let mut out = src.to_vec();
+    for y in 0..SLOT_H as usize {
+        let px = |x: usize| (y * w + x) * 4;
+        for x in left..start {
+            let from = px(x - gap);
+            out[px(x)..px(x) + 4].copy_from_slice(&src[from..from + 4]);
+        }
+        for (i, &sx) in kept.iter().enumerate() {
+            let from = px(sx);
+            out[px(start + i)..px(start + i) + 4].copy_from_slice(&src[from..from + 4]);
+        }
+        for x in start + kept.len()..right {
+            let from = px(x + gap);
+            out[px(x)..px(x) + 4].copy_from_slice(&src[from..from + 4]);
+        }
+    }
+    out
+}
+
+#[cfg(feature = "nds")]
+pub fn ds_slot_back() -> &'static [u8] {
+    static P: OnceLock<Vec<u8>> = OnceLock::new();
+    P.get_or_init(|| narrowed(slot_back()))
+}
+
+#[cfg(feature = "nds")]
+pub fn ds_slot_front() -> &'static [u8] {
+    static P: OnceLock<Vec<u8>> = OnceLock::new();
+    P.get_or_init(|| narrowed(slot_front()))
+}
+
+#[cfg(feature = "nds")]
+pub fn ds_slot_back_light() -> &'static [u8] {
+    static P: OnceLock<Vec<u8>> = OnceLock::new();
+    P.get_or_init(|| narrowed(slot_back_light()))
+}
+
+#[cfg(feature = "nds")]
+pub fn ds_slot_front_light() -> &'static [u8] {
+    static P: OnceLock<Vec<u8>> = OnceLock::new();
+    P.get_or_init(|| narrowed(slot_front_light()))
+}
+
 pub fn slot_back() -> &'static [u8] {
     static P: OnceLock<Vec<u8>> = OnceLock::new();
     load(SLOT_BACK_DARK_PNG, SLOT_W, SLOT_H, &P)
@@ -281,6 +342,55 @@ const GBC_CLEAR_PNG: &[u8] = include_bytes!("../../../assets/gbc_clear.png");
 
 /// The neutral shell asset for a mould, opaque or the separate clear one. The game's colour is
 /// blended onto it by the caller.
+#[cfg(feature = "nds")]
+pub const DS_CART_W: u32 = 200;
+#[cfg(feature = "nds")]
+pub const DS_CART_H: u32 = 212;
+#[cfg(feature = "nds")]
+const DS_CORNER: f32 = 12.0;
+#[cfg(feature = "nds")]
+const DS_RIDGE_TOP: u32 = 5;
+#[cfg(feature = "nds")]
+const DS_RIDGE_BOTTOM: u32 = 19;
+
+#[cfg(feature = "nds")]
+pub fn ds_cart_mask() -> &'static [u8] {
+    static MASK: OnceLock<Vec<u8>> = OnceLock::new();
+    MASK.get_or_init(|| {
+        let (w, h) = (DS_CART_W as f32, DS_CART_H as f32);
+        let mut out = Vec::with_capacity((DS_CART_W * DS_CART_H) as usize);
+        for y in 0..DS_CART_H {
+            for x in 0..DS_CART_W {
+                let (px, py) = (x as f32 + 0.5, y as f32 + 0.5);
+                let cx = px.clamp(DS_CORNER, w - DS_CORNER);
+                let cy = py.clamp(DS_CORNER, h - DS_CORNER);
+                let d = ((px - cx).powi(2) + (py - cy).powi(2)).sqrt();
+                let cover = (DS_CORNER + 0.5 - d).clamp(0.0, 1.0);
+                out.push((cover * 255.0).round() as u8);
+            }
+        }
+        out
+    })
+}
+
+#[cfg(feature = "nds")]
+pub fn ds_cart() -> &'static [u8] {
+    static PAINT: OnceLock<Vec<u8>> = OnceLock::new();
+    PAINT.get_or_init(|| {
+        let mask = ds_cart_mask();
+        let mut out = Vec::with_capacity(mask.len() * 4);
+        for (i, cover) in mask.iter().enumerate() {
+            let (x, y) = (i as u32 % DS_CART_W, i as u32 / DS_CART_W);
+            let ridge = (DS_RIDGE_TOP..DS_RIDGE_BOTTOM).contains(&y)
+                && (16..DS_CART_W - 16).contains(&x)
+                && (y - DS_RIDGE_TOP) % 4 < 2;
+            let grey = if ridge { 104 } else { 128 };
+            out.extend_from_slice(&[grey, grey, grey, *cover]);
+        }
+        out
+    })
+}
+
 pub fn shell_asset(mould: Mould, clear: bool) -> &'static [u8] {
     static GBA: OnceLock<Vec<u8>> = OnceLock::new();
     static GB: OnceLock<Vec<u8>> = OnceLock::new();
@@ -295,6 +405,8 @@ pub fn shell_asset(mould: Mould, clear: bool) -> &'static [u8] {
         (Mould::Gba, true) => (GBA_CLEAR_PNG, GBA_CART_W, GBA_CART_H, &GBA_CLEAR),
         (Mould::Notched, true) => (GB_CLEAR_PNG, GB_CART_W, GB_CART_H, &GB_CLEAR),
         (Mould::Rounded, true) => (GBC_CLEAR_PNG, GB_CART_W, GB_CART_H, &GBC_CLEAR),
+        #[cfg(feature = "nds")]
+        (Mould::Ds, _) => return ds_cart(),
     };
     load(bytes, w, h, slot)
 }

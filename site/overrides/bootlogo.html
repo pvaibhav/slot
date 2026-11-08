@@ -1,0 +1,66 @@
+{% extends "main.html" %}
+{% block content %}
+<link rel="stylesheet" href="{{ 'assets/bootlogo.css' | url }}">
+<div class="blm">
+  {{ page.content }}
+  <div class="blm-work">
+    <div class="blm-side">
+      <div class="blm-field">
+        <label class="blm-label" for="blm-device">Device</label>
+        <div class="blm-select">
+          <select id="blm-device"></select>
+        </div>
+      </div>
+      <div class="blm-field">
+        <span class="blm-label">Source Image</span>
+        <input type="file" id="blm-file" class="sr-only" tabindex="-1">
+        <label class="btn ghost blm-pick" id="blm-pick" for="blm-file" tabindex="0">Choose an image</label>
+        <div class="blm-chip" id="blm-chip" hidden>
+          <img id="blm-thumb" alt="">
+          <span class="blm-chip-text">
+            <span class="blm-chip-name" id="blm-name"></span>
+            <span class="blm-chip-size" id="blm-size"></span>
+          </span>
+          <label class="blm-change" for="blm-file" tabindex="0">Change</label>
+        </div>
+        <p class="blm-error" id="blm-error" hidden></p>
+      </div>
+      <div class="blm-field">
+        <span class="blm-label">Placement</span>
+        <div class="blm-row">
+          <div class="blm-seg" role="radiogroup" aria-label="Placement">
+            <label><input type="radio" name="blm-mode" value="fit" checked><span>Fit</span></label>
+            <label><input type="radio" name="blm-mode" value="fill"><span>Fill</span></label>
+            <label><input type="radio" name="blm-mode" value="center"><span>Actual size</span></label>
+          </div>
+          <label class="blm-swatch">
+            <input type="color" id="blm-background" value="#000000">
+            <span>Background</span>
+          </label>
+        </div>
+      </div>
+      <div class="blm-get">
+        <button type="button" class="btn blm-btn" id="blm-download" disabled>Download bootlogo.bmp</button>
+        <p class="blm-how"><a href="{{ 'guide/customizing/#boot-logo' | url }}">How to install a boot logo</a></p>
+      </div>
+    </div>
+    <div class="blm-stage">
+      <div class="blm-frame" id="blm-frame">
+        <div class="blm-ghost" id="blm-ghost" hidden></div>
+        <canvas id="blm-preview" width="720" height="480"></canvas>
+        <div class="blm-box" id="blm-box" hidden>
+          <span class="blm-handle" data-corner="nw"></span>
+          <span class="blm-handle" data-corner="ne"></span>
+          <span class="blm-handle" data-corner="sw"></span>
+          <span class="blm-handle" data-corner="se"></span>
+        </div>
+      </div>
+      <label class="blm-keep">
+        <input type="checkbox" id="blm-keep" checked>
+        <span>Keep source image aspect ratio</span>
+      </label>
+    </div>
+  </div>
+</div>
+<script src="{{ 'assets/bootlogo.js' | url }}"></script>
+{% endblock %}

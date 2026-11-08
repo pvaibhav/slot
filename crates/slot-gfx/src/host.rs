@@ -16,11 +16,18 @@ use winit::window::Window;
 const DEFAULT_W: u32 = 1440;
 const DEFAULT_H: u32 = 960;
 
+const DUAL_W: u32 = 1024;
+const DUAL_H: u32 = 768;
+
+type GlWindowSurface = glutin::surface::Surface<WindowSurface>;
+
 pub struct HostSurface {
     window: Window,
     display: Display,
-    gl_surface: glutin::surface::Surface<WindowSurface>,
+    gl_surface: GlWindowSurface,
     context: PossiblyCurrentContext,
+    bottom: Option<(Window, GlWindowSurface)>,
+    current: usize,
 }
 
 fn err<E: std::fmt::Display>(e: E) -> GfxError {
@@ -28,13 +35,21 @@ fn err<E: std::fmt::Display>(e: E) -> GfxError {
 }
 
 fn size() -> (u32, u32) {
+    let fallback = match dual() {
+        true => (DUAL_W, DUAL_H),
+        false => (DEFAULT_W, DEFAULT_H),
+    };
     std::env::var("SLOT_WINDOW")
         .ok()
         .and_then(|v| {
             let (w, h) = v.split_once('x')?;
             Some((w.parse().ok()?, h.parse().ok()?))
         })
-        .unwrap_or((DEFAULT_W, DEFAULT_H))
+        .unwrap_or(fallback)
+}
+
+pub fn dual() -> bool {
+    std::env::var_os("SLOT_DUAL").is_some_and(|v| v != "0")
 }
 
 fn bare() -> bool {
@@ -72,12 +87,31 @@ impl HostSurface {
 
         let _ = gl_surface.set_swap_interval(&context, SwapInterval::Wait(NonZeroU32::MIN));
 
+        let bottom = match dual() {
+            true => Some(bottom_window(events, &window, &display, &config, &context)?),
+            false => None,
+        };
+        context.make_current(&gl_surface).map_err(err)?;
+
         Ok(HostSurface {
             window,
             display,
             gl_surface,
             context,
+            bottom,
+            current: 0,
         })
+    }
+
+    pub fn bottom_window_id(&self) -> Option<winit::window::WindowId> {
+        self.bottom.as_ref().map(|(w, _)| w.id())
+    }
+
+    fn surface_at(&self, index: usize) -> (&Window, &GlWindowSurface) {
+        match (index, &self.bottom) {
+            (1, Some((w, s))) => (w, s),
+            _ => (&self.window, &self.gl_surface),
+        }
     }
 
     pub fn request_redraw(&self) {
@@ -85,11 +119,43 @@ impl HostSurface {
     }
 
     pub fn resize(&self, size: winit::dpi::PhysicalSize<u32>) {
+        self.resize_window(self.window.id(), size);
+    }
+
+    pub fn resize_window(&self, id: winit::window::WindowId, size: winit::dpi::PhysicalSize<u32>) {
         let (Some(w), Some(h)) = (NonZeroU32::new(size.width), NonZeroU32::new(size.height)) else {
             return;
         };
-        self.gl_surface.resize(&self.context, w, h);
+        let surface = match &self.bottom {
+            Some((window, surface)) if window.id() == id => surface,
+            _ => &self.gl_surface,
+        };
+        surface.resize(&self.context, w, h);
     }
+}
+
+fn bottom_window(
+    events: &ActiveEventLoop,
+    top: &Window,
+    display: &Display,
+    config: &Config,
+    context: &PossiblyCurrentContext,
+) -> Result<(Window, GlWindowSurface), GfxError> {
+    let mut attrs = Window::default_attributes()
+        .with_title("slot. bottom screen")
+        .with_inner_size(winit::dpi::PhysicalSize::<u32>::from(size()));
+    if let Ok(at) = top.outer_position() {
+        let below = at.y + top.outer_size().height as i32;
+        attrs = attrs.with_position(winit::dpi::PhysicalPosition::new(at.x, below));
+    }
+    let window = events.create_window(attrs).map_err(err)?;
+    let surface_attrs = window
+        .build_surface_attributes(Default::default())
+        .map_err(err)?;
+    let surface = unsafe { display.create_window_surface(config, &surface_attrs) }.map_err(err)?;
+    context.make_current(&surface).map_err(err)?;
+    let _ = surface.set_swap_interval(context, SwapInterval::DontWait);
+    Ok((window, surface))
 }
 
 fn pick_config(configs: Box<dyn Iterator<Item = Config> + '_>) -> Config {
@@ -108,16 +174,30 @@ fn pick_config(configs: Box<dyn Iterator<Item = Config> + '_>) -> Config {
 
 impl Surface for HostSurface {
     fn make_current(&mut self) -> Result<(), GfxError> {
-        self.context.make_current(&self.gl_surface).map_err(err)
+        let (_, surface) = self.surface_at(self.current);
+        self.context.make_current(surface).map_err(err)
     }
 
     fn window_size(&self) -> (u32, u32) {
-        let s = self.window.inner_size();
+        let s = self.surface_at(self.current).0.inner_size();
         (s.width, s.height)
     }
 
     fn swap(&mut self) -> Result<(), GfxError> {
-        self.gl_surface.swap_buffers(&self.context).map_err(err)
+        let (_, surface) = self.surface_at(self.current);
+        surface.swap_buffers(&self.context).map_err(err)
+    }
+
+    fn panel_count(&self) -> usize {
+        1 + usize::from(self.bottom.is_some())
+    }
+
+    fn select_panel(&mut self, index: usize) -> Result<(), GfxError> {
+        if index >= self.panel_count() {
+            return Err(GfxError::Context(format!("no panel {index}")));
+        }
+        self.current = index;
+        self.make_current()
     }
 
     fn proc_address(&self, name: &str) -> *const c_void {

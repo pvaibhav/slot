@@ -454,7 +454,7 @@ fn every_cartridge_is_centred_on_the_row_and_clears_both_the_plate_and_the_slot(
         ("the GBA cart", CART_H, OUT_H as f32),
         ("the Game Boy pak", GB_CART_H, lip),
     ] {
-        let (top, foot) = (rest_y(h as f32), foot_y(h as f32));
+        let (top, foot) = (rest_y(slot_ui::Canvas::FRAMED, h as f32), foot_y(slot_ui::Canvas::FRAMED, h as f32));
         assert_eq!(top, top.round(), "{name} top is off the pixel grid: {top}");
         assert_eq!(
             foot,

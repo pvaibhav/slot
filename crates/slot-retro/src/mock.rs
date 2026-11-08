@@ -18,6 +18,7 @@ pub struct MockCore {
     audio: Vec<i16>,
     sram: Option<Vec<u8>>,
     skip_next: bool,
+    size: (u32, u32),
 }
 
 impl Default for MockCore {
@@ -28,12 +29,17 @@ impl Default for MockCore {
 
 impl MockCore {
     pub fn new() -> Self {
+        Self::with_size(GBA_W, GBA_H)
+    }
+
+    pub fn with_size(w: u32, h: u32) -> Self {
         let mut c = MockCore {
             frame: 0,
-            video: vec![0; (GBA_W * GBA_H * 4) as usize],
+            video: vec![0; (w * h * 4) as usize],
             audio: Vec::new(),
             sram: None,
             skip_next: false,
+            size: (w, h),
         };
         c.render();
         c
@@ -41,10 +47,11 @@ impl MockCore {
 
     fn render(&mut self) {
         let t = self.frame as u32;
+        let (w, h) = self.size;
         let mut i = 0;
-        for y in 0..GBA_H {
-            let g = (y * 255 / (GBA_H - 1)) as u8;
-            for x in 0..GBA_W {
+        for y in 0..h {
+            let g = (y * 255 / (h - 1)) as u8;
+            for x in 0..w {
                 let r = x.wrapping_add(t) as u8;
                 let b = if (x.wrapping_add(y).wrapping_add(t) / 8) % 2 == 0 {
                     0
@@ -94,6 +101,10 @@ impl RetroCore for MockCore {
 
     fn set_frame_skip(&mut self, skip: bool) {
         self.skip_next = skip;
+    }
+
+    fn video_size(&self) -> (u32, u32) {
+        self.size
     }
 
     fn video_xrgb8888(&self) -> &[u8] {

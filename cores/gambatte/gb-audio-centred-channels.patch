@@ -44,7 +44,7 @@ diff --git a/libgambatte/src/sound/channel3.cpp b/libgambatte/src/sound/channel3
 index 4797482..efb2cd1 100644
 --- a/libgambatte/src/sound/channel3.cpp
 +++ b/libgambatte/src/sound/channel3.cpp
-@@ -142,19 +142,28 @@ void Channel3::updateWaveCounter(unsigned long const cc) {
+@@ -142,19 +142,33 @@ void Channel3::updateWaveCounter(unsigned long const cc) {
  	}
  }
  
@@ -60,8 +60,13 @@ index 4797482..efb2cd1 100644
  		unsigned long const endCycles = cycleCounter_ + cycles;
 +		unsigned long const scale = (outBase >> 6) * 3;
 +		unsigned long sum = 0;
-+		for (unsigned i = 0; i < 0x10; ++i)
++		bool flat = true;
++		for (unsigned i = 0; i < 0x10; ++i) {
 +			sum += (waveRam_[i] >> 4 >> rshift_) + ((waveRam_[i] & 0xF) >> rshift_);
++			flat = flat && waveRam_[i] == waveRam_[0] && (waveRam_[i] >> 4) == (waveRam_[i] & 0xF);
++		}
++		if (flat)
++			sum = 0;
  
  		for (;;) {
  			unsigned long const nextMajorEvent =

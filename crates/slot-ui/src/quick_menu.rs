@@ -27,7 +27,10 @@ pub enum QuickRow {
     Theme,
     Wallpaper,
     Recents,
+    ShelfMode,
     ShowTitles,
+    KidMode,
+    KidShelf,
     WallpaperTint,
     GbcShader,
     GbcColourCorrection,
@@ -54,6 +57,8 @@ pub enum QuickRow {
     ShelfNext,
     ShelfFavorite,
     ShelfForget,
+    CollPrev,
+    CollNext,
     PlayControls,
     Shortcuts,
     GameUp,
@@ -88,8 +93,11 @@ pub enum QuickRow {
     ScReset,
     LidOff,
     FetchArt,
+    #[cfg(feature = "nds")]
+    FetchBoxArt,
     Controls,
     ControlsShelf,
+    ControlsCollections,
     ControlsInGame,
     LeftStick,
     ScreenGeneral,
@@ -136,10 +144,14 @@ pub enum QuickRow {
     RommStatus,
     RommPairedServer,
     RommDisconnect,
+    GbaOverlay,
+    GbOverlay,
+    GbcOverlay,
+    Overlay,
 }
 
 impl QuickRow {
-    pub const ALL: [QuickRow; 127] = [
+    pub const ALL: [QuickRow; 137 + cfg!(feature = "nds") as usize] = [
         QuickRow::FastForward,
         QuickRow::FastForwardSound,
         QuickRow::Screen,
@@ -158,7 +170,10 @@ impl QuickRow {
         QuickRow::Theme,
         QuickRow::Wallpaper,
         QuickRow::Recents,
+        QuickRow::ShelfMode,
         QuickRow::ShowTitles,
+        QuickRow::KidMode,
+        QuickRow::KidShelf,
         QuickRow::WallpaperTint,
         QuickRow::GbcShader,
         QuickRow::GbcColourCorrection,
@@ -185,6 +200,8 @@ impl QuickRow {
         QuickRow::ShelfNext,
         QuickRow::ShelfFavorite,
         QuickRow::ShelfForget,
+        QuickRow::CollPrev,
+        QuickRow::CollNext,
         QuickRow::PlayControls,
         QuickRow::Shortcuts,
         QuickRow::GameUp,
@@ -219,8 +236,11 @@ impl QuickRow {
         QuickRow::ScReset,
         QuickRow::LidOff,
         QuickRow::FetchArt,
+        #[cfg(feature = "nds")]
+        QuickRow::FetchBoxArt,
         QuickRow::Controls,
         QuickRow::ControlsShelf,
+        QuickRow::ControlsCollections,
         QuickRow::ControlsInGame,
         QuickRow::LeftStick,
         QuickRow::ScreenGeneral,
@@ -267,6 +287,10 @@ impl QuickRow {
         QuickRow::RommStatus,
         QuickRow::RommPairedServer,
         QuickRow::RommDisconnect,
+        QuickRow::GbaOverlay,
+        QuickRow::GbOverlay,
+        QuickRow::GbcOverlay,
+        QuickRow::Overlay,
     ];
 
     pub const MAIN: [QuickRow; 6] = [
@@ -278,23 +302,28 @@ impl QuickRow {
         QuickRow::About,
     ];
 
-    pub const GENERAL: [QuickRow; 8] = [
+    pub const GENERAL: [QuickRow; 11] = [
         QuickRow::Theme,
         QuickRow::Wallpaper,
         QuickRow::WallpaperTint,
+        QuickRow::ShelfMode,
         QuickRow::Recents,
         QuickRow::ShowTitles,
         QuickRow::LidOff,
-        QuickRow::DateTime,
+        QuickRow::KidMode,
+        QuickRow::KidShelf,
         QuickRow::Wifi,
+        QuickRow::DateTime,
     ];
 
     pub const WIFI: [QuickRow; 2] = [QuickRow::WifiPower, QuickRow::Networks];
 
-    pub const NETWORK: [QuickRow; 4] = [
+    pub const NETWORK: [QuickRow; 4 + cfg!(feature = "nds") as usize] = [
         QuickRow::Server,
         QuickRow::Romm,
         QuickRow::FetchArt,
+        #[cfg(feature = "nds")]
+        QuickRow::FetchBoxArt,
         QuickRow::CheckUpdates,
     ];
 
@@ -323,8 +352,9 @@ impl QuickRow {
         QuickRow::RommDisconnect,
     ];
 
-    pub const CONTROL_PAGES: [QuickRow; 3] = [
+    pub const CONTROL_PAGES: [QuickRow; 4] = [
         QuickRow::ControlsShelf,
+        QuickRow::ControlsCollections,
         QuickRow::Shortcuts,
         QuickRow::ControlsInGame,
     ];
@@ -335,6 +365,8 @@ impl QuickRow {
         QuickRow::ShelfFavorite,
         QuickRow::ShelfForget,
     ];
+
+    pub const COLLECTION_KEYS: [QuickRow; 2] = [QuickRow::CollPrev, QuickRow::CollNext];
 
     pub const CONTROLS: [QuickRow; 12] = [
         QuickRow::GameUp,
@@ -387,16 +419,18 @@ impl QuickRow {
         QuickRow::Contrast,
     ];
 
-    pub const SCREEN_GBA: [QuickRow; 5] = [
+    pub const SCREEN_GBA: [QuickRow; 6] = [
         QuickRow::GbaShader,
+        QuickRow::GbaOverlay,
         QuickRow::GbaColourCorrection,
         QuickRow::GbaBlending,
         QuickRow::GbaBezel,
         QuickRow::GbaScale,
     ];
 
-    pub const SCREEN_GBC: [QuickRow; 6] = [
+    pub const SCREEN_GBC: [QuickRow; 7] = [
         QuickRow::GbcShader,
+        QuickRow::GbcOverlay,
         QuickRow::GbcColourCorrection,
         QuickRow::GbcBlending,
         QuickRow::GbcBezel,
@@ -404,9 +438,10 @@ impl QuickRow {
         QuickRow::GbcStretch,
     ];
 
-    pub const SCREEN_GB: [QuickRow; 8] = [
+    pub const SCREEN_GB: [QuickRow; 9] = [
         QuickRow::GbShader,
         QuickRow::GbModel,
+        QuickRow::GbOverlay,
         QuickRow::GbColourCorrection,
         QuickRow::GbBlending,
         QuickRow::GbPalette,
@@ -447,9 +482,10 @@ impl QuickRow {
         QuickRow::PlayControls,
     ];
 
-    pub const PLAY_SCREEN: [QuickRow; 12] = [
+    pub const PLAY_SCREEN: [QuickRow; 13] = [
         QuickRow::Shader,
         QuickRow::Model,
+        QuickRow::Overlay,
         QuickRow::Bezel,
         QuickRow::Scale,
         QuickRow::Stretch,
@@ -481,11 +517,13 @@ impl QuickRow {
             | QuickRow::PlaySaturation
             | QuickRow::PlayContrast => &QuickRow::PLAY_SCREEN,
             QuickRow::GbaShader
+            | QuickRow::GbaOverlay
             | QuickRow::GbaColourCorrection
             | QuickRow::GbaBlending
             | QuickRow::GbaBezel
             | QuickRow::GbaScale => &QuickRow::SCREEN_GBA,
             QuickRow::GbcShader
+            | QuickRow::GbcOverlay
             | QuickRow::GbcColourCorrection
             | QuickRow::GbcBlending
             | QuickRow::GbcBezel
@@ -493,6 +531,7 @@ impl QuickRow {
             | QuickRow::GbcStretch => &QuickRow::SCREEN_GBC,
             QuickRow::GbShader
             | QuickRow::GbModel
+            | QuickRow::GbOverlay
             | QuickRow::GbColourCorrection
             | QuickRow::GbBlending
             | QuickRow::GbPalette
@@ -512,14 +551,18 @@ impl QuickRow {
             | QuickRow::DateTime
             | QuickRow::Theme
             | QuickRow::Recents
+            | QuickRow::ShelfMode
             | QuickRow::ShowTitles
             | QuickRow::LidOff
+            | QuickRow::KidMode
+            | QuickRow::KidShelf
             | QuickRow::Wifi => &QuickRow::GENERAL,
             QuickRow::WifiPower | QuickRow::Networks => &QuickRow::WIFI,
-            QuickRow::CheckUpdates
-            | QuickRow::FetchArt
-            | QuickRow::Romm
-            | QuickRow::Server => &QuickRow::NETWORK,
+            QuickRow::CheckUpdates | QuickRow::FetchArt | QuickRow::Romm | QuickRow::Server => {
+                &QuickRow::NETWORK
+            }
+            #[cfg(feature = "nds")]
+            QuickRow::FetchBoxArt => &QuickRow::NETWORK,
             QuickRow::RommProtocol
             | QuickRow::RommServer
             | QuickRow::RommPort
@@ -528,9 +571,10 @@ impl QuickRow {
             | QuickRow::RommStatus
             | QuickRow::RommPairedServer
             | QuickRow::RommDisconnect => &QuickRow::ROMM,
-            QuickRow::ControlsShelf | QuickRow::Shortcuts | QuickRow::ControlsInGame => {
-                &QuickRow::CONTROL_PAGES
-            }
+            QuickRow::ControlsShelf
+            | QuickRow::ControlsCollections
+            | QuickRow::Shortcuts
+            | QuickRow::ControlsInGame => &QuickRow::CONTROL_PAGES,
             QuickRow::Resume
             | QuickRow::UndoSave
             | QuickRow::UndoLoad
@@ -547,12 +591,14 @@ impl QuickRow {
             }
             r if r.game_button().is_some() => &QuickRow::CONTROLS,
             r if r.shortcut().is_some() => &QuickRow::SHORTCUTS,
+            QuickRow::CollPrev | QuickRow::CollNext => &QuickRow::COLLECTION_KEYS,
             r if r.carousel_action().is_some() => &QuickRow::SHELF_KEYS,
             QuickRow::Shader
             | QuickRow::Model
             | QuickRow::ColourCorrection
             | QuickRow::Palette
             | QuickRow::Bezel
+            | QuickRow::Overlay
             | QuickRow::Scale
             | QuickRow::Stretch
             | QuickRow::Blending => &QuickRow::PLAY_SCREEN,
@@ -579,6 +625,8 @@ impl QuickRow {
             QuickRow::ControlsShelf => Some(QuickRow::Controls),
             QuickRow::ShelfPrev => Some(QuickRow::ControlsShelf),
             QuickRow::CheatList => Some(QuickRow::Cheats),
+            QuickRow::CollPrev => Some(QuickRow::ControlsCollections),
+            QuickRow::ControlsCollections => Some(QuickRow::Controls),
             _ => None,
         }
     }
@@ -618,6 +666,7 @@ impl QuickRow {
             QuickRow::Wifi => Some(QuickRow::WIFI[0]),
             QuickRow::Controls => Some(QuickRow::CONTROL_PAGES[0]),
             QuickRow::ControlsShelf => Some(QuickRow::SHELF_KEYS[0]),
+            QuickRow::ControlsCollections => Some(QuickRow::COLLECTION_KEYS[0]),
             QuickRow::ControlsInGame => Some(QuickRow::CONTROLS[0]),
             QuickRow::ScreenGeneral => Some(QuickRow::SCREEN_GENERAL[0]),
             QuickRow::ScreenGba => Some(QuickRow::SCREEN_GBA[0]),
@@ -663,8 +712,8 @@ impl QuickRow {
             QuickRow::GbColourCorrection => "Color Correction",
             QuickRow::GbcColourCorrection => "Color Correction",
             QuickRow::Game => "Gameplay",
-            QuickRow::AutoLoad => "Load State on Insert",
-            QuickRow::EjectSave => "Save State on Eject",
+            QuickRow::AutoLoad => "Auto Load State",
+            QuickRow::EjectSave => "Eject Save State",
             QuickRow::Turbo => "Turbo Buttons",
             QuickRow::Rewind => "Rewind",
             QuickRow::GbPalette => "Palette",
@@ -672,6 +721,7 @@ impl QuickRow {
             QuickRow::Theme => "Theme",
             QuickRow::Wallpaper => "Wallpaper",
             QuickRow::Recents => "Recents",
+            QuickRow::ShelfMode => "Shelf Mode",
             QuickRow::ShowTitles => "Game Titles",
             QuickRow::WallpaperTint => "Wallpaper Tint",
             QuickRow::Resume => "Resume",
@@ -685,7 +735,11 @@ impl QuickRow {
             QuickRow::ExitGame => "Exit Game",
             QuickRow::General => "General",
             QuickRow::LidOff => "Lid Power Off",
+            QuickRow::KidMode => "Kid Mode",
+            QuickRow::KidShelf => "Kid Shelf",
             QuickRow::FetchArt => "Fetch Missing Art",
+            #[cfg(feature = "nds")]
+            QuickRow::FetchBoxArt => "Fetch Box Art",
             QuickRow::Network => "Tools",
             QuickRow::Wifi | QuickRow::WifiPower => "Wi-Fi",
             QuickRow::Networks => "Network",
@@ -701,6 +755,7 @@ impl QuickRow {
             QuickRow::RommDisconnect => "Disconnect",
             QuickRow::Controls => "Controls",
             QuickRow::ControlsShelf => "Shelf",
+            QuickRow::ControlsCollections => "Collections",
             QuickRow::ControlsInGame => "In-Game",
             QuickRow::PlayControls => "Controls",
             QuickRow::Shortcuts => "Shortcuts",
@@ -738,7 +793,9 @@ impl QuickRow {
             QuickRow::ShelfPrev
             | QuickRow::ShelfNext
             | QuickRow::ShelfFavorite
-            | QuickRow::ShelfForget => self.carousel_action().map_or("", CarouselAction::label),
+            | QuickRow::ShelfForget
+            | QuickRow::CollPrev
+            | QuickRow::CollNext => self.carousel_action().map_or("", CarouselAction::label),
             QuickRow::PlayScreen => "Screen",
             QuickRow::PlayGameplay => "Gameplay",
             QuickRow::Shader => "Shader",
@@ -760,10 +817,18 @@ impl QuickRow {
             QuickRow::GbaBezel => "Bezel",
             QuickRow::Bezel => "Bezel",
             QuickRow::Cheats | QuickRow::CheatList => "Cheats",
+            QuickRow::GbaOverlay
+            | QuickRow::GbOverlay
+            | QuickRow::GbcOverlay
+            | QuickRow::Overlay => "Overlay",
         }
     }
 
     pub fn opens(self) -> bool {
+        #[cfg(feature = "nds")]
+        if self == QuickRow::FetchBoxArt {
+            return true;
+        }
         matches!(
             self,
             QuickRow::DateTime
@@ -786,6 +851,7 @@ impl QuickRow {
                 | QuickRow::General
                 | QuickRow::Controls
                 | QuickRow::ControlsShelf
+                | QuickRow::ControlsCollections
                 | QuickRow::ControlsInGame
                 | QuickRow::PlayControls
                 | QuickRow::Shortcuts
@@ -855,6 +921,8 @@ impl QuickRow {
             QuickRow::ShelfNext => CarouselAction::NextShelf,
             QuickRow::ShelfFavorite => CarouselAction::Favorite,
             QuickRow::ShelfForget => CarouselAction::ForgetRecent,
+            QuickRow::CollPrev => CarouselAction::PreviousCollection,
+            QuickRow::CollNext => CarouselAction::NextCollection,
             _ => return None,
         })
     }
@@ -931,10 +999,17 @@ pub enum QuickValue {
     Ghosting,
     Https,
     Http,
+    All,
+    Collections,
+    OneShelf,
+    Shelves,
+    Always,
+    PowerOn,
+    Never,
 }
 
 impl QuickValue {
-    pub const ALL: [QuickValue; 53] = [
+    pub const ALL: [QuickValue; 60] = [
         QuickValue::Speed1_5,
         QuickValue::Speed2,
         QuickValue::Speed3,
@@ -988,6 +1063,13 @@ impl QuickValue {
         QuickValue::Ghosting,
         QuickValue::Https,
         QuickValue::Http,
+        QuickValue::All,
+        QuickValue::Collections,
+        QuickValue::OneShelf,
+        QuickValue::Shelves,
+        QuickValue::Always,
+        QuickValue::PowerOn,
+        QuickValue::Never,
     ];
 
     pub const LEVELS: [QuickValue; 16] = [
@@ -1031,7 +1113,7 @@ impl QuickValue {
             QuickValue::Speed6 => "6×",
             QuickValue::On => "On",
             QuickValue::Off => "Off",
-            QuickValue::Lcd3x => "LCD3x",
+            QuickValue::Lcd3x => "LCD",
             QuickValue::Grid => "Grid",
             QuickValue::Dot => "Dot",
             QuickValue::Simpletex => "Simpletex",
@@ -1043,6 +1125,13 @@ impl QuickValue {
             QuickValue::Light => "Light",
             QuickValue::Show => "Show",
             QuickValue::Hide => "Hide",
+            QuickValue::All => "All",
+            QuickValue::Collections => "Collections",
+            QuickValue::OneShelf => "One Shelf",
+            QuickValue::Shelves => "Shelves",
+            QuickValue::Always => "Always",
+            QuickValue::PowerOn => "Power On",
+            QuickValue::Never => "Never",
             QuickValue::Low => "25%",
             QuickValue::Medium => "45%",
             QuickValue::High => "65%",
@@ -1130,6 +1219,7 @@ const POINTER: [&str; 11] = [
 ];
 pub(crate) const POINTER_BLEED: u32 = 4;
 const GROUND_SCRIM: f32 = 0.65;
+const GAME_SCRIM: f32 = 0.8;
 pub(crate) const TYPE_DROP: f32 = 4.0;
 pub(crate) const LEGEND_Y: f32 = 427.0;
 pub(crate) const DIM_INK: [u8; 3] = [0x9a, 0x9a, 0xa4];
@@ -1260,6 +1350,29 @@ pub fn quick_legend_faces(ink: [u8; 3]) -> [UndoFace; 8] {
         with_hint(button_face(ButtonLegend::X), "Clear", hint, false),
         with_hint(button_face(ButtonLegend::Y), "Reset All", hint, true),
     ]
+}
+
+pub fn picking_legend_faces(ink: [u8; 3]) -> [UndoFace; 8] {
+    let hint = Some(ink);
+    [
+        with_hint(button_face(ButtonLegend::B), "Cancel", hint, true),
+        with_hint(button_face(ButtonLegend::A), "Select", hint, false),
+        with_hint(button_face(ButtonLegend::A), "Unselect", hint, false),
+        with_hint(button_face(ButtonLegend::B), "Back", hint, true),
+        with_hint(button_face(ButtonLegend::A), "Add", hint, false),
+        with_hint(button_face(ButtonLegend::B), "Keep", hint, true),
+        with_hint(button_face(ButtonLegend::A), "Remove", hint, false),
+        with_hint(button_face(ButtonLegend::A), "Drop", hint, false),
+    ]
+}
+
+pub fn add_legend(ink: [u8; 3], n: usize) -> UndoFace {
+    with_hint(
+        button_face(ButtonLegend::Start),
+        &format!("Add {n}"),
+        Some(ink),
+        false,
+    )
 }
 
 pub fn quick_description_face(lines: &[&str]) -> UndoFace {
@@ -1393,7 +1506,11 @@ pub fn print_stop_legend(ink: [u8; 3]) -> UndoFace {
     let (src, w, h) = button_legend(ButtonLegend::B);
     let side = PRINT_STOP_BUTTON;
     let rgba = crate::art::cover_rgba(src, w, h, side, side).unwrap_or_default();
-    let button = UndoFace { rgba, w: side, h: side };
+    let button = UndoFace {
+        rgba,
+        w: side,
+        h: side,
+    };
     with_hint(button, "Stop", Some(ink), true)
 }
 
@@ -1413,7 +1530,12 @@ pub enum StudioGlyph {
     UpDown,
 }
 
-pub fn studio_legend(glyph: StudioGlyph, word: &str, ink: [u8; 3], hint_on_right: bool) -> UndoFace {
+pub fn studio_legend(
+    glyph: StudioGlyph,
+    word: &str,
+    ink: [u8; 3],
+    hint_on_right: bool,
+) -> UndoFace {
     let button = match glyph {
         StudioGlyph::A => button_face(ButtonLegend::A),
         StudioGlyph::B => button_face(ButtonLegend::B),
@@ -1574,6 +1696,7 @@ pub struct QuickMenu<'a> {
     pub wallpaper: Option<[(TexId, u32, u32); 2]>,
     pub networks: Option<[(TexId, u32, u32); 2]>,
     pub romm: [Option<[(TexId, u32, u32); 2]>; 4],
+    pub kid_shelf: Option<[(TexId, u32, u32); 2]>,
     pub faces: Option<&'a QuickMenuFaces>,
     pub ground: Option<(TexId, u32)>,
     pub palette: Option<[(TexId, u32, u32); 2]>,
@@ -1581,6 +1704,10 @@ pub struct QuickMenu<'a> {
     pub gb_bezel: Option<[(TexId, u32, u32); 2]>,
     pub gbc_bezel: Option<[(TexId, u32, u32); 2]>,
     pub bezel: Option<[(TexId, u32, u32); 2]>,
+    pub gba_overlay: Option<[(TexId, u32, u32); 2]>,
+    pub gb_overlay: Option<[(TexId, u32, u32); 2]>,
+    pub gbc_overlay: Option<[(TexId, u32, u32); 2]>,
+    pub overlay: Option<[(TexId, u32, u32); 2]>,
     pub bound: Option<&'a [Option<FacePair>]>,
     pub description: Option<(TexId, u32, u32)>,
     pub over_game: bool,
@@ -1595,7 +1722,7 @@ impl QuickMenu<'_> {
             (false, _) => draw_menu_ground(self.canvas, self.ground, out),
             (true, panel) => {
                 let y = match panel {
-                    true => quick_row_top(self.row.page()[0], self.hidden) - PANEL_GAP,
+                    true => quick_row_top(self.canvas, self.row.page()[0], self.hidden) - PANEL_GAP,
                     false => 0.0,
                 };
                 let bottom = self.footer_top.max(y);
@@ -1604,7 +1731,7 @@ impl QuickMenu<'_> {
                     y,
                     w: self.canvas.w,
                     h: bottom - y,
-                    colour: [0.0, 0.0, 0.0, GROUND_SCRIM],
+                    colour: [0.0, 0.0, 0.0, GAME_SCRIM],
                 });
             }
         }
@@ -1616,14 +1743,15 @@ impl QuickMenu<'_> {
             .row
             .page()
             .iter()
+            .filter(|r| !self.hidden.contains(r))
             .filter_map(|r| faces.labels.get(r.index()))
             .map(|l| l[1].1)
             .max()
             .unwrap_or(0);
         let shown = self.row.shown(self.hidden);
-        let (start, len) = quick_window(self.row, self.hidden);
+        let (start, len) = quick_window(self.canvas, self.row, self.hidden);
         for row in shown.into_iter().skip(start).take(len) {
-            let y = quick_row_top_at(row, self.row, self.hidden) + TYPE_DROP;
+            let y = quick_row_top_at(self.canvas, row, self.row, self.hidden) + TYPE_DROP;
             let lit = row == self.row;
             let mut label_end = QUICK_LABEL_X;
             if let Some(&label) = faces.labels.get(row.index()).map(|l| &l[lit as usize]) {
@@ -1644,11 +1772,16 @@ impl QuickMenu<'_> {
                 }
                 QuickRow::RommPort => self.romm[2].map(|c| c[lit as usize]),
                 QuickRow::RommStatus => self.romm[3].map(|c| c[lit as usize]),
+                QuickRow::KidShelf => self.kid_shelf.map(|c| c[lit as usize]),
                 QuickRow::Palette | QuickRow::GbPalette => self.palette.map(|c| c[lit as usize]),
                 QuickRow::GbaBezel => self.gba_bezel.map(|c| c[lit as usize]),
                 QuickRow::GbBezel => self.gb_bezel.map(|c| c[lit as usize]),
                 QuickRow::GbcBezel => self.gbc_bezel.map(|c| c[lit as usize]),
                 QuickRow::Bezel => self.bezel.map(|c| c[lit as usize]),
+                QuickRow::GbaOverlay => self.gba_overlay.map(|c| c[lit as usize]),
+                QuickRow::GbOverlay => self.gb_overlay.map(|c| c[lit as usize]),
+                QuickRow::GbcOverlay => self.gbc_overlay.map(|c| c[lit as usize]),
+                QuickRow::Overlay => self.overlay.map(|c| c[lit as usize]),
                 _ if row.binds() => self
                     .bound
                     .and_then(|b| b.get(row.index()).copied().flatten())
@@ -1672,11 +1805,27 @@ impl QuickMenu<'_> {
                 alpha: 1.0,
             });
         }
-        if let Some(bar) = quick_scroll(self.row, self.hidden) {
-            push_scroll(out, self.canvas, bar);
+        if let Some(bar) = quick_scroll(self.canvas, self.row, self.hidden) {
+            let x = self.canvas.w - SCROLL_INSET - SCROLL_W;
+            let ink = DIM_INK.map(|c| f32::from(c) / 255.0);
+            out.push(Draw::Rect {
+                x,
+                y: bar.y,
+                w: SCROLL_W,
+                h: bar.h,
+                colour: [ink[0], ink[1], ink[2], 0.3],
+            });
+            let lit = crate::hud::HUD_INK.map(|c| f32::from(c) / 255.0);
+            out.push(Draw::Rect {
+                x,
+                y: bar.thumb_y,
+                w: SCROLL_W,
+                h: bar.thumb_h,
+                colour: [lit[0], lit[1], lit[2], 1.0],
+            });
         }
         if let Some((tex, w, h)) = self.description {
-            let y = OUT_H as f32 - MOUTH_H - h as f32 - DESCRIPTION_GAP;
+            let y = self.canvas.h - MOUTH_H - h as f32 - DESCRIPTION_GAP;
             push(out, tex, self.canvas.centred(w as f32), y, w, h);
         }
     }
@@ -1807,7 +1956,7 @@ impl CheatPage<'_> {
 }
 
 pub fn draw_menu_ground(canvas: Canvas, ground: Option<(TexId, u32)>, out: &mut Vec<Draw>) {
-    let (w, h) = (canvas.w, OUT_H as f32);
+    let (w, h) = (canvas.w, canvas.h);
     match ground {
         Some((tex, tex_w)) => {
             out.push(Draw::Part {
@@ -1863,14 +2012,78 @@ fn scrolls(page: &[QuickRow]) -> bool {
     .contains(&page)
 }
 
-fn visible(page: &[QuickRow]) -> usize {
+pub fn visible_rows(canvas: Canvas) -> usize {
+    QUICK_VISIBLE + (canvas.inset_y() * 2.0 / QUICK_PITCH).max(0.0) as usize
+}
+
+pub fn legend_y(canvas: Canvas) -> f32 {
+    LEGEND_Y + canvas.h - OUT_H as f32
+}
+
+fn visible(canvas: Canvas, page: &[QuickRow]) -> usize {
     match page == QuickRow::PLAY_SCREEN {
         true => PANEL_VISIBLE,
-        false => QUICK_VISIBLE,
+        false => visible_rows(canvas),
     }
 }
 
-/// The first row shown and how many: all of them when they fit, else `fits` around `at`.
+pub fn quick_window(canvas: Canvas, selected: QuickRow, hidden: &[QuickRow]) -> (usize, usize) {
+    let count = selected.shown(hidden).len();
+    let fits = visible(canvas, selected.page());
+    if !scrolls(selected.page()) || count <= fits {
+        return (0, count);
+    }
+    window(selected.position(hidden), count, fits)
+}
+
+pub fn quick_scroll(
+    canvas: Canvas,
+    selected: QuickRow,
+    hidden: &[QuickRow],
+) -> Option<QuickScroll> {
+    let shown = selected.shown(hidden);
+    let (start, len) = quick_window(canvas, selected, hidden);
+    if len >= shown.len() {
+        return None;
+    }
+    let y = quick_row_top_at(canvas, shown[start], selected, hidden);
+    scroll_bar(y, len, shown.len(), selected.position(hidden))
+}
+
+pub fn quick_row_top_at(
+    canvas: Canvas,
+    row: QuickRow,
+    selected: QuickRow,
+    hidden: &[QuickRow],
+) -> f32 {
+    let (start, len) = quick_window(canvas, selected, hidden);
+    let held = match row.page() == QuickRow::WIFI {
+        true => QuickRow::WIFI.len(),
+        false => len,
+    };
+    let rows = QUICK_PITCH * held as f32;
+    let top = match row.page() == QuickRow::PLAY_SCREEN {
+        true => canvas.h - MOUTH_H - PANEL_GAP - rows,
+        false => (legend_y(canvas) - rows) / 2.0,
+    };
+    top + QUICK_PITCH * (row.position(hidden) as f32 - start as f32)
+}
+
+pub fn quick_row_top(canvas: Canvas, row: QuickRow, hidden: &[QuickRow]) -> f32 {
+    quick_row_top_at(canvas, row, row, hidden)
+}
+
+fn push(out: &mut Vec<Draw>, tex: TexId, x: f32, y: f32, w: u32, h: u32) {
+    out.push(Draw::Tex {
+        x: x.round(),
+        y: y.round(),
+        w: w as f32,
+        h: h as f32,
+        tex,
+        alpha: 1.0,
+    });
+}
+
 fn window(at: usize, count: usize, fits: usize) -> (usize, usize) {
     if count <= fits {
         return (0, count);
@@ -1878,16 +2091,6 @@ fn window(at: usize, count: usize, fits: usize) -> (usize, usize) {
     (at.saturating_sub(fits / 2).min(count - fits), fits)
 }
 
-pub fn quick_window(selected: QuickRow, hidden: &[QuickRow]) -> (usize, usize) {
-    let count = selected.shown(hidden).len();
-    if !scrolls(selected.page()) {
-        return (0, count);
-    }
-    window(selected.position(hidden), count, visible(selected.page()))
-}
-
-/// The bar beside `len` rows from `y` that shows where `at` is among `count`; none when every row
-/// is shown.
 fn scroll_bar(y: f32, len: usize, count: usize, at: usize) -> Option<QuickScroll> {
     if len >= count {
         return None;
@@ -1901,40 +2104,4 @@ fn scroll_bar(y: f32, len: usize, count: usize, at: usize) -> Option<QuickScroll
         thumb_y: y + (h - thumb_h) * along,
         thumb_h,
     })
-}
-
-pub fn quick_scroll(selected: QuickRow, hidden: &[QuickRow]) -> Option<QuickScroll> {
-    let shown = selected.shown(hidden);
-    let (start, len) = quick_window(selected, hidden);
-    let y = quick_row_top_at(*shown.get(start)?, selected, hidden);
-    scroll_bar(y, len, shown.len(), selected.position(hidden))
-}
-
-pub fn quick_row_top_at(row: QuickRow, selected: QuickRow, hidden: &[QuickRow]) -> f32 {
-    let (start, len) = quick_window(selected, hidden);
-    let held = match row.page() == QuickRow::WIFI {
-        true => QuickRow::WIFI.len(),
-        false => len,
-    };
-    let rows = QUICK_PITCH * held as f32;
-    let top = match row.page() == QuickRow::PLAY_SCREEN {
-        true => OUT_H as f32 - MOUTH_H - PANEL_GAP - rows,
-        false => (LEGEND_Y - rows) / 2.0,
-    };
-    top + QUICK_PITCH * (row.position(hidden) as f32 - start as f32)
-}
-
-pub fn quick_row_top(row: QuickRow, hidden: &[QuickRow]) -> f32 {
-    quick_row_top_at(row, row, hidden)
-}
-
-fn push(out: &mut Vec<Draw>, tex: TexId, x: f32, y: f32, w: u32, h: u32) {
-    out.push(Draw::Tex {
-        x: x.round(),
-        y: y.round(),
-        w: w as f32,
-        h: h as f32,
-        tex,
-        alpha: 1.0,
-    });
 }

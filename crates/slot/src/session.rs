@@ -109,7 +109,11 @@ impl Session {
             }
             Cue::Tear => self.play_sfx(Sfx::Tear),
             Cue::BuzzOff => {
-                if self.buzz_ends.take().is_some_and(|end| Instant::now() < end) {
+                if self
+                    .buzz_ends
+                    .take()
+                    .is_some_and(|end| Instant::now() < end)
+                {
                     self.sink.ring().hush();
                 }
             }
@@ -172,6 +176,10 @@ impl Session {
         self.achievements.sync_status()
     }
 
+    pub fn ring(&self) -> std::sync::Arc<crate::audio::Ring> {
+        self.sink.ring()
+    }
+
     pub fn app_mut(&mut self) -> &mut App {
         &mut self.app
     }
@@ -204,8 +212,12 @@ impl Session {
 
     pub fn step_emulator(&self, timeout: Duration) -> bool {
         self.emu.as_ref().is_some_and(|emu| {
-            emu.tick();
-            !emu.wait_frame(timeout) && emu.locked()
+            if crate::ds_view::playing(self) {
+                emu.step_ahead(timeout)
+            } else {
+                emu.tick();
+                !emu.wait_frame(timeout) && emu.locked()
+            }
         })
     }
 
@@ -442,6 +454,7 @@ impl Session {
                 self.app.peer_lost();
             }
         }
+        self.sink.ring().set_awake(self.app.expects_sound());
         if let Some(sfx) = self.app.take_sfx() {
             self.play_sfx(sfx);
         }
@@ -672,6 +685,8 @@ impl Session {
                 let cheats = match core {
                     Core::Mgba => crate::cheats::load(&root, platform, &stem, &rom),
                     Core::Gpsp | Core::Gambatte => Vec::new(),
+                    #[cfg(feature = "nds")]
+                    Core::Dsperate => Vec::new(),
                 };
                 launch("cheats read");
                 Loaded {

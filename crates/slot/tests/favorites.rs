@@ -47,11 +47,11 @@ fn go_to(a: &mut App, shelf: &str) {
     panic!("never reached the {shelf} shelf");
 }
 
-fn names(a: &mut App) -> Vec<&'static str> {
+fn names(a: &mut App) -> Vec<String> {
     let mut names = Vec::new();
     for _ in 0..4 {
         press(a, Btn::R1);
-        names.extend(a.shelf_platform_name());
+        names.extend(a.shelf_platform_name().map(str::to_string));
     }
     names
 }
@@ -79,7 +79,7 @@ fn y_on_the_shelf_hearts_the_cart_and_saves_it_without_a_banner() {
 fn the_favorites_shelf_only_shows_once_something_is_hearted() {
     let d = card();
     let mut a = boot_with(d.path(), SlotState::default());
-    assert!(!names(&mut a).contains(&"Favorites"));
+    assert!(!names(&mut a).iter().any(|n| n == "Favorites"));
     go_to(&mut a, "Game Boy");
     press(&mut a, Btn::Y);
     go_to(&mut a, "Favorites");
@@ -152,7 +152,7 @@ fn unhearting_the_last_favorite_leaves_the_empty_shelf() {
     press(&mut a, Btn::Y);
     assert_ne!(a.shelf_platform_name(), Some("Favorites"));
     assert!(read_slot_state(d.path()).favorites.is_empty());
-    assert!(!names(&mut a).contains(&"Favorites"));
+    assert!(!names(&mut a).iter().any(|n| n == "Favorites"));
 }
 
 #[test]

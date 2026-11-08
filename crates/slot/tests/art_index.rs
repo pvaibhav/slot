@@ -47,3 +47,9 @@ fn a_bad_band_drops_the_whole_look() {
 fn junk_is_none() {
     assert!(ArtIndex::parse("<html>").is_none());
 }
+
+#[test]
+fn an_entry_reads_its_box() {
+    let index = ArtIndex::parse(r#"{"00038342":{"box-3D":"NDS/box-3D/00038342.png"}}"#).unwrap();
+    assert_eq!(index.get(0x00038342).unwrap().boxed.as_deref(), Some("NDS/box-3D/00038342.png"));
+}

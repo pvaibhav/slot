@@ -93,6 +93,10 @@ fn fitted(font: &fontdue::Font, text: &str, px: f32, fit_w: f32, min_px: f32) ->
     px
 }
 
+fn fits(line: &str) -> bool {
+    text::label_font().is_none_or(|font| text::line_width(font, &line.to_uppercase(), MIN_PX, 0.0) <= FIT_W)
+}
+
 fn raster(lines: &[Line], top: usize, w: usize, h: usize, fit_w: f32, min_px: f32) -> Vec<f32> {
     let mut out = vec![0.0f32; w * h];
     let Some(font) = text::label_font() else {
@@ -255,7 +259,7 @@ pub fn receipt_face(modules: &[Vec<bool>], text: &ReceiptText) -> UndoFace {
         px: 18.0,
         gap: 24,
     }];
-    if let Some(host) = &text.host {
+    if let Some(host) = text.host.as_ref().filter(|h| fits(h)) {
         lines.push(Line {
             text: host.to_uppercase(),
             px: 26.0,

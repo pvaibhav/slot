@@ -19,6 +19,7 @@ const FETCH_THREADS: usize = 3;
 #[derive(Clone, Debug, PartialEq)]
 pub enum ArtJob {
     FetchMissing(Kind),
+    FetchBoxArt,
     Cancel,
     StudioFetch(Cart),
     StudioClose {
@@ -50,6 +51,10 @@ pub enum ArtEvent {
     },
     Missed {
         stem: String,
+    },
+    BoxLanded {
+        stem: String,
+        platform: Platform,
     },
     Done {
         landed: usize,
@@ -144,12 +149,13 @@ fn image(
 }
 
 fn label_for(
+    root: &Path,
     cart: &Cart,
     kind: Kind,
     index: &ArtIndex,
     fetch: &mut dyn FnMut(&str) -> Result<Vec<u8>, UpdateFail>,
 ) -> Result<Option<Vec<u8>>, UpdateFail> {
-    let Ok(crc) = rom::rom_crc(&cart.rom) else {
+    let Ok(crc) = rom::cached_crc(root, &cart.rom) else {
         return Ok(None);
     };
     let Some(entry) = index.get(crc) else {
@@ -192,7 +198,7 @@ fn one_cart(
         out
     };
     let began = std::time::Instant::now();
-    let made = match label_for(&cart, kind, index, &mut timed) {
+    let made = match label_for(root, &cart, kind, index, &mut timed) {
         Ok(made) => made,
         Err(e) => return Outcome::Lost(e),
     };
@@ -286,6 +292,133 @@ pub fn fetch_missing_with(
     }
 }
 
+const BOX_CACHE: &str = "Cache/art/box";
+const WHEEL_CACHE: &str = "Cache/art/wheel";
+
+pub fn box_art_paths(root: &Path, cart: &Cart) -> (PathBuf, PathBuf) {
+    let name = format!("{}.png", cart.stem);
+    let dir = cart.platform.dir_name();
+    (
+        root.join(BOX_CACHE).join(dir).join(&name),
+        root.join(WHEEL_CACHE).join(dir).join(&name),
+    )
+}
+
+enum BoxOutcome {
+    Landed(Cart),
+    Missed(String),
+    Lost(UpdateFail),
+}
+
+fn wants_box_art(root: &Path, cart: &Cart, index: &ArtIndex) -> bool {
+    let (boxed, logo) = box_art_paths(root, cart);
+    if !boxed.is_file() {
+        return true;
+    }
+    if logo.is_file() {
+        return false;
+    }
+    rom::cached_crc(root, &cart.rom)
+        .ok()
+        .and_then(|crc| index.get(crc))
+        .is_some_and(|e| e.logo.is_some())
+}
+
+fn one_box(
+    root: &Path,
+    cart: Cart,
+    index: &ArtIndex,
+    fetch: &(dyn Fn(&str) -> Result<Vec<u8>, UpdateFail> + Sync),
+) -> BoxOutcome {
+    let Some(entry) = rom::cached_crc(root, &cart.rom).ok().and_then(|crc| index.get(crc)) else {
+        return BoxOutcome::Missed(cart.stem);
+    };
+    let (boxed, logo) = box_art_paths(root, &cart);
+    let mut got_any = false;
+    for (want, path) in [(&entry.boxed, boxed), (&entry.logo, logo)] {
+        let Some(want) = want.as_deref().filter(|_| !path.is_file()) else {
+            continue;
+        };
+        let bytes = match image(&mut |url| fetch(url), want) {
+            Ok(Some(bytes)) => bytes,
+            Ok(None) => continue,
+            Err(e) => return BoxOutcome::Lost(e),
+        };
+        let Some(png) = make::as_png(&bytes) else {
+            continue;
+        };
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        got_any |= make::write_replacing(&path, &png).is_ok();
+    }
+    match got_any {
+        true => BoxOutcome::Landed(cart),
+        false => BoxOutcome::Missed(cart.stem),
+    }
+}
+
+pub fn fetch_box_art_with(
+    root: &Path,
+    index: &ArtIndex,
+    fetch: &(dyn Fn(&str) -> Result<Vec<u8>, UpdateFail> + Sync),
+    cancelled: &(dyn Fn() -> bool + Sync),
+    emit: &mut dyn FnMut(ArtEvent),
+) {
+    let carts: Vec<Cart> = slot_store::scan(root)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|c| wants_box_art(root, c, index))
+        .collect();
+    emit(ArtEvent::Counted(carts.len()));
+    let next = AtomicUsize::new(0);
+    let lost = AtomicBool::new(false);
+    let (tx, rx) = channel::<BoxOutcome>();
+    let (mut landed, mut missed) = (0, Vec::new());
+    let mut failed = None;
+    std::thread::scope(|scope| {
+        for _ in 0..FETCH_THREADS {
+            let (tx, carts, next, lost) = (tx.clone(), &carts, &next, &lost);
+            scope.spawn(move || loop {
+                if cancelled() || lost.load(Ordering::SeqCst) {
+                    return;
+                }
+                let Some(cart) = carts.get(next.fetch_add(1, Ordering::SeqCst)).cloned() else {
+                    return;
+                };
+                let outcome = one_box(root, cart, index, fetch);
+                if matches!(outcome, BoxOutcome::Lost(_)) {
+                    lost.store(true, Ordering::SeqCst);
+                }
+                if tx.send(outcome).is_err() {
+                    return;
+                }
+            });
+        }
+        drop(tx);
+        for outcome in rx {
+            match outcome {
+                BoxOutcome::Landed(cart) => {
+                    landed += 1;
+                    emit(ArtEvent::BoxLanded {
+                        stem: cart.stem,
+                        platform: cart.platform,
+                    });
+                }
+                BoxOutcome::Missed(stem) => {
+                    missed.push(stem.clone());
+                    emit(ArtEvent::Missed { stem });
+                }
+                BoxOutcome::Lost(e) => failed = Some(e),
+            }
+        }
+    });
+    match failed {
+        Some(e) => emit(ArtEvent::Failed(e)),
+        None => emit(ArtEvent::Done { landed, missed }),
+    }
+}
+
 pub fn studio_art_with(
     root: &Path,
     cart: &Cart,
@@ -296,7 +429,7 @@ pub fn studio_art_with(
         stem: cart.stem.clone(),
         ..StudioArt::default()
     };
-    let Ok(crc) = rom::rom_crc(&cart.rom) else {
+    let Ok(crc) = rom::cached_crc(root, &cart.rom) else {
         return art;
     };
     let entry = index.get(crc);
@@ -401,6 +534,7 @@ impl Runs {
 
 enum Work {
     Fetch(Kind, Arc<AtomicBool>),
+    Boxes(Arc<AtomicBool>),
     Studio(Cart),
     Close(Cart, Option<[u8; 3]>, Option<Look>),
 }
@@ -416,6 +550,9 @@ impl ArtJobs for ArtQueue {
         match job {
             ArtJob::FetchMissing(kind) => {
                 let _ = self.jobs.send(Work::Fetch(kind, self.runs.start()));
+            }
+            ArtJob::FetchBoxArt => {
+                let _ = self.jobs.send(Work::Boxes(self.runs.start()));
             }
             ArtJob::StudioFetch(cart) => {
                 let _ = self.jobs.send(Work::Studio(cart));
@@ -445,6 +582,7 @@ pub fn art_jobs(root: PathBuf) -> Box<dyn ArtJobs> {
                         run(&root, kind, &flag, &tx);
                     }
                 }
+                Work::Boxes(flag) => run_boxes(&root, &flag, &tx),
                 Work::Studio(cart) => {
                     let _ = tx.send(ArtEvent::StudioArt(studio_run(&root, &cart)));
                 }
@@ -524,13 +662,39 @@ fn run(root: &Path, kind: Kind, cancel: &AtomicBool, tx: &Sender<ArtEvent>) {
     }
 }
 
+fn run_boxes(root: &Path, cancel: &AtomicBool, tx: &Sender<ArtEvent>) {
+    if update::clock_is_wrong(update::now_unix()) {
+        let _ = tx.send(ArtEvent::Failed(UpdateFail::Clock));
+        return;
+    }
+    if let Err(e) = update::wait_online() {
+        let _ = tx.send(ArtEvent::Failed(e));
+        return;
+    }
+    let agent = update::agent(update::DOWNLOAD_TIMEOUT);
+    match load_index(root, &mut get_index) {
+        Ok(index) => fetch_box_art_with(
+            root,
+            &index,
+            &|url| fetch_art(&agent, url),
+            &|| cancel.load(Ordering::SeqCst),
+            &mut |e| {
+                let _ = tx.send(e);
+            },
+        ),
+        Err(e) => {
+            let _ = tx.send(ArtEvent::Failed(e));
+        }
+    }
+}
+
 pub fn fetch_label(root: &Path, cart: &Cart) -> Result<bool, UpdateFail> {
     if update::clock_is_wrong(update::now_unix()) {
         return Err(UpdateFail::Clock);
     }
     let agent = update::agent(update::DOWNLOAD_TIMEOUT);
     let index = load_index(root, &mut get_index)?;
-    let made = label_for(cart, Kind::Real, &index, &mut |url| fetch_art(&agent, url))?;
+    let made = label_for(root, cart, Kind::Real, &index, &mut |url| fetch_art(&agent, url))?;
     let Some(png) = made else {
         return Ok(false);
     };
@@ -538,6 +702,7 @@ pub fn fetch_label(root: &Path, cart: &Cart) -> Result<bool, UpdateFail> {
     make::write_replacing(&path, &png).map_err(|_| UpdateFail::Bad)?;
     let mut labeled = cart.clone();
     labeled.label = Some(path);
+    let _ = std::fs::remove_file(crate::label_cache::cache_path(root, &labeled));
     let _ = crate::label_cache::label_art(root, &labeled);
     Ok(true)
 }

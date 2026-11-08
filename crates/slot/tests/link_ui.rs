@@ -508,7 +508,7 @@ fn the_link_screen_draws_its_role_over_the_game() {
 fn session_playing_on_gpsp() -> (Session, TempDir, Millis) {
     let d = common::tmp_root_with_carts(&["Emerald"]);
     common::write_hack_header(&d, "Emerald", "POKEMON EMER", "BPEE");
-    slot_store::write_selected_core(d.path(), "Emerald", Core::Gpsp).expect("write core");
+    slot_store::write_selected_core(d.path(), Platform::Gba, "Emerald", Core::Gpsp).expect("write core");
     write_slot_state(
         d.path(),
         &SlotState {
@@ -1369,7 +1369,7 @@ fn session_on_a_real_core() -> Option<(Session, TempDir, Millis)> {
     bytes[0xb2] = 0;
     bytes[0xbd] = bytes[0xbd].wrapping_add(0x96);
     std::fs::write(&rom, bytes).expect("rewrite rom");
-    slot_store::write_selected_core(d.path(), "Emerald", Core::Gpsp).expect("write core");
+    slot_store::write_selected_core(d.path(), Platform::Gba, "Emerald", Core::Gpsp).expect("write core");
     std::fs::copy(
         &core,
         d.path()

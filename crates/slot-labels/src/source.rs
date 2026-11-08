@@ -51,6 +51,8 @@ pub fn platforms(platform: Platform) -> &'static [&'static str] {
         Platform::Gba | Platform::Gbav => &["Nintendo Game Boy Advance"],
         Platform::Gb => &["Nintendo Game Boy", "Nintendo Game Boy Color"],
         Platform::Gbc => &["Nintendo Game Boy Color", "Nintendo Game Boy"],
+        #[cfg(feature = "nds")]
+        Platform::Nds => &[],
     }
 }
 

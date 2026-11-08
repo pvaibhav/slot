@@ -1,7 +1,7 @@
 use slot_input::Btn;
 
 use crate::bitmaps::ButtonLegend;
-use crate::draw::{Canvas, Draw, TexId, OUT_H};
+use crate::draw::{Canvas, Draw, TexId};
 use crate::guide::{draw_help_screen, help_rows_face, GUIDE_HELP_HINT};
 use crate::hud::footer_ink;
 use crate::icon::{icon_coverage, Icon};
@@ -47,6 +47,7 @@ pub struct Keyboard {
     layout: Layout,
     title: String,
     subtitle: Option<String>,
+    alert: bool,
     text: Vec<char>,
     cursor: usize,
     row: usize,
@@ -143,6 +144,7 @@ impl Keyboard {
             layout,
             title: title.to_string(),
             subtitle: subtitle.map(str::to_string),
+            alert: false,
             cursor: text.len(),
             text,
             row,
@@ -164,6 +166,22 @@ impl Keyboard {
 
     pub fn subtitle(&self) -> Option<&str> {
         self.subtitle.as_deref()
+    }
+
+    pub fn alerted(self) -> Keyboard {
+        Keyboard {
+            alert: true,
+            ..self
+        }
+    }
+
+    pub fn refuse(&mut self, why: &str) {
+        self.subtitle = Some(why.to_string());
+        self.alert = true;
+    }
+
+    pub fn alert(&self) -> bool {
+        self.alert
     }
 
     pub fn text(&self) -> String {
@@ -392,6 +410,7 @@ impl KeyboardFaces {
 const TITLE_Y: f32 = 20.0;
 const SUBTITLE_Y: f32 = 60.0;
 const SUBTITLE_PX: f32 = 16.0;
+const ALERT_PX: f32 = 18.0;
 const SUBTITLE_H: u32 = 24;
 const FIELD_X: f32 = 60.0;
 const FIELD_Y: f32 = 104.0;
@@ -457,7 +476,7 @@ fn indent(layout: Layout, row: usize, key_w: u32) -> f32 {
 
 pub fn key_rect(canvas: Canvas, layout: Layout, row: usize, col: usize) -> [f32; 4] {
     let caps = layout_rows(layout)[row];
-    let y = GRID_Y + row as f32 * ROW_PITCH;
+    let y = GRID_Y + canvas.inset_y() + row as f32 * ROW_PITCH;
     let kw = key_w(canvas);
     let w = cap_width(caps[col], kw) as f32;
     if caps[col] == Cap::Special(Space) {
@@ -515,11 +534,15 @@ pub fn keyboard_text_face(kb: &Keyboard) -> (UndoFace, Vec<f32>) {
     (face, stops)
 }
 
-fn subtitle_face(label: &str) -> UndoFace {
+fn subtitle_face(label: &str, alert: bool) -> UndoFace {
     let Some(font) = text::label_font() else {
         return blank();
     };
-    let layout = text::fit(font, label, f32::INFINITY, 1, SUBTITLE_PX, SUBTITLE_PX);
+    let (px, ink) = match alert {
+        true => (ALERT_PX, MENU_INK),
+        false => (SUBTITLE_PX, DIM_INK),
+    };
+    let layout = text::fit(font, label, f32::INFINITY, 1, px, px);
     let set = layout
         .lines
         .iter()
@@ -527,7 +550,7 @@ fn subtitle_face(label: &str) -> UndoFace {
         .fold(0.0, f32::max);
     let w = set.ceil() as u32 + 2;
     let mut rgba = vec![0u8; (w * SUBTITLE_H * 4) as usize];
-    text::draw_centred(&mut rgba, w, SUBTITLE_H, &layout, DIM_INK);
+    text::draw_centred(&mut rgba, w, SUBTITLE_H, &layout, ink);
     UndoFace {
         rgba,
         w,
@@ -695,7 +718,7 @@ pub fn keyboard_faces(kb: &Keyboard, canvas: Canvas) -> KeyboardFaces {
     let (text, stops) = keyboard_text_face(kb);
     KeyboardFaces {
         title: heading_face(kb.title()),
-        subtitle: kb.subtitle().map(subtitle_face),
+        subtitle: kb.subtitle().map(|s| subtitle_face(s, kb.alert())),
         text,
         stops,
         caps: keyboard_cap_faces(kb, canvas),
@@ -743,7 +766,7 @@ fn draw_field(canvas: Canvas, faces: &KeyboardTex, kb: &Keyboard, out: &mut Vec<
         let shown = (tw as f32 - scroll).min(room);
         out.push(Draw::Part {
             x: FIELD_X,
-            y: FIELD_Y,
+            y: FIELD_Y + canvas.inset_y(),
             w: shown,
             h: th as f32,
             tex,
@@ -753,14 +776,14 @@ fn draw_field(canvas: Canvas, faces: &KeyboardTex, kb: &Keyboard, out: &mut Vec<
     }
     out.push(Draw::Rect {
         x: (FIELD_X + caret + CARET_GAP - scroll).round(),
-        y: FIELD_Y + CARET_INSET,
+        y: FIELD_Y + canvas.inset_y() + CARET_INSET,
         w: CARET_W,
         h: FIELD_H as f32 - 2.0 * CARET_INSET,
         colour: colour(MENU_INK),
     });
     out.push(Draw::Rect {
         x: RULE_X,
-        y: RULE_Y,
+        y: RULE_Y + canvas.inset_y(),
         w: canvas.w - 2.0 * RULE_X,
         h: RULE_H,
         colour: colour(DIM_INK),
@@ -790,10 +813,10 @@ pub fn draw_keyboard(
         out,
         faces.title,
         canvas.centred(faces.title.1 as f32),
-        TITLE_Y,
+        TITLE_Y + canvas.inset_y(),
     );
     if let Some(sub) = faces.subtitle {
-        place(out, sub, canvas.centred(sub.1 as f32), SUBTITLE_Y);
+        place(out, sub, canvas.centred(sub.1 as f32), SUBTITLE_Y + canvas.inset_y());
     }
     draw_field(canvas, faces, kb, out);
     for (r, row) in faces.caps.iter().enumerate() {
@@ -806,7 +829,7 @@ pub fn draw_keyboard(
 }
 
 pub fn draw_keyboard_legends(canvas: Canvas, faces: &KeyboardTex, out: &mut Vec<Draw>) {
-    let y = OUT_H as f32 - MOUTH_H;
+    let y = canvas.h - MOUTH_H;
     let [(cancel, cw, _), (done, dw, _)] = faces.legends;
     for (tex, w, x) in [
         (cancel, cw, 0.0),

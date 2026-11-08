@@ -1,4 +1,4 @@
-use slot_gfx::{Canvas, Draw, TexId, OUT_H};
+use slot_gfx::{Canvas, Draw, TexId, OUT_H, OUT_W};
 use slot_store::{Cart, Platform};
 
 use crate::board::{board_in, Placed};
@@ -11,26 +11,39 @@ use crate::silhouette::GbShell;
 use crate::slot_chrome::{draw_empty_slot, MOUTH_H};
 
 const SIDE_SCALE: f32 = 0.78;
+const HIDDEN_BELOW: f32 = 0.25;
+const SHOWN_FROM: f32 = 0.5;
+
+fn edge_fade(canvas: Canvas, x: f32, w: f32) -> f32 {
+    if canvas.w <= OUT_W as f32 || w <= 0.0 {
+        return 1.0;
+    }
+    let shown = ((x + w).min(canvas.w) - x.max(0.0)).max(0.0) / w;
+    ((shown - HIDDEN_BELOW) / (SHOWN_FROM - HIDDEN_BELOW)).clamp(0.0, 1.0)
+}
 const SIDE_ALPHA: f32 = 1.0;
 
-pub fn rest_y(h: f32) -> f32 {
-    let y = if h > CART_H as f32 {
-        (OUT_H as f32 - MOUTH_H - h) / 2.0
-    } else {
-        (OUT_H + CART_H) as f32 / 2.0 - h
-    };
+pub fn rest_y(canvas: Canvas, h: f32) -> f32 {
+    let y = canvas.inset_y()
+        + if h > CART_H as f32 {
+            (OUT_H as f32 - MOUTH_H - h) / 2.0
+        } else {
+            (OUT_H + CART_H) as f32 / 2.0 - h
+        };
     // A Game Boy pak is 337px in a 422px gap, which centres at 42.5. Snap to a
     // whole pixel so the 312×337 bitmap hits the RG SP panel 1:1.
     y.round()
 }
 
-pub fn foot_y(h: f32) -> f32 {
-    rest_y(h) + h
+pub fn foot_y(canvas: Canvas, h: f32) -> f32 {
+    rest_y(canvas, h) + h
 }
 
 pub fn box_size(platform: Platform) -> (u32, u32) {
     match platform {
         Platform::Gba | Platform::Gbav => (318, 282),
+        #[cfg(feature = "nds")]
+        Platform::Nds => (318, 282),
         Platform::Gb | Platform::Gbc => (312, 277),
     }
 }
@@ -73,6 +86,7 @@ pub struct Shelf {
     ride: f32,
     vel: f32,
     held: Option<(i32, Millis, usize)>,
+    lead: f32,
 }
 
 impl Shelf {
@@ -97,6 +111,7 @@ impl Shelf {
             ride: 0.0,
             vel: 0.0,
             held: None,
+            lead: 0.0,
         }
     }
 
@@ -109,21 +124,82 @@ impl Shelf {
     }
 
     pub fn restock(&mut self, carts: Vec<Cart>) -> Vec<TexId> {
+        let mut faces = vec![None; carts.len()];
+        let mut wrapped = vec![None; carts.len()];
+        let mut interiors = vec![None; carts.len()];
+        let mut kept = vec![false; self.carts.len()];
+        for (to, cart) in carts.iter().enumerate() {
+            let from =
+                self.carts.iter().enumerate().position(|(k, c)| {
+                    !kept[k] && c.platform == cart.platform && c.stem == cart.stem
+                });
+            if let Some(from) = from {
+                kept[from] = true;
+                faces[to] = self.faces[from].take();
+                wrapped[to] = self.wrapped[from].take();
+                interiors[to] = self.interiors[from].take();
+            }
+        }
         let old: Vec<TexId> = self
             .faces
             .drain(..)
             .chain(self.interiors.drain(..))
             .flatten()
             .collect();
-        self.faces = vec![None; carts.len()];
-        self.wrapped = vec![None; carts.len()];
-        self.interiors = vec![None; carts.len()];
+        self.faces = faces;
+        self.wrapped = wrapped;
+        self.interiors = interiors;
         self.hearted = vec![false; carts.len()];
         self.glints = vec![None; carts.len()];
         self.carts = carts;
         self.held = None;
         self.select(0);
         old
+    }
+
+    pub fn empty_like(&self) -> Shelf {
+        Shelf {
+            shadow: self.shadow,
+            gb_shadow: self.gb_shadow,
+            gbc_shadow: self.gbc_shadow,
+            backing: self.backing,
+            gb_backing: self.gb_backing,
+            gbc_backing: self.gbc_backing,
+            heart: self.heart,
+            ..Shelf::new(Vec::new())
+        }
+    }
+
+    pub fn carry(&mut self, by: i32) -> Option<(usize, usize)> {
+        let n = self.carts.len();
+        if n < 2 {
+            return None;
+        }
+        let at = self.index;
+        let to = (at as i32 + by).rem_euclid(n as i32) as usize;
+        self.carts.swap(at, to);
+        self.faces.swap(at, to);
+        self.wrapped.swap(at, to);
+        self.interiors.swap(at, to);
+        self.hearted.swap(at, to);
+        self.index = to;
+        self.ride += by as f32;
+        Some((at, to))
+    }
+
+    pub fn swap_carts(&mut self, at: usize, to: usize) {
+        if at >= self.carts.len() || to >= self.carts.len() {
+            return;
+        }
+        self.carts.swap(at, to);
+        self.faces.swap(at, to);
+        self.wrapped.swap(at, to);
+        self.interiors.swap(at, to);
+        self.hearted.swap(at, to);
+        if self.index == at {
+            self.ride += to as f32 - at as f32;
+            self.index = to;
+        }
     }
 
     pub fn select(&mut self, i: usize) {
@@ -385,7 +461,15 @@ impl Shelf {
         }
         let from = self.ride;
         let n = n as f32;
-        from + (self.index as f32 - from + n / 2.0).rem_euclid(n) - n / 2.0
+        from + (self.index as f32 - from + n / 2.0).rem_euclid(n) - n / 2.0 - self.lead
+    }
+
+    fn placed(&self) -> f32 {
+        self.scroll_target() + self.lead
+    }
+
+    pub fn set_lead(&mut self, lead: f32) {
+        self.lead = lead;
     }
 
     pub fn cart_at_offset(&self, off: i32) -> Option<usize> {
@@ -405,7 +489,7 @@ impl Shelf {
 
     pub fn selected_at(&self, canvas: Canvas) -> (f32, f32) {
         let (w, _) = self.slot_width(0);
-        let scale = shrink(self.scroll_target() - self.scroll);
+        let scale = shrink(self.placed() - self.scroll);
         (self.centre(canvas, 0) - w * scale / 2.0, scale)
     }
 
@@ -424,7 +508,7 @@ impl Shelf {
     }
 
     fn centre(&self, canvas: Canvas, slot: i32) -> f32 {
-        let u = self.scroll - self.scroll_target();
+        let u = self.scroll - self.placed();
         let a = u.floor() as i32;
         let mut c = canvas.w / 2.0 - (u - a as f32) * self.pitch(a, u);
         if slot >= a {
@@ -540,6 +624,22 @@ impl Shelf {
         self.layers(i, rect, 1.0, out);
     }
 
+    pub fn draw_cart_faded(&self, i: usize, rect: [f32; 4], alpha: f32, out: &mut Vec<Draw>) {
+        self.layers(i, rect, alpha, out);
+    }
+
+    pub fn draw_row_turned(
+        &self,
+        canvas: Canvas,
+        hidden: Option<&str>,
+        dim: f32,
+        turn: &dyn Fn(usize) -> f32,
+        shift: &dyn Fn(usize) -> (f32, f32, f32),
+        out: &mut Vec<Draw>,
+    ) {
+        self.row(canvas, hidden, 0.0, 0.0, dim, turn, shift, out);
+    }
+
     pub fn draw_row(
         &self,
         canvas: Canvas,
@@ -549,10 +649,38 @@ impl Shelf {
         dim: f32,
         out: &mut Vec<Draw>,
     ) {
+        self.row(
+            canvas,
+            hidden,
+            shake,
+            recede,
+            dim,
+            &|_| 0.0,
+            &|_| (0.0, 0.0, 1.0),
+            out,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn row(
+        &self,
+        canvas: Canvas,
+        hidden: Option<&str>,
+        shake: f32,
+        recede: f32,
+        dim: f32,
+        turn: &dyn Fn(usize) -> f32,
+        shift: &dyn Fn(usize) -> (f32, f32, f32),
+        out: &mut Vec<Draw>,
+    ) {
         let recede = recede.clamp(0.0, 1.0);
         let dim = dim.clamp(0.0, 1.0);
-        let target = self.scroll_target();
-        for slot in -SLOTS..=SLOTS {
+        let target = self.placed();
+        let front = shift(self.index) != (0.0, 0.0, 1.0);
+        let order = (-SLOTS..=SLOTS)
+            .filter(|&s| !front || s != 0)
+            .chain(front.then_some(0));
+        for slot in order {
             let Some(i) = self.cart_at_offset(slot) else {
                 continue;
             };
@@ -560,19 +688,29 @@ impl Shelf {
             if hidden == Some(cart.stem.as_str()) {
                 continue;
             }
-            let offset = target + slot as f32 - self.scroll;
+            let (dx, dy, grow) = shift(i);
+            let offset = target + slot as f32 + dx - self.scroll;
             let t = offset.abs().min(1.0);
-            let scale = shrink(offset);
-            let alpha = (1.0 + (SIDE_ALPHA - 1.0) * t) * (1.0 - recede);
+            let scale = shrink(offset) * grow;
+            let mut alpha = (1.0 + (SIDE_ALPHA - 1.0) * t) * (1.0 - recede);
             let (cw, ch) = cart_box(cart.platform);
             let (w, h) = (cw as f32 * scale, ch as f32 * scale);
             let away = offset.signum() * (1.0 + offset.abs());
-            let x = self.centre(canvas, slot) - w / 2.0 + away * PART * recede;
+            let u = self.scroll - self.placed();
+            let step = match dx < 0.0 {
+                true => self.pitch(slot - 1, u),
+                false => self.pitch(slot, u),
+            };
+            let x = self.centre(canvas, slot) + dx * step - w / 2.0 + away * PART * recede;
+            alpha *= edge_fade(canvas, x, w);
             if x + w <= 0.0 || x >= canvas.w || alpha <= 0.0 {
                 continue;
             }
             let x = x + shake;
-            let y = foot_y(ch as f32) - h;
+            let y = foot_y(canvas, ch as f32) - h + dy;
+            let start = out.len();
+            let deg = turn(i);
+            let centre = [x + w / 2.0, y + h / 2.0];
             if let Some(tex) = self.wrapped(i) {
                 let (bw, bh) = box_size(cart.platform);
                 let (bw, bh) = (bw as f32 * scale, bh as f32 * scale);
@@ -584,9 +722,10 @@ impl Shelf {
                     tex,
                     alpha: alpha * dim,
                 });
+                turn_about(&mut out[start..], centre, deg);
                 continue;
             }
-            if alpha < 1.0 {
+            if alpha < 1.0 && !is_ds(cart.platform) {
                 let backing = match self.shell(i) {
                     None => self.shadow,
                     Some(GbShell::Notched) => self.gb_shadow,
@@ -629,7 +768,58 @@ impl Shelf {
                     });
                 }
             }
+            turn_about(&mut out[start..], centre, deg);
         }
+    }
+}
+
+pub fn turned(rect: [f32; 4], centre: [f32; 2], deg: f32) -> [[f32; 2]; 4] {
+    let [x, y, w, h] = rect;
+    let (sin, cos) = deg.to_radians().sin_cos();
+    [[x, y], [x + w, y], [x + w, y + h], [x, y + h]].map(|[px, py]| {
+        let (dx, dy) = (px - centre[0], py - centre[1]);
+        [
+            centre[0] + dx * cos - dy * sin,
+            centre[1] + dx * sin + dy * cos,
+        ]
+    })
+}
+
+pub fn turn_about(draws: &mut [Draw], centre: [f32; 2], deg: f32) {
+    if deg == 0.0 {
+        return;
+    }
+    for draw in draws {
+        *draw = match *draw {
+            Draw::Tex {
+                x,
+                y,
+                w,
+                h,
+                tex,
+                alpha,
+            } => Draw::Quad {
+                corners: turned([x, y, w, h], centre, deg),
+                tex,
+                uv: [0.0, 0.0, 1.0, 1.0],
+                alpha,
+            },
+            Draw::Part {
+                x,
+                y,
+                w,
+                h,
+                tex,
+                alpha,
+                uv,
+            } => Draw::Quad {
+                corners: turned([x, y, w, h], centre, deg),
+                tex,
+                uv,
+                alpha,
+            },
+            other => other,
+        };
     }
 }
 
@@ -639,4 +829,16 @@ fn shrink(offset: f32) -> f32 {
 
 fn recede_alpha(face_alpha: f32) -> f32 {
     (face_alpha / SIDE_ALPHA).clamp(0.0, 1.0)
+}
+
+fn is_ds(platform: slot_store::Platform) -> bool {
+    #[cfg(feature = "nds")]
+    {
+        platform == slot_store::Platform::Nds
+    }
+    #[cfg(not(feature = "nds"))]
+    {
+        let _ = platform;
+        false
+    }
 }

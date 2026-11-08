@@ -26,8 +26,8 @@ fn the_wide_elements_fall_where_the_symbology_says() {
 
 #[test]
 fn the_alphabet_covers_a_bare_url() {
-    assert!(code39("*GITHUB.COM/BRANDONKOWALSKI/SLOT*").is_some());
-    assert!(code39("*SLOT.KOWALSKI.IO*").is_some());
+    assert!(code39("*GITHUB.COM/SLOT-CFW/SLOT*").is_some());
+    assert!(code39("*SLOT-CFW.FYI*").is_some());
     assert!(
         code39("*A B-C.D$E/F+G%H*").is_some(),
         "the symbols are all in"

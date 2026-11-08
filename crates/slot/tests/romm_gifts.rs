@@ -188,7 +188,7 @@ fn an_installed_game_becomes_a_gift_and_a_gift_with_no_game_is_dropped_on_rescan
 }
 
 #[test]
-fn a_rescan_asks_for_the_boxes_again() {
+fn a_rescan_keeps_existing_boxes_and_asks_for_new_ones() {
     let (d, mut a) = booted_with("GBA/Emerald\n");
     let script = Script::default();
     a.set_romm_jobs(Box::new(script.clone()));
@@ -205,7 +205,7 @@ fn a_rescan_asks_for_the_boxes_again() {
     let now = a.now();
     a.tick_ms(now + 1);
     let stems: Vec<String> = a.gift_wants().into_iter().map(|(_, (_, stem))| stem).collect();
-    assert_eq!(stems, ["Emerald", "Sent"]);
+    assert_eq!(stems, ["Sent"]);
 }
 
 fn request(port: u16, head: &str) -> u16 {

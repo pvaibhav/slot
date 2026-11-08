@@ -6,12 +6,12 @@ Make it your screen size:
 
   Device         Size
   RG SP          720 x 480
-  RG34XX         720 x 480
-  RG34XXSP       720 x 480
-  RG35XXSP       640 x 480
-  RG35XX Plus    640 x 480
-  RG35XX-H       640 x 480
-  RG28XX         640 x 480
+  RG 34XX        720 x 480
+  RG 34XXSP      720 x 480
+  RG 35XXSP      640 x 480
+  RG 35XX Plus   640 x 480
+  RG 35XX-H      640 x 480
+  RG 28XX        640 x 480
 
 Other sizes are scaled to fill the screen and cropped from the centre.
 

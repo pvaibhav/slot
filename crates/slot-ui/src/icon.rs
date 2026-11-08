@@ -42,10 +42,11 @@ pub enum Icon {
     Return,
     Shift,
     Space,
+    Kid,
 }
 
 impl Icon {
-    pub const ALL: [Icon; 18] = [
+    pub const ALL: [Icon; 19] = [
         Icon::Volume,
         Icon::VolumeZero,
         Icon::VolumeMuted,
@@ -64,6 +65,7 @@ impl Icon {
         Icon::Return,
         Icon::Shift,
         Icon::Space,
+        Icon::Kid,
     ];
 
     pub fn index(self) -> usize {
@@ -90,6 +92,7 @@ impl Icon {
             Icon::Return => '\u{f0311}',
             Icon::Shift => '\u{f0636}',
             Icon::Space => '\u{f1050}',
+            Icon::Kid => '\u{f18fb}',
         }
     }
 }

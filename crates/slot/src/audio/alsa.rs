@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 use libloading::Library;
 
+use super::jack::{follows_jack, Jack, RouteWatch};
 use super::pacer::Pacer;
 use super::ring::Ring;
 use super::silence::Silence;
@@ -116,7 +117,7 @@ impl Alsa {
 
 pub struct AlsaSink {
     ring: Arc<Ring>,
-    held: Arc<AtomicBool>,
+    jack: Arc<Jack>,
     device: Option<Device>,
 }
 
@@ -129,7 +130,7 @@ impl AlsaSink {
     pub fn new() -> Self {
         AlsaSink {
             ring: Arc::new(Ring::new(0)),
-            held: Arc::new(AtomicBool::new(false)),
+            jack: Arc::new(Jack::default()),
             device: None,
         }
     }
@@ -153,14 +154,14 @@ impl AudioSink for AlsaSink {
         let ring = self.ring.clone();
         let stop = Arc::new(AtomicBool::new(false));
         let flag = stop.clone();
-        let held = self.held.clone();
+        let jack = self.jack.clone();
         let (ready_tx, ready_rx) = mpsc::channel();
         let join = std::thread::Builder::new()
             .name("slot-audio".into())
             .spawn(move || match play(&ring, sample_rate) {
                 Ok(mut device) => {
                     let _ = ready_tx.send(Ok(()));
-                    device.run(&ring, &flag, &held);
+                    device.run(&ring, &flag, &jack);
                 }
                 Err(e) => {
                     let _ = ready_tx.send(Err(e));
@@ -195,7 +196,7 @@ impl AudioSink for AlsaSink {
     }
 
     fn hold_open(&self, held: bool) {
-        self.held.store(held, Ordering::Relaxed);
+        self.jack.set(held);
     }
 }
 
@@ -204,6 +205,7 @@ struct Playback {
     pcm: Option<*mut c_void>,
     rate: u32,
     failing: bool,
+    follow_jack: bool,
 }
 
 fn play(ring: &Arc<Ring>, sample_rate: u32) -> Result<Playback, AudioError> {
@@ -214,20 +216,27 @@ fn play(ring: &Arc<Ring>, sample_rate: u32) -> Result<Playback, AudioError> {
         pcm: None,
         rate: sample_rate,
         failing: false,
+        follow_jack: follows_jack(std::env::var("IS_DSOS").ok().as_deref()),
     })
 }
 
 impl Playback {
-    fn run(&mut self, ring: &Ring, stop: &AtomicBool, held: &AtomicBool) {
+    fn run(&mut self, ring: &Ring, stop: &AtomicBool, jack: &Jack) {
         let mut buf = vec![0i16; PERIOD_FRAMES * CHANNELS as usize];
         let span = Duration::from_secs_f64(PERIOD_FRAMES as f64 / self.rate as f64);
         let mut silence = Silence::quiet(RELEASE_AFTER);
         let mut pace = Pacer::new(span);
+        let mut route = RouteWatch::new(std::env::var("ALSA_CONFIG_PATH").ok().as_deref());
         while !stop.load(Ordering::Relaxed) {
             ring.fill(&mut buf);
-            let hold = silence.hear(&buf, span);
+            let hold = silence.hear(&buf, span) || ring.awake();
+            let rerouted = self.follow_jack && route.changed();
+            if rerouted && self.pcm.is_some() {
+                self.release();
+                eprintln!("slot: audio released to follow the new audio route");
+            }
             match (self.pcm, hold) {
-                (Some(_), false) if !held.load(Ordering::Relaxed) => {
+                (Some(_), false) if !jack.plugged() => {
                     self.release();
                     eprintln!("slot: audio released after silence");
                 }
@@ -249,7 +258,7 @@ impl Playback {
             match self.pcm {
                 Some(pcm) => {
                     pace.reset();
-                    if !self.write(pcm, &buf) {
+                    if !self.write(pcm, &buf, ring) {
                         return;
                     }
                 }
@@ -258,7 +267,7 @@ impl Playback {
         }
     }
 
-    fn write(&self, pcm: *mut c_void, buf: &[i16]) -> bool {
+    fn write(&self, pcm: *mut c_void, buf: &[i16], ring: &Ring) -> bool {
         let mut written = 0;
         while written < PERIOD_FRAMES {
             let at = written * CHANNELS as usize;
@@ -270,6 +279,7 @@ impl Playback {
                 )
             };
             if frames < 0 {
+                ring.note_xrun();
                 let err = unsafe { (self.alsa.recover)(pcm, frames as c_int, 1) };
                 if err < 0 {
                     eprintln!("slot: audio: {}", self.alsa.message(err));

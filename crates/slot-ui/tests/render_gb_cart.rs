@@ -33,7 +33,7 @@ fn paste(frame: &mut [u8], face: &CartFace, left: u32) {
             if a == 0 {
                 continue;
             }
-            let top = rest_y(face.h as f32) as u32;
+            let top = rest_y(slot_ui::Canvas::FRAMED, face.h as f32) as u32;
             let d = (((y + top) * SHEET_W + x + left) * 3) as usize;
             for c in 0..3 {
                 frame[d + c] =
@@ -79,8 +79,8 @@ fn render_gb_cart() {
             "{} at column {}, standing {}..{}",
             cart.stem,
             i as u32 * CART_W,
-            rest_y(face.h as f32),
-            rest_y(face.h as f32) + face.h as f32
+            rest_y(slot_ui::Canvas::FRAMED, face.h as f32),
+            rest_y(slot_ui::Canvas::FRAMED, face.h as f32) + face.h as f32
         );
     }
 
