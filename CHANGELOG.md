@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [1.15.2](https://github.com/slot-cfw/slot/releases/tag/v1.15.2)
 
 - Load State on Insert is now Auto Load State, with a new Power On option. Carts you insert start fresh, but powering on still picks up the game you were playing. On and Off are now Always and Never. Save State on Eject is now Eject Save State. ([#206](https://github.com/slot-cfw/slot/issues/206))
 - When Check for Updates cannot reach the update server, it now says Could not fetch update info and Try again later.
