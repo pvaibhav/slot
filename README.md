@@ -40,15 +40,16 @@ A full user guide can be found at [slot-cfw.fyi](https://slot-cfw.fyi).
 
 # Supported Devices
 
-| Device             | Supported                                    | Since Version |
-|--------------------|----------------------------------------------|---------------|
-| Anbernic RG SP     | Yes                                          | Always        |
-| Anbernic RG34XX    | Yes                                          | 1.4.0         |
-| Anbernic RG34XXSP  | Yes                                          | 1.4.0         |
-| Anbernic RG35XXSP  | Yes                                          | 1.5.0         |
-| Anbernic 35XX Plus | Yes                                          | 1.5.0         |
-| Anbernic RG28XX    | Yes                                          | 1.6.0         |
-| Anbernic RG35XX-H  | Yes                                          | 1.7.0         |
+| Device                | Supported | Since Version |
+|-----------------------|-----------|---------------|
+| Anbernic RG SP        | **Yes**   | Always        |
+| Anbernic RG 34XX      | **Yes**   | 1.4.0         |
+| Anbernic RG 34XXSP    | **Yes**   | 1.4.0         |
+| Anbernic RG 35XXSP    | **Yes**   | 1.5.0         |
+| Anbernic RG 35XX Plus | **Yes**   | 1.5.0         |
+| Anbernic RG 35XX-H    | **Yes**   | 1.7.0         |
+| Anbernic RG 35XX Pro  | **Yes**   | 1.15.0        |
+| Anbernic RG 28XX      | **Yes**   | 1.6.0         |
 
 If you have one of the untested devices, or have tried slot on a device not listed,
 please [open an issue on GitHub](https://github.com/slot-cfw/slot/issues) and let me know how it went.
@@ -74,7 +75,7 @@ My goal with this project was to recreate the feeling of playing my GBA SP in th
 but with a few modern creature comforts.
 
 Nothing about this project is exciting or groundbreaking from a technological perspective, and as a
-result, I delegated the glue code. mGBA and gpSP have been around forever and are the true stars of
+result, I delegated the glue code. mGBA, gpSP and Gambatte have been around forever and are the true stars of
 this show. The incredible skeuomorphic art is the work of [Markus](https://github.com/MarkusMaribu), an
 artist who saw the bare-bones version and offered to dress it up.
 
