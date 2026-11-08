@@ -72,76 +72,9 @@ jobs:
           path: ${{ steps.package.outputs.zip }}
           if-no-files-found: error
 
-  build-ds:
-    name: RG DS+ card tree
-    runs-on: ubuntu-24.04-arm
-    container: rust:1-bullseye
-    outputs:
-      zip: ${{ steps.package.outputs.zip }}
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Install zip, cmake, Task and Bun
-        run: |
-          set -eu
-          sed -i '/bullseye-security/d' /etc/apt/sources.list
-          apt-get -o Acquire::Check-Valid-Until=false update
-          apt-get install -y --no-install-recommends zip unzip cmake ninja-build g++ file
-          curl -fsSL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
-          curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash -s "bun-v1.2.6"
-
-      - name: Build the tree
-        run: task dist:device:ds OUT="slot-${GITHUB_REF_NAME}"
-
-      - name: Check what is about to ship
-        run: |
-          set -eu
-          out="slot-${GITHUB_REF_NAME}"
-          file "$out/System/slot" | grep -q aarch64
-          file "$out/System/mgba_libretro.so" | grep -q aarch64
-          file "$out/System/gpsp_libretro.so" | grep -q aarch64
-          file "$out/System/gambatte_libretro.so" | grep -q aarch64
-          file "$out/System/slot_ds.so" | grep -q aarch64
-          dsperate_sha="$(cat vendor/dsperate-src.sha)"
-          test -f "$out/System/licenses/dsperate-${dsperate_sha}.tar.gz"
-          test -f "$out/System/licenses/dsperate-shim.tar.gz"
-          test -x "$out/System/slot"
-          gpsp_src_sha="$(cat vendor/gpsp-src.sha)"
-          test -f "$out/System/licenses/gpsp-${gpsp_src_sha}.tar.gz"
-          test -f "$out/System/licenses/gpsp-${gpsp_src_sha}.meta"
-          for p in cores/gpsp/*.patch; do
-            test -f "$out/System/licenses/gpsp-$(basename "$p")"
-          done
-          gambatte_src_sha="$(cat vendor/gambatte-src.sha)"
-          test -f "$out/System/licenses/gambatte-${gambatte_src_sha}.tar.gz"
-          test -f "$out/System/licenses/gambatte-${gambatte_src_sha}.meta"
-          for p in cores/gambatte/*.patch; do
-            test -f "$out/System/licenses/gambatte-$(basename "$p")"
-          done
-          mgba_src_commit="$(grep '^commit=' vendor/mgba_libretro.so.meta | cut -d= -f2)"
-          test -f "$out/System/licenses/mgba-${mgba_src_commit}.meta"
-          for p in cores/mgba/*.patch; do
-            test -f "$out/System/licenses/mgba-$(basename "$p")"
-          done
-
-      - name: Package
-        id: package
-        run: |
-          set -eu
-          out="slot-${GITHUB_REF_NAME}"
-          zip="$out-rgdsplus.zip"
-          zip -qry "$zip" "$out"
-          echo "zip=$zip" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: ${{ steps.package.outputs.zip }}
-          path: ${{ steps.package.outputs.zip }}
-          if-no-files-found: error
-
   publish:
     name: release
-    needs: [build, build-ds]
+    needs: build
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
@@ -157,15 +90,10 @@ jobs:
         with:
           name: ${{ needs.build.outputs.zip }}
 
-      - uses: actions/download-artifact@v8
-        with:
-          name: ${{ needs.build-ds.outputs.zip }}
-
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
           ZIP: ${{ needs.build.outputs.zip }}
-          DS_ZIP: ${{ needs.build-ds.outputs.zip }}
         run: |
           set -eu
           awk -v head="## [${GITHUB_REF_NAME#v}]" '
@@ -174,7 +102,7 @@ jobs:
             found { print }
           ' CHANGELOG.md | sed -e '/./,$!d' > notes.md
           test -s notes.md
-          gh release create "$GITHUB_REF_NAME" "$ZIP" "$DS_ZIP" --repo "$GITHUB_REPOSITORY" \
+          gh release create "$GITHUB_REF_NAME" "$ZIP" --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" --notes-file notes.md
 
       - name: Publish versions.json with the site

@@ -6,12 +6,9 @@ LIVE="${LIVE:-https://slot-cfw.fyi/versions.json}"
 
 slot=$(gh release view --repo "$SLOT_REPO" --json tagName,assets | jq '
   .tagName as $t | ($t | ltrimstr("v")) as $v
-  | (first(.assets[] | select(.name == "slot-\($t)-rgdsplus.zip"))
-     | {zip: .name, size: .size, sha256: (.digest | ltrimstr("sha256:"))}) as $ds
   | first(.assets[] | select(.name == "slot-\($t)-h700.zip"))
-  | {version: $v, tag: $t, zip: .name, size: .size, sha256: (.digest | ltrimstr("sha256:")), rgdsplus: $ds}')
+  | {version: $v, tag: $t, zip: .name, size: .size, sha256: (.digest | ltrimstr("sha256:"))}')
 echo "$slot" | jq -e '.sha256 | test("^[0-9a-f]{64}$")' > /dev/null
-echo "$slot" | jq -e '.rgdsplus.sha256 | test("^[0-9a-f]{64}$")' > /dev/null
 
 baseos_release() {
   gh release view --repo "$BASEOS_REPO" --json tagName,isPrerelease,assets | jq -e '
