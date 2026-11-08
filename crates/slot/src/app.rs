@@ -10094,8 +10094,6 @@ impl App {
             return;
         };
         let canvas = self.canvas();
-        self.draw_studio_ground(0.0, out);
-        let shown = view(studio, canvas.w);
         let since = self.studio_closing.unwrap_or(self.studio_opened);
         let t = (self.now().saturating_sub(since) as f32 / STUDIO_SLIDE_MS).min(1.0);
         if self.studio_closing.is_some() || t < 1.0 {
@@ -10106,6 +10104,8 @@ impl App {
             self.draw_studio_cart(out);
             return draw_empty_slot(canvas, self.slot_faces, out);
         }
+        self.draw_studio_ground(0.0, out);
+        let shown = view(studio, canvas.w);
         for item in &shown.items {
             let start = out.len();
             match item {
