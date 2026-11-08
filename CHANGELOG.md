@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.15.0](https://github.com/slot-cfw/slot/releases/tag/v1.15.0)
+
+- Collections let you group games across systems. Hold Y on a game to add it to one, or hold SELECT to pick several and press START. Collections stack behind Favorites on L2 / R2, or set Settings → Shelf Mode to Collections to give each its own spot in the row. On a collection, hold Y to take a game out, press X to move a game, and hold X to move the whole collection. ([#190](https://github.com/slot-cfw/slot/issues/190))
+- Game Boy Advance Video now sits behind Game Boy Advance. Press L2 / R2 on the GBA shelf to switch between them, and slot comes back to the one you used last.
+- Kid Mode is a new setting in Settings → General. It locks down slot so a kid can only pick a game and play it.
+- GBA games with a clock on the cart, like Boktai and Pokémon Ruby, Sapphire and Emerald, now read the time in your city instead of UTC.
+- Rumble works in Gambatte, for Game Boy carts with a motor like Pokémon Pinball. ([#194](https://github.com/slot-cfw/slot/issues/194))
+- ROMs with a space or a dot at the end of the name, like `Super Mario Land .gb`, are renamed at boot. Their saves, labels, favorites and collections are also renamed. These filenames were causing issues with save state folder creation and fired off the scary red banner.
+- slot.local now answers alongside the BaseOS hostname, and slot uses BaseOS's network time instead of its own. The Gamebit receipt prints the name the device answers to, and A skips the print. ([#193](https://github.com/slot-cfw/slot/issues/193))
+- The LCD3x shader is now called LCD. On 4:3 devices it draws its stripes to fit the screen, so they no longer band and shimmer at GBA's 2.67x. 3:2 devices keep LCD3x as it was.
+- A GBA game and a Game Boy game with the same name now each keep their own core, and START opens the right board for each.
+- Pikachu talks again in Pokémon Yellow, on both Gambatte and mGBA. The Game Boy pop fix in 1.14.0 had silenced his voice. ([#202](https://github.com/slot-cfw/slot/issues/202))
+- The no-network notice fits on screen. ([#195](https://github.com/slot-cfw/slot/issues/195))
+
 ## [1.14.0](https://github.com/slot-cfw/slot/releases/tag/v1.14.0)
 
 - Gambatte is a new core for Game Boy and Game Boy Color, and the default on new cards. Existing cards stay on mGBA. Press START on a Game Boy cart to switch cores. Saves and the clock carry over between them. ([#184](https://github.com/slot-cfw/slot/issues/184))
@@ -119,8 +133,8 @@
 - Game Boy stretch now properly only widens the picture.
 - The backlight steps follow a curve, so the low-end goes dimmer. ([#54](https://github.com/slot-cfw/slot/issues/54), @flo333)
 - Holding a direction repeats it in menus, the clock and the shelf letter jump, but never in play.
-- RG34XX uses its own chords for brightness and the menu display. ([#85](https://github.com/slot-cfw/slot/issues/85), @paulocoe-creator)
-- The RG28XX picture is turned the way BaseOS says.
+- RG 34XX uses its own chords for brightness and the menu display. ([#85](https://github.com/slot-cfw/slot/issues/85), @paulocoe-creator)
+- The RG 28XX picture is turned the way BaseOS says.
 - Restart no longer hangs on a black screen: the WiFi driver is unloaded first.
 - Muted play keeps its frame rate. ([#51](https://github.com/slot-cfw/slot/issues/51), @flo333)
 - Fast-forward no longer stutters on frames that take longer than average. ([#70](https://github.com/slot-cfw/slot/issues/70))
@@ -130,7 +144,7 @@
 
 ## [1.6.0](https://github.com/slot-cfw/slot/releases/tag/v1.6.0)
 
-- Runs on the RG28XX: its panel is mounted portrait, so slot turns the picture onto it. ([#35](https://github.com/slot-cfw/slot/issues/35), @GamerAnim)
+- Runs on the RG 28XX: its panel is mounted portrait, so slot turns the picture onto it. ([#35](https://github.com/slot-cfw/slot/issues/35), @GamerAnim)
 - Pokémon Pinball: Ruby & Sapphire rumble. mGBA now sees the game's Game Boy Player check. You still need to turn rumble on in game settings. ([#25](https://github.com/slot-cfw/slot/issues/25))
 - A red alarm shows when the SD card turns read-only or a save fails to write.
 - A new shortcut for mute: SELECT + VOL+ / VOL-. The 34XX has a fake volume wheel so VOL+ + VOL- isn't possible. ([#39](https://github.com/slot-cfw/slot/issues/39))
@@ -144,13 +158,13 @@
 - The BaseOS startup sound no longer leaves slot silent. ([#20](https://github.com/slot-cfw/slot/issues/20))
 - A user defined `Config/bootlogo.bmp` will take precedence over the shipped one. ([#30](https://github.com/slot-cfw/slot/issues/30))
 - Cart shell, core and video mode files are now `.txt` instead of `.ini`, so Chrome on Windows opens them. slot renames them on first boot. ([#15](https://github.com/slot-cfw/slot/issues/15))
-- The grid shader's lines stay even on the RG34XX and at fractional scales, and the dot shader no longer darkens a white screen as much. ([#26](https://github.com/slot-cfw/slot/issues/26), [#36](https://github.com/slot-cfw/slot/issues/36))
+- The grid shader's lines stay even on the RG 34XX and at fractional scales, and the dot shader no longer darkens a white screen as much. ([#26](https://github.com/slot-cfw/slot/issues/26), [#36](https://github.com/slot-cfw/slot/issues/36))
 
 ## [1.5.0](https://github.com/slot-cfw/slot/releases/tag/v1.5.0)
 
 - Rumble regression fixed.
 - The boot logo is built to the size of the one BaseOS installed, so it fits every panel instead of only 720x480.
-- Runs on the RG35XXSP: the picture fills the 4:3 screen's width and a GBA SP bezel sits underneath while a game plays.
+- Runs on the RG 35XXSP: the picture fills the 4:3 screen's width and a GBA SP bezel sits underneath while a game plays.
 - Screen shaders chosen per platform: Off, LCD3x, Grid or Dot for GBA, and Off, Grid or Simpletex for Game Boy and Game Boy Color.
 - SELECT + B / A in game steps back and forth through the screen shaders. A game's own soft reset that holds SELECT with A or B no longer reaches it; hold A on the carousel to start a game fresh instead.
 - New settings: auto save on eject, turbo buttons and rewind can each be switched off.

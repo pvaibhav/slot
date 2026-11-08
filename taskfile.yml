@@ -266,6 +266,13 @@ tasks:
       - bun install --frozen-lockfile
       - bun run build
 
+  site:
+    desc: Serve the docs site locally with live reload, ADDR defaults to localhost:8000
+    vars:
+      ADDR: '{{.ADDR | default "localhost:8000"}}'
+    cmds:
+      - uv tool run --python 3.13 --from zensical==0.0.71 zensical serve -f site/zensical.toml -a {{.ADDR}}
+
   dist:
     desc: Build the copy-to-SD2 tree, OUT defaults to ./dist
     deps: [ core, release, web ]

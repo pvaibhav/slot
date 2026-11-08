@@ -1,16 +1,16 @@
 (() => {
   const DEVICES = [
-    { id: "rg35xxplus", name: "RG35XX Plus / RG35XX 2024", width: 640, height: 480, rotation: 0 },
-    { id: "rg35xxh", name: "RG35XX H", width: 640, height: 480, rotation: 0 },
-    { id: "rg35xxpro", name: "RG35XX Pro", width: 640, height: 480, rotation: 0 },
-    { id: "rg35xxsp", name: "RG35XX SP", width: 640, height: 480, rotation: 0 },
-    { id: "rg40xxh", name: "RG40XX H", width: 640, height: 480, rotation: 0 },
-    { id: "rg40xxv", name: "RG40XX V", width: 640, height: 480, rotation: 0 },
+    { id: "rg35xxplus", name: "RG 35XX Plus / RG 35XX 2024", width: 640, height: 480, rotation: 0 },
+    { id: "rg35xxh", name: "RG 35XX-H", width: 640, height: 480, rotation: 0 },
+    { id: "rg35xxpro", name: "RG 35XX Pro", width: 640, height: 480, rotation: 0 },
+    { id: "rg35xxsp", name: "RG 35XXSP", width: 640, height: 480, rotation: 0 },
+    { id: "rg40xxh", name: "RG 40XX-H", width: 640, height: 480, rotation: 0 },
+    { id: "rg40xxv", name: "RG 40XX-V", width: 640, height: 480, rotation: 0 },
     { id: "rgsp", name: "RG SP", width: 720, height: 480, rotation: 0 },
-    { id: "rg34xx", name: "RG34XX", width: 720, height: 480, rotation: 0 },
-    { id: "rg34xxsp", name: "RG34XX SP", width: 720, height: 480, rotation: 0 },
+    { id: "rg34xx", name: "RG 34XX", width: 720, height: 480, rotation: 0 },
+    { id: "rg34xxsp", name: "RG 34XXSP", width: 720, height: 480, rotation: 0 },
     { id: "rgcubexx", name: "RG CubeXX", width: 720, height: 720, rotation: 0 },
-    { id: "rg28xx", name: "RG28XX", width: 640, height: 480, rotation: 90 },
+    { id: "rg28xx", name: "RG 28XX", width: 640, height: 480, rotation: 90 },
   ];
   const FALLBACK = "rgsp";
   const SMALLEST = 8;

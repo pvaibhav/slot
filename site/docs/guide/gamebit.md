@@ -56,7 +56,7 @@ Each platform has a Bezels tab for uploading and removing bezels. See [Bezels](c
 
 ## BIOS
 
-Each platform has a BIOS tab. BIOS files are optional. See [BIOS](customizing.md#bios).
+Each platform has a BIOS tab. BIOS files are optional. See [BIOS](playing.md#bios).
 
 ## Boot logo
 

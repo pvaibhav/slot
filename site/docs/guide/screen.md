@@ -48,7 +48,7 @@ The choices depend on your screen's shape. slot leaves out any that would look t
 
 ### 4:3 Devices (640×480)
 
-RG35XXSP, RG35XX Plus, RG35XX-H and RG28XX
+RG 35XXSP, RG 35XX Plus, RG 35XX-H and RG 28XX
 
 **Game Boy and Game Boy Color**
 
@@ -68,7 +68,7 @@ RG35XXSP, RG35XX Plus, RG35XX-H and RG28XX
 
 ### 3:2 Devices (720×480)
 
-RG SP, RG34XX and RG34XXSP
+RG SP, RG 34XX and RG 34XXSP
 
 | Scale   | Game Boy and Game Boy Color                                                             |
 |---------|-----------------------------------------------------------------------------------------|

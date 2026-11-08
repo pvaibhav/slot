@@ -30,20 +30,23 @@ Tap <kbd>MENU</kbd> while playing. The game pauses behind it.
 
 ## Picking an emulator
 
-GBA games can use [mGBA](https://mgba.io) or [gpSP](https://github.com/libretro/gpsp). Game Boy and Game Boy Color games always use mGBA.
+GBA games can use [mGBA](https://mgba.io) or [gpSP](https://github.com/libretro/gpsp). Game Boy and Game Boy Color games can use [Gambatte](https://github.com/libretro/gambatte-libretro) or mGBA. Gambatte is the default on new cards.
 
-On the shelf, press <kbd>START</kbd> on a GBA cart. It opens to show the circuit board with a chip in one of two sockets. <kbd>Left</kbd> puts it on mGBA, <kbd>Right</kbd> on gpSP. <kbd>A</kbd> saves your choice, <kbd>B</kbd> backs out.
+On the shelf, press <kbd>START</kbd> on a GBA, GBC or GB cart. It opens to show the circuit board with a chip in one of two sockets. <kbd>Left</kbd> puts it on mGBA, <kbd>Right</kbd> on gpSP or gambatte (GB/C Only). <kbd>A</kbd> saves your choice, <kbd>B</kbd> backs out.
 
-slot remembers the choice per game. mGBA is the default.
+slot remembers the choice per game.
 
 Which should you use?
 
 - mGBA is more accurate but at the expense of using more resources.
 - gpSP is faster but less accurate. It's also the one that does the wireless adapter for Pokémon trading. See [Linking Up](linking.md).
+- gambatte is extremely popular and accurate for GB/C. Link play is currently not supported in gambatte.
 
 !!! warning "Save states belong to a core"
 
-    States made on mGBA don't show up on gpSP and the other way around. Your battery save is shared, so in-game saves carry over.
+    If you switch cores, you won't be able to use your existing save states. They will be avaliable when you switch back. 
+    
+    Your battery save is shared, so in-game saves carry over.
 
 ## Battery saves
 
@@ -66,3 +69,14 @@ To manually pick the sun level yourself, bind Sunlight Up and Sunlight Down in [
 !!! important "gpSP does not have solar sensor support"
 
     Be sure to run the Boktai games with the mGBA core.
+
+## BIOS
+
+slot doesn't need any BIOS files. If you have your own, drop them into `BIOS/` and you'll get the real boot animation
+when a game starts.
+
+- `gba_bios.bin`
+- `gbc_bios.bin`
+- `gb_bios.bin`
+
+If you link with mGBA, both devices need the same BIOS setup. See [Linking Up](linking.md).

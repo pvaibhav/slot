@@ -50,21 +50,22 @@ Random picks one at boot.
 
 Shelf changes the wallpaper as you move between shelves. Name a file after each shelf:
 
-| Shelf                  | File                                |
-|------------------------|-------------------------------------|
-| Game Boy               | `GB.png`                            |
-| Game Boy Color         | `GBC.png`                           |
-| Game Boy Advance       | `GBA.png`                           |
-| Game Boy Advance Video | `GBAV.png`, otherwise `GBA.png`     |
-| Favorites              | `Favorites.png`                     |
-| Recents                | `Recents.png`                       |
+| Shelf                  | File                            |
+|------------------------|---------------------------------|
+| Game Boy               | `GB.png`                        |
+| Game Boy Color         | `GBC.png`                       |
+| Game Boy Advance       | `GBA.png`                       |
+| Game Boy Advance Video | `GBAV.png`, otherwise `GBA.png` |
+| Favorites              | `Favorites.png`                 |
+| Recents                | `Recents.png`                   |
+| All Games (Kid Mode)   | `ALL.png`                       |
 
 A shelf without a file shows the default wallpaper.
 
-| Device                                  | Suggested Size |
-|-----------------------------------------|----------------|
-| RG SP, RG34XX, RG34XXSP                 | 720×480        |
-| RG35XXSP, RG35XX Plus, RG35XX-H, RG28XX | 640×480        |
+| Device                                      | Suggested Size |
+|---------------------------------------------|----------------|
+| RG SP, RG 34XX, RG 34XXSP                   | 720×480        |
+| RG 35XXSP, RG 35XX Plus, RG 35XX-H, RG 28XX | 640×480        |
 
 Other sizes are scaled to fill the screen and cropped from the center.
 
@@ -79,24 +80,26 @@ The bezel is drawn over the game, so it needs a transparent hole where the game 
 
 Where this hole is located in the bezel image depends on the Scale you have selected.
 
-A bezel without a suffix will appear in the list regardless of the currently selected Scale. If the bezel filename
+A bezel without a suffix will appear in the list regardless of the selected Scale. If the bezel filename
 ends in one of the following suffixes, it will only appear when that Scale is selected.
 
-| Scale     | Suffix      | Where the game goes                                |
-|-----------|-------------|----------------------------------------------------|
-| SP Screen | `_spscreen` | In the middle, like a GBA SP shows Game Boy |
-| Integer   | `_integer`  | The biggest whole-number size, in the middle       |
-| Fit       | `_fit`      | As big as the whole picture fits                   |
+| Scale     | Suffix      | Where the game goes                          |
+|-----------|-------------|----------------------------------------------|
+| SP Screen | `_spscreen` | In the middle, like a GBA SP shows Game Boy  |
+| Integer   | `_integer`  | The biggest whole-number size, in the middle |
+| Fit       | `_fit`      | As big as the whole picture fits             |
 
 !!! info "Why would I use SP Screen over Integer?"
 
     SP Screen allows you to use a bottom bezel with Game Boy and Game Boy Color games.
 
-    Paired with the bundled AGS-102 bezel, it makes your 4:3 device look like a GBA SP.
+    Paired with the bundled AGS-102 bezel, it makes your 4:3 device look like an OG GBA SP.
 
 ## Bezel templates
 
-Each template is the screen in grey with a hole where the game goes. Paint over the grey and keep the hole clear.
+Each template is the screen in gray with a hole where the game goes. Paint over the gray and keep the hole clear.
+
+Make your bezel the same size as your screen. slot scales any other size to fill the screen and crops what hangs over.
 
 | Screen        | Game Boy and Game Boy Color                                                                                                                           | GBA                                                                                              |
 |---------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------|
@@ -118,24 +121,13 @@ slot copies the file as it is, without resizing it.
 
 Boot logos must be a 24-bit, uncompressed `.bmp` at your device's screen size:
 
-| Device                                                                         | Size                                 |
-|--------------------------------------------------------------------------------|--------------------------------------|
-| RG35XX Plus, RG35XX 2024, RG35XX H, RG35XX Pro, RG35XX SP, RG40XX H, RG40XX V | 640×480                              |
-| RG SP, RG34XX, RG34XX SP                                                       | 720×480                              |
-| RG CubeXX                                                                      | 720×720                              |
-| RG28XX                                                                         | 480×640, turned 90° counterclockwise |
+| Device                                                                              | Size                                 |
+|-------------------------------------------------------------------------------------|--------------------------------------|
+| RG 35XX Plus, RG 35XX 2024, RG 35XX-H, RG 35XX Pro, RG 35XXSP, RG 40XX-H, RG 40XX-V | 640×480                              |
+| RG SP, RG 34XX, RG 34XXSP                                                           | 720×480                              |
+| RG CubeXX                                                                           | 720×720                              |
+| RG 28XX                                                                             | 480×640, turned 90° counterclockwise |
 
 A smaller image is centred on black. A larger one, a 32-bit one or a compressed one won't show, and you'll get no logo at boot.
 
 Delete `Config/bootlogo.bmp` to go back to the slot logo.
-
-## BIOS
-
-slot doesn't need any BIOS files. If you have your own, drop them into `BIOS/` and you'll get the real boot animation
-when a game starts.
-
-- `gba_bios.bin`
-- `gbc_bios.bin`
-- `gb_bios.bin`
-
-If you link with mGBA, both devices need the same BIOS setup. See [Linking Up](linking.md).
