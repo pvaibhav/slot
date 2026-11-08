@@ -487,6 +487,7 @@ enum UpdateState {
     Cancelling(Release, u64),
     Closing(Release),
     Failed(UpdateFail),
+    CheckFailed,
     Notice(NetNotice),
 }
 
@@ -12425,6 +12426,10 @@ impl App {
                 "slot is up to date".into(),
                 format!("{running} is the latest version."),
             ),
+            UpdateState::CheckFailed => (
+                "Could not fetch update info".into(),
+                "Try again later.".into(),
+            ),
             UpdateState::Notice(NetNotice::Password) => ("Invalid Password".into(), String::new()),
             UpdateState::Notice(NetNotice::RommPort) => ("Invalid Port".into(), String::new()),
             UpdateState::Notice(NetNotice::NoNetwork) => (
@@ -12568,7 +12573,10 @@ impl App {
                     self.set_update(Some(UpdateState::UpToDate))
                 }
                 (Some(UpdateState::Checking), UpdateEvent::Failed(f)) => {
-                    self.set_update(Some(UpdateState::Failed(f)))
+                    self.set_update(Some(match f {
+                        UpdateFail::Clock | UpdateFail::NoWifi => UpdateState::Failed(f),
+                        _ => UpdateState::CheckFailed,
+                    }))
                 }
                 _ => {}
             }
@@ -12914,7 +12922,12 @@ impl App {
                 self.draw_side_legend(cancel, false, self.legend_y(), out);
                 self.draw_side_legend(install, true, self.legend_y(), out);
             }
-            Some(UpdateState::UpToDate | UpdateState::Failed(_) | UpdateState::Notice(_)) => {
+            Some(
+                UpdateState::UpToDate
+                | UpdateState::Failed(_)
+                | UpdateState::CheckFailed
+                | UpdateState::Notice(_),
+            ) => {
                 self.draw_side_legend(back, false, self.legend_y(), out)
             }
             _ => {}

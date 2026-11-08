@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- When Check for Updates cannot reach the update server, it now says Could not fetch update info and Try again later.
+
 ## [1.15.1](https://github.com/slot-cfw/slot/releases/tag/v1.15.1)
 
 - With Game Titles on, the game's title now fades out instead of staying on top when editing a collection.

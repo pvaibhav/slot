@@ -305,11 +305,47 @@ fn every_failure_has_its_own_words() {
     for (fail, title, detail) in want {
         let (_d, mut a, jobs) = on_updates();
         press(&mut a, Btn::A);
+        jobs.send(&mut a, UpdateEvent::Available(vec![release()]));
+        press(&mut a, Btn::A);
         jobs.send(&mut a, UpdateEvent::Failed(fail.clone()));
         assert_eq!(text(&a), Some((title.into(), detail.into())), "{fail:?}");
         press(&mut a, Btn::B);
         assert!(!a.update_shown());
     }
+}
+
+#[test]
+fn a_check_that_cannot_reach_the_server_says_to_try_again_later() {
+    for fail in [
+        UpdateFail::Offline,
+        UpdateFail::Download,
+        UpdateFail::Bad,
+        UpdateFail::Checksum,
+    ] {
+        let (_d, mut a, jobs) = on_updates();
+        press(&mut a, Btn::A);
+        jobs.send(&mut a, UpdateEvent::Failed(fail.clone()));
+        assert_eq!(
+            text(&a),
+            Some((
+                "Could not fetch update info".into(),
+                "Try again later.".into()
+            )),
+            "{fail:?}"
+        );
+        press(&mut a, Btn::B);
+        assert!(!a.update_shown());
+    }
+    let (_d, mut a, jobs) = on_updates();
+    press(&mut a, Btn::A);
+    jobs.send(&mut a, UpdateEvent::Failed(UpdateFail::NoWifi));
+    assert_eq!(
+        text(&a),
+        Some((
+            "Could not join Wi-Fi".into(),
+            "Check Wi-Fi in the General menu.".into()
+        ))
+    );
 }
 
 #[test]
