@@ -165,6 +165,48 @@ impl WallpaperTint {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
+pub enum AutoLoad {
+    #[default]
+    Always,
+    PowerOn,
+    Never,
+}
+
+impl AutoLoad {
+    pub const ALL: [AutoLoad; 3] = [AutoLoad::Always, AutoLoad::PowerOn, AutoLoad::Never];
+
+    pub fn key(self) -> &'static str {
+        match self {
+            AutoLoad::Always => "1",
+            AutoLoad::PowerOn => "power",
+            AutoLoad::Never => "0",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<AutoLoad> {
+        AutoLoad::ALL.into_iter().find(|a| a.key() == value)
+    }
+
+    pub fn on_insert(self) -> bool {
+        self == AutoLoad::Always
+    }
+
+    pub fn at_power_on(self) -> bool {
+        self != AutoLoad::Never
+    }
+
+    pub fn step(self, right: bool) -> AutoLoad {
+        let n = AutoLoad::ALL.len();
+        let at = AutoLoad::ALL.iter().position(|a| *a == self).unwrap_or(0);
+        AutoLoad::ALL[if right {
+            (at + 1) % n
+        } else {
+            (at + n - 1) % n
+        }]
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub enum WallpaperPick {
     None,
@@ -417,7 +459,7 @@ pub struct SlotState {
     pub shader_gba: Shader,
     pub shader_gb: Shader,
     pub shader_gbc: Shader,
-    pub auto_load: bool,
+    pub auto_load: AutoLoad,
     pub eject_save: bool,
     pub turbo: bool,
     pub rewind: bool,
@@ -604,7 +646,7 @@ impl Default for SlotState {
             shader_gba: Shader::Grid,
             shader_gb: Shader::Simpletex,
             shader_gbc: Shader::Simpletex,
-            auto_load: true,
+            auto_load: AutoLoad::Always,
             eject_save: true,
             turbo: true,
             rewind: true,
@@ -740,7 +782,7 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
     }
     text.push_str(&format!("gb_core={}\n", s.gb_core.as_str()));
     text.push_str(&format!("left_stick_dpad={}\n", s.left_stick_dpad as u8));
-    text.push_str(&format!("auto_load={}\n", s.auto_load as u8));
+    text.push_str(&format!("auto_load={}\n", s.auto_load.key()));
     if let Some(min) = s.lid_off_min {
         text.push_str(&format!("lid_off_min={min}\n"));
     }
@@ -876,7 +918,7 @@ fn parse(text: &str) -> Option<SlotState> {
             "colour_correction_gb" => colour_correction_gb = flag(value),
             "colour_correction_gbc" => colour_correction_gbc = flag(value),
             "shader_gba" => shader_gba = Shader::parse(value).filter(|s| Shader::GBA.contains(s)),
-            "auto_load" => auto_load = flag(value),
+            "auto_load" => auto_load = AutoLoad::parse(value),
             "eject_save" => eject_save = flag(value),
             "turbo" => turbo = flag(value),
             "rewind" => rewind = flag(value),

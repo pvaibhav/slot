@@ -7,7 +7,7 @@ use slot_input::{Action, Btn, RawEvent, MENU_DOUBLE_TAP_MS, MUTE_CHORD_MS};
 use slot_power::{Battery, Charge, LedState, LidPolicy, Power, RepairResult};
 use slot_retro::LinkChannel;
 use slot_store::{
-    format_stamp, parse_stamp, read_slot_state, scan, write_slot_state, BezelPick, Blending, Cart,
+    format_stamp, parse_stamp, read_slot_state, scan, write_slot_state, AutoLoad, BezelPick, Blending, Cart,
     Collection, Core, GbColors, KidMode, Platform, Recent, Scale, Shader, ShelfMode, ShotDir, ShotEntry,
     SlotState, StateEntry,
     StateRing, Stretch, WallpaperPick, WallpaperTint, BLUE_LIGHT_MAX, BRIGHTNESS_MAX, CONTRAST_MAX,
@@ -1307,7 +1307,7 @@ impl App {
             Some((at, i)) => {
                 self.shelf_at = at;
                 self.shelf_mut().select(i);
-                self.insert(!self.state.auto_load);
+                self.insert(!self.state.auto_load.at_power_on());
                 if let Phase::Inserting { resumed, t, .. } = &mut self.phase {
                     *resumed = true;
                     *t = INSERT_S;
@@ -2764,7 +2764,11 @@ impl App {
             QuickRow::GbcShader => Some(shader_value(self.state.shader_gbc)),
             QuickRow::Rumble => Some(QuickValue::flag(self.state.rumble)),
             QuickRow::LeftStick => Some(QuickValue::flag(self.state.left_stick_dpad)),
-            QuickRow::AutoLoad => Some(QuickValue::flag(self.state.auto_load)),
+            QuickRow::AutoLoad => Some(match self.state.auto_load {
+                AutoLoad::Always => QuickValue::Always,
+                AutoLoad::PowerOn => QuickValue::PowerOn,
+                AutoLoad::Never => QuickValue::Never,
+            }),
             QuickRow::EjectSave => Some(QuickValue::flag(self.state.eject_save)),
             QuickRow::Turbo => Some(QuickValue::flag(self.state.turbo)),
             QuickRow::Rewind => Some(QuickValue::flag(self.state.rewind)),
@@ -5185,11 +5189,11 @@ impl App {
                 Action::GbaDown(Btn::A) => self.play_held = Some(now),
                 Action::GbaUp(Btn::A) => {
                     if self.play_held.take().is_some() && !self.unwrap_seated() {
-                        self.insert(!self.state.auto_load);
+                        self.insert(!self.state.auto_load.on_insert());
                     }
                 }
                 Action::Insert if !self.unwrap_seated() => {
-                    self.insert(!self.state.auto_load);
+                    self.insert(!self.state.auto_load.on_insert());
                 }
                 _ => {}
             },
@@ -5748,7 +5752,7 @@ impl App {
             }
             QuickRow::Rumble => s.rumble = !s.rumble,
             QuickRow::LeftStick => s.left_stick_dpad = !s.left_stick_dpad,
-            QuickRow::AutoLoad => s.auto_load = !s.auto_load,
+            QuickRow::AutoLoad => s.auto_load = s.auto_load.step(right),
             QuickRow::EjectSave => s.eject_save = !s.eject_save,
             QuickRow::Turbo => s.turbo = !s.turbo,
             QuickRow::Rewind => s.rewind = !s.rewind,
@@ -9304,7 +9308,7 @@ impl App {
             return;
         }
         if self.now().saturating_sub(at) >= PLAY_HOLD_MS && !self.unwrap_seated() {
-            self.insert(!self.kid_locked() || !self.state.auto_load);
+            self.insert(!self.kid_locked() || !self.state.auto_load.on_insert());
         }
     }
 

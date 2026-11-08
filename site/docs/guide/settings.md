@@ -78,8 +78,8 @@ See [The Screen](screen.md) for what Scale, Stretch, Frame Blending, Saturation 
 | Turbo Buttons | On, Off | On | Turbo A and Turbo B |
 | Rumble | On, Off | On | For games with a rumble pak |
 | Left Stick as D-Pad | On, Off | On | Only on devices with a left stick |
-| Load State on Insert | On, Off | On | Inserting a cart picks up where you left off |
-| Save State on Eject | On, Off | On | Ejecting saves where you were |
+| Auto Load State | Always, Power On, Never | Always | Inserting a cart picks up where you left off.<br>Power On resumes only the game you powered off in |
+| Eject Save State | On, Off | On | Ejecting saves where you were |
 
 ## Controls
 

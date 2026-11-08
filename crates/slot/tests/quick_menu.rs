@@ -7,8 +7,8 @@ use common::{
 use slot::app::{App, Phase};
 use slot_input::{Action, Btn};
 use slot_store::{
-    read_slot_state, write_slot_state, Appearance, BezelPick, Blending, GbColors, GbPalette,
-    Platform, Scale, Shader, SlotState, Stretch, WallpaperPick, Zone,
+    read_slot_state, write_slot_state, Appearance, AutoLoad, BezelPick, Blending, GbColors,
+    GbPalette, Platform, Scale, Shader, SlotState, Stretch, WallpaperPick, Zone,
 };
 use slot_ui::{
     Draw, Icon, QuickMenuFaces, QuickRow, QuickValue, TexId, HINT_EDGE, MENU_PAD, MOUTH_H, OUT_H,
@@ -356,22 +356,31 @@ fn the_game_page_flips_auto_load_eject_save_turbo_and_rewind_and_saves_each() {
         let s = read_slot_state(d.path());
         (s.auto_load, s.eject_save, s.turbo, s.rewind)
     };
-    assert_eq!(card(&d), (true, true, true, true));
+    assert_eq!(card(&d), (AutoLoad::Always, true, true, true));
     press(&mut a, Btn::Right);
-    assert_eq!(card(&d), (true, true, true, false));
+    assert_eq!(card(&d), (AutoLoad::Always, true, true, false));
     assert!(!a.may_rewind(), "rewind still offered with it off");
     press(&mut a, Btn::Down);
     press(&mut a, Btn::Left);
-    assert_eq!(card(&d), (true, true, false, false));
+    assert_eq!(card(&d), (AutoLoad::Always, true, false, false));
     assert!(!a.turbo());
     press(&mut a, Btn::Down);
     press(&mut a, Btn::Down);
     assert_eq!(a.quick_menu(), Some(QuickRow::AutoLoad));
-    press(&mut a, Btn::Right);
-    assert_eq!(card(&d), (false, true, false, false));
+    for (want, value) in [
+        (AutoLoad::PowerOn, QuickValue::PowerOn),
+        (AutoLoad::Never, QuickValue::Never),
+        (AutoLoad::Always, QuickValue::Always),
+    ] {
+        press(&mut a, Btn::Right);
+        assert_eq!(card(&d), (want, true, false, false));
+        assert_eq!(a.quick_value(QuickRow::AutoLoad), Some(value));
+    }
+    press(&mut a, Btn::Left);
+    assert_eq!(card(&d).0, AutoLoad::Never);
     press(&mut a, Btn::Down);
     press(&mut a, Btn::Right);
-    assert_eq!(card(&d), (false, false, false, false));
+    assert_eq!(card(&d), (AutoLoad::Never, false, false, false));
     press(&mut a, Btn::B);
     assert_eq!(a.quick_menu(), Some(QuickRow::Game));
 }

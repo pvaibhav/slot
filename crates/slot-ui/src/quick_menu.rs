@@ -699,8 +699,8 @@ impl QuickRow {
             QuickRow::GbColourCorrection => "Color Correction",
             QuickRow::GbcColourCorrection => "Color Correction",
             QuickRow::Game => "Gameplay",
-            QuickRow::AutoLoad => "Load State on Insert",
-            QuickRow::EjectSave => "Save State on Eject",
+            QuickRow::AutoLoad => "Auto Load State",
+            QuickRow::EjectSave => "Eject Save State",
             QuickRow::Turbo => "Turbo Buttons",
             QuickRow::Rewind => "Rewind",
             QuickRow::GbPalette => "Palette",
@@ -984,10 +984,13 @@ pub enum QuickValue {
     Collections,
     OneShelf,
     Shelves,
+    Always,
+    PowerOn,
+    Never,
 }
 
 impl QuickValue {
-    pub const ALL: [QuickValue; 54] = [
+    pub const ALL: [QuickValue; 57] = [
         QuickValue::Speed1_5,
         QuickValue::Speed2,
         QuickValue::Speed3,
@@ -1042,6 +1045,9 @@ impl QuickValue {
         QuickValue::Collections,
         QuickValue::OneShelf,
         QuickValue::Shelves,
+        QuickValue::Always,
+        QuickValue::PowerOn,
+        QuickValue::Never,
     ];
 
     pub const LEVELS: [QuickValue; 16] = [
@@ -1098,6 +1104,9 @@ impl QuickValue {
             QuickValue::Collections => "Collections",
             QuickValue::OneShelf => "One Shelf",
             QuickValue::Shelves => "Shelves",
+            QuickValue::Always => "Always",
+            QuickValue::PowerOn => "Power On",
+            QuickValue::Never => "Never",
             QuickValue::Low => "25%",
             QuickValue::Medium => "45%",
             QuickValue::High => "65%",

@@ -546,6 +546,45 @@ fn the_left_stick_row_keeps_its_label_clear_of_its_value() {
 }
 
 #[test]
+fn power_on_keeps_auto_load_state_clear_of_its_value() {
+    let Ok(surface) = HeadlessSurface::new() else {
+        return;
+    };
+    let Ok(mut c) = Compositor::new(&surface) else {
+        return;
+    };
+    let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
+    clocked(d.path());
+    let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+    f.upload_faces(&mut c);
+    let mut input = Script(VecDeque::new());
+    tap(&mut f, &mut input, Btn::Menu);
+    for _ in 0..QuickRow::Game.position(&[]) {
+        tap(&mut f, &mut input, Btn::Down);
+    }
+    tap(&mut f, &mut input, Btn::A);
+    let hidden = f.app().hidden_rows();
+    for _ in 0..QuickRow::AutoLoad.position(&hidden) {
+        tap(&mut f, &mut input, Btn::Down);
+    }
+    tap(&mut f, &mut input, Btn::Right);
+    assert_eq!(f.app().quick_menu(), Some(QuickRow::AutoLoad));
+    assert_eq!(
+        f.app().quick_value(QuickRow::AutoLoad),
+        Some(slot_ui::QuickValue::PowerOn)
+    );
+    let top = quick_row_top(slot_ui::Canvas::FRAMED, QuickRow::AutoLoad, &hidden) as usize;
+    let px = composed(&mut f, &mut c, "power-on");
+    let ink = inked(&px, 40..OUT_W as usize, top);
+    assert!(!ink.is_empty(), "the Auto Load State row drew nothing");
+    let gap = ink.windows(2).map(|w| w[1] - w[0]).max().unwrap_or(0);
+    assert!(
+        gap >= 24,
+        "the label runs into the value, widest gap {gap} px"
+    );
+}
+
+#[test]
 fn a_duplicate_binding_shows_a_warning_naming_the_other_row() {
     let Ok(surface) = HeadlessSurface::new() else {
         return;
