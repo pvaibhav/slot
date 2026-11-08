@@ -24,7 +24,14 @@ jobs:
           sed -i '/bullseye-security/d' /etc/apt/sources.list
           apt-get -o Acquire::Check-Valid-Until=false update
           apt-get install -y --no-install-recommends zip unzip cmake
-          curl -fsSL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
+          # taskfile.dev/install.sh reads the latest tag from a page that now redirects, so
+          # install a pinned Task build and check it against Task's published checksum.
+          task_tgz=task_linux_arm64.tar.gz
+          curl -fsSLO "https://github.com/go-task/task/releases/download/v3.54.0/$task_tgz"
+          echo "d7189d439d4a6058e39e1b2acd7c8b27acd4856691b408f23b242e4294e1df5b  $task_tgz" \
+            | sha256sum -c -
+          tar -xzf "$task_tgz" -C /usr/local/bin task
+          rm "$task_tgz"
           curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash -s "bun-v1.2.6"
 
       - name: Build the tree
