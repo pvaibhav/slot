@@ -148,10 +148,14 @@ pub enum QuickRow {
     GbOverlay,
     GbcOverlay,
     Overlay,
+    GbaReflection,
+    GbReflection,
+    GbcReflection,
+    Reflection,
 }
 
 impl QuickRow {
-    pub const ALL: [QuickRow; 137 + cfg!(feature = "nds") as usize] = [
+    pub const ALL: [QuickRow; 141 + cfg!(feature = "nds") as usize] = [
         QuickRow::FastForward,
         QuickRow::FastForwardSound,
         QuickRow::Screen,
@@ -291,6 +295,10 @@ impl QuickRow {
         QuickRow::GbOverlay,
         QuickRow::GbcOverlay,
         QuickRow::Overlay,
+        QuickRow::GbaReflection,
+        QuickRow::GbReflection,
+        QuickRow::GbcReflection,
+        QuickRow::Reflection,
     ];
 
     pub const MAIN: [QuickRow; 6] = [
@@ -419,26 +427,28 @@ impl QuickRow {
         QuickRow::Contrast,
     ];
 
-    pub const SCREEN_GBA: [QuickRow; 6] = [
+    pub const SCREEN_GBA: [QuickRow; 7] = [
         QuickRow::GbaShader,
         QuickRow::GbaOverlay,
         QuickRow::GbaColourCorrection,
         QuickRow::GbaBlending,
         QuickRow::GbaBezel,
+        QuickRow::GbaReflection,
         QuickRow::GbaScale,
     ];
 
-    pub const SCREEN_GBC: [QuickRow; 7] = [
+    pub const SCREEN_GBC: [QuickRow; 8] = [
         QuickRow::GbcShader,
         QuickRow::GbcOverlay,
         QuickRow::GbcColourCorrection,
         QuickRow::GbcBlending,
         QuickRow::GbcBezel,
+        QuickRow::GbcReflection,
         QuickRow::GbcScale,
         QuickRow::GbcStretch,
     ];
 
-    pub const SCREEN_GB: [QuickRow; 9] = [
+    pub const SCREEN_GB: [QuickRow; 10] = [
         QuickRow::GbShader,
         QuickRow::GbModel,
         QuickRow::GbOverlay,
@@ -446,6 +456,7 @@ impl QuickRow {
         QuickRow::GbBlending,
         QuickRow::GbPalette,
         QuickRow::GbBezel,
+        QuickRow::GbReflection,
         QuickRow::GbScale,
         QuickRow::GbStretch,
     ];
@@ -482,11 +493,12 @@ impl QuickRow {
         QuickRow::PlayControls,
     ];
 
-    pub const PLAY_SCREEN: [QuickRow; 13] = [
+    pub const PLAY_SCREEN: [QuickRow; 14] = [
         QuickRow::Shader,
         QuickRow::Model,
         QuickRow::Overlay,
         QuickRow::Bezel,
+        QuickRow::Reflection,
         QuickRow::Scale,
         QuickRow::Stretch,
         QuickRow::Palette,
@@ -521,12 +533,14 @@ impl QuickRow {
             | QuickRow::GbaColourCorrection
             | QuickRow::GbaBlending
             | QuickRow::GbaBezel
+            | QuickRow::GbaReflection
             | QuickRow::GbaScale => &QuickRow::SCREEN_GBA,
             QuickRow::GbcShader
             | QuickRow::GbcOverlay
             | QuickRow::GbcColourCorrection
             | QuickRow::GbcBlending
             | QuickRow::GbcBezel
+            | QuickRow::GbcReflection
             | QuickRow::GbcScale
             | QuickRow::GbcStretch => &QuickRow::SCREEN_GBC,
             QuickRow::GbShader
@@ -536,6 +550,7 @@ impl QuickRow {
             | QuickRow::GbBlending
             | QuickRow::GbPalette
             | QuickRow::GbBezel
+            | QuickRow::GbReflection
             | QuickRow::GbScale
             | QuickRow::GbStretch => &QuickRow::SCREEN_GB,
             QuickRow::FastForward
@@ -599,6 +614,7 @@ impl QuickRow {
             | QuickRow::Palette
             | QuickRow::Bezel
             | QuickRow::Overlay
+            | QuickRow::Reflection
             | QuickRow::Scale
             | QuickRow::Stretch
             | QuickRow::Blending => &QuickRow::PLAY_SCREEN,
@@ -821,6 +837,10 @@ impl QuickRow {
             | QuickRow::GbOverlay
             | QuickRow::GbcOverlay
             | QuickRow::Overlay => "Overlay",
+            QuickRow::GbaReflection
+            | QuickRow::GbReflection
+            | QuickRow::GbcReflection
+            | QuickRow::Reflection => "Reflection",
         }
     }
 

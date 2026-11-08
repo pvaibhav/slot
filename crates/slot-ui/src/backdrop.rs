@@ -92,6 +92,32 @@ pub fn default_game_bezel_face(colour: bool, kind: BezelArt, w: u32, h: u32) -> 
     }
 }
 
+/// Takes the glass's reflection out of Authentic's own bezel art and keeps its shade. Over
+/// the screen the art is the white sheen laid on the black shade, so a pixel lets through
+/// `(1 - shade)(1 - sheen)` of the screen and adds `sheen` of white: the sheen is the white
+/// it adds, and the shade what is left of the light it holds back. The lens's lip, just
+/// inside the solid bezel, is left as drawn.
+pub fn clear_glass_reflection(rgba: &mut [u8], w: u32, h: u32) {
+    let (w, h) = (w as usize, h as usize);
+    if rgba.len() < w * h * 4 {
+        return;
+    }
+    let solid: Vec<bool> = rgba.chunks_exact(4).map(|px| px[3] == 255).collect();
+    let near_solid = |x: usize, y: usize| {
+        (y.saturating_sub(2)..(y + 3).min(h))
+            .any(|y| (x.saturating_sub(2)..(x + 3).min(w)).any(|x| solid[y * w + x]))
+    };
+    for (i, px) in rgba.chunks_exact_mut(4).enumerate() {
+        if px[3] == 0 || solid[i] || near_solid(i % w, i / w) {
+            continue;
+        }
+        let a = px[3] as f32 / 255.0;
+        let sheen = px[..3].iter().map(|&c| c as f32).sum::<f32>() / (3.0 * 255.0) * a;
+        let shade = (1.0 - (1.0 - a) / (1.0 - sheen).max(1e-3)).max(0.0);
+        px.copy_from_slice(&[0, 0, 0, (shade * 255.0).round() as u8]);
+    }
+}
+
 /// How dark the bezel's shadow falls on the screen under it, where it is deepest.
 const BEZEL_SHADOW: f32 = 0.6;
 

@@ -1375,6 +1375,7 @@ fn the_game_boy_page_steps_the_palette_from_auto() {
             QuickRow::GbBlending,
             QuickRow::GbPalette,
             QuickRow::GbBezel,
+            QuickRow::GbReflection,
             QuickRow::GbScale,
             QuickRow::GbStretch,
         ]

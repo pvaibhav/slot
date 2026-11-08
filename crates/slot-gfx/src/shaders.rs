@@ -80,7 +80,7 @@ uniform float u_grain;
 uniform vec4 u_lcd;
 uniform vec4 u_ink;
 uniform vec3 u_glass;
-uniform float u_sheen;
+uniform vec2 u_sheen;
 varying vec2 v_uv;
 const vec3 offsets = vec3(3.141592654) * vec3(1.0 / 2.0, 1.0 / 2.0 - 2.0 / 3.0, 1.0 / 2.0 - 4.0 / 3.0);
 const vec3 luma_coeff = vec3(0.2126, 0.7152, 0.0722);
@@ -170,7 +170,7 @@ void main() {
         // top right, and the shade of the bezel toward the bottom.
         float sheen = 0.19 * max(v_uv.x - 0.14 - 0.87 * v_uv.y, 0.0);
         float shade = max(v_uv.y - 0.55 - 0.05 * v_uv.x, 0.0) * (0.44 - 0.11 * v_uv.x);
-        c = mix(c, vec3(1.0), sheen * u_sheen) * (1.0 - shade * u_sheen);
+        c = mix(c, vec3(1.0), sheen * u_sheen.x) * (1.0 - shade * u_sheen.y);
     } else if (!inside) {
         // Past the picture, the source shows as it is.
     } else if (u_mode > 6.5) {

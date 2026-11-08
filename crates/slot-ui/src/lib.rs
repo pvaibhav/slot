@@ -49,7 +49,7 @@ mod toast;
 
 pub use art::decode as decode_png;
 pub use backdrop::{
-    bezel_face, blur_background, blur_background_at, cast_screen_shadow, default_background,
+    bezel_face, blur_background, blur_background_at, cast_screen_shadow, clear_glass_reflection, default_background,
     default_background_at, default_game_bezel_face, draw_backdrop, draw_ground, game_bezel_face,
     reference_ground_covers, wallpaper_face, BezelArt,
 };

@@ -107,6 +107,7 @@ fn screen_shows_the_palette_only_when_palettes_are_live() {
             &[
                 QuickRow::Palette,
                 QuickRow::Model,
+                QuickRow::Reflection,
                 QuickRow::Bezel,
                 QuickRow::Overlay,
                 QuickRow::Scale,
@@ -123,6 +124,7 @@ fn screen_shows_the_palette_only_when_palettes_are_live() {
         [
             &[
                 QuickRow::Model,
+                QuickRow::Reflection,
                 QuickRow::Bezel,
                 QuickRow::Overlay,
                 QuickRow::Scale,
@@ -938,4 +940,31 @@ fn the_cheats_page_wraps_and_menu_closes_it_into_the_game() {
     a.apply(Action::QuickMenu);
     assert_eq!(a.in_game_menu(), None);
     assert!(matches!(a.phase(), Phase::Playing { .. }));
+}
+
+#[test]
+fn reflection_shows_only_under_authentic_and_turns_off_the_running_consoles_glass() {
+    let (d, mut a) = playing();
+    assert!(a.in_game_hidden().contains(&QuickRow::Reflection));
+    for _ in 0..8 {
+        if a.screen_shader() == Shader::Authentic {
+            break;
+        }
+        a.apply(Action::ShaderNext);
+    }
+    assert_eq!(a.screen_shader(), Shader::Authentic);
+    assert!(!a.in_game_hidden().contains(&QuickRow::Reflection));
+    assert!(!a.hidden_rows().contains(&QuickRow::GbaReflection));
+    assert!(a.hidden_rows().contains(&QuickRow::GbReflection));
+
+    go_to(&mut a, QuickRow::Reflection);
+    assert_eq!(a.quick_value(QuickRow::Reflection), Some(QuickValue::On));
+    press(&mut a, Btn::Right);
+    assert_eq!(a.quick_value(QuickRow::Reflection), Some(QuickValue::Off));
+    assert!(!a.reflection(Platform::Gba));
+    assert!(
+        a.reflection(Platform::Gb),
+        "another console's glass changed"
+    );
+    assert!(!slot_store::read_slot_state(d.path()).reflection_gba);
 }

@@ -508,6 +508,10 @@ pub struct SlotState {
     pub bezel_gba: BezelPick,
     pub bezel_gb: BezelPick,
     pub bezel_gbc: BezelPick,
+    /// Whether Authentic lays the glass's reflection over each console's screen.
+    pub reflection_gba: bool,
+    pub reflection_gb: bool,
+    pub reflection_gbc: bool,
     pub overlay_gba: Option<String>,
     pub overlay_gb: Option<String>,
     pub overlay_gbc: Option<String>,
@@ -710,6 +714,9 @@ impl Default for SlotState {
             bezel_gba: BezelPick::Ags102,
             bezel_gb: BezelPick::Ags102,
             bezel_gbc: BezelPick::Ags102,
+            reflection_gba: true,
+            reflection_gb: true,
+            reflection_gbc: true,
             overlay_gba: None,
             overlay_gb: None,
             overlay_gbc: None,
@@ -837,6 +844,9 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
     text.push_str(&format!("bezel_gba={}\n", s.bezel_gba.key()));
     text.push_str(&format!("bezel_gb={}\n", s.bezel_gb.key()));
     text.push_str(&format!("bezel_gbc={}\n", s.bezel_gbc.key()));
+    text.push_str(&format!("reflection_gba={}\n", s.reflection_gba as u8));
+    text.push_str(&format!("reflection_gb={}\n", s.reflection_gb as u8));
+    text.push_str(&format!("reflection_gbc={}\n", s.reflection_gbc as u8));
     text.push_str(&format!(
         "overlay_gba={}\n",
         s.overlay_gba.as_deref().unwrap_or_default()
@@ -934,6 +944,9 @@ fn parse(text: &str) -> Option<SlotState> {
     let mut bezel_gba = None;
     let mut bezel_gb = None;
     let mut bezel_gbc = None;
+    let mut reflection_gba = None;
+    let mut reflection_gb = None;
+    let mut reflection_gbc = None;
     let mut overlay_gba = None;
     let mut overlay_gb = None;
     let mut overlay_gbc = None;
@@ -1006,6 +1019,9 @@ fn parse(text: &str) -> Option<SlotState> {
             "bezel_gba" => bezel_gba = Some(BezelPick::parse(value)),
             "bezel_gb" => bezel_gb = Some(BezelPick::parse(value)),
             "bezel_gbc" => bezel_gbc = Some(BezelPick::parse(value)),
+            "reflection_gba" => reflection_gba = flag(value),
+            "reflection_gb" => reflection_gb = flag(value),
+            "reflection_gbc" => reflection_gbc = flag(value),
             "overlay_gba" => overlay_gba = overlay_name(value),
             "overlay_gb" => overlay_gb = overlay_name(value),
             "overlay_gbc" => overlay_gbc = overlay_name(value),
@@ -1089,6 +1105,9 @@ fn parse(text: &str) -> Option<SlotState> {
         bezel_gba: bezel_gba.unwrap_or(fallback.bezel_gba),
         bezel_gb: bezel_gb.unwrap_or(fallback.bezel_gb),
         bezel_gbc: bezel_gbc.unwrap_or(fallback.bezel_gbc),
+        reflection_gba: reflection_gba.unwrap_or(fallback.reflection_gba),
+        reflection_gb: reflection_gb.unwrap_or(fallback.reflection_gb),
+        reflection_gbc: reflection_gbc.unwrap_or(fallback.reflection_gbc),
         overlay_gba,
         overlay_gb,
         overlay_gbc,

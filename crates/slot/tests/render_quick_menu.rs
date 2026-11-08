@@ -299,6 +299,7 @@ fn the_game_boy_page_shows_the_palette_by_name() {
         QuickRow::GbaOverlay,
         QuickRow::GbOverlay,
         QuickRow::GbcOverlay,
+        QuickRow::GbReflection,
     ];
     for _ in 0..QuickRow::GbPalette.position(&hidden) {
         tap(&mut f, &mut input, Btn::Down);

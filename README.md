@@ -36,6 +36,7 @@ notes are in the [changelog](CHANGELOG.md).
   and glass, with shadows from the dots and bezel. Game Boy offers Game Boy, Pocket, and
   Light models. The default bezel is cut from Harlequin's dmg-3x art, with its glass and
   power light. Pick **Authentic** under **Settings > Screen > your system > Shader**.
+  **Reflection** in the same menu turns the glass's reflection off and keeps its shade.
   The shaders are also [available for NextUI](https://github.com/pvaibhav/authentic-shaders).
 - ~~**LCD ghosting / interframe blending.**~~ Included upstream since **v1.10.0**
   as **Frame Blending** under Settings > Screen.

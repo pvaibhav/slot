@@ -128,6 +128,7 @@ fn the_rows_run_in_the_order_the_user_chose() {
             "Color Correction",
             "Frame Blending",
             "Bezel",
+            "Reflection",
             "Scale"
         ]
     );
@@ -139,6 +140,7 @@ fn the_rows_run_in_the_order_the_user_chose() {
             "Color Correction",
             "Frame Blending",
             "Bezel",
+            "Reflection",
             "Scale",
             "Stretch"
         ]
@@ -153,6 +155,7 @@ fn the_rows_run_in_the_order_the_user_chose() {
             "Frame Blending",
             "Palette",
             "Bezel",
+            "Reflection",
             "Scale",
             "Stretch"
         ]
@@ -427,6 +430,7 @@ fn the_in_game_pages_hold_their_rows_in_order() {
             QuickRow::Model,
             QuickRow::Overlay,
             QuickRow::Bezel,
+            QuickRow::Reflection,
             QuickRow::Scale,
             QuickRow::Stretch,
             QuickRow::Palette,
@@ -504,6 +508,7 @@ fn a_hidden_palette_and_bezel_leave_nine_screen_rows() {
         QuickRow::Bezel,
         QuickRow::Overlay,
         QuickRow::Model,
+        QuickRow::Reflection,
     ];
     assert_eq!(
         QuickRow::Shader.shown(&hidden),
@@ -528,7 +533,7 @@ fn the_in_game_screen_panel_shows_three_rows_and_scrolls_the_rest() {
         slot_ui::quick_window(
             slot_ui::Canvas::FRAMED,
             QuickRow::Shader,
-            &[QuickRow::Overlay, QuickRow::Model]
+            &[QuickRow::Overlay, QuickRow::Model, QuickRow::Reflection]
         ),
         (0, 3)
     );
@@ -536,7 +541,7 @@ fn the_in_game_screen_panel_shows_three_rows_and_scrolls_the_rest() {
         slot_ui::quick_window(
             slot_ui::Canvas::FRAMED,
             QuickRow::Bezel,
-            &[QuickRow::Overlay, QuickRow::Model]
+            &[QuickRow::Overlay, QuickRow::Model, QuickRow::Reflection]
         ),
         (0, 3)
     );
@@ -544,7 +549,7 @@ fn the_in_game_screen_panel_shows_three_rows_and_scrolls_the_rest() {
         slot_ui::quick_window(
             slot_ui::Canvas::FRAMED,
             QuickRow::Scale,
-            &[QuickRow::Overlay, QuickRow::Model]
+            &[QuickRow::Overlay, QuickRow::Model, QuickRow::Reflection]
         ),
         (1, 3)
     );
@@ -552,7 +557,7 @@ fn the_in_game_screen_panel_shows_three_rows_and_scrolls_the_rest() {
         slot_ui::quick_window(
             slot_ui::Canvas::FRAMED,
             QuickRow::Stretch,
-            &[QuickRow::Overlay, QuickRow::Model]
+            &[QuickRow::Overlay, QuickRow::Model, QuickRow::Reflection]
         ),
         (2, 3)
     );
@@ -560,7 +565,7 @@ fn the_in_game_screen_panel_shows_three_rows_and_scrolls_the_rest() {
         slot_ui::quick_window(
             slot_ui::Canvas::FRAMED,
             QuickRow::PlayContrast,
-            &[QuickRow::Overlay, QuickRow::Model]
+            &[QuickRow::Overlay, QuickRow::Model, QuickRow::Reflection]
         ),
         (8, 3)
     );
@@ -569,6 +574,7 @@ fn the_in_game_screen_panel_shows_three_rows_and_scrolls_the_rest() {
         QuickRow::Bezel,
         QuickRow::Overlay,
         QuickRow::Model,
+        QuickRow::Reflection,
     ];
     assert_eq!(
         slot_ui::quick_window(slot_ui::Canvas::FRAMED, QuickRow::PlayContrast, &hidden),
@@ -581,7 +587,7 @@ fn a_scroll_bar_shows_only_on_a_page_with_rows_out_of_sight() {
     let top = slot_ui::quick_scroll(
         slot_ui::Canvas::FRAMED,
         QuickRow::Shader,
-        &[QuickRow::Overlay, QuickRow::Model],
+        &[QuickRow::Overlay, QuickRow::Model, QuickRow::Reflection],
     )
     .expect("eleven rows in three");
     assert!(
@@ -595,7 +601,7 @@ fn a_scroll_bar_shows_only_on_a_page_with_rows_out_of_sight() {
     let end = slot_ui::quick_scroll(
         slot_ui::Canvas::FRAMED,
         QuickRow::PlayContrast,
-        &[QuickRow::Overlay, QuickRow::Model],
+        &[QuickRow::Overlay, QuickRow::Model, QuickRow::Reflection],
     )
     .expect("eleven rows in three");
     assert!(

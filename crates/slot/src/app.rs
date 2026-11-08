@@ -2600,6 +2600,10 @@ impl App {
         if !(self.authentic(platform) && platform == Platform::Gb) {
             hidden.push(QuickRow::Model);
         }
+        // The glass's reflection is Authentic's; no other shader draws one.
+        if !self.authentic(platform) {
+            hidden.push(QuickRow::Reflection);
+        }
         if no_bezel {
             hidden.push(QuickRow::Bezel);
         }
@@ -2744,6 +2748,9 @@ impl App {
             (QuickRow::Bezel, Platform::Gba) => QuickRow::GbaBezel,
             (QuickRow::Bezel, Platform::Gb) => QuickRow::GbBezel,
             (QuickRow::Bezel, Platform::Gbc) => QuickRow::GbcBezel,
+            (QuickRow::Reflection, Platform::Gba) => QuickRow::GbaReflection,
+            (QuickRow::Reflection, Platform::Gb) => QuickRow::GbReflection,
+            (QuickRow::Reflection, Platform::Gbc) => QuickRow::GbcReflection,
             (QuickRow::Scale, Platform::Gba) => QuickRow::GbaScale,
             (QuickRow::Scale, Platform::Gb) => QuickRow::GbScale,
             (QuickRow::Scale, Platform::Gbc) => QuickRow::GbcScale,
@@ -2770,7 +2777,11 @@ impl App {
             | QuickRow::PlayBlueLight
             | QuickRow::PlaySaturation
             | QuickRow::PlayContrast
+            | QuickRow::Reflection
             | QuickRow::Scale => self.quick_value(self.playing_row(row)),
+            QuickRow::GbaReflection => Some(QuickValue::flag(self.state.reflection_gba)),
+            QuickRow::GbReflection => Some(QuickValue::flag(self.state.reflection_gb)),
+            QuickRow::GbcReflection => Some(QuickValue::flag(self.state.reflection_gbc)),
             QuickRow::Stretch => match self.playing_row(row) {
                 QuickRow::Stretch => None,
                 row => self.quick_value(row),
@@ -3636,6 +3647,15 @@ impl App {
         }
         if !self.authentic(Platform::Gb) {
             hidden.push(QuickRow::GbModel);
+        }
+        for (row, platform) in [
+            (QuickRow::GbaReflection, Platform::Gba),
+            (QuickRow::GbReflection, Platform::Gb),
+            (QuickRow::GbcReflection, Platform::Gbc),
+        ] {
+            if !self.authentic(platform) {
+                hidden.push(row);
+            }
         }
         for (row, platform) in [
             (QuickRow::GbaOverlay, Platform::Gba),
@@ -4886,6 +4906,17 @@ impl App {
         }
     }
 
+    /// Whether Authentic lays the glass's reflection over this console's screen.
+    pub fn reflection(&self, platform: Platform) -> bool {
+        match platform {
+            #[cfg(feature = "nds")]
+            Platform::Nds => false,
+            Platform::Gba | Platform::Gbav => self.state.reflection_gba,
+            Platform::Gb => self.state.reflection_gb,
+            Platform::Gbc => self.state.reflection_gbc,
+        }
+    }
+
     pub fn authentic(&self, platform: Platform) -> bool {
         let shader = match platform {
             #[cfg(feature = "nds")]
@@ -5781,6 +5812,10 @@ impl App {
             | QuickRow::Scale
             | QuickRow::Stretch
             | QuickRow::Bezel
+            | QuickRow::Reflection
+            | QuickRow::GbaReflection
+            | QuickRow::GbReflection
+            | QuickRow::GbcReflection
             | QuickRow::ShelfPrev
             | QuickRow::ShelfNext
             | QuickRow::ShelfFavorite
@@ -6031,6 +6066,9 @@ impl App {
                 s.shader_gbc = to;
                 self.core_options_pending();
             }
+            QuickRow::GbaReflection => s.reflection_gba = !s.reflection_gba,
+            QuickRow::GbReflection => s.reflection_gb = !s.reflection_gb,
+            QuickRow::GbcReflection => s.reflection_gbc = !s.reflection_gbc,
             QuickRow::Rumble => s.rumble = !s.rumble,
             QuickRow::LeftStick => s.left_stick_dpad = !s.left_stick_dpad,
             QuickRow::AutoLoad => s.auto_load = s.auto_load.step(right),
@@ -6108,6 +6146,7 @@ impl App {
             | QuickRow::Scale
             | QuickRow::Stretch
             | QuickRow::Bezel
+            | QuickRow::Reflection
             | QuickRow::General
             | QuickRow::ShelfPrev
             | QuickRow::ShelfNext

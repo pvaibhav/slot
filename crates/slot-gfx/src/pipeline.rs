@@ -37,9 +37,9 @@ pub struct GamePass {
     u_ink: gl::types::GLint,
     u_glass: gl::types::GLint,
     u_sheen: gl::types::GLint,
-    /// How much of the glass's sheen and shade the shader lays over Authentic: none when the
-    /// bezel carries the glass itself.
-    sheen: f32,
+    /// How much of the glass's sheen and of its shade the shader lays over Authentic: none
+    /// when the bezel carries the glass itself, and no sheen when the reflection is off.
+    sheen: [f32; 2],
     ramp: gl::types::GLuint,
     screen: Screen,
     ghost: Ghost,
@@ -135,7 +135,7 @@ impl GamePass {
             u_ink,
             u_glass,
             u_sheen,
-            sheen: 1.0,
+            sheen: [1.0; 2],
             ramp,
             screen: Screen::Gba,
             ghost: Ghost::new()?,
@@ -212,8 +212,8 @@ impl GamePass {
         self.effect = effect;
     }
 
-    pub fn set_glass(&mut self, on: bool) {
-        self.sheen = if on { 1.0 } else { 0.0 };
+    pub fn set_glass(&mut self, sheen: bool, shade: bool) {
+        self.sheen = [sheen, shade].map(|on| if on { 1.0 } else { 0.0 });
     }
 
     pub fn set_screen(&mut self, screen: Screen) {
@@ -340,7 +340,7 @@ impl GamePass {
                 gl::Uniform4f(self.u_ink, x, y, z, w);
                 let [x, y, z] = look.glass;
                 gl::Uniform3f(self.u_glass, x, y, z);
-                gl::Uniform1f(self.u_sheen, self.sheen);
+                gl::Uniform2f(self.u_sheen, self.sheen[0], self.sheen[1]);
                 gl::ActiveTexture(gl::TEXTURE2);
                 gl::BindTexture(gl::TEXTURE_2D, self.ramp);
             }

@@ -9,7 +9,7 @@ use slot_input::{InputSource, Millis};
 use slot_power::{Platform, Power};
 use slot_store::{format_stamp, BezelPick, Platform as Console};
 use slot_ui::{
-    badge_face, bare_board_face, bezel_face, cart_shadow, cast_screen_shadow, cheat_name_face,
+    badge_face, bare_board_face, bezel_face, cart_shadow, cast_screen_shadow, cheat_name_face, clear_glass_reflection,
     chip_face, chip_face_text, chip_shadow_face, core_button_legends, date_time_text,
     default_game_bezel_face, delete_legends, footer_ink, game_bezel_face, gb_cart_shadow,
     hint_face, icon_face, link_button_legends, menu_detail_face, menu_face, padded, photo_face,
@@ -121,7 +121,7 @@ struct QuickPalette {
 }
 
 /// The bezel shown, and whether it shades an Authentic screen.
-type BezelImage = (Console, BezelPick, Option<BezelArt>, (u32, u32), bool);
+type BezelImage = (Console, BezelPick, Option<BezelArt>, (u32, u32), bool, bool);
 
 #[derive(Default)]
 struct BezelSync {
@@ -1273,11 +1273,13 @@ impl Frontend {
         sync_game_bezel(self.session.app_mut(), compositor, &mut self.game_bezel);
         compositor.set_game_bezel(self.session.app().shown_game_bezel());
         // Authentic's own bezels carry the glass, so the shader leaves it out.
-        let bezel_glass = self.session.app().shown_game_bezel().is_some()
+        let app = self.session.app();
+        let bezel_glass = app.shown_game_bezel().is_some()
             && self.game_bezel.image.as_ref().is_some_and(|image| {
                 image.1 == BezelPick::Default && image.2.is_some_and(BezelArt::authentic)
             });
-        compositor.set_authentic_glass(!bezel_glass);
+        let reflection = app.reflection(app.playing_platform());
+        compositor.set_authentic_glass(!bezel_glass && reflection, !bezel_glass);
         sync_overlay(
             self.session.app_mut(),
             compositor,
@@ -2150,7 +2152,14 @@ fn sync_game_bezel(app: &mut App, compositor: &mut Compositor, state: &mut Bezel
     let (w, h) = app.game_bezel_size();
     let last = state.image.as_ref().and_then(|image| image.2);
     let art = bezel_key(&pick, app.bezel_art(), last);
-    let shown = (platform, pick, art, (w, h), app.authentic(platform));
+    let shown = (
+        platform,
+        pick,
+        art,
+        (w, h),
+        app.authentic(platform),
+        app.reflection(platform),
+    );
     if state.image.as_ref() != Some(&shown) {
         let rgba = match &shown.1 {
             BezelPick::None | BezelPick::Ags102 => None,
@@ -2176,6 +2185,9 @@ fn sync_game_bezel(app: &mut App, compositor: &mut Compositor, state: &mut Bezel
         let rgba = rgba.map(|mut rgba| {
             if shown.4 && !own_shadow {
                 cast_screen_shadow(&mut rgba, w, h);
+            }
+            if own_shadow && !shown.5 {
+                clear_glass_reflection(&mut rgba, w, h);
             }
             rgba
         });
