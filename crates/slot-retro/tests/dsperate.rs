@@ -13,11 +13,8 @@ type StateLoad = unsafe extern "C" fn(*mut u8, *const u8, usize) -> i32;
 type Close = unsafe extern "C" fn(*mut u8);
 
 fn shim() -> Option<PathBuf> {
-    if !cfg!(target_os = "linux") {
-        eprintln!("skipped: slot_ds.so is a Linux library");
-        return None;
-    }
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../vendor/slot_ds.so");
+    let name = format!("slot_ds.{}", std::env::consts::DLL_EXTENSION);
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../vendor").join(name);
     if !path.exists() {
         eprintln!("skipped: {} is not built", path.display());
         return None;

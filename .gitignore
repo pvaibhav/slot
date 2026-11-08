@@ -18,6 +18,7 @@
 .DS_Store
 /.idea/
 /target-device
+/target-host
 /target-verify
 /dist-device
 /dist-device-ds
