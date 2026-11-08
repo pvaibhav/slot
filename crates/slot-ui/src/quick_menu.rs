@@ -1071,7 +1071,7 @@ impl QuickValue {
             QuickValue::Speed6 => "6×",
             QuickValue::On => "On",
             QuickValue::Off => "Off",
-            QuickValue::Lcd3x => "LCD3x",
+            QuickValue::Lcd3x => "LCD",
             QuickValue::Grid => "Grid",
             QuickValue::Dot => "Dot",
             QuickValue::Simpletex => "Simpletex",

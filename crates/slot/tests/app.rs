@@ -2369,6 +2369,24 @@ fn the_shader_shortcut_steps_the_seated_carts_shader_both_ways_and_names_it() {
 }
 
 #[test]
+fn the_lcd_shader_draws_lcd3x_on_a_3_by_2_panel_and_the_grid_lcd_elsewhere() {
+    let d = common::tmp_root_with_carts(&["Emerald"]);
+    let (mut s, _motor) = common::session_with_platform(d.path());
+    s.app_mut().apply(slot_input::Action::Insert);
+    s.app_mut().apply(slot_input::Action::ShaderPrev);
+    assert_eq!(s.app().screen_shader(), slot_store::Shader::Lcd3x);
+    for (panel, want) in [
+        ((720, 480), slot_gfx::ScreenEffect::Lcd3x),
+        ((640, 480), slot_gfx::ScreenEffect::LcdGrid),
+        ((1024, 768), slot_gfx::ScreenEffect::LcdGrid),
+        ((720, 480), slot_gfx::ScreenEffect::Lcd3x),
+    ] {
+        s.app_mut().set_panel(panel);
+        assert_eq!(s.app().screen_effect(), want, "{panel:?}");
+    }
+}
+
+#[test]
 fn the_shader_shortcut_does_nothing_on_the_shelf() {
     let d = common::tmp_root_with_carts(&["Emerald", "Fusion"]);
     let (mut s, _motor) = common::session_with_platform(d.path());

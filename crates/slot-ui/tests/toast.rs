@@ -522,3 +522,8 @@ fn the_kid_mode_unlock_toast_stays_on_one_line() {
     assert_eq!(ink_bands(&f).len(), 1, "{:?}", ink_bands(&f));
     assert_eq!(Toast::KidUnlocked.text(), "Kid Mode is off until restart");
 }
+
+#[test]
+fn the_lcd_shader_toast_says_lcd_on_every_panel() {
+    assert_eq!(Toast::ShaderLcd3x.text(), "Shader: LCD");
+}

@@ -4616,6 +4616,18 @@ impl App {
         }
     }
 
+    pub fn screen_effect(&self) -> slot_gfx::ScreenEffect {
+        use slot_gfx::ScreenEffect;
+        match self.screen_shader() {
+            Shader::Off => ScreenEffect::None,
+            Shader::Lcd3x => ScreenEffect::lcd_for(self.panel),
+            Shader::Grid => ScreenEffect::Grid,
+            Shader::Dot => ScreenEffect::Dot,
+            Shader::Simpletex => ScreenEffect::Simpletex,
+            Shader::Shimmerless => ScreenEffect::Shimmerless,
+        }
+    }
+
     pub fn colour_correction(&self) -> bool {
         self.colour_correction_for(self.playing_platform())
     }

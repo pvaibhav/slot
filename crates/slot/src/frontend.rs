@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use slot_gfx::{Compositor, Draw, ScreenEffect, TexId, OUT_H, OUT_W};
+use slot_gfx::{Compositor, Draw, TexId, OUT_H, OUT_W};
 
 const PAPER: &[u8] = include_bytes!("../assets/paper.png");
 use crate::shot_loader::{ShotLoader, Want};
@@ -1064,14 +1064,7 @@ impl Frontend {
         compositor.set_saturation(self.session.app().saturation());
         compositor.set_contrast(self.session.app().contrast());
         compositor.set_picture(self.session.app().picture_rect());
-        compositor.set_screen_effect(match self.session.app().screen_shader() {
-            slot_store::Shader::Off => ScreenEffect::None,
-            slot_store::Shader::Lcd3x => ScreenEffect::Lcd3x,
-            slot_store::Shader::Grid => ScreenEffect::Grid,
-            slot_store::Shader::Dot => ScreenEffect::Dot,
-            slot_store::Shader::Simpletex => ScreenEffect::Simpletex,
-            slot_store::Shader::Shimmerless => ScreenEffect::Shimmerless,
-        });
+        compositor.set_screen_effect(self.session.app().screen_effect());
         compositor.set_shake(self.session.app().screen_shake());
         compositor.set_screen_power(self.session.app().screen_power());
         compositor.set_screen_footer(self.session.app().screen_footer());

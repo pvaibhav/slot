@@ -151,7 +151,7 @@ impl Toast {
             Toast::ColourOn => "Correction On",
             Toast::ColourOff => "Correction Off",
             Toast::ShaderOff => "Shader: Off",
-            Toast::ShaderLcd3x => "Shader: LCD3x",
+            Toast::ShaderLcd3x => "Shader: LCD",
             Toast::ShaderGrid => "Shader: Grid",
             Toast::ShaderDot => "Shader: Dot",
             Toast::ShaderSimpletex => "Shader: Simpletex",

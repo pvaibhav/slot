@@ -261,7 +261,7 @@ fn the_values_read_as_the_menu_prints_them() {
             "6×",
             "On",
             "Off",
-            "LCD3x",
+            "LCD",
             "Grid",
             "Dot",
             "Simpletex",

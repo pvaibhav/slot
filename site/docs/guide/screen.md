@@ -10,10 +10,12 @@ Shaders make the picture look more like a real handheld screen.
 | GBA            | Game Boy and Game Boy Color |
 |----------------|-----------------------------|
 | Off            | Off                         |
-| LCD3x          | LCD3x                       |
+| LCD            | LCD                         |
 | Grid (default) | Grid                        |
 | Dot            | Simpletex (default)         |
 | Shimmerless    | Shimmerless                 |
+
+LCD draws red, green and blue stripes across every game pixel. On 3:2 devices it's Gigaherz's LCD3x, which fits GBA's exact 3x. On 4:3 devices slot draws the stripes to fit the screen's own scale, so every game pixel looks the same. The setting follows the card between devices.
 
 Shimmerless is only available for GBA on 4:3 devices. GBA on a 3:2 device is always exactly 3x resolution and Shimmerless has no visual impact.
 
