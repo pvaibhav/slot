@@ -2,7 +2,7 @@
 
 ## [1.15.1](https://github.com/slot-cfw/slot/releases/tag/v1.15.1)
 
-- With Game Titles on, the game's title now fades out instead of staying on top.
+- With Game Titles on, the game's title now fades out instead of staying on top when editing a collection.
 
 ## [1.15.0](https://github.com/slot-cfw/slot/releases/tag/v1.15.0)
 
