@@ -146,7 +146,10 @@ impl DevicePlatform {
         let rtc = first_dir(&sysfs.join("class/rtc"), |_| true);
         let motor = Motor::open(sysfs);
         let led = first_dir(&sysfs.join("class/leds"), |d| {
-            d.join("multi_intensity").is_file() || d.join("brightness").is_file()
+            let charging = d
+                .file_name()
+                .is_some_and(|n| n.to_string_lossy().contains("charging"));
+            !charging && (d.join("multi_intensity").is_file() || d.join("brightness").is_file())
         })
         .map(|dir| {
             if dir.join("multi_intensity").is_file() {

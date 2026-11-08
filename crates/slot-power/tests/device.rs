@@ -597,3 +597,16 @@ fn without_an_os_sleep_command_sleep_does_nothing() {
     let mut p = platform(&d);
     p.sleep();
 }
+
+#[test]
+fn the_charging_led_is_left_to_the_kernel() {
+    let d = sysfs("255", "87");
+    for name in ["amber:charging", "green:power", "mmc0::", "red:status"] {
+        leds(&d, name, &[("brightness", "0"), ("max_brightness", "255")]);
+    }
+    let mut p = platform(&d);
+    p.set_led(LedState::Running);
+    p.set_led(LedState::Charging);
+    assert_eq!(read(&d, "amber:charging/brightness"), "0", "slot drove the kernel's charging LED");
+    assert_eq!(read(&d, "green:power/brightness"), "255");
+}
