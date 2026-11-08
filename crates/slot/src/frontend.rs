@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 use slot_gfx::{Compositor, Draw, TexId, OUT_H, OUT_W};
 
 const PAPER: &[u8] = include_bytes!("../assets/paper.png");
+use crate::screen::Screen;
 use crate::shot_loader::{ShotLoader, Want};
 use slot_input::{InputSource, Millis};
 use slot_power::{Platform, Power};
@@ -60,6 +61,8 @@ pub struct Frontend {
     switcher: Switcher,
     guide_page: GuidePage,
     clocks: Clocks,
+    box_text: BoxTextSync,
+    box_art: BoxArtSync,
     about: AboutFace,
     update_text: UpdateText,
     fetch_sync: FetchSync,
@@ -473,6 +476,7 @@ struct Clocks {
 
 struct ShelfLook {
     slot: [[TexId; 2]; 2],
+    ds_slot: Option<[[TexId; 2]; 2]>,
     plugged: [TexId; 2],
     bolt: [TexId; 2],
     port: [Option<TexId>; 2],
@@ -577,6 +581,8 @@ impl Frontend {
             switcher: Switcher::default(),
             guide_page: GuidePage::default(),
             clocks: Clocks::default(),
+            box_text: BoxTextSync::default(),
+            box_art: BoxArtSync::default(),
             about: AboutFace::default(),
             update_text: UpdateText::default(),
             fetch_sync: FetchSync::new(),
@@ -739,6 +745,17 @@ impl Frontend {
                 [upload(slot_back_light()), upload(slot_front_light())],
             ]
         };
+        #[cfg(feature = "nds")]
+        let ds_slot = {
+            let mut upload =
+                |bytes: &[u8]| compositor.create_texture(slot_ui::SLOT_W, slot_ui::SLOT_H, bytes);
+            Some([
+                [upload(slot_ui::ds_slot_back()), upload(slot_ui::ds_slot_front())],
+                [upload(slot_ui::ds_slot_back_light()), upload(slot_ui::ds_slot_front_light())],
+            ])
+        };
+        #[cfg(not(feature = "nds"))]
+        let ds_slot = None;
         let plugged = [
             compositor.create_texture(slot_ui::SLOT_W, slot_ui::SLOT_H, slot_ui::slot_plugged()),
             compositor.create_texture(
@@ -767,6 +784,7 @@ impl Frontend {
         self.session.app_mut().set_kid_icon_faces(kid);
         self.look = Some(ShelfLook {
             slot,
+            ds_slot,
             plugged,
             bolt,
             port: [None, None],
@@ -837,6 +855,10 @@ impl Frontend {
             return;
         }
         self.session.app_mut().set_slot_faces(slot[0], slot[1]);
+        if let Some(ds) = self.look.as_ref().and_then(|look| look.ds_slot) {
+            let ds = ds[usize::from(light)];
+            self.session.app_mut().set_ds_slot_faces(ds[0], ds[1]);
+        }
         self.session.app_mut().set_plugged_face(plugged);
         if let Some(tex) = self.look.as_ref().map(|look| look.plugged[1]) {
             self.session.app_mut().set_printer_face(tex);
@@ -1058,7 +1080,47 @@ impl Frontend {
         self.link_shot_shown = true;
     }
 
+    pub fn bottom_source(&self) -> crate::app::BottomSource {
+        self.session.app().bottom_source()
+    }
+
+    pub fn set_two_panels(&mut self, on: bool) {
+        self.session.app_mut().set_two_panels(on);
+    }
+
+    pub fn render_screen(&mut self, compositor: &mut Compositor, window: (u32, u32), screen: Screen) {
+        if screen == Screen::Top {
+            self.render(compositor, window);
+            return;
+        }
+        self.session.app_mut().set_panel(window);
+        compositor.fit(window);
+        compositor.begin_frame();
+        self.draw_screen_list(compositor, screen);
+        compositor.end_frame(window);
+    }
+
     pub fn compose(&mut self, compositor: &mut Compositor) {
+        if self.prepare(compositor) {
+            self.draw_screen_list(compositor, Screen::Top);
+        }
+    }
+
+    fn draw_screen_list(&mut self, compositor: &mut Compositor, screen: Screen) {
+        self.draws.clear();
+        self.session.app().draw_screen(screen, &mut self.draws);
+        if screen == Screen::Top || self.draws.iter().any(|d| matches!(d, Draw::Game)) {
+            self.ds.swap_game(&mut self.draws, &self.session, compositor, screen);
+        }
+        compositor.draw_list(&self.draws);
+        if screen == Screen::Top {
+            if let Some((w, h, rgba)) = compositor.take_capture() {
+                self.session.app_mut().shot_taken(w, h, rgba);
+            }
+        }
+    }
+
+    fn prepare(&mut self, compositor: &mut Compositor) -> bool {
         compositor.set_blue_light(self.session.app().blue_light());
         compositor.set_dim(self.session.app().dim());
         compositor.set_saturation(self.session.app().saturation());
@@ -1075,7 +1137,7 @@ impl Frontend {
         compositor.begin_frame();
         self.sync_grounds(compositor);
         if self.draw_rebuild(compositor) {
-            return;
+            return false;
         }
         if let Some([r, g, b]) = self.session.app().blank_panel() {
             let px = (slot_gfx::SRC_W * slot_gfx::SRC_H) as usize;
@@ -1089,6 +1151,8 @@ impl Frontend {
         }
         self.cart_faces.sync(self.session.app_mut(), compositor);
         sync_clock(self.session.app_mut(), compositor, &mut self.clocks);
+        sync_box_text(self.session.app_mut(), compositor, &mut self.box_text);
+        sync_box_art(self.session.app_mut(), compositor, &mut self.box_art);
         sync_binding_faces(self.session.app_mut(), compositor);
         sync_about(self.session.app_mut(), compositor, &mut self.about);
         sync_update(self.session.app_mut(), compositor, &mut self.update_text);
@@ -1183,13 +1247,7 @@ impl Frontend {
             &mut self.switcher,
         );
         sync_guide(self.session.app_mut(), compositor, &mut self.guide_page);
-        self.draws.clear();
-        self.session.app().draw(&mut self.draws);
-        self.ds.swap_game(&mut self.draws, &self.session, compositor);
-        compositor.draw_list(&self.draws);
-        if let Some((w, h, rgba)) = compositor.take_capture() {
-            self.session.app_mut().shot_taken(w, h, rgba);
-        }
+        true
     }
 
     pub fn drive_emulator(&mut self) {
@@ -2540,6 +2598,78 @@ fn sync_core_picker(
     );
     app.set_core_board_faces(board_id, lid_id);
     *built = made;
+}
+
+#[derive(Default)]
+struct BoxArtSync {
+    loader: Option<crate::box_art::BoxArtLoader>,
+    asked: Option<(slot_store::Platform, String)>,
+    tex: [Option<TexId>; 2],
+}
+
+fn sync_box_art(app: &mut App, compositor: &mut Compositor, sync: &mut BoxArtSync) {
+    if !app.two_panels() {
+        return;
+    }
+    let seated = app.seated_cart().cloned();
+    let want = seated.as_ref().map(|c| (c.platform, c.stem.clone()));
+    if want != sync.asked {
+        sync.asked = want;
+        app.set_box_art(None);
+        if let (Some(cart), Some(root)) = (seated, app.root().map(|r| r.to_path_buf())) {
+            sync.loader
+                .get_or_insert_with(crate::box_art::BoxArtLoader::spawn)
+                .request(root, cart);
+        }
+    }
+    let Some(art) = sync.loader.as_ref().and_then(|l| l.take()) else {
+        return;
+    };
+    if sync.asked.as_ref() != Some(&(art.platform, art.stem.clone())) {
+        return;
+    }
+    let [box_tex, logo_tex] = &mut sync.tex;
+    let mut up = |image: Option<crate::box_art::Image>, slot: &mut Option<TexId>| {
+        image.map(|(w, h, rgba)| (upload_rgba(compositor, slot, w, h, &rgba), w, h))
+    };
+    let boxed = up(art.boxed, box_tex);
+    let logo = up(art.logo, logo_tex);
+    app.set_box_art(Some(crate::app::BoxArtFaces {
+        boxed,
+        logo,
+        stem: art.stem,
+        platform: art.platform,
+    }));
+}
+
+#[derive(Default)]
+struct BoxTextSync {
+    shown: Option<(String, String)>,
+    title: Option<TexId>,
+    system: Option<TexId>,
+}
+
+fn sync_box_text(app: &mut App, compositor: &mut Compositor, sync: &mut BoxTextSync) {
+    let want = app.box_text();
+    if want == sync.shown {
+        return;
+    }
+    sync.shown = want.clone();
+    let Some((title, system)) = want else {
+        app.set_box_text_faces(slot_ui::Printed::default(), slot_ui::Printed::default());
+        return;
+    };
+    let mut put = |text: &str, slot: &mut Option<TexId>| {
+        let face = slot_ui::title_line_face(text);
+        let w = face.w;
+        match w {
+            0 => slot_ui::Printed::default(),
+            _ => slot_ui::Printed::new(upload(compositor, slot, face), w),
+        }
+    };
+    let title = put(&title, &mut sync.title);
+    let system = put(&system, &mut sync.system);
+    app.set_box_text_faces(title, system);
 }
 
 fn upload(compositor: &mut Compositor, slot: &mut Option<TexId>, face: slot_ui::UndoFace) -> TexId {

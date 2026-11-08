@@ -78,6 +78,12 @@ const LIP_Y: f32 = BAND_Y;
 
 const SEATED_Y: f32 = BAY_Y + 4.0;
 
+pub fn seated_rect(canvas: Canvas, platform: slot_store::Platform) -> [f32; 4] {
+    let (sw, sh) = seated_box(platform);
+    let (sw, sh) = (sw as f32, sh as f32);
+    [canvas.w / 2.0 - sw / 2.0, SEATED_Y + drop(canvas), sw, sh]
+}
+
 fn catch_at(lip: f32, foot: f32, seated_foot: f32) -> f32 {
     (lip - foot) / (seated_foot - foot)
 }

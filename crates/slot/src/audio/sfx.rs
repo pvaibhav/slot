@@ -1,5 +1,9 @@
 const INSERT: &[u8] = include_bytes!("../../assets/insert.pcm");
 const EJECT: &[u8] = include_bytes!("../../assets/eject.pcm");
+#[cfg(feature = "nds")]
+const DS_INSERT: &[u8] = include_bytes!("../../assets/ds_insert.pcm");
+#[cfg(feature = "nds")]
+const DS_EJECT: &[u8] = include_bytes!("../../assets/ds_eject.pcm");
 const PRINT_BUZZ: &[u8] = include_bytes!("../../../../assets/server/buzz.pcm");
 const TEAR: &[u8] = include_bytes!("../../../../assets/server/tear.pcm");
 const ASSET_HZ: f32 = 48_000.0;
@@ -8,6 +12,10 @@ const ASSET_HZ: f32 = 48_000.0;
 pub enum Sfx {
     Insert,
     Eject,
+    #[cfg(feature = "nds")]
+    DsInsert,
+    #[cfg(feature = "nds")]
+    DsEject,
     PrintBuzz,
     Tear,
 }
@@ -17,6 +25,10 @@ impl Sfx {
         match self {
             Sfx::Insert => 0.097,
             Sfx::Eject => 0.021,
+            #[cfg(feature = "nds")]
+            Sfx::DsInsert => 0.541,
+            #[cfg(feature = "nds")]
+            Sfx::DsEject => 0.011,
             Sfx::PrintBuzz | Sfx::Tear => 0.0,
         }
     }
@@ -25,6 +37,10 @@ impl Sfx {
         match self {
             Sfx::Insert => INSERT,
             Sfx::Eject => EJECT,
+            #[cfg(feature = "nds")]
+            Sfx::DsInsert => DS_INSERT,
+            #[cfg(feature = "nds")]
+            Sfx::DsEject => DS_EJECT,
             Sfx::PrintBuzz => PRINT_BUZZ,
             Sfx::Tear => TEAR,
         }
@@ -33,6 +49,8 @@ impl Sfx {
     fn level(self) -> f32 {
         match self {
             Sfx::Insert | Sfx::Eject => 1.0,
+            #[cfg(feature = "nds")]
+            Sfx::DsInsert | Sfx::DsEject => 1.0,
             Sfx::PrintBuzz => 0.40,
             Sfx::Tear => 0.45,
         }

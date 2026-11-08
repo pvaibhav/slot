@@ -229,7 +229,7 @@ impl Playback {
         let mut route = RouteWatch::new(std::env::var("ALSA_CONFIG_PATH").ok().as_deref());
         while !stop.load(Ordering::Relaxed) {
             ring.fill(&mut buf);
-            let hold = silence.hear(&buf, span);
+            let hold = silence.hear(&buf, span) || ring.awake();
             let rerouted = self.follow_jack && route.changed();
             if rerouted && self.pcm.is_some() {
                 self.release();

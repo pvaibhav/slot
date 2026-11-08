@@ -2,7 +2,9 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use slot::frontend::Frontend;
+use slot::app::BottomSource;
 use slot::pacer::Pacer;
+use slot::screen::Screen;
 use slot::input::DeviceInput;
 use slot::panel_turn::{panel_turn, PanelTurn};
 use slot_gfx::{Compositor, DsPass, DsScreen, FbdevSurface, KmsSurface, Surface};
@@ -112,6 +114,7 @@ pub fn run() {
         true => DsPass::new().map_err(|e| eprintln!("slot: ds pass: {e}")).ok(),
         false => None,
     };
+    frontend.set_two_panels(ds.is_some());
     let show_fps = root.join(SHOW_FPS).is_file();
     let mut ds_overlay = DsOverlayTextures::default();
     let mut fps = Fps::default();
@@ -152,19 +155,13 @@ pub fn run() {
         }
         let late = frontend.step_emulator(pacer.period(), STEP_TIMEOUT);
         let stepped = Instant::now();
-        let menu_below = ds.is_some() && frontend.ds_frame().is_some() && frontend.ds_menu_below();
-        if !menu_below {
-            frontend.render(&mut compositor, window);
-        }
+        frontend.render(&mut compositor, window);
         let rendered = Instant::now();
         let ds_frame = frontend.ds_frame();
         if let (Some(pass), Some(frame)) = (ds.as_mut(), ds_frame) {
             pass.set_grade(compositor.grade());
             ds_overlay.sync(pass, frontend.ds_overlay());
             pass.upload(frame);
-            if menu_below {
-                pass.draw_screen(DsScreen::Top, surface.window_size());
-            }
             if frontend.ds_direct() && show_fps {
                 let shown = fps.sample(frontend.frames_published(), Instant::now());
                 pass.draw_fps(shown, surface.window_size());
@@ -181,13 +178,15 @@ pub fn run() {
         let bottom_began = Instant::now();
         if let Some(pass) = ds.as_ref() {
             let power = frontend.ds_frame().map(|_| frontend.screen_power());
-            let drawn = match menu_below {
-                true => draw_menu_below(&mut *surface, &mut frontend, &mut compositor, window),
-                false => draw_bottom(&mut *surface, pass, power),
+            let drawn = match frontend.bottom_source() {
+                BottomSource::Compositor => draw_menu_below(&mut *surface, &mut frontend, &mut compositor, window),
+                BottomSource::DsScreen => draw_bottom(&mut *surface, pass, power),
+                BottomSource::Black => draw_bottom(&mut *surface, pass, None),
             };
             if let Err(e) = drawn {
                 eprintln!("slot: bottom panel: {e}");
                 ds = None;
+                frontend.set_two_panels(false);
             }
         }
         let bottom_took = bottom_began.elapsed();
@@ -316,7 +315,7 @@ fn draw_menu_below(
     window: (u32, u32),
 ) -> Result<(), slot_gfx::GfxError> {
     surface.select_panel(1)?;
-    frontend.render(compositor, window);
+    frontend.render_screen(compositor, window, Screen::Bottom);
     let swapped = surface.swap();
     surface.select_panel(0)?;
     swapped

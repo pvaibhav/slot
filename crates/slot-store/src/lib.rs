@@ -18,6 +18,8 @@ mod gba;
 mod guides;
 pub mod ini;
 pub mod overlay;
+#[cfg(feature = "nds")]
+mod nds_header;
 mod platform;
 mod ring;
 mod scan;
@@ -47,6 +49,8 @@ pub use guides::{
     GUIDE_SPOTS_FILE,
 };
 pub use overlay::{overlay_entries, OverlayEntry, OverlayPart};
+#[cfg(feature = "nds")]
+pub use nds_header::{read_banner, NdsBanner};
 pub use platform::Platform;
 pub use ring::{is_stamp, StateEntry, StateRing, RING_MAX};
 pub use scan::{initial, is_hidden, listing, scan, scan_platform, sort_key, Cart, StoreError};

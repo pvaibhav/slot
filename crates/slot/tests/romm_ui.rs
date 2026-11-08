@@ -75,7 +75,14 @@ fn romm_row_reads_offline_when_paired_and_not_yet_heard_from() {
 fn tools_lists_romm_after_gamebit() {
     assert_eq!(
         QuickRow::NETWORK.map(QuickRow::label),
-        ["Gamebit", "RomM", "Fetch Missing Art", "Check for Updates"]
+        [
+            "Gamebit",
+            "RomM",
+            "Fetch Missing Art",
+            #[cfg(feature = "nds")]
+            "Fetch Box Art",
+            "Check for Updates"
+        ]
     );
     let (_d, mut a) = booted();
     open_at(&mut a, QuickRow::Romm);

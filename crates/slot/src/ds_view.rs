@@ -52,12 +52,18 @@ pub fn direct(session: &Session) -> bool {
 }
 
 impl DsView {
-    pub fn swap_game(&mut self, draws: &mut [Draw], session: &Session, compositor: &mut Compositor) {
+    pub fn swap_game(
+        &mut self,
+        draws: &mut [Draw],
+        session: &Session,
+        compositor: &mut Compositor,
+        screen: crate::screen::Screen,
+    ) {
         if !seated(session) {
             self.last.clear();
             return;
         }
-        let top = !playing(session) || direct(session);
+        let top = screen == crate::screen::Screen::Top && (!playing(session) || direct(session));
         if let Some(frame) = frame(session) {
             self.last.clear();
             self.last.extend_from_slice(&frame);

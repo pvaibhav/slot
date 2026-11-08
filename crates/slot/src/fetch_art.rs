@@ -64,6 +64,7 @@ pub struct Scene {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Run {
     pub kind: Option<Kind>,
+    pub boxes: bool,
     pub counted: bool,
     pub total: usize,
     pub played: usize,
@@ -93,6 +94,13 @@ pub enum FetchArt {
 }
 
 impl Run {
+    pub fn boxes() -> Run {
+        Run {
+            boxes: true,
+            ..Run::default()
+        }
+    }
+
     pub fn new(kind: Kind) -> Run {
         Run {
             kind: Some(kind),
@@ -120,6 +128,7 @@ impl Run {
                 self.carts.push(cart.clone());
                 self.queue.push_back(cart);
             }
+            ArtEvent::BoxLanded { .. } => self.landed += 1,
             ArtEvent::Missed { stem } => self.missed.push(stem),
             ArtEvent::Done { .. } => self.finished = true,
             ArtEvent::StudioArt(_) | ArtEvent::StudioSaved(_) => {}

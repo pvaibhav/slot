@@ -93,6 +93,8 @@ pub enum QuickRow {
     ScReset,
     LidOff,
     FetchArt,
+    #[cfg(feature = "nds")]
+    FetchBoxArt,
     Controls,
     ControlsShelf,
     ControlsCollections,
@@ -145,7 +147,7 @@ pub enum QuickRow {
 }
 
 impl QuickRow {
-    pub const ALL: [QuickRow; 133] = [
+    pub const ALL: [QuickRow; 133 + cfg!(feature = "nds") as usize] = [
         QuickRow::FastForward,
         QuickRow::FastForwardSound,
         QuickRow::Screen,
@@ -230,6 +232,8 @@ impl QuickRow {
         QuickRow::ScReset,
         QuickRow::LidOff,
         QuickRow::FetchArt,
+        #[cfg(feature = "nds")]
+        QuickRow::FetchBoxArt,
         QuickRow::Controls,
         QuickRow::ControlsShelf,
         QuickRow::ControlsCollections,
@@ -306,10 +310,12 @@ impl QuickRow {
 
     pub const WIFI: [QuickRow; 2] = [QuickRow::WifiPower, QuickRow::Networks];
 
-    pub const NETWORK: [QuickRow; 4] = [
+    pub const NETWORK: [QuickRow; 4 + cfg!(feature = "nds") as usize] = [
         QuickRow::Server,
         QuickRow::Romm,
         QuickRow::FetchArt,
+        #[cfg(feature = "nds")]
+        QuickRow::FetchBoxArt,
         QuickRow::CheckUpdates,
     ];
 
@@ -545,6 +551,8 @@ impl QuickRow {
             | QuickRow::FetchArt
             | QuickRow::Romm
             | QuickRow::Server => &QuickRow::NETWORK,
+            #[cfg(feature = "nds")]
+            QuickRow::FetchBoxArt => &QuickRow::NETWORK,
             QuickRow::RommProtocol
             | QuickRow::RommServer
             | QuickRow::RommPort
@@ -716,6 +724,8 @@ impl QuickRow {
             QuickRow::KidMode => "Kid Mode",
             QuickRow::KidShelf => "Kid Shelf",
             QuickRow::FetchArt => "Fetch Missing Art",
+            #[cfg(feature = "nds")]
+            QuickRow::FetchBoxArt => "Fetch Box Art",
             QuickRow::Network => "Tools",
             QuickRow::Wifi | QuickRow::WifiPower => "Wi-Fi",
             QuickRow::Networks => "Network",
@@ -800,6 +810,10 @@ impl QuickRow {
     }
 
     pub fn opens(self) -> bool {
+        #[cfg(feature = "nds")]
+        if self == QuickRow::FetchBoxArt {
+            return true;
+        }
         matches!(
             self,
             QuickRow::DateTime

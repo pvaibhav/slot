@@ -597,6 +597,8 @@ fn network_sits_between_controls_and_about() {
             QuickRow::Server,
             QuickRow::Romm,
             QuickRow::FetchArt,
+            #[cfg(feature = "nds")]
+            QuickRow::FetchBoxArt,
             QuickRow::CheckUpdates
         ]
     );
@@ -619,12 +621,21 @@ fn tools_holds_the_network_tools() {
             QuickRow::Server,
             QuickRow::Romm,
             QuickRow::FetchArt,
+            #[cfg(feature = "nds")]
+            QuickRow::FetchBoxArt,
             QuickRow::CheckUpdates
         ]
     );
     assert_eq!(
         QuickRow::NETWORK.map(QuickRow::label),
-        ["Gamebit", "RomM", "Fetch Missing Art", "Check for Updates"]
+        [
+            "Gamebit",
+            "RomM",
+            "Fetch Missing Art",
+            #[cfg(feature = "nds")]
+            "Fetch Box Art",
+            "Check for Updates"
+        ]
     );
     assert_eq!(QuickRow::WIFI.map(QuickRow::label), ["Wi-Fi", "Network"]);
     assert_eq!(QuickRow::Wifi.label(), "Wi-Fi");
@@ -634,7 +645,7 @@ fn tools_holds_the_network_tools() {
     let (_d, mut a, _) = on_carousel();
     common::connect(&mut a);
     for row in QuickRow::NETWORK {
-        let shown = row != QuickRow::Romm || cfg!(feature = "romm");
+        let shown = (row != QuickRow::Romm || cfg!(feature = "romm")) && row.label() != "Fetch Box Art";
         assert_eq!(!a.hidden_rows().contains(&row), shown, "{row:?}");
     }
 }

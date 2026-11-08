@@ -33,6 +33,7 @@ pub struct Ring {
     xruns: AtomicU64,
     consuming: AtomicBool,
     priming: AtomicBool,
+    awake: AtomicBool,
 }
 
 impl Ring {
@@ -58,6 +59,7 @@ impl Ring {
             xruns: AtomicU64::new(0),
             consuming: AtomicBool::new(true),
             priming: AtomicBool::new(false),
+            awake: AtomicBool::new(false),
         }
     }
 
@@ -226,6 +228,14 @@ impl Ring {
     pub fn set_muted(&self, muted: bool) {
         self.muted.store(muted, Ordering::Relaxed);
         self.room.notify_all();
+    }
+
+    pub fn set_awake(&self, awake: bool) {
+        self.awake.store(awake, Ordering::Relaxed);
+    }
+
+    pub fn awake(&self) -> bool {
+        self.awake.load(Ordering::Relaxed)
     }
 
     pub fn muted(&self) -> bool {

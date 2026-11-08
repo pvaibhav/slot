@@ -137,6 +137,10 @@ impl Session {
         &self.app
     }
 
+    pub fn ring(&self) -> std::sync::Arc<crate::audio::Ring> {
+        self.sink.ring()
+    }
+
     pub fn app_mut(&mut self) -> &mut App {
         &mut self.app
     }
@@ -386,6 +390,7 @@ impl Session {
                 self.app.peer_lost();
             }
         }
+        self.sink.ring().set_awake(self.app.expects_sound());
         if let Some(sfx) = self.app.take_sfx() {
             self.play_sfx(sfx);
         }

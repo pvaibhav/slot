@@ -13,6 +13,7 @@ pub struct Look {
 pub struct Entry {
     pub real: Option<String>,
     pub logo: Option<String>,
+    pub boxed: Option<String>,
     pub look: Option<Look>,
 }
 
@@ -61,6 +62,7 @@ fn entry(raw: &Value) -> Entry {
     Entry {
         real: path("support-texture"),
         logo: path("wheel"),
+        boxed: path("box-3D"),
         look: look(&raw["look"]),
     }
 }
