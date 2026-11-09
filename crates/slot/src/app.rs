@@ -718,8 +718,6 @@ pub struct App {
     two_panels: bool,
     ds_slot_faces: Option<(TexId, TexId)>,
     box_art: Option<BoxArtFaces>,
-    box_title: slot_ui::Printed,
-    box_system: slot_ui::Printed,
     card_writes: Arc<crate::card_log::CardWrites>,
     resume_unread: bool,
     card_read_only: bool,
@@ -1215,8 +1213,6 @@ impl App {
             two_panels: false,
             ds_slot_faces: None,
             box_art: None,
-            box_title: slot_ui::Printed::default(),
-            box_system: slot_ui::Printed::default(),
             card_writes,
             resume_unread: false,
             card_read_only: false,
@@ -7144,19 +7140,6 @@ impl App {
         self.box_art.as_ref()
     }
 
-    pub fn box_text(&self) -> Option<(String, String)> {
-        if !self.two_panels {
-            return None;
-        }
-        let cart = self.seated_cart()?;
-        Some((slot_ui::label_text(cart), cart.platform.name().to_string()))
-    }
-
-    pub fn set_box_text_faces(&mut self, title: slot_ui::Printed, system: slot_ui::Printed) {
-        self.box_title = title;
-        self.box_system = system;
-    }
-
     pub fn top_previews_game(&self) -> bool {
         !self.ds_seated()
             && matches!(self.phase, Phase::Playing { .. })
@@ -7170,7 +7153,11 @@ impl App {
             self.push_game(out);
             return;
         }
-        self.draw_background(out);
+        let over_game = matches!(self.phase, Phase::Playing { .. }) && self.game_visible();
+        match over_game {
+            true => out.push(Draw::Game),
+            false => self.draw_background(out),
+        }
         #[cfg(feature = "nds")]
         {
             let art = self.box_art.as_ref().filter(|a| {
@@ -7180,8 +7167,7 @@ impl App {
                 canvas: self.canvas(),
                 boxed: art.and_then(|a| a.boxed),
                 logo: art.and_then(|a| a.logo),
-                title: self.box_title,
-                system: self.box_system,
+                over_game,
             }
             .draw(out);
         }
@@ -7518,7 +7504,7 @@ impl App {
                 canvas: self.canvas(),
             }
             .draw(out);
-            if row.page() != QuickRow::PLAY_SCREEN {
+            if row.page() != QuickRow::PLAY_SCREEN && !self.two_panels {
                 slot_ui::draw_corners(
                     self.canvas(),
                     self.battery,

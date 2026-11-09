@@ -426,7 +426,7 @@ mod rendered {
         let mut list = Vec::new();
         r.f.app().draw_screen(Screen::Top, &mut list);
         assert!(
-            !list.iter().any(|d| matches!(d, slot_gfx::Draw::Rect { colour, w, .. } if colour[3] > 0.5 && colour[3] != slot_ui::GAME_DIM && *w > 600.0)),
+            list.iter().filter(|d| matches!(d, slot_gfx::Draw::Rect { colour, w, .. } if colour[3] > 0.5 && *w > 600.0)).count() <= 1,
             "the menu's scrim is on the top screen"
         );
         assert_eq!(r.f.bottom_source(), BottomSource::Compositor);

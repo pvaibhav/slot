@@ -61,7 +61,6 @@ pub struct Frontend {
     switcher: Switcher,
     guide_page: GuidePage,
     clocks: Clocks,
-    box_text: BoxTextSync,
     box_art: BoxArtSync,
     about: AboutFace,
     update_text: UpdateText,
@@ -581,7 +580,6 @@ impl Frontend {
             switcher: Switcher::default(),
             guide_page: GuidePage::default(),
             clocks: Clocks::default(),
-            box_text: BoxTextSync::default(),
             box_art: BoxArtSync::default(),
             about: AboutFace::default(),
             update_text: UpdateText::default(),
@@ -1151,7 +1149,6 @@ impl Frontend {
         }
         self.cart_faces.sync(self.session.app_mut(), compositor);
         sync_clock(self.session.app_mut(), compositor, &mut self.clocks);
-        sync_box_text(self.session.app_mut(), compositor, &mut self.box_text);
         sync_box_art(self.session.app_mut(), compositor, &mut self.box_art);
         sync_binding_faces(self.session.app_mut(), compositor);
         sync_about(self.session.app_mut(), compositor, &mut self.about);
@@ -2644,36 +2641,6 @@ fn sync_box_art(app: &mut App, compositor: &mut Compositor, sync: &mut BoxArtSyn
         stem: art.stem,
         platform: art.platform,
     }));
-}
-
-#[derive(Default)]
-struct BoxTextSync {
-    shown: Option<(String, String)>,
-    title: Option<TexId>,
-    system: Option<TexId>,
-}
-
-fn sync_box_text(app: &mut App, compositor: &mut Compositor, sync: &mut BoxTextSync) {
-    let want = app.box_text();
-    if want == sync.shown {
-        return;
-    }
-    sync.shown = want.clone();
-    let Some((title, system)) = want else {
-        app.set_box_text_faces(slot_ui::Printed::default(), slot_ui::Printed::default());
-        return;
-    };
-    let mut put = |text: &str, slot: &mut Option<TexId>| {
-        let face = slot_ui::title_line_face(text);
-        let w = face.w;
-        match w {
-            0 => slot_ui::Printed::default(),
-            _ => slot_ui::Printed::new(upload(compositor, slot, face), w),
-        }
-    };
-    let title = put(&title, &mut sync.title);
-    let system = put(&system, &mut sync.system);
-    app.set_box_text_faces(title, system);
 }
 
 fn upload(compositor: &mut Compositor, slot: &mut Option<TexId>, face: slot_ui::UndoFace) -> TexId {
