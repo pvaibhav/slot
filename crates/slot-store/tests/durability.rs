@@ -280,6 +280,7 @@ fn a_card_from_before_the_settings_keeps_all_its_values() {
             favorites: Vec::new(),
             shelf: None,
             shelf_cart: None,
+            ..SlotState::default()
         }
     );
 }
@@ -507,6 +508,17 @@ fn an_empty_slot_writes_an_empty_platform() {
     assert_eq!(read_slot_state(d.path()).cart_platform, None);
 }
 
+fn ds_build() -> Option<Platform> {
+    #[cfg(feature = "nds")]
+    {
+        Some(Platform::Nds)
+    }
+    #[cfg(not(feature = "nds"))]
+    {
+        None
+    }
+}
+
 #[test]
 fn an_unreadable_platform_reads_as_a_card_that_never_said() {
     let d = tmp_root();
@@ -516,7 +528,7 @@ fn an_unreadable_platform_reads_as_a_card_that_never_said() {
         ("cart_platform=nes\n", None),
         ("cart_platform=gameboy\n", None),
         ("cart_platform=0\n", None),
-        ("cart_platform=nds\n", None),
+        ("cart_platform=nds\n", ds_build()),
         ("cart_platform=GBA\n", Some(Platform::Gba)),
         ("cart_platform=Gbc\n", Some(Platform::Gbc)),
     ] {
