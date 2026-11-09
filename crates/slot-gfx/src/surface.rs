@@ -34,6 +34,13 @@ pub trait Surface {
     fn refresh_period(&self) -> Option<std::time::Duration> {
         None
     }
+    fn flip_times_us(&self) -> Option<[u64; 2]> {
+        None
+    }
+    fn last_vblank(&self) -> Option<std::time::Instant> {
+        None
+    }
+
     fn select_panel(&mut self, _index: usize) -> Result<(), GfxError> {
         Ok(())
     }

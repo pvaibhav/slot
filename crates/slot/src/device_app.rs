@@ -122,11 +122,13 @@ pub fn run() {
     let mut pacer = match surface.refresh_period() {
         Some(period) => {
             eprintln!("slot: pace: fixed at the panel's {:.3} ms", period.as_secs_f64() * 1e3);
+            frontend.fix_present();
             Pacer::fixed(period)
         }
         None => Pacer::new(),
     };
     let (mut frames, mut missed, mut early, mut stale) = (0u32, 0u32, 0u32, 0u32);
+    let (mut repeats, mut shown_at) = (0u32, None::<Instant>);
     let mut stages = Stages::default();
     loop {
         pacer.wait();
@@ -192,6 +194,12 @@ pub fn run() {
         let bottom_took = bottom_began.elapsed();
         slot::latency::swapped(swap_took.as_secs_f64() * 1000.0);
         let dropped = pacer.swapped(work, swap_took > Duration::from_millis(1));
+        if let Some(vblank) = surface.last_vblank() {
+            if let Some(prev) = shown_at.replace(vblank) {
+                repeats += u32::from(vblank.saturating_duration_since(prev) > pacer.period().mul_f64(1.5));
+            }
+            pacer.lock_to(vblank);
+        }
         if slot::latency::tracing() {
             frames += 1;
             missed += u32::from(dropped);
@@ -200,12 +208,16 @@ pub fn run() {
             stages.add([stepped - began, rendered - stepped, swap - rendered, swap_took, bottom_took]);
             if frames == 600 {
                 eprintln!(
-                    "slot: pace: 600 frames, {missed} missed a latch, {early} drawn early, {stale} stale, work {:.1} ms, period {:.2} ms, {}",
+                    "slot: pace: 600 frames, {repeats} repeated on the top panel, {missed} missed a latch, {early} drawn early, {stale} stale, work {:.1} ms, period {:.2} ms, {}, panel phase {}",
                     pacer.work().as_secs_f64() * 1e3,
                     pacer.period().as_secs_f64() * 1e3,
-                    stages.report()
+                    stages.report(),
+                    surface
+                        .flip_times_us()
+                        .map(|[top, bottom]| format!("{:.2} ms", (top as f64 - bottom as f64) / 1000.0))
+                        .unwrap_or_else(|| "n/a".into())
                 );
-                (frames, missed, early, stale) = (0, 0, 0, 0);
+                (frames, missed, early, stale, repeats) = (0, 0, 0, 0, 0);
                 stages = Stages::default();
             }
         }

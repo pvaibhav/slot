@@ -49,7 +49,7 @@ pub use host::HostSurface;
 pub use kms_atomic::{atomic_plan, primary_plane_for, AtomicIds, PlaneInfo, PLANE_TYPE_PRIMARY};
 #[cfg(unix)]
 pub use kms::{
-    free_crtc, preferred_mode, retry_until, KmsSurface, Panel, CONNECTOR_DSI, MODE_TYPE_PREFERRED,
+    free_crtc, preferred_mode, retry_until, FlipQueue, FlipStep, KmsSurface, Panel, CONNECTOR_DSI, MODE_TYPE_PREFERRED,
 };
 pub use layout::{canvas_scale, fills, panel_pixels, Canvas};
 pub use lcd3x::{lcd3x_factors, lcd3x_mask, ScreenEffect};
