@@ -57,7 +57,8 @@ Each feature links to a [wiki](https://github.com/pvaibhav/slot/wiki) page with 
   game, because a scan can stall frames.
 - ~~**Online cart label scraping.**~~ Included upstream since **v1.13.0** as **Fetch Missing
   Art** under Network. No Wi-Fi? Put `Artwork.pack` from the release page in your card's
-  `Labels` folder and slot labels your carts from that instead. See [Cart labels](https://github.com/pvaibhav/slot/wiki/Cart-labels).
+  `Labels` folder and slot labels your carts from that instead. It holds 5,472 labels for
+  GB, GBC and GBA in one download. See [Cart labels](https://github.com/pvaibhav/slot/wiki/Cart-labels).
 - **[RetroAchievements.](https://github.com/pvaibhav/slot/wiki/RetroAchievements)** You can earn softcore GB, GBC, and GBA achievements, online or offline.
   Put your account in `Config/retroachievements.toml` for this to work. slot caches all your
   games' achievements while Wi-Fi is connected. Once that sync is done, you can play away from
