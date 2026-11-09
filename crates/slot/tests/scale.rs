@@ -26,6 +26,14 @@ fn root_for(platform: Platform) -> TempDir {
             std::fs::write(dir.join("Game.gba"), rom).unwrap();
             d
         }
+        #[cfg(feature = "nds")]
+        Platform::Nds => {
+            let d = tmp_root_with_carts(&["Zzz"]);
+            let dir = d.path().join("Games").join(Platform::Nds.dir_name());
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("Game.nds"), vec![0u8; 0x200]).unwrap();
+            d
+        }
     }
 }
 
