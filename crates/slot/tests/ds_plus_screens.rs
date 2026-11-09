@@ -58,6 +58,17 @@ fn big_tex(list: &[slot_gfx::Draw]) -> Option<[f32; 4]> {
     })
 }
 
+fn carts_shown(list: &[slot_gfx::Draw], canvas_w: f32) -> usize {
+    list.iter()
+        .filter(|d| match **d {
+            slot_gfx::Draw::Tex { x, w, h, .. } | slot_gfx::Draw::Rect { x, w, h, .. } => {
+                h > 100.0 && w < 600.0 && x + w > 0.0 && x < canvas_w
+            }
+            _ => false,
+        })
+        .count()
+}
+
 fn bottom(a: &slot::app::App) -> Vec<slot_gfx::Draw> {
     let mut out = Vec::new();
     a.draw_screen(Screen::Bottom, &mut out);
@@ -185,10 +196,10 @@ fn two_panel_ds_app() -> (tempfile::TempDir, slot::app::App) {
 }
 
 #[test]
-fn a_ds_cart_flings_up_while_the_shelf_stays_on_the_bottom() {
+fn a_ds_cart_flings_up_while_the_shelf_parts_on_the_bottom() {
     let (_d, mut a) = two_panel_ds_app();
     a.apply(slot_input::Action::Insert);
-    let (mut early, mut late, mut secs) = (0, 0, 0.0);
+    let (mut early, mut parted, mut late, mut secs) = (0, 0, 0, 0.0);
     for _ in 0..1200 {
         a.update(1.0 / 240.0);
         let seat = a.seat();
@@ -201,7 +212,19 @@ fn a_ds_cart_flings_up_while_the_shelf_stays_on_the_bottom() {
             slot::app::BottomSource::Compositor,
             "the shelf left the bottom at seat {seat}"
         );
-        if seat < 0.3 {
+        let w = a.canvas().w;
+        if seat > 0.2 && seat < 0.25 {
+            parted += 1;
+            assert_eq!(
+                carts_shown(&bottom(&a), w),
+                1,
+                "a neighbour is still on the bottom at seat {seat}"
+            );
+        }
+        if seat >= 0.3 {
+            assert_eq!(carts_shown(&bottom(&a), w), 0, "carts on the bottom at seat {seat}");
+        }
+        if seat < 0.25 {
             early += 1;
             assert!(
                 big_tex(&bottom(&a)).is_some(),
@@ -224,8 +247,8 @@ fn a_ds_cart_flings_up_while_the_shelf_stays_on_the_bottom() {
         }
     }
     assert!(
-        early > 0 && late > 0,
-        "the insert never passed both halves: {early} {late}"
+        early > 0 && parted > 0 && late > 0,
+        "the insert never passed every stage: {early} {parted} {late}"
     );
     assert!(
         secs > 1.2,
@@ -280,6 +303,19 @@ fn a_ds_cart_springs_out_of_the_top_slot_and_lands_on_the_shelf() {
         matches!(a.phase(), slot::app::Phase::Shelf),
         "{:?}",
         a.phase()
+    );
+    let w = a.canvas().w;
+    assert_eq!(
+        carts_shown(&bottom(&a), w),
+        1,
+        "the neighbours were back before the card landed"
+    );
+    for _ in 0..120 {
+        a.update(1.0 / 240.0);
+    }
+    assert!(
+        carts_shown(&bottom(&a), w) > 1,
+        "the neighbours did not come back after the card landed"
     );
 }
 

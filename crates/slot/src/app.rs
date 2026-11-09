@@ -65,6 +65,7 @@ pub const EJECT_S: f32 = SEATED_AT;
 
 const EJECT_HOLD_S: f32 = 0.35;
 const DS_INSERT_FLY_S: f32 = 1.8;
+const DS_PART_S: f32 = 0.3;
 const DS_EJECT_FLY_S: f32 = 1.8;
 const DS_CLICK_GAP_S: f32 = 0.53;
 
@@ -718,6 +719,7 @@ pub struct App {
     two_panels: bool,
     ds_slot_faces: Option<(TexId, TexId)>,
     box_art: Option<BoxArtFaces>,
+    ds_landed: Option<f64>,
     card_writes: Arc<crate::card_log::CardWrites>,
     resume_unread: bool,
     card_read_only: bool,
@@ -1213,6 +1215,7 @@ impl App {
             two_panels: false,
             ds_slot_faces: None,
             box_art: None,
+            ds_landed: None,
             card_writes,
             resume_unread: false,
             card_read_only: false,
@@ -6270,6 +6273,9 @@ impl App {
             });
         }
         if let Some(phase) = next {
+            if matches!(self.phase, Phase::Ejecting { .. }) && self.two_panels && self.ds_seated() {
+                self.ds_landed = Some(self.clock);
+            }
             self.phase = phase;
             self.refused_from = None;
             if matches!(self.phase, Phase::Shelf) {
@@ -6992,6 +6998,12 @@ impl App {
         self.draw_status_footer(out);
     }
 
+    fn ds_parted(&self) -> Option<f32> {
+        let at = self.ds_landed?;
+        let k = ((self.clock - at) / 1000.0) as f32 / DS_PART_S;
+        (k < 1.0).then(|| 1.0 - ease(k.max(0.0)))
+    }
+
     fn draw_ds_fling_bottom(&self, out: &mut Vec<Draw>) {
         let canvas = self.canvas();
         self.draw_background(out);
@@ -6999,7 +7011,11 @@ impl App {
             return;
         };
         let seat = self.seat();
-        self.shelf().draw_row(canvas, Some(stem), 0.0, seat, 1.0, out);
+        let part = match self.ds_inserting() {
+            true => ease((seat * DS_INSERT_FLY_S / DS_PART_S).clamp(0.0, 1.0)),
+            false => 1.0,
+        };
+        self.shelf().draw_row_parted(canvas, Some(stem), part, out);
         let placed = match self.ds_inserting() {
             true => ds_insert_bottom(seat),
             false => ds_eject_bottom(1.0 - seat),
@@ -7318,6 +7334,9 @@ impl App {
                             self.draw_picking(out);
                         } else if self.draw_leaving(out) {
                         } else if self.draw_pressing(out) {
+                        } else if let Some(part) = self.ds_parted() {
+                            self.shelf().draw_row_parted(self.canvas(), None, part, out);
+                            draw_empty_slot(self.canvas(), self.slot_faces, out);
                         } else if !self.draw_unwrap(out) {
                             self.shelf()
                                 .draw(self.canvas(), self.shelf_shake(), self.slot_faces, out);
