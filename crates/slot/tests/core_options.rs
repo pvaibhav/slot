@@ -2,7 +2,7 @@ mod common;
 
 use slot::link_kind::{serial_option, LinkKind};
 use slot_retro::LibretroCore;
-use slot_store::{Blending, Core, Platform};
+use slot_store::{Core, Platform};
 
 fn dylib_for(core: Core) -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -352,7 +352,7 @@ fn mgba_answers_the_game_boy_player_logo_except_for_gba_video() {
 }
 
 #[test]
-fn every_frame_blending_slot_sets_is_one_the_core_declares() {
+fn the_blending_off_slot_sets_is_one_the_core_declares() {
     let _g = common::core_lock();
     for which in Core::ALL {
         let path = dylib_for(which);
@@ -361,29 +361,16 @@ fn every_frame_blending_slot_sets_is_one_the_core_declares() {
             continue;
         }
         let platform = test_platform(which);
-        for blending in Blending::MGBA {
-            let mut core = LibretroCore::open(&path).expect("open core");
-            slot::core::apply_core_options(
-                &mut core,
-                which,
-                platform,
-                "auto",
-                false,
-                false,
-                None,
-            );
-            slot::core::apply_blending(&mut core, which, blending);
-            every_option_is_one_the_core_has(
-                &core,
-                &format!("{} blending={blending:?}", which.as_str()),
-            );
-            let (key, value) = slot::core::blend_option(which, blending);
-            assert!(
-                core.options().iter().any(|(k, v)| k == key && v == value),
-                "{} was never told {key}={value} for {blending:?}",
-                which.as_str()
-            );
-        }
+        let mut core = LibretroCore::open(&path).expect("open core");
+        slot::core::apply_core_options(&mut core, which, platform, "auto", false, false, None);
+        slot::core::apply_blending_off(&mut core, which);
+        every_option_is_one_the_core_has(&core, &format!("{} blending off", which.as_str()));
+        let (key, value) = slot::core::blending_off(which);
+        assert!(
+            core.options().iter().any(|(k, v)| k == key && v == value),
+            "{} was never told {key}={value}",
+            which.as_str()
+        );
     }
 }
 
@@ -408,142 +395,11 @@ fn both_cores_declare_a_frame_blending_option() {
     }
 }
 
-const PRESENTS: usize = 40;
-const CHANGED_AT: usize = 30;
-
-fn probe_for(which: Core) -> impl Fn(&[u8]) -> [u8; 3] {
-    let at = if which.runs(Platform::Gba) {
-        0
-    } else {
-        (80 * 240 + 120) * 4
-    };
-    move |frame: &[u8]| [frame[at], frame[at + 1], frame[at + 2]]
-}
-
 fn test_platform(which: Core) -> Platform {
     if which.runs(Platform::Gba) {
         Platform::Gba
     } else {
         Platform::Gb
-    }
-}
-
-fn gb_flicker_rom() -> Vec<u8> {
-    let mut rom = vec![0u8; 0x8000];
-    rom[0x100..0x104].copy_from_slice(&[0x00, 0xc3, 0x50, 0x01]);
-    let code = [
-        0xf0, 0x44, 0xfe, 0x90, 0x20, 0xfa, 0xf0, 0x47, 0x2f, 0xe0, 0x47, 0xf0, 0x44, 0xfe, 0x90,
-        0x28, 0xfa, 0x18, 0xed,
-    ];
-    rom[0x150..0x150 + code.len()].copy_from_slice(&code);
-    rom[0x134..0x13b].copy_from_slice(b"FLICKER");
-    let mut sum = 0u8;
-    for b in &rom[0x134..=0x14c] {
-        sum = sum.wrapping_sub(*b).wrapping_sub(1);
-    }
-    rom[0x14d] = sum;
-    rom
-}
-
-fn flicker_rom() -> Vec<u8> {
-    const MVN_R3_R3: u32 = 0xe1e0_3003;
-    let mut rom = common::gba_rom();
-    rom[0xc0 + 9 * 4..0xc0 + 10 * 4].copy_from_slice(&MVN_R3_R3.to_le_bytes());
-    rom
-}
-
-fn frames_with_mix_set_at(which: Core, at: Option<usize>) -> Vec<Vec<u8>> {
-    use slot::audio::Ring;
-    use slot::emu::{CoreState, EmuHandle, Speed};
-    use std::time::{Duration, Instant};
-
-    let d = tempfile::tempdir().expect("a temporary directory");
-    let platform = test_platform(which);
-    let (name, bytes) = if platform == Platform::Gba {
-        ("blend.gba", flicker_rom())
-    } else {
-        ("blend.gb", gb_flicker_rom())
-    };
-    let rom = d.path().join(name);
-    std::fs::write(&rom, bytes).expect("write the test rom");
-    let mut core = LibretroCore::open(&dylib_for(which)).expect("open core");
-    let palette = (which == Core::Gambatte)
-        .then(|| slot_store::GbColors::Palette(slot_store::GbPalette::all().next().unwrap()));
-    slot::core::apply_core_options(&mut core, which, platform, "auto", false, false, palette);
-    let ring = std::sync::Arc::new(Ring::new(1 << 16));
-    let emu = EmuHandle::spawn(Box::new(core), rom, ring, None, None);
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while emu.state() == CoreState::Loading {
-        assert!(Instant::now() < deadline, "the core never loaded");
-        std::thread::sleep(Duration::from_millis(2));
-    }
-    assert_eq!(emu.state(), CoreState::Ready);
-    emu.set_driven(true);
-    emu.set_speed(Speed::Normal);
-    while !emu.locked() {
-        assert!(Instant::now() < deadline, "the worker never locked");
-        std::thread::sleep(Duration::from_millis(1));
-    }
-    let start = emu.published_count();
-    let mut frames = Vec::new();
-    for i in 0..PRESENTS {
-        if at == Some(i) {
-            let (key, value) = slot::core::blend_option(which, Blending::Mix);
-            emu.set_option(key, value);
-        }
-        emu.tick();
-        assert!(
-            emu.wait_frame(Duration::from_secs(2)),
-            "a tick's frame never arrived"
-        );
-        frames.push(emu.latest_frame().expect("nothing published").to_vec());
-    }
-    assert_eq!(
-        emu.published_count() - start,
-        PRESENTS as u64,
-        "a tick came late and the worker ran a frame of its own, so the runs are not comparable"
-    );
-    frames
-}
-
-#[test]
-fn a_frame_blending_change_reaches_a_running_core_without_a_reload() {
-    let _g = common::core_lock();
-    for which in Core::ALL {
-        if !dylib_for(which).exists() {
-            eprintln!("no {} dylib on this host, skipping", which.as_str());
-            continue;
-        }
-        let probe = probe_for(which);
-        let plain = frames_with_mix_set_at(which, None);
-        let mixed = frames_with_mix_set_at(which, Some(CHANGED_AT));
-        assert!(
-            plain[..CHANGED_AT] == mixed[..CHANGED_AT],
-            "{}: the two runs differ before anything was changed, so they cannot be compared",
-            which.as_str()
-        );
-        assert!(
-            plain[CHANGED_AT..]
-                .windows(2)
-                .all(|w| probe(&w[0]) != probe(&w[1])),
-            "{}: the test rom stopped flickering, so blending would have nothing to show",
-            which.as_str()
-        );
-        let px0 = &probe;
-        for i in CHANGED_AT + 3..PRESENTS {
-            assert_eq!(
-                px0(&mixed[i]),
-                px0(&mixed[i - 1]),
-                "{}: frame {i} still flickers after mixing was set mid-game",
-                which.as_str()
-            );
-            assert!(
-                px0(&mixed[i]).iter().all(|c| (0x40..0xc0).contains(c)),
-                "{}: frame {i} shows {:02x?}, not a mix of the black and white it flickers between",
-                which.as_str(),
-                px0(&mixed[i])
-            );
-        }
     }
 }
 

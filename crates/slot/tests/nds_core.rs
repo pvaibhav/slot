@@ -1,7 +1,7 @@
 #![cfg(feature = "nds")]
 
 use slot::core::{dylib_name, open_core};
-use slot_store::{Blending, Core, Platform};
+use slot_store::{Core, Platform};
 
 #[test]
 fn the_ds_core_is_the_slot_ds_shim() {
@@ -21,7 +21,6 @@ fn a_missing_ds_shim_falls_back_to_a_ds_sized_mock() {
         Platform::Nds,
         "",
         false,
-        Blending::Off,
         None,
         None,
     );

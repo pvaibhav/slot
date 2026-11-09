@@ -643,7 +643,6 @@ pub struct App {
     snapshot: Option<Box<dyn Snapshot>>,
     core: Core,
     colour_pending: Option<bool>,
-    blending_pending: Option<Blending>,
     /// The game in the slot's cheats, the Cheats page's selected row, the codes the core is to
     /// run next, and the cheats' names as drawn.
     cheats: Vec<Cheat>,
@@ -1147,7 +1146,6 @@ impl App {
             snapshot: None,
             core: Core::default(),
             colour_pending: None,
-            blending_pending: None,
             cheats: Vec::new(),
             cheat_row: 0,
             cheats_pending: None,
@@ -4928,17 +4926,10 @@ impl App {
         shader == Shader::Authentic
     }
 
-    /// What the core is asked for. Under Authentic the shader draws the screen's colours and
-    /// its ghosting itself, so the core's correction and blending stay off.
+    /// What the core is asked for. Under Authentic the shader draws the screen's colours
+    /// itself, so the core's correction stays off. The core never blends frames: the GPU does.
     pub fn core_colour_correction_for(&self, platform: Platform) -> bool {
         self.colour_correction_for(platform) && !self.authentic(platform)
-    }
-
-    pub fn core_blending_for(&self, platform: Platform) -> Blending {
-        match self.authentic(platform) {
-            true => Blending::Off,
-            false => self.blending_for(platform),
-        }
     }
 
     pub fn gb_model(&self) -> GbModel {
@@ -4956,7 +4947,17 @@ impl App {
     }
 
     pub fn blending_in_play(&self) -> Blending {
-        self.blending_for(self.playing_platform()).on(self.core)
+        self.blending_for(self.playing_platform())
+    }
+
+    /// The GPU's frame blending for the game in play. Authentic draws its LCD's response
+    /// whatever this says.
+    pub fn frame_blend(&self) -> slot_gfx::FrameBlend {
+        match self.blending_in_play() {
+            Blending::Off => slot_gfx::FrameBlend::Off,
+            Blending::Mix => slot_gfx::FrameBlend::Mix,
+            Blending::Ghosting => slot_gfx::FrameBlend::Ghosting,
+        }
     }
 
     pub fn light(&self) -> bool {
@@ -5066,13 +5067,6 @@ impl App {
         self.colour_pending
             .take()
             .map(|_| self.core_colour_correction_for(platform))
-    }
-
-    pub fn take_blending(&mut self) -> Option<Blending> {
-        let platform = self.playing_platform();
-        self.blending_pending
-            .take()
-            .map(|_| self.core_blending_for(platform).on(self.core))
     }
 
     pub fn sunlight(&self) -> Option<u8> {
@@ -5885,7 +5879,6 @@ impl App {
                 Platform::Gbc => self.state.blending_gbc = to,
                 _ => self.state.blending_gba = to,
             }
-            self.blending_pending = Some(self.blending_in_play());
             self.persist();
             return;
         }
@@ -6076,16 +6069,13 @@ impl App {
             QuickRow::Turbo => s.turbo = !s.turbo,
             QuickRow::Rewind => s.rewind = !s.rewind,
             QuickRow::GbaBlending => {
-                s.blending_gba = s.blending_gba.step(&Blending::MGBA, right);
-                self.blending_pending = Some(self.blending_in_play());
+                s.blending_gba = s.blending_gba.step(&Blending::ALL, right);
             }
             QuickRow::GbcBlending => {
-                s.blending_gbc = s.blending_gbc.step(&Blending::MGBA, right);
-                self.blending_pending = Some(self.blending_in_play());
+                s.blending_gbc = s.blending_gbc.step(&Blending::ALL, right);
             }
             QuickRow::GbBlending => {
-                s.blending_gb = s.blending_gb.step(&Blending::MGBA, right);
-                self.blending_pending = Some(self.blending_in_play());
+                s.blending_gb = s.blending_gb.step(&Blending::ALL, right);
             }
             QuickRow::Theme => s.appearance = s.appearance.toggle(),
             QuickRow::WallpaperTint => s.wallpaper_tint = s.wallpaper_tint.step(right),
@@ -6219,12 +6209,11 @@ impl App {
         self.apply(action);
     }
 
-    /// Ask the core again for its palette, colour correction and blending, which Authentic
-    /// turns to neutral and back.
+    /// Ask the core again for its palette and colour correction, which Authentic turns to
+    /// neutral and back.
     fn core_options_pending(&mut self) {
         self.palette_pending = Some(self.state.gb_colors());
         self.colour_pending = Some(self.colour_correction());
-        self.blending_pending = Some(self.blending_in_play());
     }
 
     fn step_shader(&mut self, right: bool) {

@@ -420,23 +420,14 @@ pub enum Blending {
 }
 
 impl Blending {
-    pub const MGBA: [Blending; 3] = [Blending::Off, Blending::Mix, Blending::Ghosting];
-    pub const GPSP: [Blending; 2] = [Blending::Off, Blending::Mix];
+    pub const ALL: [Blending; 3] = [Blending::Off, Blending::Mix, Blending::Ghosting];
 
+    /// Slot blends frames on the GPU, so every Game Boy and GBA core offers every choice.
     pub fn choices(core: Core) -> &'static [Blending] {
         match core {
-            Core::Mgba => &Blending::MGBA,
-            Core::Gpsp => &Blending::GPSP,
-            Core::Gambatte => &Blending::MGBA,
+            Core::Mgba | Core::Gpsp | Core::Gambatte => &Blending::ALL,
             #[cfg(feature = "nds")]
             Core::Dsperate => &[Blending::Off],
-        }
-    }
-
-    pub fn on(self, core: Core) -> Blending {
-        match (core, self) {
-            (Core::Gpsp, Blending::Ghosting) => Blending::Mix,
-            (_, blending) => blending,
         }
     }
 
@@ -449,7 +440,7 @@ impl Blending {
     }
 
     pub fn parse(value: &str) -> Option<Blending> {
-        Blending::MGBA.into_iter().find(|b| b.key() == value)
+        Blending::ALL.into_iter().find(|b| b.key() == value)
     }
 
     pub fn step(self, choices: &[Blending], right: bool) -> Blending {

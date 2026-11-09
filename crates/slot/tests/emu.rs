@@ -1360,3 +1360,25 @@ fn a_core_stuck_in_a_frame_does_not_hold_the_caller_past_two_seconds() {
         "the caller waited {waited:?} on a stuck core"
     );
 }
+
+#[test]
+fn state_loads_resets_and_refreshes_each_cut_the_picture_and_frames_carry_their_cut() {
+    let emu = spawn();
+    let frame_after = |cut: u64| wait_for(|| emu.latest_frame().is_some_and(|f| f.cut() == cut));
+    assert!(frame_after(0), "no frame before any cut");
+    let state = emu
+        .request_state()
+        .recv_timeout(Duration::from_secs(2))
+        .expect("no state");
+    assert_eq!(emu.cuts(), 0, "saving a state jumped the picture");
+    emu.request_load(state);
+    assert!(frame_after(1), "no frame came tagged after the state load");
+    emu.snapshot().reset();
+    assert!(frame_after(2), "no frame came tagged after the reset");
+    emu.set_speed(Speed::Paused);
+    emu.refresh();
+    assert!(
+        frame_after(3),
+        "the refreshed frame was not tagged as a new picture"
+    );
+}

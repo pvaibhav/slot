@@ -1,7 +1,7 @@
 use slot_gfx::{
     blue_light_gain, canvas_size, contrast_boost, dim_gain, game_layout, lcd3x_factors, lcd3x_mask,
-    saturation_boost, Compositor, Draw, GameLayout, HeadlessSurface, Overlay, Screen, ScreenEffect,
-    Sizing, OUT_H, OUT_W, SRC_H, SRC_W,
+    saturation_boost, Compositor, Draw, FrameBlend, GameLayout, HeadlessSurface, Overlay, Screen,
+    ScreenEffect, Sizing, OUT_H, OUT_W, SRC_H, SRC_W,
 };
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
@@ -1800,4 +1800,210 @@ fn an_authentic_gbc_draws_white_and_black_at_bgbs_true_brightness() {
             "{rgb:?} drew {drawn:?}, BGB's GBC reality draws {bgb:?}"
         );
     }
+}
+
+/// The middle of a plain picture after each frame in `frames`, blended `blend`.
+fn blended(blend: FrameBlend, screen: Screen, frames: &[[u8; 3]]) -> Option<Vec<u8>> {
+    let (_g, _s, mut c) = compositor()?;
+    c.fit((OUT_W, OUT_H));
+    c.set_game_source_rect(WHOLE);
+    c.set_screen_effect(ScreenEffect::None);
+    c.set_authentic_screen(screen);
+    c.set_frame_blend(blend);
+    c.set_screen_power(1.0);
+    let shown = frames
+        .iter()
+        .map(|&rgb| {
+            c.begin_frame();
+            c.upload_game(&flat_shot(rgb));
+            c.draw_game();
+            let frame = c.read_window((OUT_W, OUT_H));
+            px(&frame, OUT_W as usize / 2, OUT_H as usize / 2)[1]
+        })
+        .collect();
+    Some(shown)
+}
+
+#[test]
+fn frame_blending_off_shows_each_frame_as_it_comes() {
+    let Some(shown) = blended(
+        FrameBlend::Off,
+        Screen::Gba,
+        &[[0xff; 3], [0; 3], [0xff; 3]],
+    ) else {
+        return;
+    };
+    assert_eq!(shown, [0xff, 0, 0xff]);
+}
+
+#[test]
+fn mix_blends_each_frame_half_and_half_with_the_one_before_on_the_gpu() {
+    let frames = [[0xff; 3], [0; 3], [0xff; 3], [0xff; 3]];
+    let Some(shown) = blended(FrameBlend::Mix, Screen::Gba, &frames) else {
+        return;
+    };
+    assert_eq!(
+        shown[0], 0xff,
+        "the first frame has nothing before it to mix with"
+    );
+    assert!(
+        shown[1].abs_diff(0x80) <= 1,
+        "white then black showed {}",
+        shown[1]
+    );
+    assert!(
+        shown[2].abs_diff(0x80) <= 1,
+        "black then white showed {}",
+        shown[2]
+    );
+    assert_eq!(shown[3], 0xff, "two white frames mixed to {}", shown[3]);
+}
+
+#[test]
+fn ghosting_without_authentic_fades_like_the_screens_lcd_and_settles() {
+    let mut frames = vec![[0xff; 3]; 4];
+    frames.extend([[0; 3]; 30]);
+    let Some(shown) = blended(FrameBlend::Ghosting, Screen::Gba, &frames) else {
+        return;
+    };
+    let fading = &shown[4..];
+    assert_eq!(shown[3], 0xff);
+    assert!(
+        fading[0] < 0xff && fading[0] > 0x10,
+        "one frame of black showed {}, not the GBA's slow fade",
+        fading[0]
+    );
+    assert!(
+        fading.windows(2).all(|w| w[1] <= w[0]),
+        "the fade went back up: {fading:?}"
+    );
+    assert_eq!(
+        *fading.last().unwrap(),
+        0,
+        "the fade never finished: {fading:?}"
+    );
+}
+
+#[test]
+fn blending_a_still_picture_leaves_it_as_sharp_as_no_blending() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    c.fit((OUT_W, OUT_H));
+    c.set_game_source_rect(WHOLE);
+    c.set_screen_effect(ScreenEffect::None);
+    c.set_screen_power(1.0);
+    let stripes = every_fourth_column_lit();
+    let mut drawn = |blend: FrameBlend| {
+        c.set_frame_blend(blend);
+        for _ in 0..30 {
+            c.begin_frame();
+            c.upload_game(&stripes);
+            c.draw_game();
+        }
+        c.read_window((OUT_W, OUT_H))
+    };
+    let off = drawn(FrameBlend::Off);
+    for blend in [FrameBlend::Mix, FrameBlend::Ghosting] {
+        assert!(
+            drawn(blend) == off,
+            "{blend:?} drew a still picture differently"
+        );
+    }
+}
+
+/// The middle of a plain picture, drawn without a new frame from the game.
+fn redrawn(c: &mut Compositor) -> u8 {
+    c.begin_frame();
+    c.draw_game();
+    let frame = c.read_window((OUT_W, OUT_H));
+    px(&frame, OUT_W as usize / 2, OUT_H as usize / 2)[1]
+}
+
+#[test]
+fn a_paused_game_shows_a_new_blending_choice_without_another_frame() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    c.fit((OUT_W, OUT_H));
+    c.set_game_source_rect(WHOLE);
+    c.set_screen_effect(ScreenEffect::None);
+    c.set_authentic_screen(Screen::Gba);
+    c.set_screen_power(1.0);
+    for rgb in [[0xff; 3], [0; 3]] {
+        c.begin_frame();
+        c.upload_game(&flat_shot(rgb));
+        c.draw_game();
+    }
+    assert_eq!(redrawn(&mut c), 0);
+    c.set_frame_blend(FrameBlend::Mix);
+    let mixed = redrawn(&mut c);
+    assert!(mixed.abs_diff(0x80) <= 1, "paused Mix showed {mixed}");
+    c.set_frame_blend(FrameBlend::Ghosting);
+    let ghosted = redrawn(&mut c);
+    assert!(
+        ghosted > 0x10 && ghosted < 0xf0,
+        "paused Ghosting showed {ghosted}, not white fading to black"
+    );
+    c.set_frame_blend(FrameBlend::Off);
+    assert_eq!(redrawn(&mut c), 0);
+}
+
+#[test]
+fn a_cut_blends_nothing_of_the_picture_before_it() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    c.fit((OUT_W, OUT_H));
+    c.set_game_source_rect(WHOLE);
+    c.set_screen_effect(ScreenEffect::None);
+    c.set_authentic_screen(Screen::Gba);
+    c.set_screen_power(1.0);
+    for blend in [FrameBlend::Mix, FrameBlend::Ghosting] {
+        c.set_frame_blend(blend);
+        for _ in 0..10 {
+            c.begin_frame();
+            c.upload_game(&flat_shot([0xff; 3]));
+            c.draw_game();
+        }
+        c.cut_frame_blend();
+        assert_eq!(
+            redrawn(&mut c),
+            0xff,
+            "{blend:?} lost the last frame at the cut"
+        );
+        c.begin_frame();
+        c.upload_game(&flat_shot([0; 3]));
+        c.draw_game();
+        let frame = c.read_window((OUT_W, OUT_H));
+        let first = px(&frame, OUT_W as usize / 2, OUT_H as usize / 2)[1];
+        assert_eq!(
+            first, 0,
+            "{blend:?} blended the old picture into the first frame after a cut"
+        );
+        c.set_frame_blend(FrameBlend::Off);
+    }
+}
+
+#[test]
+fn blending_chosen_after_a_lone_frame_blends_the_next_frame_with_it() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    c.fit((OUT_W, OUT_H));
+    c.set_game_source_rect(WHOLE);
+    c.set_screen_effect(ScreenEffect::None);
+    c.set_screen_power(1.0);
+    c.cut_frame_blend();
+    c.begin_frame();
+    c.upload_game(&flat_shot([0xff; 3]));
+    c.draw_game();
+    c.set_frame_blend(FrameBlend::Mix);
+    assert_eq!(redrawn(&mut c), 0xff);
+    c.begin_frame();
+    c.upload_game(&flat_shot([0; 3]));
+    c.draw_game();
+    let frame = c.read_window((OUT_W, OUT_H));
+    let mixed = px(&frame, OUT_W as usize / 2, OUT_H as usize / 2)[1];
+    assert!(mixed.abs_diff(0x80) <= 1, "white then black showed {mixed}");
 }

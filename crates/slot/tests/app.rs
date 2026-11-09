@@ -2465,7 +2465,7 @@ fn buttons_during_shutdown_never_reach_the_game() {
 
 #[test]
 fn authentic_trades_the_game_boys_colour_ghosting_and_palette_rows_for_a_model() {
-    use slot_store::{Blending, GbColors, GbPalette, Platform, Shader};
+    use slot_store::{GbColors, GbPalette, Platform, Shader};
     use slot_ui::QuickRow;
     let d = common::tmp_root_with_gb_carts(&["Tetris", "Zelda"]);
     let (mut s, _motor) = common::session_with_platform(d.path());
@@ -2493,7 +2493,6 @@ fn authentic_trades_the_game_boys_colour_ghosting_and_palette_rows_for_a_model()
     // The setting stays as chosen; only the core is told to leave the picture alone.
     assert!(app.colour_correction_for(Platform::Gb));
     assert!(!app.core_colour_correction_for(Platform::Gb));
-    assert_eq!(app.core_blending_for(Platform::Gb), Blending::Off);
     assert_eq!(
         app.core_gb_colors(),
         GbColors::Palette(GbPalette::GRAYSCALE)

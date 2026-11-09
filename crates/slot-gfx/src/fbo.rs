@@ -219,7 +219,17 @@ impl Compositor {
     }
 
     pub fn set_screen_effect(&mut self, effect: crate::ScreenEffect) {
-        self.game.set_effect(effect);
+        self.game.set_effect(effect, &self.quad);
+    }
+
+    pub fn set_frame_blend(&mut self, blend: crate::FrameBlend) {
+        self.game.set_blend(blend, &self.quad);
+    }
+
+    /// The game's picture jumped (another game, a state load, a reset): blend nothing of
+    /// what came before into the next frame.
+    pub fn cut_frame_blend(&mut self) {
+        self.game.cut();
     }
 
     pub fn set_authentic_screen(&mut self, screen: crate::Screen) {

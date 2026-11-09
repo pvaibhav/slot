@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use slot_retro::{LibretroCore, MockCore, RetroCore};
-use slot_store::{Blending, Core, GbColors, Platform};
+use slot_store::{Core, GbColors, Platform};
 
 use crate::root;
 
@@ -53,7 +53,6 @@ pub fn open_core(
     platform: Platform,
     serial: &str,
     colour: bool,
-    blending: Blending,
     palette: Option<GbColors>,
     link: Option<u8>,
 ) -> Opened {
@@ -62,9 +61,7 @@ pub fn open_core(
     if core == Core::Dsperate {
         return open_ds(root, &paths);
     }
-    match open_named(
-        root, core, platform, serial, colour, blending, palette, link, &paths,
-    ) {
+    match open_named(root, core, platform, serial, colour, palette, link, &paths) {
         Some(core) => Opened { core, named: true },
         None => {
             report_missing(core, &paths);
@@ -117,18 +114,7 @@ pub fn open_core_for_palette(
     palette: Option<GbColors>,
     paths: &[PathBuf],
 ) -> Box<dyn RetroCore> {
-    open_named(
-        root,
-        core,
-        platform,
-        serial,
-        colour,
-        Blending::Off,
-        palette,
-        None,
-        paths,
-    )
-    .unwrap_or_else(|| {
+    open_named(root, core, platform, serial, colour, palette, None, paths).unwrap_or_else(|| {
         report_missing(core, paths);
         Box::new(MockCore::new())
     })
@@ -141,7 +127,6 @@ fn open_named(
     platform: Platform,
     serial: &str,
     colour: bool,
-    blending: Blending,
     palette: Option<GbColors>,
     link: Option<u8>,
     paths: &[PathBuf],
@@ -163,7 +148,7 @@ fn open_named(
                     colour,
                     palette,
                 );
-                apply_blending(&mut opened, core, blending);
+                apply_blending_off(&mut opened, core);
                 if let Some(player) = link {
                     apply_link_options(&mut opened, core, player);
                 }
@@ -262,23 +247,19 @@ pub fn sunlight_at(local_secs: i64) -> u8 {
     (SUNLIGHT_NOON * (360 - from_noon) / 360).max(0) as u8
 }
 
-pub fn blend_option(which: Core, blending: Blending) -> (&'static str, &'static str) {
-    match (which, blending.on(which)) {
-        (Core::Mgba, Blending::Off) => ("mgba_interframe_blending", "OFF"),
-        (Core::Mgba, Blending::Mix) => ("mgba_interframe_blending", "mix"),
-        (Core::Mgba, Blending::Ghosting) => ("mgba_interframe_blending", "lcd_ghosting"),
-        (Core::Gpsp, Blending::Off) => ("gpsp_frame_mixing", "disabled"),
-        (Core::Gpsp, Blending::Mix | Blending::Ghosting) => ("gpsp_frame_mixing", "enabled"),
-        (Core::Gambatte, Blending::Off) => ("gambatte_mix_frames", "disabled"),
-        (Core::Gambatte, Blending::Mix) => ("gambatte_mix_frames", "mix"),
-        (Core::Gambatte, Blending::Ghosting) => ("gambatte_mix_frames", "lcd_ghosting"),
+/// The core's own frame blending, which stays off: Slot blends frames on the GPU instead.
+pub fn blending_off(which: Core) -> (&'static str, &'static str) {
+    match which {
+        Core::Mgba => ("mgba_interframe_blending", "OFF"),
+        Core::Gpsp => ("gpsp_frame_mixing", "disabled"),
+        Core::Gambatte => ("gambatte_mix_frames", "disabled"),
         #[cfg(feature = "nds")]
-        (Core::Dsperate, _) => ("dsperate_blending", "off"),
+        Core::Dsperate => ("dsperate_blending", "off"),
     }
 }
 
-pub fn apply_blending(core: &mut LibretroCore, which: Core, blending: Blending) {
-    let (key, value) = blend_option(which, blending);
+pub fn apply_blending_off(core: &mut LibretroCore, which: Core) {
+    let (key, value) = blending_off(which);
     core.set_option(key, value);
 }
 
@@ -395,17 +376,11 @@ mod tests {
     }
 
     #[test]
-    fn gambatte_spells_blending_and_color_correction() {
-        for (blending, want) in [
-            (Blending::Off, "disabled"),
-            (Blending::Mix, "mix"),
-            (Blending::Ghosting, "lcd_ghosting"),
-        ] {
-            assert_eq!(
-                blend_option(Core::Gambatte, blending),
-                ("gambatte_mix_frames", want)
-            );
-        }
+    fn gambatte_spells_blending_off_and_color_correction() {
+        assert_eq!(
+            blending_off(Core::Gambatte),
+            ("gambatte_mix_frames", "disabled")
+        );
         assert_eq!(
             colour_option(Core::Gambatte, Platform::Gbc, true),
             Some(("gambatte_gbc_color_correction", "GBC only"))
@@ -421,37 +396,12 @@ mod tests {
     }
 
     #[test]
-    fn each_core_spells_frame_blending_its_own_way() {
-        for (which, blending, want) in [
-            (
-                Core::Mgba,
-                Blending::Off,
-                ("mgba_interframe_blending", "OFF"),
-            ),
-            (
-                Core::Mgba,
-                Blending::Mix,
-                ("mgba_interframe_blending", "mix"),
-            ),
-            (
-                Core::Mgba,
-                Blending::Ghosting,
-                ("mgba_interframe_blending", "lcd_ghosting"),
-            ),
-            (Core::Gpsp, Blending::Off, ("gpsp_frame_mixing", "disabled")),
-            (Core::Gpsp, Blending::Mix, ("gpsp_frame_mixing", "enabled")),
-            (
-                Core::Gpsp,
-                Blending::Ghosting,
-                ("gpsp_frame_mixing", "enabled"),
-            ),
-        ] {
-            assert_eq!(
-                blend_option(which, blending),
-                want,
-                "{which:?} {blending:?}"
-            );
-        }
+    fn each_core_spells_frame_blending_off_its_own_way() {
+        assert_eq!(
+            blending_off(Core::Mgba),
+            ("mgba_interframe_blending", "OFF")
+        );
+        assert_eq!(blending_off(Core::Gpsp), ("gpsp_frame_mixing", "disabled"));
     }
 
     #[test]

@@ -57,7 +57,7 @@ pub use kms_atomic::{atomic_plan, primary_plane_for, AtomicIds, PlaneInfo, PLANE
 pub use layout::{canvas_scale, fills, panel_pixels, Canvas};
 pub use lcd3x::{lcd3x_factors, lcd3x_mask, ScreenEffect};
 pub use overlay::{Overlay, OverlayPass};
-pub use pipeline::{SCALE, SRC_H, SRC_W, WHOLE_TEXTURE};
+pub use pipeline::{FrameBlend, SCALE, SRC_H, SRC_W, WHOLE_TEXTURE};
 pub use placement::{game_layout, table_placement, GameLayout, Sizing};
 pub use power::{screen_brightness, screen_rect_above, screen_scale, screen_width};
 pub use surface::{

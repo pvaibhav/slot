@@ -1,6 +1,6 @@
 mod common;
 
-use slot_store::{Blending, Core, Platform};
+use slot_store::{Core, Platform};
 
 fn dylib_for(core: Core) -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -667,7 +667,6 @@ fn open_core_reaches_a_gpsp_named_dylib_under_the_content_roots_system_directory
         Platform::Gba,
         "auto",
         false,
-        Blending::Off,
         None,
         None,
     )
@@ -894,75 +893,4 @@ fn a_paused_refresh_shows_a_colour_change_on_the_first_toggle() {
         (off - raw).abs() < raw * 0.02,
         "toggling back off did not restore the raw colours: {raw:.1} then {off:.1}"
     );
-}
-
-/// Render changing pixels through the real cores: reading the option map alone cannot
-/// catch a misspelled option that the core ignores or a build without display filters.
-#[test]
-fn frame_mixing_changes_the_rendered_frames_with_colour_correction_off() {
-    use slot_retro::{ButtonMask, LibretroCore, RetroCore};
-
-    let _g = common::core_lock();
-    let d = tempfile::tempdir().unwrap();
-    let rom = d.path().join("display.gba");
-    std::fs::write(&rom, common::gba_rom()).unwrap();
-    // The display ROM changes its picture at frame 32, which is what shows the ghosting.
-    const SWITCH: usize = 16;
-    for which in [Core::Mgba, Core::Gpsp] {
-        let path = dylib_for(which);
-        if !path.exists() {
-            eprintln!("no {which:?} dylib on this host, skipping");
-            continue;
-        }
-        let render = |ghosting: bool, switch_to: Option<bool>| {
-            let mut core = LibretroCore::open(&path).expect("open core");
-            slot::core::apply_core_options(
-                &mut core,
-                which,
-                Platform::Gba,
-                "auto",
-                false,
-                false,
-                None,
-            );
-            slot::core::apply_blending(
-                &mut core,
-                which,
-                if ghosting {
-                    Blending::Mix
-                } else {
-                    Blending::Off
-                },
-            );
-            core.load(&rom).expect("load display ROM");
-            let mut pixels = Vec::new();
-            for frame in 0..64 {
-                if let (SWITCH, Some(on)) = (frame, switch_to) {
-                    let (key, value) = slot::core::blend_option(
-                        which,
-                        if on { Blending::Mix } else { Blending::Off },
-                    );
-                    core.set_option(key, value);
-                }
-                core.run_frame(ButtonMask::default());
-                pixels.extend_from_slice(&core.video_xrgb8888()[..4]);
-            }
-            pixels
-        };
-        let on = render(true, None);
-        let off = render(false, None);
-        assert_ne!(on, off, "{which:?} ghosting had no effect");
-        let switched = render(true, Some(false));
-        let after = (SWITCH + 1) * 4;
-        assert_eq!(
-            switched[after..],
-            off[after..],
-            "{which:?} kept ghosting after it was switched off mid-game"
-        );
-        assert_ne!(
-            switched[after..],
-            on[after..],
-            "{which:?} ignored ghosting being switched off mid-game"
-        );
-    }
 }

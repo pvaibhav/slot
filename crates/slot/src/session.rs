@@ -26,6 +26,8 @@ pub struct Session {
     root: PathBuf,
     app: App,
     emu: Option<EmuHandle>,
+    /// How many cores have been started, so a new one's frames are known for a new picture.
+    launches: u64,
     opening: Option<Opening>,
     sink: Box<dyn AudioSink>,
     gestures: Gestures,
@@ -56,6 +58,7 @@ impl Session {
             app: App::boot(&root),
             root,
             emu: None,
+            launches: 0,
             opening: None,
             sink,
             gestures: Gestures::new(),
@@ -241,6 +244,11 @@ impl Session {
         self.emu.as_ref().is_some_and(EmuHandle::frame_ready)
     }
 
+    /// How many cores have been started: a new one's frames are a new picture.
+    pub fn launches(&self) -> u64 {
+        self.launches
+    }
+
     pub fn frames_published(&self) -> u64 {
         self.emu.as_ref().map_or(0, EmuHandle::published_count)
     }
@@ -417,13 +425,6 @@ impl Session {
                     emu.set_option(key, value);
                     repaint = true;
                 }
-            }
-        }
-        if let Some(blending) = self.app.take_blending() {
-            if let Some(emu) = &self.emu {
-                let (key, value) = crate::core::blend_option(self.app.core(), blending);
-                emu.set_option(key, value);
-                repaint = true;
             }
         }
         if let Some(codes) = self.app.take_cheat_codes() {
@@ -663,7 +664,6 @@ impl Session {
         let player = self.app.link_player();
         let chosen = self.app.core_gb_colors();
         let colour = self.app.core_colour_correction_for(platform);
-        let blending = self.app.core_blending_for(platform);
         let join = std::thread::Builder::new()
             .name("slot-open".into())
             .spawn(move || {
@@ -673,9 +673,7 @@ impl Session {
                 };
                 launch("resume state read");
                 let palette = crate::core::palette_for(chosen, platform, &rom, player);
-                let mut opened = open_core(
-                    &root, core, platform, serial, colour, blending, palette, player,
-                );
+                let mut opened = open_core(&root, core, platform, serial, colour, palette, player);
                 crate::core::apply_game_boy_player(&mut *opened.core, core, platform, &rom);
                 launch("core opened");
                 let sav = persist::read_sav(&root, platform, &stem);
@@ -748,6 +746,7 @@ impl Session {
         emu.set_driven(self.driven);
         self.app.set_snapshot(Box::new(emu.snapshot()));
         self.emu = Some(emu);
+        self.launches += 1;
         self.sunlight_sent = None;
         true
     }

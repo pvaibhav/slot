@@ -127,7 +127,7 @@ fn colour_correction_changed_behind_the_menu_redraws_the_paused_frame() {
 }
 
 #[test]
-fn frame_blending_changed_behind_the_menu_redraws_the_paused_frame() {
+fn frame_blending_changed_behind_the_menu_reaches_the_gpu_and_leaves_the_core_paused() {
     let (mut s, _d, mut now) = session_playing();
     assert!(
         runs_at(&mut s, &mut now, Speed::Normal),
@@ -139,18 +139,10 @@ fn frame_blending_changed_behind_the_menu_redraws_the_paused_frame() {
         tap(&mut s, &mut now, btn);
     }
     assert_eq!(s.app().in_game_menu(), Some(QuickRow::Blending));
-    let shown = s.emu().map(|e| e.published_count()).expect("no core");
+    assert_eq!(s.app().frame_blend(), slot_gfx::FrameBlend::Off);
     tap(&mut s, &mut now, Btn::Right);
-    let deadline = Instant::now() + BAIL;
-    while s.emu().map(|e| e.published_count()) == Some(shown) {
-        assert!(
-            Instant::now() < deadline,
-            "the paused frame was never redrawn"
-        );
-        step(&mut s, &mut now, &[]);
-        std::thread::sleep(Duration::from_millis(1));
-    }
-    assert_eq!(s.observed_speed(), Some(Speed::Paused));
+    assert_eq!(s.app().frame_blend(), slot_gfx::FrameBlend::Mix);
+    assert!(runs_at(&mut s, &mut now, Speed::Paused));
 }
 
 #[test]

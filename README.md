@@ -40,6 +40,9 @@ notes are in the [changelog](CHANGELOG.md).
   The shaders are also [available for NextUI](https://github.com/pvaibhav/authentic-shaders).
 - ~~**LCD ghosting / interframe blending.**~~ Included upstream since **v1.10.0**
   as **Frame Blending** under Settings > Screen.
+- **Frame Blending on the GPU.** Mix and Ghosting work the same on every shader and core,
+  so gpSP gets Ghosting too, and the emulator spends no CPU time on blending. Ghosting
+  fades like the console's own LCD, as Authentic does.
 - **Colour calibration** for the RG SP and RG34XXSP panels, based on an accurate 3x1D LUT
   measured by me. Both white point and gamma curve are corrected. Currently no other firmware
   has this!

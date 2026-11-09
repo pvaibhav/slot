@@ -247,8 +247,10 @@ impl Screen {
     }
 }
 
-/// What the LCD shows after its slow response: two textures at the game's own size, the
-/// last one read while the next is drawn. Tiny next to the screen, and none of it on the CPU.
+/// What the LCD shows after its slow response, or the last two frames mixed: two textures at
+/// the game's own size, before any scaling, the last one read while the next is drawn. Tiny
+/// next to the screen, and none of it on the CPU. Frame blending runs through it under every
+/// shader; the core's own blending stays off.
 pub(crate) struct Ghost {
     prog: gl::types::GLuint,
     u_keep: gl::types::GLint,
@@ -310,6 +312,38 @@ impl Ghost {
 
     /// The screen after a new frame from `game`, each pixel `keep`ing part of what it showed.
     pub fn respond(&mut self, game: gl::types::GLuint, keep: [f32; 2], quad: &crate::quad::Quad) {
+        self.draw(game, self.tex[self.shown], keep, quad);
+    }
+
+    /// The new frame from `game` half and half with the frame before it, `last`.
+    pub fn mix(
+        &mut self,
+        game: gl::types::GLuint,
+        last: gl::types::GLuint,
+        quad: &crate::quad::Quad,
+    ) {
+        self.draw(game, last, [0.5; 2], quad);
+    }
+
+    /// Read the screen at each game pixel's centre, as every shader but Authentic does, or
+    /// filtered between game pixels for Authentic's shadow.
+    pub fn set_filter(&mut self, filter: gl::types::GLenum) {
+        unsafe {
+            for t in self.tex {
+                gl::BindTexture(gl::TEXTURE_2D, t);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, filter as i32);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, filter as i32);
+            }
+        }
+    }
+
+    fn draw(
+        &mut self,
+        game: gl::types::GLuint,
+        prev: gl::types::GLuint,
+        keep: [f32; 2],
+        quad: &crate::quad::Quad,
+    ) {
         use crate::pipeline::{SRC_H, SRC_W};
         let next = 1 - self.shown;
         let keep = if self.primed { keep } else { [0.0; 2] };
@@ -323,7 +357,7 @@ impl Ghost {
             gl::UseProgram(self.prog);
             gl::Uniform2f(self.u_keep, keep[0], keep[1]);
             gl::ActiveTexture(gl::TEXTURE1);
-            gl::BindTexture(gl::TEXTURE_2D, self.tex[self.shown]);
+            gl::BindTexture(gl::TEXTURE_2D, prev);
             gl::ActiveTexture(gl::TEXTURE0);
             gl::BindTexture(gl::TEXTURE_2D, game);
             quad.draw();

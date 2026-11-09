@@ -46,6 +46,9 @@ pub struct Frontend {
     start: Instant,
     last: Instant,
     draws: Vec<Draw>,
+    /// The picture the GPU blends frames of: the core it came from, the cut its frames were
+    /// drawn after, or a blank panel.
+    picture: Option<Picture>,
     ds: crate::ds_view::DsView,
     polaroid_texes: Vec<TexId>,
     title_tex: Option<TexId>,
@@ -615,6 +618,7 @@ impl Frontend {
             start: now,
             last: now,
             draws: Vec::new(),
+            picture: None,
             ds: Default::default(),
             polaroid_texes: Vec::new(),
             title_tex: None,
@@ -1202,6 +1206,7 @@ impl Frontend {
         compositor.set_picture(self.session.app().picture_rect());
         compositor.set_screen_effect(self.session.app().screen_effect());
         compositor.set_authentic_screen(authentic_screen(self.session.app()));
+        compositor.set_frame_blend(self.session.app().frame_blend());
         compositor.set_shake(self.session.app().screen_shake());
         compositor.set_screen_power(self.session.app().screen_power());
         compositor.set_screen_footer(self.session.app().screen_footer());
@@ -1215,12 +1220,15 @@ impl Frontend {
             return false;
         }
         if let Some([r, g, b]) = self.session.app().blank_panel() {
+            self.picture_is(Picture::Blank, compositor);
             let px = (slot_gfx::SRC_W * slot_gfx::SRC_H) as usize;
             compositor.upload_game(&[b, g, r, 0xff].repeat(px));
         } else if let Some(frame) = (!crate::ds_view::seated(&self.session))
             .then(|| self.session.frame())
             .flatten()
         {
+            let launch = self.session.launches();
+            self.picture_is(Picture::Game(launch, frame.cut()), compositor);
             compositor.upload_game(&frame);
             crate::latency::picture(&frame);
             crate::latency::taken();
@@ -1625,6 +1633,22 @@ impl Frontend {
         let deadline = Instant::now() + Duration::from_secs(2);
         while !self.session.achievement_flush_ready() && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+enum Picture {
+    Blank,
+    /// A frame from the `n`th core started, drawn after its `cut`th jump.
+    Game(u64, u64),
+}
+
+impl Frontend {
+    /// The next frame uploaded is of `picture`; blend nothing of another into it.
+    fn picture_is(&mut self, picture: Picture, compositor: &mut Compositor) {
+        if self.picture.replace(picture) != Some(picture) {
+            compositor.cut_frame_blend();
         }
     }
 }
