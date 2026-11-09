@@ -1254,6 +1254,10 @@ impl Frontend {
         self.session.set_driven(true);
     }
 
+    pub fn fix_present(&mut self) {
+        self.session.set_fixed_present(true);
+    }
+
     pub fn step_emulator(&self, present: Duration, timeout: Duration) -> bool {
         self.session.step_emulator(present, timeout)
     }

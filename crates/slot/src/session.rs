@@ -38,6 +38,7 @@ pub struct Session {
     prefetch: Prefetch,
     reloading: bool,
     driven: bool,
+    fixed_present: bool,
     sunlight_sent: Option<u8>,
     buzz_ends: Option<Instant>,
 }
@@ -66,6 +67,7 @@ impl Session {
             prefetch: Prefetch::default(),
             reloading: false,
             driven: false,
+            fixed_present: false,
             sunlight_sent: None,
             buzz_ends: None,
         };
@@ -147,6 +149,13 @@ impl Session {
 
     pub fn emu(&self) -> Option<&EmuHandle> {
         self.emu.as_ref()
+    }
+
+    pub fn set_fixed_present(&mut self, fixed: bool) {
+        self.fixed_present = fixed;
+        if let Some(emu) = &self.emu {
+            emu.set_fixed_present(fixed);
+        }
     }
 
     pub fn set_driven(&mut self, driven: bool) {
@@ -665,6 +674,7 @@ impl Session {
         self.app.set_resume_unread(resume_unread);
         emu.set_volume(self.app.output_volume());
         emu.set_driven(self.driven);
+        emu.set_fixed_present(self.fixed_present);
         self.app.set_snapshot(Box::new(emu.snapshot()));
         self.emu = Some(emu);
         self.sunlight_sent = None;

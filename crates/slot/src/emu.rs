@@ -113,6 +113,7 @@ struct Shared {
     peer_ended: AtomicBool,
     bios_mismatch: AtomicBool,
     driven: AtomicBool,
+    fixed_present: AtomicBool,
     locked: AtomicBool,
     present_ns: AtomicU64,
     requested: AtomicBool,
@@ -124,6 +125,33 @@ struct Shared {
 struct Clock {
     tick: u64,
     done: u64,
+    sent: Option<Instant>,
+}
+
+impl Shared {
+    fn next_tick(&self, served: u64, until: Instant) -> Wait {
+        let mut clock = self.clock.lock().unwrap_or_else(|e| e.into_inner());
+        loop {
+            if clock.tick > served {
+                return Wait::Tick(clock.tick, clock.sent.unwrap_or_else(Instant::now));
+            }
+            if self.requested.swap(false, Ordering::AcqRel) {
+                return Wait::Request;
+            }
+            let Some(left) = until.checked_duration_since(Instant::now()) else {
+                return Wait::Late;
+            };
+            if self.stop.load(Ordering::Relaxed)
+                || !self.driven.load(Ordering::Relaxed)
+            {
+                return Wait::Late;
+            }
+            clock = match self.clocked.wait_timeout(clock, left) {
+                Ok((c, _)) => c,
+                Err(e) => e.into_inner().0,
+            };
+        }
+    }
 }
 
 impl EmuHandle {
@@ -191,6 +219,7 @@ impl EmuHandle {
             peer_ended: AtomicBool::new(false),
             bios_mismatch: AtomicBool::new(false),
             driven: AtomicBool::new(false),
+            fixed_present: AtomicBool::new(false),
             locked: AtomicBool::new(false),
             present_ns: AtomicU64::new(PRESENT.as_nanos() as u64),
             requested: AtomicBool::new(false),
@@ -272,6 +301,10 @@ impl EmuHandle {
         );
     }
 
+    pub fn set_fixed_present(&self, fixed: bool) {
+        self.shared.fixed_present.store(fixed, Ordering::Relaxed);
+    }
+
     pub fn set_driven(&self, driven: bool) {
         self.shared.driven.store(driven, Ordering::Relaxed);
         self.shared.clocked.notify_all();
@@ -287,6 +320,7 @@ impl EmuHandle {
             .store(present.as_nanos() as u64, Ordering::Relaxed);
         let mut clock = self.shared.clock.lock().unwrap_or_else(|e| e.into_inner());
         clock.tick += 1;
+        clock.sent = Some(Instant::now());
         self.shared.clocked.notify_all();
     }
 
@@ -496,7 +530,7 @@ fn request(cmds: &Sender<Cmd>, shared: &Shared, cmd: Cmd) -> bool {
 }
 
 enum Wait {
-    Tick(u64),
+    Tick(u64, Instant),
     Request,
     Late,
 }
@@ -907,15 +941,20 @@ impl Worker {
                 let patience = if stalled { PRESENT } else { STALL };
                 let until = Instant::now() + patience;
                 loop {
-                    match self.next_tick(served, until) {
-                        Wait::Tick(tick) => {
+                    match self.shared.next_tick(served, until) {
+                        Wait::Tick(tick, sent) => {
                             due = match tick - served {
                                 n if n <= MAX_CATCH_UP => n as u32,
                                 _ => 1,
                             };
                             served = tick;
                             stalled = false;
-                            if let Some(measured) = rate.served(Instant::now(), tick) {
+                            let fixed = self.shared.fixed_present.load(Ordering::Relaxed);
+                            if fixed {
+                                scale = self.shared.present_ns.load(Ordering::Relaxed) as f64
+                                    / PRESENT.as_nanos() as f64;
+                            }
+                            if let Some(measured) = lock_scale(fixed, &mut rate, sent, tick) {
                                 scale = measured;
                             }
                         }
@@ -1060,29 +1099,6 @@ impl Worker {
             .tick
     }
 
-    fn next_tick(&self, served: u64, until: Instant) -> Wait {
-        let mut clock = self.shared.clock.lock().unwrap_or_else(|e| e.into_inner());
-        loop {
-            if clock.tick > served {
-                return Wait::Tick(clock.tick);
-            }
-            if self.shared.requested.swap(false, Ordering::AcqRel) {
-                return Wait::Request;
-            }
-            let Some(left) = until.checked_duration_since(Instant::now()) else {
-                return Wait::Late;
-            };
-            if self.shared.stop.load(Ordering::Relaxed)
-                || !self.shared.driven.load(Ordering::Relaxed)
-            {
-                return Wait::Late;
-            }
-            clock = match self.shared.clocked.wait_timeout(clock, left) {
-                Ok((c, _)) => c,
-                Err(e) => e.into_inner().0,
-            };
-        }
-    }
 
     fn publish(&self, video: &[u8]) {
         let mut buf = self.frames.take_write();
@@ -1219,6 +1235,11 @@ impl TickRate {
         self.restart(now, tick);
         clean.then(|| present / PRESENT.as_secs_f64())
     }
+}
+
+fn lock_scale(fixed: bool, rate: &mut TickRate, sent: Instant, tick: u64) -> Option<f64> {
+    let measured = rate.served(sent, tick);
+    (!fixed).then_some(measured).flatten()
 }
 
 fn drain_transport(transport: &mut dyn LinkChannel, link: &Link, cap: u32) {
@@ -1368,6 +1389,39 @@ mod tests {
         rate.restart(back, 370);
         let scale = run_window(&mut rate, back, 1);
         assert!(near_panel(scale), "measured {scale:?}");
+    }
+
+    #[test]
+    fn a_tick_keeps_the_time_the_loop_sent_it() {
+        let ring = Arc::new(crate::audio::Ring::new(4096));
+        let handle = EmuHandle::spawn(Box::new(slot_retro::MockCore::new()), "mock".into(), ring, None, None);
+        let sent = Instant::now();
+        handle.tick(PRESENT);
+        std::thread::sleep(Duration::from_millis(40));
+        match handle.shared.next_tick(0, Instant::now() + Duration::from_millis(1)) {
+            Wait::Tick(_, at) => assert!(
+                at.duration_since(sent) < Duration::from_millis(10),
+                "the tick was stamped when the worker read it, {:?} after it was sent",
+                at.duration_since(sent)
+            ),
+            _ => panic!("no tick"),
+        }
+    }
+
+    #[test]
+    fn a_fixed_panel_period_is_never_remeasured_from_a_slow_loop() {
+        let start = Instant::now();
+        let slow = PANEL + Duration::from_millis(3);
+        let mut fixed = TickRate::new(start, 0);
+        let mut free = TickRate::new(start, 0);
+        let (mut from_fixed, mut from_free) = (None, None);
+        for t in 1..=u64::from(RATE_WINDOW) {
+            let at = start + slow * t as u32;
+            from_fixed = from_fixed.or(lock_scale(true, &mut fixed, at, t));
+            from_free = from_free.or(lock_scale(false, &mut free, at, t));
+        }
+        assert_eq!(from_fixed, None, "a fixed panel period was re-measured from a late loop");
+        assert!(from_free.is_some_and(|s| s > 1.1), "a free period was not measured: {from_free:?}");
     }
 
     #[test]
