@@ -165,48 +165,6 @@ impl WallpaperTint {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
-pub enum AutoLoad {
-    #[default]
-    Always,
-    PowerOn,
-    Never,
-}
-
-impl AutoLoad {
-    pub const ALL: [AutoLoad; 3] = [AutoLoad::Always, AutoLoad::PowerOn, AutoLoad::Never];
-
-    pub fn key(self) -> &'static str {
-        match self {
-            AutoLoad::Always => "1",
-            AutoLoad::PowerOn => "power",
-            AutoLoad::Never => "0",
-        }
-    }
-
-    pub fn parse(value: &str) -> Option<AutoLoad> {
-        AutoLoad::ALL.into_iter().find(|a| a.key() == value)
-    }
-
-    pub fn on_insert(self) -> bool {
-        self == AutoLoad::Always
-    }
-
-    pub fn at_power_on(self) -> bool {
-        self != AutoLoad::Never
-    }
-
-    pub fn step(self, right: bool) -> AutoLoad {
-        let n = AutoLoad::ALL.len();
-        let at = AutoLoad::ALL.iter().position(|a| *a == self).unwrap_or(0);
-        AutoLoad::ALL[if right {
-            (at + 1) % n
-        } else {
-            (at + n - 1) % n
-        }]
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub enum WallpaperPick {
     None,
@@ -459,8 +417,8 @@ pub struct SlotState {
     pub shader_gba: Shader,
     pub shader_gb: Shader,
     pub shader_gbc: Shader,
-    pub auto_load: AutoLoad,
-    pub eject_save: bool,
+    pub resume_insert: bool,
+    pub resume_power_on: bool,
     pub turbo: bool,
     pub rewind: bool,
     pub gb_palettes: bool,
@@ -646,8 +604,8 @@ impl Default for SlotState {
             shader_gba: Shader::Grid,
             shader_gb: Shader::Simpletex,
             shader_gbc: Shader::Simpletex,
-            auto_load: AutoLoad::Always,
-            eject_save: true,
+            resume_insert: true,
+            resume_power_on: true,
             turbo: true,
             rewind: true,
             gb_palettes: false,
@@ -738,7 +696,7 @@ fn write_list(root: &Path, name: &str, list: &[Recent]) -> std::io::Result<()> {
 
 pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
     let mut text = format!(
-        "cart={}\ncart_platform={}\nbrightness={}\nblue_light={}\nvolume={}\nvolume_hp={}\nmuted={}\nmuted_hp={}\nclock_set={}\nzone={}\nclock_24h={}\nnetwork_time={}\nrumble={}\nff_speed={}\nff_sound={}\ncolour_correction_gba={}\ncolour_correction_gb={}\nshader_gba={}\nshader_gb={}\neject_save={}\nturbo={}\nrewind={}\ngb_palettes={}\ngb_palette={}\nappearance={}\nwallpaper={}\n",
+        "cart={}\ncart_platform={}\nbrightness={}\nblue_light={}\nvolume={}\nvolume_hp={}\nmuted={}\nmuted_hp={}\nclock_set={}\nzone={}\nclock_24h={}\nnetwork_time={}\nrumble={}\nff_speed={}\nff_sound={}\ncolour_correction_gba={}\ncolour_correction_gb={}\nshader_gba={}\nshader_gb={}\nturbo={}\nrewind={}\ngb_palettes={}\ngb_palette={}\nappearance={}\nwallpaper={}\n",
         s.cart.as_deref().unwrap_or(""),
         s.cart_platform.map_or(String::new(), platform_key),
         s.brightness,
@@ -758,7 +716,6 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
         s.colour_correction_gb as u8,
         s.shader_gba.name(),
         s.shader_gb.name(),
-        s.eject_save as u8,
         s.turbo as u8,
         s.rewind as u8,
         s.gb_palettes as u8,
@@ -782,7 +739,8 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
     }
     text.push_str(&format!("gb_core={}\n", s.gb_core.as_str()));
     text.push_str(&format!("left_stick_dpad={}\n", s.left_stick_dpad as u8));
-    text.push_str(&format!("auto_load={}\n", s.auto_load.key()));
+    text.push_str(&format!("resume_insert={}\n", s.resume_insert as u8));
+    text.push_str(&format!("resume_power_on={}\n", s.resume_power_on as u8));
     if let Some(min) = s.lid_off_min {
         text.push_str(&format!("lid_off_min={min}\n"));
     }
@@ -824,6 +782,15 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
     write_list(root, FAVORITES_FILE, &s.favorites)
 }
 
+fn auto_load_value(value: &str) -> Option<(bool, bool)> {
+    match value {
+        "1" => Some((true, true)),
+        "power" => Some((false, true)),
+        "0" => Some((false, false)),
+        _ => None,
+    }
+}
+
 fn parse(text: &str) -> Option<SlotState> {
     let mut cart = None;
     let mut cart_platform = None;
@@ -852,7 +819,8 @@ fn parse(text: &str) -> Option<SlotState> {
     let mut shader_gb = None;
     let mut shader_gbc = None;
     let mut auto_load = None;
-    let mut eject_save = None;
+    let mut resume_insert = None;
+    let mut resume_power_on = None;
     let mut turbo = None;
     let mut rewind = None;
     let mut gb_palettes = None;
@@ -918,8 +886,9 @@ fn parse(text: &str) -> Option<SlotState> {
             "colour_correction_gb" => colour_correction_gb = flag(value),
             "colour_correction_gbc" => colour_correction_gbc = flag(value),
             "shader_gba" => shader_gba = Shader::parse(value).filter(|s| Shader::GBA.contains(s)),
-            "auto_load" => auto_load = AutoLoad::parse(value),
-            "eject_save" => eject_save = flag(value),
+            "auto_load" => auto_load = auto_load_value(value),
+            "resume_insert" => resume_insert = flag(value),
+            "resume_power_on" => resume_power_on = flag(value),
             "turbo" => turbo = flag(value),
             "rewind" => rewind = flag(value),
             "gb_palettes" => gb_palettes = flag(value),
@@ -995,8 +964,12 @@ fn parse(text: &str) -> Option<SlotState> {
         shader_gba: shader_gba.unwrap_or(fallback.shader_gba),
         shader_gb: shader_gb.unwrap_or(fallback.shader_gb),
         shader_gbc: shader_gbc.or(shader_gb).unwrap_or(fallback.shader_gbc),
-        auto_load: auto_load.unwrap_or(fallback.auto_load),
-        eject_save: eject_save.unwrap_or(fallback.eject_save),
+        resume_insert: resume_insert
+            .or(auto_load.map(|(insert, _)| insert))
+            .unwrap_or(fallback.resume_insert),
+        resume_power_on: resume_power_on
+            .or(auto_load.map(|(_, power_on)| power_on))
+            .unwrap_or(fallback.resume_power_on),
         turbo: turbo.unwrap_or(fallback.turbo),
         rewind: rewind.unwrap_or(fallback.rewind),
         gb_palettes: gb_palettes.unwrap_or(fallback.gb_palettes),

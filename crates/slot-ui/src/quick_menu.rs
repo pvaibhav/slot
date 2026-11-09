@@ -20,7 +20,7 @@ pub enum QuickRow {
     GbaColourCorrection,
     GbColourCorrection,
     Game,
-    EjectSave,
+    ResumePowerOn,
     Turbo,
     Rewind,
     GbPalette,
@@ -109,7 +109,7 @@ pub enum QuickRow {
     PlayBlueLight,
     PlaySaturation,
     PlayContrast,
-    AutoLoad,
+    ResumeInsert,
     UndoSave,
     UndoLoad,
     GbaScale,
@@ -159,7 +159,7 @@ impl QuickRow {
         QuickRow::GbaColourCorrection,
         QuickRow::GbColourCorrection,
         QuickRow::Game,
-        QuickRow::EjectSave,
+        QuickRow::ResumePowerOn,
         QuickRow::Turbo,
         QuickRow::Rewind,
         QuickRow::GbPalette,
@@ -248,7 +248,7 @@ impl QuickRow {
         QuickRow::PlayBlueLight,
         QuickRow::PlaySaturation,
         QuickRow::PlayContrast,
-        QuickRow::AutoLoad,
+        QuickRow::ResumeInsert,
         QuickRow::UndoSave,
         QuickRow::UndoLoad,
         QuickRow::GbaScale,
@@ -451,8 +451,8 @@ impl QuickRow {
         QuickRow::Turbo,
         QuickRow::Rumble,
         QuickRow::LeftStick,
-        QuickRow::AutoLoad,
-        QuickRow::EjectSave,
+        QuickRow::ResumeInsert,
+        QuickRow::ResumePowerOn,
     ];
 
     pub const PLAY: [QuickRow; 9] = [
@@ -533,8 +533,8 @@ impl QuickRow {
             | QuickRow::Turbo
             | QuickRow::Rumble
             | QuickRow::LeftStick
-            | QuickRow::AutoLoad
-            | QuickRow::EjectSave => &QuickRow::GAME,
+            | QuickRow::ResumeInsert
+            | QuickRow::ResumePowerOn => &QuickRow::GAME,
             QuickRow::Wallpaper
             | QuickRow::WallpaperTint
             | QuickRow::DateTime
@@ -699,8 +699,8 @@ impl QuickRow {
             QuickRow::GbColourCorrection => "Color Correction",
             QuickRow::GbcColourCorrection => "Color Correction",
             QuickRow::Game => "Gameplay",
-            QuickRow::AutoLoad => "Auto Load State",
-            QuickRow::EjectSave => "Eject Save State",
+            QuickRow::ResumeInsert => "Resume on Insert",
+            QuickRow::ResumePowerOn => "Resume on Power On",
             QuickRow::Turbo => "Turbo Buttons",
             QuickRow::Rewind => "Rewind",
             QuickRow::GbPalette => "Palette",
@@ -984,13 +984,10 @@ pub enum QuickValue {
     Collections,
     OneShelf,
     Shelves,
-    Always,
-    PowerOn,
-    Never,
 }
 
 impl QuickValue {
-    pub const ALL: [QuickValue; 57] = [
+    pub const ALL: [QuickValue; 54] = [
         QuickValue::Speed1_5,
         QuickValue::Speed2,
         QuickValue::Speed3,
@@ -1045,9 +1042,6 @@ impl QuickValue {
         QuickValue::Collections,
         QuickValue::OneShelf,
         QuickValue::Shelves,
-        QuickValue::Always,
-        QuickValue::PowerOn,
-        QuickValue::Never,
     ];
 
     pub const LEVELS: [QuickValue; 16] = [
@@ -1104,9 +1098,6 @@ impl QuickValue {
             QuickValue::Collections => "Collections",
             QuickValue::OneShelf => "One Shelf",
             QuickValue::Shelves => "Shelves",
-            QuickValue::Always => "Always",
-            QuickValue::PowerOn => "Power On",
-            QuickValue::Never => "Never",
             QuickValue::Low => "25%",
             QuickValue::Medium => "45%",
             QuickValue::High => "65%",

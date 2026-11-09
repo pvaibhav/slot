@@ -369,6 +369,30 @@ fn an_eject_the_card_refuses_puts_up_a_banner() {
 }
 
 #[test]
+fn an_eject_saves_the_state_with_both_resume_rows_off() {
+    let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
+    write_slot_state(
+        d.path(),
+        &SlotState {
+            resume_insert: false,
+            resume_power_on: false,
+            ..seated("Emerald")
+        },
+    )
+    .unwrap();
+    let mut a = slot::app::App::boot(d.path());
+    a.set_snapshot(StubSnapshot::boxed());
+    a.on_core_ready();
+    for _ in 0..120 {
+        a.update(1.0 / 60.0);
+    }
+    a.apply(Action::Eject);
+    a.settle_saves();
+    let r = StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald");
+    assert_eq!(r.read_resume().unwrap().expect("the eject wrote no resume").len(), 1024);
+}
+
+#[test]
 fn an_eject_is_on_the_card_once_saves_settle() {
     let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
     let mut a = app_playing_in(d.path(), "Emerald");

@@ -3,7 +3,7 @@ mod common;
 use common::{boot, tmp_root_with_carts};
 use slot::app::{App, Phase};
 use slot_input::{Action, Btn};
-use slot_store::{read_slot_state, write_slot_state, AutoLoad, Platform, SlotState};
+use slot_store::{read_slot_state, write_slot_state, Platform, SlotState};
 
 fn seated(cart: &str) -> SlotState {
     SlotState {
@@ -25,11 +25,12 @@ fn boot_with_a_seated_cart_never_shows_the_shelf() {
 }
 
 #[test]
-fn boot_reseats_the_cart_fresh_only_when_auto_load_state_is_never() {
-    for auto_load in AutoLoad::ALL {
+fn resume_on_power_on_alone_decides_whether_boot_reseats_the_cart_fresh() {
+    for (resume_insert, resume_power_on) in [(true, true), (true, false), (false, true), (false, false)] {
         let d = tmp_root_with_carts(&["Emerald"]);
         let s = SlotState {
-            auto_load,
+            resume_insert,
+            resume_power_on,
             ..seated("Emerald")
         };
         write_slot_state(d.path(), &s).unwrap();
@@ -37,32 +38,36 @@ fn boot_reseats_the_cart_fresh_only_when_auto_load_state_is_never() {
         assert!(matches!(a.phase(), Phase::Inserting { .. }));
         assert_eq!(
             a.starting_clean(),
-            auto_load == AutoLoad::Never,
-            "{auto_load:?}"
+            !resume_power_on,
+            "resume_insert {resume_insert} resume_power_on {resume_power_on}"
         );
     }
 }
 
 #[test]
-fn an_old_on_or_off_auto_load_still_reads_from_the_card() {
-    for (value, want, clean) in [
-        ("1", AutoLoad::Always, false),
-        ("0", AutoLoad::Never, true),
-        ("power", AutoLoad::PowerOn, false),
+fn an_old_auto_load_state_becomes_the_two_resume_rows() {
+    for (value, insert, power_on) in [
+        ("1", true, true),
+        ("power", false, true),
+        ("0", false, false),
     ] {
         let d = tmp_root_with_carts(&["Emerald"]);
         write_slot_state(d.path(), &seated("Emerald")).unwrap();
         let path = d.path().join("Config/slot.state");
         let text = std::fs::read_to_string(&path).unwrap();
-        assert!(text.contains("auto_load=1\n"), "{text}");
-        std::fs::write(
-            &path,
-            text.replace("auto_load=1\n", &format!("auto_load={value}\n")),
-        )
-        .unwrap();
-        assert_eq!(read_slot_state(d.path()).auto_load, want, "{value}");
+        assert!(text.contains("resume_insert=1\n"), "{text}");
+        assert!(text.contains("resume_power_on=1\n"), "{text}");
+        let old = text
+            .lines()
+            .filter(|l| !l.starts_with("resume_"))
+            .map(|l| format!("{l}\n"))
+            .collect::<String>()
+            + &format!("auto_load={value}\neject_save=0\n");
+        std::fs::write(&path, old).unwrap();
+        let s = read_slot_state(d.path());
+        assert_eq!((s.resume_insert, s.resume_power_on), (insert, power_on), "{value}");
         let a = App::boot(d.path());
-        assert_eq!(a.starting_clean(), clean, "{value}");
+        assert_eq!(a.starting_clean(), !power_on, "{value}");
     }
 }
 

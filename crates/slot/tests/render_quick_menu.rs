@@ -546,7 +546,7 @@ fn the_left_stick_row_keeps_its_label_clear_of_its_value() {
 }
 
 #[test]
-fn power_on_keeps_auto_load_state_clear_of_its_value() {
+fn resume_on_power_on_stays_clear_of_its_value() {
     let Ok(surface) = HeadlessSurface::new() else {
         return;
     };
@@ -564,19 +564,19 @@ fn power_on_keeps_auto_load_state_clear_of_its_value() {
     }
     tap(&mut f, &mut input, Btn::A);
     let hidden = f.app().hidden_rows();
-    for _ in 0..QuickRow::AutoLoad.position(&hidden) {
+    for _ in 0..QuickRow::ResumePowerOn.position(&hidden) {
         tap(&mut f, &mut input, Btn::Down);
     }
     tap(&mut f, &mut input, Btn::Right);
-    assert_eq!(f.app().quick_menu(), Some(QuickRow::AutoLoad));
+    assert_eq!(f.app().quick_menu(), Some(QuickRow::ResumePowerOn));
     assert_eq!(
-        f.app().quick_value(QuickRow::AutoLoad),
-        Some(slot_ui::QuickValue::PowerOn)
+        f.app().quick_value(QuickRow::ResumePowerOn),
+        Some(slot_ui::QuickValue::Off)
     );
-    let top = quick_row_top(slot_ui::Canvas::FRAMED, QuickRow::AutoLoad, &hidden) as usize;
+    let top = quick_row_top(slot_ui::Canvas::FRAMED, QuickRow::ResumePowerOn, &hidden) as usize;
     let px = composed(&mut f, &mut c, "power-on");
     let ink = inked(&px, 40..OUT_W as usize, top);
-    assert!(!ink.is_empty(), "the Auto Load State row drew nothing");
+    assert!(!ink.is_empty(), "the Resume on Power On row drew nothing");
     let gap = ink.windows(2).map(|w| w[1] - w[0]).max().unwrap_or(0);
     assert!(
         gap >= 24,

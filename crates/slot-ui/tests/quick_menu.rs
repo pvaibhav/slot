@@ -165,8 +165,8 @@ fn the_rows_run_in_the_order_the_user_chose() {
             "Turbo Buttons",
             "Rumble",
             "Left Stick as D-Pad",
-            "Auto Load State",
-            "Eject Save State"
+            "Resume on Insert",
+            "Resume on Power On"
         ]
     );
     let opens: Vec<QuickRow> = QuickRow::ALL.into_iter().filter(|r| r.opens()).collect();
@@ -310,9 +310,6 @@ fn the_values_read_as_the_menu_prints_them() {
             "Collections",
             "One Shelf",
             "Shelves",
-            "Always",
-            "Power On",
-            "Never",
         ]
     );
     assert_eq!(QuickValue::flag(true), QuickValue::On);
