@@ -28,11 +28,13 @@ notes are in the [changelog](CHANGELOG.md).
 
 ## What this fork adds
 
-- **Lower input lag with automatic 120 Hz** on supported RG SP, RG34XX SP, and RG34XX
+Each feature links to a [wiki](https://github.com/pvaibhav/slot/wiki) page with screenshots, how it works, and what we measured.
+
+- **[Lower input lag with automatic 120 Hz](https://github.com/pvaibhav/slot/wiki/120-Hz-and-run-ahead)** on supported RG SP, RG34XX SP, and RG34XX
   panels. Other panel revisions keep their existing refresh rate.
-- **Automatic CPU scaling** with `schedutil` for GB, GBC, gpSP, and paused play.
+- **[Automatic CPU scaling](https://github.com/pvaibhav/slot/wiki/CPU-speed-and-battery)** with `schedutil` for GB, GBC, gpSP, and paused play.
   Running GBA games on mGBA use `performance` to keep frames on time.
-- **Authentic LCD shaders** recreate the reflective screens' colours, pixel grid, ghosting,
+- **[Authentic LCD shaders](https://github.com/pvaibhav/slot/wiki/Authentic-shader)** recreate the reflective screens' colours, pixel grid, ghosting,
   and glass, with shadows from the dots and bezel. Game Boy offers Game Boy, Pocket, and
   Light models. The default bezel is cut from Harlequin's dmg-3x art, with its glass and
   power light. Pick **Authentic** under **Settings > Screen > your system > Shader**.
@@ -40,23 +42,23 @@ notes are in the [changelog](CHANGELOG.md).
   The shaders are also [available for NextUI](https://github.com/pvaibhav/authentic-shaders).
 - ~~**LCD ghosting / interframe blending.**~~ Included upstream since **v1.10.0**
   as **Frame Blending** under Settings > Screen.
-- **Frame Blending on the GPU.** Mix and Ghosting work the same on every shader and core,
+- **[Frame Blending on the GPU.](https://github.com/pvaibhav/slot/wiki/GPU-frame-blending)** Mix and Ghosting work the same on every shader and core,
   so gpSP gets Ghosting too, and the emulator spends no CPU time on blending. Ghosting
   fades like the console's own LCD, as Authentic does.
-- **Colour calibration** for the RG SP and RG34XXSP panels, based on an accurate 3x1D LUT
+- **[Colour calibration](https://github.com/pvaibhav/slot/wiki/Panel-colour-calibration)** for the RG SP and RG34XXSP panels, based on an accurate 3x1D LUT
   measured by me. Both white point and gamma curve are corrected. Currently no other firmware
   has this!
 - ~~Holding POWER **shuts down** directly, without showing a menu.~~
   Included upstream since **v1.8.0**. Restart is available from Settings > About with X.
 - ~~**Home Wi-Fi.**~~ Included upstream since **v1.13.0** as the **Network** menu. Join your
   network there. slot deletes the old `Config/wifi.toml` on first start.
-- **Wi-Fi stays connected while you play.** If Wi-Fi is connected when you put a cart in, it
+- **[Wi-Fi stays connected while you play.](https://github.com/pvaibhav/slot/wiki/RetroAchievements#wi-fi-during-a-game)** If Wi-Fi is connected when you put a cart in, it
   stays connected, so RetroAchievements stay online. slot never starts a connection during a
   game, because a scan can stall frames.
 - ~~**Online cart label scraping.**~~ Included upstream since **v1.13.0** as **Fetch Missing
   Art** under Network. No Wi-Fi? Put `Artwork.pack` from the release page in your card's
-  `Labels` folder and slot labels your carts from that instead.
-- **RetroAchievements.** You can earn softcore GB, GBC, and GBA achievements, online or offline.
+  `Labels` folder and slot labels your carts from that instead. See [Cart labels](https://github.com/pvaibhav/slot/wiki/Cart-labels).
+- **[RetroAchievements.](https://github.com/pvaibhav/slot/wiki/RetroAchievements)** You can earn softcore GB, GBC, and GBA achievements, online or offline.
   Put your account in `Config/retroachievements.toml` for this to work. slot caches all your
   games' achievements while Wi-Fi is connected. Once that sync is done, you can play away from
   Wi-Fi and keep what you earn. It syncs when Wi-Fi connects again. When you play
@@ -64,7 +66,7 @@ notes are in the [changelog](CHANGELOG.md).
   A holographic trophy seal on a cart's label shows it's ready to earn achievements offline.
 - ~~**Linking over home Wi-Fi.**~~ Removed. Links use upstream's direct link, which needs no
   network. Wi-Fi is off during a link, and achievements you earn then sync after it ends.
-- **Cheats.** Put `Cheats.pack` from the release page in `Cheats/`, and a game's cheats from the
+- **[Cheats.](https://github.com/pvaibhav/slot/wiki/Cheats)** Put `Cheats.pack` from the release page in `Cheats/`, and a game's cheats from the
   libretro database appear under **Cheats** in its in-game menu, each with an On/Off switch.
   slot remembers which are on for each game. To use your own, add a RetroArch `.cht` file named
   after the ROM to `Cheats/GBA`, `Cheats/GB` or `Cheats/GBC`. Cheats need the mGBA core.
@@ -72,7 +74,7 @@ notes are in the [changelog](CHANGELOG.md).
 - ~~**Network time from BaseOS and `slot.local` beside the device's own name.**~~ Included
   upstream since **v1.15.0**. **Set Automatically** uses BaseOS's network time, and Gamebit
   answers at `slot.local` alongside `<hostname>.local`, with a numbered name on conflicts.
-- **Updates from this fork.** Network > Check for Updates installs this fork's releases, never
+- **[Updates from this fork.](https://github.com/pvaibhav/slot/wiki/Updates-and-releases)** Network > Check for Updates installs this fork's releases, never
   upstream's.
 
 Your Frame Blending choice carries over when you update.
