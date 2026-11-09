@@ -426,7 +426,7 @@ mod rendered {
         let mut list = Vec::new();
         r.f.app().draw_screen(Screen::Top, &mut list);
         assert!(
-            !list.iter().any(|d| matches!(d, slot_gfx::Draw::Rect { colour, w, .. } if colour[3] > 0.5 && *w > 600.0)),
+            !list.iter().any(|d| matches!(d, slot_gfx::Draw::Rect { colour, w, .. } if colour[3] > 0.5 && colour[3] != slot_ui::GAME_DIM && *w > 600.0)),
             "the menu's scrim is on the top screen"
         );
         assert_eq!(r.f.bottom_source(), BottomSource::Compositor);
@@ -1032,4 +1032,55 @@ fn both_screens_power_off_together_when_a_ds_card_ejects() {
         }
     }
     assert!(powering > 0 && dark_hold > 0, "{powering} {dark_hold}");
+}
+
+#[cfg(target_os = "macos")]
+mod menu_step {
+    use super::rendered::Rig;
+    use slot::app::BottomSource;
+    use slot::screen::Screen;
+    use slot_input::{Btn, Millis, RawEvent};
+
+    #[test]
+    fn a_ds_games_menu_changes_both_screens_on_the_same_frame() {
+        let mut r = Rig::ds();
+        r.play();
+        let mut now: Millis = 300_000;
+        r.input.0.push_back(vec![RawEvent::Down(Btn::Menu)]);
+        r.f.advance_at(&mut r.input, now, 1.0 / 60.0);
+        r.input.0.push_back(vec![RawEvent::Up(Btn::Menu)]);
+        let (mut top_at, mut bottom_at): (Option<u32>, Option<u32>) = (None, None);
+        for frame in 0..60 {
+            now += 16;
+            r.f.advance_at(&mut r.input, now, 1.0 / 60.0);
+            let mut top = Vec::new();
+            r.f.app().draw_screen(Screen::Top, &mut top);
+            let game_on_top = top.iter().any(|d| matches!(d, slot_gfx::Draw::Game));
+            if game_on_top {
+                let px = r.shot(Screen::Top, &format!("menu-step-top-{frame:02}"));
+                let w = 1024usize;
+                let green = (150..600)
+                    .step_by(7)
+                    .flat_map(|y| (20..250).step_by(9).map(move |x| (y * w + x) * 4 + 1))
+                    .map(|i| px[i])
+                    .max()
+                    .unwrap_or(0);
+                assert!(green < 140, "the top screen showed the DS bottom screen on frame {frame} (green {green})");
+            }
+            if top_at.is_none() && !game_on_top {
+                top_at = Some(frame);
+            }
+            if bottom_at.is_none() && r.f.bottom_source() == BottomSource::Compositor {
+                bottom_at = Some(frame);
+            }
+            if top_at.is_some() && bottom_at.is_some() {
+                break;
+            }
+        }
+        let (Some(t), Some(b)) = (top_at, bottom_at) else {
+            panic!("the menu never showed: top {top_at:?} bottom {bottom_at:?}");
+        };
+        assert_eq!(t, b, "the top changed on frame {t}, the bottom on frame {b}");
+    }
+
 }

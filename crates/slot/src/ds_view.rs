@@ -63,7 +63,7 @@ impl DsView {
             self.last.clear();
             return;
         }
-        let top = screen == crate::screen::Screen::Top && (!playing(session) || direct(session));
+        let top = screen == crate::screen::Screen::Top;
         if let Some(frame) = frame(session) {
             self.last.clear();
             self.last.extend_from_slice(&frame);
