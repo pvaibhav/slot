@@ -541,3 +541,22 @@
     if (e.key === "Escape" && stage) insert();
   });
 })();
+
+(function(){
+  "use strict";
+
+  var KEY = "notice:slot-advance";
+  var notice = document.getElementById("notice");
+  if (!notice) return;
+  try { if (localStorage.getItem(KEY) === "dismissed") return; } catch (e) {}
+  notice.hidden = false;
+  var root = document.documentElement.style;
+  var fit = function(){ root.setProperty("--notice-h", notice.hidden ? "0px" : notice.offsetHeight + "px"); };
+  fit();
+  addEventListener("resize", fit);
+  document.getElementById("notice-close").addEventListener("click", function(){
+    try { localStorage.setItem(KEY, "dismissed"); } catch (e) {}
+    notice.hidden = true;
+    fit();
+  });
+})();

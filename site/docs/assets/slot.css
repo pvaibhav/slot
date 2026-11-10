@@ -524,12 +524,12 @@ kbd{
 .md-typeset .hero .btn{text-decoration:none}
 .md-typeset .hero .btn:not(.ghost){color:var(--opening)}
 .md-typeset .tagline{color:var(--ink)}
-.hero{min-height:calc(100dvh - var(--mast-h) - 142px)}
+.hero{min-height:calc(100dvh - var(--mast-h) - var(--notice-h,0px) - 142px)}
 @media (max-width:900px){
-  .hero{min-height:calc(100dvh - var(--mast-h) - 214px)}
+  .hero{min-height:calc(100dvh - var(--mast-h) - var(--notice-h,0px) - 214px)}
 }
 @media (max-width:520px){
-  .hero{min-height:calc(100dvh - var(--mast-h) - 206px);padding-top:12px;padding-bottom:8px}
+  .hero{min-height:calc(100dvh - var(--mast-h) - var(--notice-h,0px) - 206px);padding-top:12px;padding-bottom:8px}
 }
 .md-typeset .guide-steps h3{margin:0 0 10px;font-size:clamp(21px,2.4vw,27px);letter-spacing:-.01em;color:var(--ink)}
 .md-typeset .guide-steps p{margin:0;line-height:1.6;font-size:18px;color:var(--ink)}
@@ -758,3 +758,13 @@ html.docs-dark,html.docs-dark body{background:#050508}
 html.docs-dark .md-container{background:var(--page)}
 html.docs-off{overflow:hidden}
 html.docs-off .md-header,html.docs-off .md-container{opacity:0}
+.notice{display:flex;align-items:center;justify-content:center;gap:10px;padding:8px clamp(16px,3vw,32px);background:var(--housing);border-bottom:1px solid var(--rule);color:var(--muted);font-size:14px;line-height:1.45}
+.notice[hidden]{display:none}
+.notice p{margin:0;text-align:center}
+.notice a{color:var(--ink);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.notice a:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.notice .pill{display:inline-block;margin-right:10px;padding:2px 7px;border-radius:999px;background:var(--ink);color:var(--opening);font-size:11px;font-weight:700;letter-spacing:.06em;vertical-align:1px}
+.notice-close{flex:none;display:grid;place-items:center;width:28px;height:28px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--muted);cursor:pointer;transition:background .12s,color .12s}
+.notice-close svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+.notice-close:hover{background:rgba(255,255,255,.07);color:var(--ink)}
+.notice-close:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
