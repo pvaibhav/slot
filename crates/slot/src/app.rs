@@ -7404,6 +7404,15 @@ impl App {
                     canvas: self.canvas(),
                 }
                 .draw(out);
+                if !self.two_panels {
+                    slot_ui::draw_corners(
+                        self.canvas(),
+                        self.gauge(),
+                        self.hud_bolt,
+                        self.shelf_clock,
+                        out,
+                    );
+                }
                 self.draw_tint_peek(out);
             }
             Phase::Shelf if self.keyboard.is_some() => self.draw_networks(out),
