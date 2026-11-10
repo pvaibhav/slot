@@ -34,7 +34,7 @@ pub struct NetworkList<'a> {
     pub selected: usize,
     pub message: Option<NetFace>,
     pub pointer: Option<NetFace>,
-    pub ground: Option<(TexId, u32)>,
+    pub ground: Option<crate::MenuGround>,
     pub canvas: Canvas,
 }
 
@@ -350,7 +350,7 @@ pub fn pair_face(text: &str, slot: PairSlot, max_w: f32) -> UndoFace {
 pub struct PairScreen<'a> {
     pub qr: Option<NetFace>,
     pub lines: &'a [(PairSlot, NetFace)],
-    pub ground: Option<(TexId, u32)>,
+    pub ground: Option<crate::MenuGround>,
     pub canvas: Canvas,
 }
 

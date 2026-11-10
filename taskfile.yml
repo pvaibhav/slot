@@ -693,7 +693,7 @@ tasks:
           {{.ADB}} push "$p" "{{.SD}}/System/licenses/mgba-$(basename "$p")"
         done
       - "{{.ADB}} shell 'chmod +x {{.SD}}/System/slot && sync'"
-      - "{{.ADB}} reboot"
+      - "{{.ADB}} shell 'rmmod 8821cs 2>/dev/null; sync; reboot'"
       - "{{.ADB}} wait-for-device"
       - 'echo "deployed to {{.SD}}{{if .SERIAL}} on {{.SERIAL}}{{end}}, device rebooting"'
 

@@ -42,7 +42,7 @@ fn the_link_ending_says_who_ended_it() {
 fn the_banner_says_what_happened_and_never_what_is_on_screen() {
     let all = Toast::all();
     assert_eq!(
-        all[..28],
+        all[..32],
         [
             Toast::StateSaved,
             Toast::StateLoaded,
@@ -72,18 +72,22 @@ fn the_banner_says_what_happened_and_never_what_is_on_screen() {
             Toast::Forgotten,
             Toast::Collection,
             Toast::KidUnlocked,
+            Toast::TintOff,
+            Toast::TintLow,
+            Toast::TintMedium,
+            Toast::TintHigh,
         ],
         "a banner was added or dropped: every face is uploaded by its place in this list"
     );
     let palettes = GbColors::all().count();
     assert_eq!(palettes, 49);
     assert_eq!(
-        all[28..28 + palettes],
+        all[32..32 + palettes],
         GbColors::all().map(Toast::Palette).collect::<Vec<_>>()[..],
         "the palette banners do not follow the fixed ones in palette order"
     );
     assert_eq!(
-        all[28 + palettes..],
+        all[32 + palettes..],
         QuickRow::ALL
             .into_iter()
             .filter(|r| r.binds())

@@ -1680,7 +1680,7 @@ pub struct QuickMenu<'a> {
     pub romm: [Option<[(TexId, u32, u32); 2]>; 4],
     pub kid_shelf: Option<[(TexId, u32, u32); 2]>,
     pub faces: Option<&'a QuickMenuFaces>,
-    pub ground: Option<(TexId, u32)>,
+    pub ground: Option<MenuGround>,
     pub palette: Option<[(TexId, u32, u32); 2]>,
     pub gba_bezel: Option<[(TexId, u32, u32); 2]>,
     pub gb_bezel: Option<[(TexId, u32, u32); 2]>,
@@ -1817,19 +1817,35 @@ impl QuickMenu<'_> {
     }
 }
 
-pub fn draw_menu_ground(canvas: Canvas, ground: Option<(TexId, u32)>, out: &mut Vec<Draw>) {
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct MenuGround {
+    pub tex: TexId,
+    pub w: u32,
+    pub tint: f32,
+}
+
+pub fn draw_menu_ground(canvas: Canvas, ground: Option<MenuGround>, out: &mut Vec<Draw>) {
     let (w, h) = (canvas.w, canvas.h);
     match ground {
-        Some((tex, tex_w)) => {
+        Some(ground) => {
             out.push(Draw::Part {
                 x: 0.0,
                 y: 0.0,
                 w,
                 h,
-                tex,
+                tex: ground.tex,
                 alpha: 1.0,
-                uv: canvas.cover(tex_w as f32),
+                uv: canvas.cover(ground.w as f32),
             });
+            if ground.tint > 0.0 {
+                out.push(Draw::Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    w,
+                    h,
+                    colour: [0.0, 0.0, 0.0, ground.tint],
+                });
+            }
             out.push(Draw::Rect {
                 x: 0.0,
                 y: 0.0,

@@ -11,8 +11,8 @@ use slot_store::{
     GbColors, GbPalette, Platform, Scale, Shader, SlotState, Stretch, WallpaperPick, Zone,
 };
 use slot_ui::{
-    Draw, Icon, QuickMenuFaces, QuickRow, QuickValue, TexId, HINT_EDGE, MENU_PAD, MOUTH_H, OUT_H,
-    OUT_W,
+    Draw, Icon, QuickMenuFaces, QuickRow, QuickValue, TexId, Toast, HINT_EDGE, MENU_PAD, MOUTH_H,
+    OUT_H, OUT_W,
 };
 use tempfile::TempDir;
 
@@ -1507,6 +1507,69 @@ fn the_tint_darkens_your_own_wallpaper_on_the_shelf() {
         seen.windows(2).all(|w| w[0] < w[1]),
         "each step is not darker than the last: {seen:?}"
     );
+}
+
+#[test]
+fn the_tint_darkens_the_menu_as_you_change_it() {
+    use slot_store::WallpaperTint;
+    let (_d, mut a) = on_own_wallpaper(WallpaperTint::Off);
+    open_at(&mut a, QuickRow::WallpaperTint);
+    let menu_washes = |a: &App| {
+        let draws = frame(a);
+        let wall = draws
+            .iter()
+            .position(|d| matches!(d, Draw::Part { tex, .. } if *tex == TexId::from_raw(802)))
+            .expect("the menu is not over the wallpaper");
+        black_washes(&draws[wall..])
+            .into_iter()
+            .fold(1.0, |lit, alpha| lit * (1.0 - alpha))
+    };
+    let mut lit = vec![menu_washes(&a)];
+    for _ in 0..3 {
+        press(&mut a, Btn::Right);
+        a.tick_ms(a.now() + 5_000);
+        lit.push(menu_washes(&a));
+    }
+    assert!(
+        lit.windows(2).all(|w| w[1] < w[0]),
+        "the menu does not darken with each step: {lit:?}"
+    );
+    press(&mut a, Btn::Right);
+    a.tick_ms(a.now() + 5_000);
+    assert_eq!(menu_washes(&a), lit[0], "Off does not bring the menu back");
+}
+
+#[test]
+fn changing_the_tint_peeks_at_the_shelf_then_fades_back() {
+    use slot_store::WallpaperTint;
+    let (_d, mut a) = on_own_wallpaper(WallpaperTint::Off);
+    open_at(&mut a, QuickRow::WallpaperTint);
+    let at = a.now();
+    assert_eq!(a.tint_peek_alpha(at + 500), 0.0, "it peeked before a change");
+    press(&mut a, Btn::Right);
+    assert!(a.tint_peek_alpha(at + 60) > 0.0 && a.tint_peek_alpha(at + 60) < 1.0);
+    assert_eq!(a.tint_peek_alpha(at + 300), 1.0);
+    assert_eq!(a.tint_peek_alpha(at + 2_000), 0.0, "the peek never ended");
+    assert_eq!(a.toast(), Some(Toast::TintLow), "the new tint is not said");
+    a.tick_ms(at + 300);
+    let draws = frame(&a);
+    let peek = draws
+        .iter()
+        .rposition(|d| matches!(d, Draw::Part { tex, alpha, .. } if *tex == TexId::from_raw(802) && *alpha == 1.0))
+        .expect("no peek at the wallpaper");
+    assert!(
+        draws[..peek]
+            .iter()
+            .any(|d| matches!(d, Draw::Part { tex, .. } if *tex == TexId::from_raw(802))),
+        "the peek is the menu's own ground, not a layer over it"
+    );
+    assert_eq!(black_washes(&draws[peek..]), vec![0.25], "the peek is not tinted Low");
+    press(&mut a, Btn::Right);
+    assert_eq!(a.tint_peek_alpha(a.now()), 1.0, "a second change dipped the peek");
+    assert_eq!(a.toast(), Some(Toast::TintMedium), "the toast kept the old tint");
+    press(&mut a, Btn::Down);
+    assert_eq!(a.tint_peek_alpha(a.now()), 0.0, "moving off the row kept the peek");
+    assert_eq!(a.toast(), None, "moving off the row kept the toast");
 }
 
 #[test]

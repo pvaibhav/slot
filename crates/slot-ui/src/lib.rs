@@ -121,7 +121,7 @@ pub use polaroids::{
 };
 pub use power_menu::{heading_face, menu_detail_face, menu_face, PowerChoice, MENU_PAD};
 pub use quick_menu::{
-    add_legend, clock_legend_faces, core_button_legends, picking_legend_faces, delete_legends, draw_menu_ground, link_button_legends,
+    add_legend, clock_legend_faces, core_button_legends, picking_legend_faces, delete_legends, draw_menu_ground, MenuGround, link_button_legends,
     fetch_choice_legends, fetch_legends, fetch_skip_legend, print_stop_legend, prompt_legends,
     studio_legend,
     StudioGlyph, quick_description_face, quick_label_face, quick_legend_faces,

@@ -82,6 +82,9 @@ const BLANK_DIM: f32 = 0.1;
 const VOLUME_STEP: u8 = 5;
 
 const AUTOSAVE_MS: Millis = 60_000;
+const PEEK_IN_MS: Millis = 120;
+const PEEK_HOLD_MS: Millis = 680;
+const PEEK_OUT_MS: Millis = 200;
 const RESUME_MS: Millis = 300_000;
 const SETTLED_MS: Millis = 10_000;
 const CARD_CHECK_MS: Millis = 2_000;
@@ -678,6 +681,7 @@ pub struct App {
     footer_row: Option<QuickRow>,
     states_from_menu: bool,
     menu_tap: Option<(Millis, Option<QuickRow>)>,
+    tint_peek: Option<Millis>,
     sticker_face: Option<(TexId, u32, u32)>,
     ground: Option<TexId>,
     ground_w: u32,
@@ -1174,6 +1178,7 @@ impl App {
             footer_row: None,
             states_from_menu: false,
             menu_tap: None,
+            tint_peek: None,
             sticker_face: None,
             ground: None,
             ground_w: OUT_W,
@@ -3464,7 +3469,16 @@ impl App {
         [ground, blur, own]
     }
 
-    fn menu_ground(&self) -> Option<(TexId, u32)> {
+    fn menu_ground(&self) -> Option<slot_ui::MenuGround> {
+        let tint = match self.own_wallpaper_shown() {
+            true => tint_alpha(self.state.wallpaper_tint),
+            false => 0.0,
+        };
+        self.menu_backdrop()
+            .map(|(tex, w)| slot_ui::MenuGround { tex, w, tint })
+    }
+
+    fn menu_backdrop(&self) -> Option<(TexId, u32)> {
         let [_, blur, own] = self.grounds();
         if self.collection_wallpaper.is_some() {
             return own;
@@ -5287,6 +5301,14 @@ impl App {
                 _ => {}
             }
         }
+        match (row, action) {
+            (QuickRow::WallpaperTint, Action::GbaDown(btn @ (Btn::Left | Btn::Right))) => {
+                self.change_setting(row, btn == Btn::Right);
+                return self.peek_tint();
+            }
+            (_, Action::GbaDown(_)) if self.tint_peek.take().is_some() => self.hud.hush(),
+            _ => {}
+        }
         let row = match action {
             Action::GbaDown(Btn::Up) => row.up(&self.hidden_rows()),
             Action::GbaDown(Btn::Down) => row.down(&self.hidden_rows()),
@@ -5303,6 +5325,61 @@ impl App {
             _ => return,
         };
         self.phase = Phase::QuickMenu { row };
+    }
+
+    fn peek_tint(&mut self) {
+        let now = self.now();
+        let into = (self.tint_peek_alpha(now) * PEEK_IN_MS as f32) as Millis;
+        self.tint_peek = Some(now.saturating_sub(into));
+        let said = match self.state.wallpaper_tint {
+            WallpaperTint::Off => Toast::TintOff,
+            WallpaperTint::Low => Toast::TintLow,
+            WallpaperTint::Medium => Toast::TintMedium,
+            WallpaperTint::High => Toast::TintHigh,
+        };
+        self.hud.toast(said, now);
+    }
+
+    pub fn tint_peek_alpha(&self, now: Millis) -> f32 {
+        let Some(at) = self.tint_peek else {
+            return 0.0;
+        };
+        let t = now.saturating_sub(at);
+        if t < PEEK_IN_MS {
+            t as f32 / PEEK_IN_MS as f32
+        } else if t < PEEK_IN_MS + PEEK_HOLD_MS {
+            1.0
+        } else {
+            let out = t - PEEK_IN_MS - PEEK_HOLD_MS;
+            (1.0 - out as f32 / PEEK_OUT_MS as f32).max(0.0)
+        }
+    }
+
+    fn draw_tint_peek(&self, out: &mut Vec<Draw>) {
+        let alpha = self.tint_peek_alpha(self.now());
+        let Some((tex, tex_w)) = self.menu_backdrop().filter(|_| alpha > 0.0) else {
+            return;
+        };
+        let canvas = self.canvas();
+        out.push(Draw::Part {
+            x: 0.0,
+            y: 0.0,
+            w: canvas.w,
+            h: canvas.h,
+            tex,
+            alpha,
+            uv: canvas.cover(tex_w as f32),
+        });
+        let tint = tint_alpha(self.state.wallpaper_tint);
+        if tint > 0.0 && self.own_wallpaper_shown() {
+            out.push(Draw::Rect {
+                x: 0.0,
+                y: 0.0,
+                w: canvas.w,
+                h: canvas.h,
+                colour: [0.0, 0.0, 0.0, tint * alpha],
+            });
+        }
     }
 
     fn in_game_menu_input(&mut self, row: QuickRow, action: Action) {
@@ -7299,33 +7376,36 @@ impl App {
                 return;
             }
             Phase::QuickMenu { .. } if self.keyboard.is_some() => self.draw_networks(out),
-            Phase::QuickMenu { row } => QuickMenu {
-                row: *row,
-                hidden: &self.hidden_rows(),
-                bound: Some(&self.bound_faces()),
-                description: self.description(*row),
-                values: QuickRow::ALL.map(|r| self.quick_value(r)),
-                clock: self.quick_clock_faces,
-                wallpaper: self.quick_wallpaper_faces,
-                networks: self.quick_network_faces,
-                romm: self.quick_romm_faces,
-                kid_shelf: self.quick_kid_shelf_faces,
-                faces: self.quick_menu_faces.as_ref(),
-                ground: self.menu_ground(),
-                palette: self.quick_palette_faces,
-                gba_bezel: self.quick_bezel_faces[bezel_slot(Platform::Gba)],
-                gb_bezel: self.quick_bezel_faces[bezel_slot(Platform::Gb)],
-                gbc_bezel: self.quick_bezel_faces[bezel_slot(Platform::Gbc)],
-                bezel: None,
-                gba_overlay: self.quick_overlay_faces[overlay_slot(Platform::Gba)],
-                gb_overlay: self.quick_overlay_faces[overlay_slot(Platform::Gb)],
-                gbc_overlay: self.quick_overlay_faces[overlay_slot(Platform::Gbc)],
-                overlay: None,
-                over_game: false,
-                footer_top: self.canvas().h,
-                canvas: self.canvas(),
+            Phase::QuickMenu { row } => {
+                QuickMenu {
+                    row: *row,
+                    hidden: &self.hidden_rows(),
+                    bound: Some(&self.bound_faces()),
+                    description: self.description(*row),
+                    values: QuickRow::ALL.map(|r| self.quick_value(r)),
+                    clock: self.quick_clock_faces,
+                    wallpaper: self.quick_wallpaper_faces,
+                    networks: self.quick_network_faces,
+                    romm: self.quick_romm_faces,
+                    kid_shelf: self.quick_kid_shelf_faces,
+                    faces: self.quick_menu_faces.as_ref(),
+                    ground: self.menu_ground(),
+                    palette: self.quick_palette_faces,
+                    gba_bezel: self.quick_bezel_faces[bezel_slot(Platform::Gba)],
+                    gb_bezel: self.quick_bezel_faces[bezel_slot(Platform::Gb)],
+                    gbc_bezel: self.quick_bezel_faces[bezel_slot(Platform::Gbc)],
+                    bezel: None,
+                    gba_overlay: self.quick_overlay_faces[overlay_slot(Platform::Gba)],
+                    gb_overlay: self.quick_overlay_faces[overlay_slot(Platform::Gb)],
+                    gbc_overlay: self.quick_overlay_faces[overlay_slot(Platform::Gbc)],
+                    overlay: None,
+                    over_game: false,
+                    footer_top: self.canvas().h,
+                    canvas: self.canvas(),
+                }
+                .draw(out);
+                self.draw_tint_peek(out);
             }
-            .draw(out),
             Phase::Shelf if self.keyboard.is_some() => self.draw_networks(out),
             Phase::Shelf | Phase::Unwrap { .. } => {
                 self.draw_background(out);
