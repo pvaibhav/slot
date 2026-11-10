@@ -1,9 +1,9 @@
 shelf 720x480 8b6c56839ff543b6
 shelf 640x480 2613b35201b52555
-quick-menu 720x480 7dfd6f3a95095f38
-quick-menu 640x480 51aa6cae52a0bada
-settings-long-list 720x480 6abb8920e34235e5
-settings-long-list 640x480 c908e79e61a6067e
+quick-menu 720x480 72d8eb25a03ae1ec
+quick-menu 640x480 4f24427858ded84a
+settings-long-list 720x480 621d984ea59e38f9
+settings-long-list 640x480 366ccfcfaee6af2b
 gba-sp-frame 720x480 ca438bd6f9bf87c0
 gba-sp-frame 640x480 3c37d7ef4065304a
 gba-integer 720x480 ca438bd6f9bf87c0

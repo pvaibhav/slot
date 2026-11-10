@@ -39,13 +39,13 @@ Press <kbd>Y</kbd> to heart a cart. It shows up on the Favorites shelf alongside
 
 ## Recents
 
-Turn on Recents in Settings → General to get a shelf of the last 10 games you played.
+Turn on Recents in Settings → Shelf to get a shelf of the last 10 games you played.
 
 Press <kbd>X</kbd> on the Recents shelf to remove the selected game.
 
 ## Game titles
 
-Turn on Game Titles in Settings → General and they will appear above the slot.
+Turn on Game Titles in Settings → Shelf and they will appear above the slot.
 
 ## Adding games
 

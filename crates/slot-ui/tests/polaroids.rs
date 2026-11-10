@@ -3,7 +3,7 @@ use std::path::Path;
 use slot_power::{Battery, Charge};
 use slot_store::StateEntry;
 use slot_ui::{
-    photo_face, Draw, PhotoFace, Polaroids, Printed, TexId, OUT_W, PHOTO_H, PHOTO_W, PLATE_H,
+    photo_face, Draw, Gauge, PhotoFace, Polaroids, Printed, TexId, OUT_W, PHOTO_H, PHOTO_W, PLATE_H,
 };
 
 fn entry(dir: &Path, stamp: &str) -> StateEntry {
@@ -117,11 +117,14 @@ fn the_gauge_stays_clear_of_the_title_on_the_left() {
     let p = switcher();
     let mut out = Vec::new();
     p.draw(
-        Some(Battery {
+        Gauge {
+            battery: Some(Battery {
             percent: 68,
             charge: Charge::Charging,
         }),
-        Printed { face: None, w: 30 },
+            percent: Printed { face: None, w: 30 },
+            ..Gauge::default()
+        },
         Some(TexId::from_raw(7)),
         Printed::default(),
         &mut out,
@@ -152,8 +155,7 @@ fn the_clock_stays_clear_of_the_title_on_the_right() {
     let p = switcher();
     let mut out = Vec::new();
     p.draw(
-        None,
-        Printed::default(),
+        Gauge::default(),
         None,
         Printed { face: None, w: 40 },
         &mut out,
@@ -182,8 +184,7 @@ fn a_switcher_with_no_gauge_still_shows_its_clock() {
     let p = switcher();
     let mut out = Vec::new();
     p.draw(
-        None,
-        Printed::default(),
+        Gauge::default(),
         None,
         Printed { face: None, w: 40 },
         &mut out,

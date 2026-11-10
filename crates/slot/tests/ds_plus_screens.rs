@@ -494,6 +494,10 @@ mod rendered {
         r.tap(Btn::Menu);
         r.run_for(0.6);
         let hidden = r.f.app().hidden_rows();
+        for _ in 0..QuickRow::System.position(&hidden) {
+            r.tap(Btn::Down);
+        }
+        r.tap(Btn::A);
         for _ in 0..QuickRow::About.position(&hidden) {
             r.tap(Btn::Down);
         }

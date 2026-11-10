@@ -44,7 +44,7 @@ Keep all three options lowercase. A line slot can't read is skipped.
 
 ## Wallpapers
 
-Drop a `.png` into `Wallpapers/` and pick it under Wallpaper in Settings → General.
+Drop a `.png` into `Wallpapers/` and pick it under Wallpaper in Settings → Shelf.
 
 Random picks one at boot.
 

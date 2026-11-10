@@ -1,7 +1,7 @@
 use slot_power::{Battery, Charge};
 use slot_store::{Cart, Platform};
 use slot_ui::{
-    draw_footer, footer_ink, label_colour, rest_y, Canvas, Draw, GbShell, Printed, Shelf, TexId,
+    draw_footer, footer_ink, label_colour, rest_y, Canvas, Draw, Gauge, GbShell, Printed, Shelf, TexId,
     CART_H, CART_W, LABEL_W, LABEL_X, LABEL_Y, OUT_W,
 };
 
@@ -427,11 +427,14 @@ fn the_gauge_is_white_in_dark_mode_and_black_in_light_mode() {
         let mut out = Vec::new();
         draw_footer(
             Canvas::FRAMED,
-            Some(Battery {
+            Gauge {
+                battery: Some(Battery {
                 percent: 68,
                 charge: Charge::Discharging,
             }),
-            Printed { face: None, w: 30 },
+                percent: Printed { face: None, w: 30 },
+                ..Gauge::default()
+            },
             None,
             Printed { face: None, w: 40 },
             footer_ink(light),
@@ -453,11 +456,14 @@ fn the_band_prints_the_charge_at_one_margin_and_the_clock_at_the_other() {
     let mut out = Vec::new();
     draw_footer(
         Canvas::FRAMED,
-        Some(Battery {
+        Gauge {
+            battery: Some(Battery {
             percent: 68,
             charge: Charge::Charging,
         }),
-        Printed { face: None, w: 30 },
+            percent: Printed { face: None, w: 30 },
+            ..Gauge::default()
+        },
         Some(TexId::from_raw(1)),
         Printed { face: None, w: 40 },
         [255, 255, 255],
@@ -502,11 +508,14 @@ fn the_footer_does_not_move_the_gauge_when_the_charge_state_changes() {
     let mut idle = Vec::new();
     draw_footer(
         Canvas::FRAMED,
-        Some(Battery {
+        Gauge {
+            battery: Some(Battery {
             percent: 68,
             charge: Charge::Discharging,
         }),
-        Printed { face: None, w: 30 },
+            percent: Printed { face: None, w: 30 },
+            ..Gauge::default()
+        },
         None,
         Printed { face: None, w: 40 },
         [255, 255, 255],
@@ -515,11 +524,14 @@ fn the_footer_does_not_move_the_gauge_when_the_charge_state_changes() {
     let mut charging = Vec::new();
     draw_footer(
         Canvas::FRAMED,
-        Some(Battery {
+        Gauge {
+            battery: Some(Battery {
             percent: 68,
             charge: Charge::Charging,
         }),
-        Printed { face: None, w: 30 },
+            percent: Printed { face: None, w: 30 },
+            ..Gauge::default()
+        },
         Some(TexId::from_raw(2)),
         Printed { face: None, w: 40 },
         [255, 255, 255],
@@ -538,8 +550,7 @@ fn a_band_with_no_gauge_still_draws_its_clock() {
     let mut out = Vec::new();
     draw_footer(
         Canvas::FRAMED,
-        None,
-        Printed::default(),
+        Gauge::default(),
         None,
         Printed { face: None, w: 40 },
         [255, 255, 255],

@@ -239,7 +239,7 @@ fn an_ota_check_leaves_the_radio_held() {
     join_home(&mut a);
     assert!(a.wifi_up());
     a.apply(Action::QuickMenu);
-    for row in [QuickRow::Network, QuickRow::CheckUpdates] {
+    for row in [QuickRow::System, QuickRow::CheckUpdates] {
         for _ in 0..12 {
             if a.quick_menu() == Some(row) {
                 break;
@@ -466,7 +466,7 @@ fn with_network_time(on: bool) -> (TempDir, App, common::Clock) {
 
 fn open_clock(a: &mut App) {
     a.apply(Action::QuickMenu);
-    for _ in 0..QuickRow::General.position(&[]) {
+    for _ in 0..QuickRow::System.position(&[]) {
         a.apply(Action::GbaDown(Btn::Down));
     }
     a.apply(Action::GbaDown(Btn::A));

@@ -7,7 +7,7 @@ use slot_input::{Action, Btn, RawEvent, MENU_DOUBLE_TAP_MS, MUTE_CHORD_MS};
 use slot_power::{Battery, Charge, LedState, LidPolicy, Power, RepairResult};
 use slot_retro::LinkChannel;
 use slot_store::{
-    format_stamp, parse_stamp, read_slot_state, scan, write_slot_state, BezelPick, Blending, Cart,
+    format_stamp, parse_stamp, read_slot_state, scan, write_slot_state, BatteryDisplay, BezelPick, Blending, Cart,
     Collection, Core, GbColors, KidMode, Platform, Recent, Scale, Shader, ShelfMode, ShotDir, ShotEntry,
     SlotState, StateEntry,
     StateRing, Stretch, WallpaperPick, WallpaperTint, BLUE_LIGHT_MAX, BRIGHTNESS_MAX, CONTRAST_MAX,
@@ -2786,6 +2786,11 @@ impl App {
             } else {
                 QuickValue::Hide
             }),
+            QuickRow::BatteryDisplay => Some(match self.state.battery_display {
+                BatteryDisplay::Both => QuickValue::Both,
+                BatteryDisplay::Icon => QuickValue::Icon,
+                BatteryDisplay::Percent => QuickValue::Percentage,
+            }),
             QuickRow::WallpaperTint => Some(match self.state.wallpaper_tint {
                 WallpaperTint::Off => QuickValue::Off,
                 WallpaperTint::Low => QuickValue::Low,
@@ -2850,6 +2855,7 @@ impl App {
             | QuickRow::GbaBezel
             | QuickRow::Bezel
             | QuickRow::General
+            | QuickRow::System
             | QuickRow::ShelfPrev
             | QuickRow::ShelfNext
             | QuickRow::ShelfFavorite
@@ -2932,7 +2938,7 @@ impl App {
         }
         let wifi = self.wifi_up().then(|| self.wifi_face()).flatten();
         let face = self.kid_icon_faces.map(|f| f[usize::from(self.light())]);
-        slot_ui::draw_kid_icon(self.canvas(), self.battery_percent, wifi, face, out);
+        slot_ui::draw_kid_icon(self.canvas(), self.gauge(), wifi, face, out);
     }
 
     pub fn set_kid_faces(&mut self, faces: Vec<(TexId, u32, u32)>) {
@@ -3777,6 +3783,14 @@ impl App {
 
     pub fn set_battery_percent_face(&mut self, face: TexId, w: u32) {
         self.battery_percent = slot_ui::Printed::new(face, w);
+    }
+
+    fn gauge(&self) -> slot_ui::Gauge {
+        slot_ui::Gauge {
+            battery: self.battery,
+            percent: self.battery_percent,
+            display: self.state.battery_display,
+        }
     }
 
     pub fn set_shelf_clock_face(&mut self, face: TexId, w: u32) {
@@ -5379,6 +5393,13 @@ impl App {
 
     fn open_quick_row(&mut self, row: QuickRow) {
         match row {
+            QuickRow::Server | QuickRow::Romm | QuickRow::FetchArt if !self.wifi_up() => {
+                self.set_update(Some(UpdateState::Notice(NetNotice::NoNetwork)));
+            }
+            #[cfg(feature = "nds")]
+            QuickRow::FetchBoxArt if !self.wifi_up() => {
+                self.set_update(Some(UpdateState::Notice(NetNotice::NoNetwork)));
+            }
             QuickRow::DateTime => {
                 self.phase = clock_screen(self.utc_secs(), &self.state, self.has_saved(), true);
             }
@@ -5388,9 +5409,6 @@ impl App {
             QuickRow::FetchBoxArt => self.open_fetch_box_art(),
             QuickRow::CheckUpdates => self.open_check_for_updates(),
             QuickRow::Server => self.open_server(),
-            QuickRow::Network if !self.wifi_up() => {
-                self.set_update(Some(UpdateState::Notice(NetNotice::NoNetwork)));
-            }
             QuickRow::WifiPower => self.set_wifi_off(!self.state.wifi_off),
             QuickRow::Networks => self.open_networks(),
             QuickRow::RommProtocol | QuickRow::RommSelfSigned => self.change_setting(row, true),
@@ -5427,6 +5445,7 @@ impl App {
             | QuickRow::ScreenGb
             | QuickRow::Shortcuts
             | QuickRow::General
+            | QuickRow::System
             | QuickRow::Network
             | QuickRow::Romm
             | QuickRow::Wifi
@@ -5466,6 +5485,7 @@ impl App {
             | QuickRow::Recents
             | QuickRow::ShelfMode
             | QuickRow::ShowTitles
+            | QuickRow::BatteryDisplay
             | QuickRow::KidMode
             | QuickRow::KidShelf
             | QuickRow::Wallpaper
@@ -5764,6 +5784,7 @@ impl App {
                 self.blending_pending = Some(self.blending_in_play());
             }
             QuickRow::Theme => s.appearance = s.appearance.toggle(),
+            QuickRow::BatteryDisplay => s.battery_display = s.battery_display.step(right),
             QuickRow::WallpaperTint => s.wallpaper_tint = s.wallpaper_tint.step(right),
             QuickRow::ScreenGeneral
             | QuickRow::Brightness
@@ -5819,6 +5840,7 @@ impl App {
             | QuickRow::Stretch
             | QuickRow::Bezel
             | QuickRow::General
+            | QuickRow::System
             | QuickRow::ShelfPrev
             | QuickRow::ShelfNext
             | QuickRow::ShelfFavorite
@@ -7049,8 +7071,7 @@ impl App {
     fn draw_status_footer(&self, out: &mut Vec<Draw>) {
         draw_footer(
             self.canvas(),
-            self.battery,
-            self.battery_percent,
+            self.gauge(),
             self.bolt,
             self.shelf_clock,
             footer_ink(self.light()),
@@ -7063,8 +7084,7 @@ impl App {
         draw_empty_slot(self.canvas(), self.top_slot_faces(), out);
         draw_footer(
             self.canvas(),
-            self.battery,
-            self.battery_percent,
+            self.gauge(),
             self.bolt,
             self.shelf_clock,
             footer_ink(self.light()),
@@ -7080,8 +7100,7 @@ impl App {
         self.draw_seated_mouth(cart, out);
         draw_footer(
             self.canvas(),
-            self.battery,
-            self.battery_percent,
+            self.gauge(),
             self.bolt,
             self.shelf_clock,
             footer_ink(self.light()),
@@ -7189,8 +7208,7 @@ impl App {
         }
         draw_footer(
             self.canvas(),
-            self.battery,
-            self.battery_percent,
+            self.gauge(),
             self.bolt,
             self.shelf_clock,
             footer_ink(self.light()),
@@ -7364,15 +7382,14 @@ impl App {
                 } else {
                     draw_footer(
                         self.canvas(),
-                        self.battery,
-                        self.battery_percent,
+                        self.gauge(),
                         self.bolt,
                         self.shelf_clock,
                         footer_ink(self.light()),
                         out,
                     );
                     if self.wifi_up() {
-                        slot_ui::draw_wifi_icon(self.canvas(), self.battery_percent, self.wifi_face(), out);
+                        slot_ui::draw_wifi_icon(self.canvas(), self.gauge(), self.wifi_face(), out);
                     }
                     self.draw_kid_icon(out);
                 }
@@ -7434,8 +7451,7 @@ impl App {
                 if let Some((g, _)) = &self.guide {
                     g.draw(
                         self.canvas(),
-                        self.battery,
-                        self.battery_percent,
+                        self.gauge(),
                         self.hud_bolt,
                         self.shelf_clock,
                         out,
@@ -7446,8 +7462,7 @@ impl App {
                 if let Some(v) = &self.shot_viewer {
                     v.draw(
                         self.canvas(),
-                        self.battery,
-                        self.battery_percent,
+                        self.gauge(),
                         self.hud_bolt,
                         self.shelf_clock,
                         out,
@@ -7461,8 +7476,7 @@ impl App {
                     self.draw_sp_strip(out);
                     p.draw_chrome(
                         self.canvas(),
-                        self.battery,
-                        self.battery_percent,
+                        self.gauge(),
                         self.hud_bolt,
                         self.shelf_clock,
                         out,
@@ -7522,8 +7536,7 @@ impl App {
             if row.page() != QuickRow::PLAY_SCREEN && !self.two_panels {
                 slot_ui::draw_corners(
                     self.canvas(),
-                    self.battery,
-                    self.battery_percent,
+                    self.gauge(),
                     self.hud_bolt,
                     self.shelf_clock,
                     out,
@@ -7626,15 +7639,14 @@ impl App {
         }
         draw_footer(
             self.canvas(),
-            self.battery,
-            self.battery_percent,
+            self.gauge(),
             self.bolt,
             self.shelf_clock,
             footer_ink(self.light()),
             out,
         );
         if self.wifi_up() {
-            slot_ui::draw_wifi_icon(self.canvas(), self.battery_percent, self.wifi_face(), out);
+            slot_ui::draw_wifi_icon(self.canvas(), self.gauge(), self.wifi_face(), out);
         }
         self.draw_kid_icon(out);
         shift_down(&mut out[start..], self.menu_footer_offset());
@@ -9743,10 +9755,10 @@ impl App {
             self.wifi_wanted_at = Some(now + WIFI_RETRY_MS);
         }
         if let Phase::QuickMenu { row } = self.phase {
-            if (row.page() == QuickRow::NETWORK || row.page() == QuickRow::ROMM) && self.update.is_none() && !self.wifi_up() {
+            if row.page() == QuickRow::ROMM && self.update.is_none() && !self.wifi_up() {
                 self.keyboard = None;
                 self.phase = Phase::QuickMenu {
-                    row: QuickRow::Network,
+                    row: QuickRow::Romm,
                 };
                 self.set_update(Some(UpdateState::Notice(NetNotice::NoNetwork)));
             }
@@ -9754,7 +9766,7 @@ impl App {
         if matches!(self.phase, Phase::RommPair) && self.update.is_none() && !self.wifi_up() {
             self.romm_jobs.ask(RommJob::CancelPair);
             self.phase = Phase::QuickMenu {
-                row: QuickRow::Network,
+                row: QuickRow::Romm,
             };
             self.set_update(Some(UpdateState::Notice(NetNotice::NoNetwork)));
         }
@@ -12438,7 +12450,7 @@ impl App {
             UpdateState::Notice(NetNotice::RommPort) => ("Invalid Port".into(), String::new()),
             UpdateState::Notice(NetNotice::NoNetwork) => (
                 "Not connected".into(),
-                "Join a Wi-Fi network to use Tools.".into(),
+                "Join a Wi-Fi network first.".into(),
             ),
             UpdateState::Notice(NetNotice::RommNoServer) => (
                 "Enter a server first".into(),
@@ -12454,7 +12466,7 @@ impl App {
                 let (title, detail) = match f {
                     UpdateFail::NoWifi => (
                         "Could not join Wi-Fi",
-                        "Check Wi-Fi in the General menu.",
+                        "Check Wi-Fi in the System menu.",
                     ),
                     UpdateFail::Offline => (
                         "Could not connect",

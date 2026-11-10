@@ -144,10 +144,12 @@ pub enum QuickRow {
     GbOverlay,
     GbcOverlay,
     Overlay,
+    BatteryDisplay,
+    System,
 }
 
 impl QuickRow {
-    pub const ALL: [QuickRow; 133 + cfg!(feature = "nds") as usize] = [
+    pub const ALL: [QuickRow; 135 + cfg!(feature = "nds") as usize] = [
         QuickRow::FastForward,
         QuickRow::FastForwardSound,
         QuickRow::Screen,
@@ -283,40 +285,47 @@ impl QuickRow {
         QuickRow::GbOverlay,
         QuickRow::GbcOverlay,
         QuickRow::Overlay,
+        QuickRow::BatteryDisplay,
+        QuickRow::System,
     ];
 
     pub const MAIN: [QuickRow; 6] = [
         QuickRow::General,
-        QuickRow::Screen,
         QuickRow::Game,
         QuickRow::Controls,
+        QuickRow::Screen,
         QuickRow::Network,
-        QuickRow::About,
+        QuickRow::System,
     ];
 
-    pub const GENERAL: [QuickRow; 11] = [
+    pub const GENERAL: [QuickRow; 8] = [
         QuickRow::Theme,
         QuickRow::Wallpaper,
         QuickRow::WallpaperTint,
         QuickRow::ShelfMode,
         QuickRow::Recents,
         QuickRow::ShowTitles,
-        QuickRow::LidOff,
         QuickRow::KidMode,
         QuickRow::KidShelf,
+    ];
+
+    pub const SYSTEM: [QuickRow; 6] = [
         QuickRow::Wifi,
         QuickRow::DateTime,
+        QuickRow::LidOff,
+        QuickRow::BatteryDisplay,
+        QuickRow::CheckUpdates,
+        QuickRow::About,
     ];
 
     pub const WIFI: [QuickRow; 2] = [QuickRow::WifiPower, QuickRow::Networks];
 
-    pub const NETWORK: [QuickRow; 4 + cfg!(feature = "nds") as usize] = [
+    pub const NETWORK: [QuickRow; 3 + cfg!(feature = "nds") as usize] = [
         QuickRow::Server,
         QuickRow::Romm,
         QuickRow::FetchArt,
         #[cfg(feature = "nds")]
         QuickRow::FetchBoxArt,
-        QuickRow::CheckUpdates,
     ];
 
     pub const ROMM: [QuickRow; 8] = [
@@ -537,18 +546,20 @@ impl QuickRow {
             | QuickRow::ResumePowerOn => &QuickRow::GAME,
             QuickRow::Wallpaper
             | QuickRow::WallpaperTint
-            | QuickRow::DateTime
             | QuickRow::Theme
             | QuickRow::Recents
             | QuickRow::ShelfMode
             | QuickRow::ShowTitles
-            | QuickRow::LidOff
             | QuickRow::KidMode
-            | QuickRow::KidShelf
-            | QuickRow::Wifi => &QuickRow::GENERAL,
+            | QuickRow::KidShelf => &QuickRow::GENERAL,
+            QuickRow::Wifi
+            | QuickRow::DateTime
+            | QuickRow::LidOff
+            | QuickRow::BatteryDisplay
+            | QuickRow::CheckUpdates
+            | QuickRow::About => &QuickRow::SYSTEM,
             QuickRow::WifiPower | QuickRow::Networks => &QuickRow::WIFI,
-            QuickRow::CheckUpdates
-            | QuickRow::FetchArt
+            QuickRow::FetchArt
             | QuickRow::Romm
             | QuickRow::Server => &QuickRow::NETWORK,
             #[cfg(feature = "nds")]
@@ -607,6 +618,7 @@ impl QuickRow {
             QuickRow::GameUp => Some(QuickRow::ControlsInGame),
             QuickRow::ScSave => Some(QuickRow::Shortcuts),
             QuickRow::Theme => Some(QuickRow::General),
+            QuickRow::Wifi => Some(QuickRow::System),
             QuickRow::Server => Some(QuickRow::Network),
             QuickRow::RommProtocol => Some(QuickRow::Romm),
             QuickRow::WifiPower => Some(QuickRow::Wifi),
@@ -648,6 +660,7 @@ impl QuickRow {
             QuickRow::PlayControls => Some(QuickRow::CONTROLS[0]),
             QuickRow::Shortcuts => Some(QuickRow::SHORTCUTS[0]),
             QuickRow::General => Some(QuickRow::GENERAL[0]),
+            QuickRow::System => Some(QuickRow::SYSTEM[0]),
             QuickRow::Network => Some(QuickRow::NETWORK[0]),
             QuickRow::Romm => Some(QuickRow::ROMM[0]),
             QuickRow::Wifi => Some(QuickRow::WIFI[0]),
@@ -719,7 +732,9 @@ impl QuickRow {
             QuickRow::Guide => "Guide",
             QuickRow::Settings => "Settings",
             QuickRow::ExitGame => "Exit Game",
-            QuickRow::General => "General",
+            QuickRow::General => "Shelf",
+            QuickRow::System => "System",
+            QuickRow::BatteryDisplay => "Battery Display",
             QuickRow::LidOff => "Lid Power Off",
             QuickRow::KidMode => "Kid Mode",
             QuickRow::KidShelf => "Kid Shelf",
@@ -833,6 +848,7 @@ impl QuickRow {
                 | QuickRow::PlayScreen
                 | QuickRow::PlayGameplay
                 | QuickRow::General
+                | QuickRow::System
                 | QuickRow::Controls
                 | QuickRow::ControlsShelf
                 | QuickRow::ControlsCollections
@@ -984,10 +1000,13 @@ pub enum QuickValue {
     Collections,
     OneShelf,
     Shelves,
+    Both,
+    Icon,
+    Percentage,
 }
 
 impl QuickValue {
-    pub const ALL: [QuickValue; 54] = [
+    pub const ALL: [QuickValue; 57] = [
         QuickValue::Speed1_5,
         QuickValue::Speed2,
         QuickValue::Speed3,
@@ -1042,6 +1061,9 @@ impl QuickValue {
         QuickValue::Collections,
         QuickValue::OneShelf,
         QuickValue::Shelves,
+        QuickValue::Both,
+        QuickValue::Icon,
+        QuickValue::Percentage,
     ];
 
     pub const LEVELS: [QuickValue; 16] = [
@@ -1098,6 +1120,9 @@ impl QuickValue {
             QuickValue::Collections => "Collections",
             QuickValue::OneShelf => "One Shelf",
             QuickValue::Shelves => "Shelves",
+            QuickValue::Both => "Both",
+            QuickValue::Icon => "Icon",
+            QuickValue::Percentage => "Percentage",
             QuickValue::Low => "25%",
             QuickValue::Medium => "45%",
             QuickValue::High => "65%",

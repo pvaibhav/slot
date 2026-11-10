@@ -150,7 +150,7 @@ fn network_time_on_draws_three_rows_with_the_pointer_on_the_first() {
     f.advance(&mut input);
     f.app_mut().set_wifi(Wifi::inline(Box::new(Fake::joined())));
     f.app_mut().apply(Action::QuickMenu);
-    for _ in 0..QuickRow::General.position(&[]) {
+    for _ in 0..QuickRow::System.position(&[]) {
         f.app_mut().apply(Action::GbaDown(Btn::Down));
     }
     f.app_mut().apply(Action::GbaDown(Btn::A));

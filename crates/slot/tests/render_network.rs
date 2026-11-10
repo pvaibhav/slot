@@ -71,7 +71,7 @@ fn count_in(frame: &[u8], [x, y, w, h]: [f32; 4], test: fn([u8; 3]) -> bool) -> 
 
 fn open_networks(f: &mut Frontend) {
     f.app_mut().apply(Action::QuickMenu);
-    for row in [QuickRow::General, QuickRow::Wifi, QuickRow::Networks] {
+    for row in [QuickRow::System, QuickRow::Wifi, QuickRow::Networks] {
         for _ in 0..12 {
             if f.app().quick_menu() == Some(row) {
                 break;
@@ -362,7 +362,7 @@ fn the_list_says_it_is_scanning_until_results_arrive_then_offers_other() {
         f.app_mut().set_panel(panel);
         let canvas = f.app().canvas();
         f.app_mut().apply(Action::QuickMenu);
-        for row in [QuickRow::General, QuickRow::Wifi, QuickRow::Networks] {
+        for row in [QuickRow::System, QuickRow::Wifi, QuickRow::Networks] {
             while f.app().quick_menu() != Some(row) {
                 press(&mut f, Btn::Down);
             }
@@ -710,6 +710,10 @@ fn the_no_network_notice_fits_the_screen() {
         let canvas = f.app().canvas();
         f.app_mut().apply(Action::QuickMenu);
         while f.app().quick_menu() != Some(QuickRow::Network) {
+            press(&mut f, Btn::Down);
+        }
+        press(&mut f, Btn::A);
+        while f.app().quick_menu() != Some(QuickRow::FetchArt) {
             press(&mut f, Btn::Down);
         }
         press(&mut f, Btn::A);

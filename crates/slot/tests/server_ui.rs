@@ -1066,6 +1066,7 @@ mod screen {
         assert!(r.f.rebuilding_labels());
         let before = r.f.app().quick_menu();
         assert!(before.is_some(), "{:?}", r.f.app().phase());
+        r.f.advance(&mut r.input);
         r.input.0.push_back(vec![RawEvent::Down(Btn::Down)]);
         r.f.advance(&mut r.input);
         r.input.0.push_back(vec![RawEvent::Up(Btn::Down)]);

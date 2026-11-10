@@ -53,7 +53,7 @@ pub use backdrop::{
     draw_ground, game_bezel_face, wallpaper_face, BezelArt,
 };
 pub use barcode::{code39, CODE39_NARROW, CODE39_WIDE};
-pub use battery::{draw_gauge, BOLT_PX, GAUGE_H, GAUGE_W, WALL};
+pub use battery::{draw_gauge, Gauge, BOLT_PX, GAUGE_H, GAUGE_W, WALL};
 pub use board::{
     bare_board_face, baseos_cart_face, board_at, board_face, board_from, board_from_shaped,
     board_in, board_x, board_zoom, chip_face, chip_face_text, chip_shadow_face, gb_chip_face,

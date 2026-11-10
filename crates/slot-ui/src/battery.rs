@@ -1,5 +1,6 @@
 use slot_gfx::{Draw, TexId};
 use slot_power::{Battery, Charge};
+use slot_store::BatteryDisplay;
 
 use crate::footer::Printed;
 use crate::plate::HINT_H;
@@ -18,18 +19,55 @@ const BOLT_W: f32 = 14.0;
 const BOLT_H: f32 = 14.0;
 const BOLT_GAP: f32 = 5.0;
 const _: () = assert!(BOLT_GAP > 0.0);
-pub const GAUGE_ROW_W: f32 = BOLT_W + BOLT_GAP + GAUGE_W + NUB_W + GAP;
+
+#[derive(Copy, Clone, Default, PartialEq, Eq, Debug)]
+pub struct Gauge {
+    pub battery: Option<Battery>,
+    pub percent: Printed,
+    pub display: BatteryDisplay,
+}
+
+impl Gauge {
+    fn text(self) -> Printed {
+        match self.display.percent() {
+            true => self.percent,
+            false => Printed::default(),
+        }
+    }
+
+    fn capsule_w(self) -> f32 {
+        match self.display.icon() {
+            true => GAUGE_W + NUB_W,
+            false => 0.0,
+        }
+    }
+
+    fn text_x(self) -> f32 {
+        BOLT_W
+            + BOLT_GAP
+            + match self.display.icon() {
+                true => self.capsule_w() + GAP,
+                false => 0.0,
+            }
+    }
+
+    pub fn row_w(self) -> f32 {
+        match self.text().w {
+            0 => BOLT_W + BOLT_GAP + self.capsule_w(),
+            w => self.text_x() + w as f32,
+        }
+    }
+}
 
 pub fn draw_gauge(
     x: f32,
     y: f32,
-    battery: Option<Battery>,
-    percent: Printed,
+    gauge: Gauge,
     bolt: Option<TexId>,
     ink: [u8; 3],
     out: &mut Vec<Draw>,
 ) {
-    let Some(b) = battery else {
+    let Some(b) = gauge.battery else {
         return;
     };
     let colour = [
@@ -45,22 +83,24 @@ pub fn draw_gauge(
 
     let cx = x + BOLT_W + BOLT_GAP;
 
-    rect(cx, y, GAUGE_W, WALL, out);
-    rect(cx, y + GAUGE_H - WALL, GAUGE_W, WALL, out);
-    rect(cx, y, WALL, GAUGE_H, out);
-    rect(cx + GAUGE_W - WALL, y, WALL, GAUGE_H, out);
-    rect(cx + GAUGE_W, y + (GAUGE_H - NUB_H) / 2.0, NUB_W, NUB_H, out);
+    if gauge.display.icon() {
+        rect(cx, y, GAUGE_W, WALL, out);
+        rect(cx, y + GAUGE_H - WALL, GAUGE_W, WALL, out);
+        rect(cx, y, WALL, GAUGE_H, out);
+        rect(cx + GAUGE_W - WALL, y, WALL, GAUGE_H, out);
+        rect(cx + GAUGE_W, y + (GAUGE_H - NUB_H) / 2.0, NUB_W, NUB_H, out);
 
-    let inner = GAUGE_W - 4.0 * WALL;
-    let fill = inner * f32::from(b.percent.min(100)) / 100.0;
-    if fill > 0.0 {
-        rect(
-            cx + 2.0 * WALL,
-            y + 2.0 * WALL,
-            fill,
-            GAUGE_H - 4.0 * WALL,
-            out,
-        );
+        let inner = GAUGE_W - 4.0 * WALL;
+        let fill = inner * f32::from(b.percent.min(100)) / 100.0;
+        if fill > 0.0 {
+            rect(
+                cx + 2.0 * WALL,
+                y + 2.0 * WALL,
+                fill,
+                GAUGE_H - 4.0 * WALL,
+                out,
+            );
+        }
     }
 
     if let (Charge::Charging, Some(tex)) = (b.charge, bolt) {
@@ -74,8 +114,9 @@ pub fn draw_gauge(
         });
     }
 
+    let percent = gauge.text();
     if percent.w > 0 {
-        let px = cx + GAUGE_W + NUB_W + GAP;
+        let px = x + gauge.text_x();
         let py = y + (GAUGE_H - HINT_H as f32) / 2.0;
         out.push(match percent.face {
             Some(tex) => Draw::Tex {

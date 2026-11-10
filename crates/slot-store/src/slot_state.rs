@@ -165,6 +165,55 @@ impl WallpaperTint {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
+pub enum BatteryDisplay {
+    #[default]
+    Both,
+    Icon,
+    Percent,
+}
+
+impl BatteryDisplay {
+    pub const ALL: [BatteryDisplay; 3] = [
+        BatteryDisplay::Both,
+        BatteryDisplay::Icon,
+        BatteryDisplay::Percent,
+    ];
+
+    pub fn key(self) -> &'static str {
+        match self {
+            BatteryDisplay::Both => "both",
+            BatteryDisplay::Icon => "icon",
+            BatteryDisplay::Percent => "percent",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<BatteryDisplay> {
+        BatteryDisplay::ALL.into_iter().find(|d| d.key() == value)
+    }
+
+    pub fn icon(self) -> bool {
+        self != BatteryDisplay::Percent
+    }
+
+    pub fn percent(self) -> bool {
+        self != BatteryDisplay::Icon
+    }
+
+    pub fn step(self, right: bool) -> BatteryDisplay {
+        let n = BatteryDisplay::ALL.len();
+        let at = BatteryDisplay::ALL
+            .iter()
+            .position(|d| *d == self)
+            .unwrap_or(0);
+        BatteryDisplay::ALL[if right {
+            (at + 1) % n
+        } else {
+            (at + n - 1) % n
+        }]
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub enum WallpaperPick {
     None,
@@ -428,6 +477,7 @@ pub struct SlotState {
     pub wallpaper_tint: WallpaperTint,
     pub show_recents: bool,
     pub show_titles: bool,
+    pub battery_display: BatteryDisplay,
     pub wifi_off: bool,
     pub gb_core: Core,
     pub left_stick_dpad: bool,
@@ -615,6 +665,7 @@ impl Default for SlotState {
             wallpaper_tint: WallpaperTint::Off,
             show_recents: false,
             show_titles: false,
+            battery_display: BatteryDisplay::Both,
             wifi_off: false,
             gb_core: Core::Gambatte,
             left_stick_dpad: true,
@@ -734,6 +785,7 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
     text.push_str(&format!("wallpaper_tint={}\n", s.wallpaper_tint.key()));
     text.push_str(&format!("show_recents={}\n", s.show_recents as u8));
     text.push_str(&format!("show_titles={}\n", s.show_titles as u8));
+    text.push_str(&format!("battery_display={}\n", s.battery_display.key()));
     if s.wifi_off {
         text.push_str("wifi_off=1\n");
     }
@@ -830,6 +882,7 @@ fn parse(text: &str) -> Option<SlotState> {
     let mut wallpaper_tint = None;
     let mut show_recents = None;
     let mut show_titles = None;
+    let mut battery_display = None;
     let mut wifi_off = None;
     let mut gb_core = None;
     let mut left_stick_dpad = None;
@@ -898,6 +951,7 @@ fn parse(text: &str) -> Option<SlotState> {
             "wallpaper_tint" => wallpaper_tint = WallpaperTint::parse(value),
             "show_recents" => show_recents = flag(value),
             "show_titles" => show_titles = flag(value),
+            "battery_display" => battery_display = BatteryDisplay::parse(value),
             "wifi_off" => wifi_off = flag(value),
             "gb_core" => gb_core = Core::parse(value).filter(|c| c.runs(Platform::Gb)),
             "left_stick_dpad" => left_stick_dpad = flag(value),
@@ -979,6 +1033,7 @@ fn parse(text: &str) -> Option<SlotState> {
         wallpaper_tint: wallpaper_tint.unwrap_or(fallback.wallpaper_tint),
         show_recents: show_recents.unwrap_or(fallback.show_recents),
         show_titles: show_titles.unwrap_or(fallback.show_titles),
+        battery_display: battery_display.unwrap_or(fallback.battery_display),
         wifi_off: wifi_off.unwrap_or(fallback.wifi_off),
         gb_core: gb_core.unwrap_or(Core::Mgba),
         left_stick_dpad: left_stick_dpad.unwrap_or(fallback.left_stick_dpad),

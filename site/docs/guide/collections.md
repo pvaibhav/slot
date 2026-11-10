@@ -12,7 +12,7 @@ Empty collections are skipped. If you have no favorites, your first collection t
 
 ## Shelf Mode
 
-Settings → General → Shelf Mode has two choices:
+Settings → Shelf → Shelf Mode has two choices:
 
 - **All**: the system shelves as usual, with your collections stacked behind Favorites.
 - **Collections**: the system shelves are hidden and each collection gets its own spot in the <kbd>L1</kbd> / <kbd>R1</kbd> row, after Recents and Favorites. <kbd>L2</kbd> / <kbd>R2</kbd> do nothing.
