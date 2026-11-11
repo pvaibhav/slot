@@ -5,7 +5,8 @@ use slot_gfx::{Canvas, Draw, TexId, OUT_H, OUT_W};
 
 use crate::art;
 
-const DEFAULT_PNG: &[u8] = include_bytes!("../../../assets/background_default.png");
+pub const SLOT_WALLPAPER_PNG: &[u8] = include_bytes!("../../../assets/background_default.png");
+const DEFAULT_PNG: &[u8] = SLOT_WALLPAPER_PNG;
 const BEZEL_GB_PNG: &[u8] = include_bytes!("../../../assets/bezel_gb.png");
 const BEZEL_GBC_PNG: &[u8] = include_bytes!("../../../assets/bezel_gbc.png");
 const BEZEL_GB_FIT_3X2_PNG: &[u8] = include_bytes!("../../../assets/bezel_gb_fit_3x2.png");
@@ -27,7 +28,9 @@ const BEZEL_AUTHENTIC_POCKET_4X3_PNG: &[u8] =
     include_bytes!("../../../assets/bezel_authentic_pocket_4x3.png");
 const BEZEL_AUTHENTIC_GBA_4X3_PNG: &[u8] =
     include_bytes!("../../../assets/bezel_authentic_gba_4x3.png");
-const BLUR_PNG: &[u8] = include_bytes!("../../../assets/background_default_blur.png");
+pub const SLOT_BLUR_WALLPAPER_PNG: &[u8] =
+    include_bytes!("../../../assets/background_default_blur.png");
+const BLUR_PNG: &[u8] = SLOT_BLUR_WALLPAPER_PNG;
 
 const SCRIM: f32 = 0.62;
 

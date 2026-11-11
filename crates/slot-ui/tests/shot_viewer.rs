@@ -245,14 +245,13 @@ fn stepping_resets_the_zoom() {
     assert_eq!(v.mode(), ShotMode::Full);
 }
 
-use slot_ui::{thumbnail, Draw, Printed, TexId};
+use slot_ui::{thumbnail, Draw, Gauge, Printed, TexId};
 
 fn drawn(v: &ShotViewer, canvas: Canvas) -> Vec<Draw> {
     let mut out = Vec::new();
     v.draw(
         canvas,
-        None,
-        Printed::default(),
+        Gauge::default(),
         None,
         Printed::default(),
         &mut out,

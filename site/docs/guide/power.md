@@ -7,7 +7,7 @@ disk. Open it again and you're back in the game.
 
 Leave it shut and slot powers off after 3 minutes. Next time you power on, it boots straight back into that game.
 
-Change the wait with Lid Power Off in Settings → General. You can pick 1, 3, 5, 10, 15 or 30 minutes.
+Change the wait with Lid Power Off in Settings → System. You can pick 1, 3, 5, 10, 15 or 30 minutes.
 
 ## No lid?
 
@@ -22,12 +22,12 @@ When the battery hits 5%, and you're not charging, slot saves and powers off by 
 
 ## Restarting
 
-Settings → About, then press <kbd>X</kbd>. Is this useful for anyone other than me? Probably not!
+Settings → System → About, then press <kbd>X</kbd>. Is this useful for anyone other than me? Probably not!
 
 ## The clock
 
 The first time slot boots, or if the clock ever reads as long ago, it asks you to set the time. You can change it later
-from Date & Time in Settings → General.
+from Date & Time in Settings → System.
 
 | Row   | Does                                            |
 |-------|-------------------------------------------------|

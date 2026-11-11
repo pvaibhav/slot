@@ -49,9 +49,9 @@ Each feature links to a [wiki](https://github.com/pvaibhav/slot/wiki) page with 
   measured by me. Both white point and gamma curve are corrected. Currently no other firmware
   has this!
 - ~~Holding POWER **shuts down** directly, without showing a menu.~~
-  Included upstream since **v1.8.0**. Restart is available from Settings > About with X.
+  Included upstream since **v1.8.0**. Restart is available from Settings > System > About with X.
 - ~~**Home Wi-Fi.**~~ Included upstream since **v1.13.0** as the **Network** menu. Join your
-  network there. slot deletes the old `Config/wifi.toml` on first start.
+  network from **System > Wi-Fi**. slot deletes the old `Config/wifi.toml` on first start.
 - **[Wi-Fi stays connected while you play.](https://github.com/pvaibhav/slot/wiki/RetroAchievements#wi-fi-during-a-game)** If Wi-Fi is connected when you put a cart in, it
   stays connected, so RetroAchievements stay online. slot never starts a connection during a
   game, because a scan can stall frames.
@@ -75,7 +75,7 @@ Each feature links to a [wiki](https://github.com/pvaibhav/slot/wiki) page with 
 - ~~**Network time from BaseOS and `slot.local` beside the device's own name.**~~ Included
   upstream since **v1.15.0**. **Set Automatically** uses BaseOS's network time, and Gamebit
   answers at `slot.local` alongside `<hostname>.local`, with a numbered name on conflicts.
-- **[Updates from this fork.](https://github.com/pvaibhav/slot/wiki/Updates-and-releases)** Network > Check for Updates installs this fork's releases, never
+- **[Updates from this fork.](https://github.com/pvaibhav/slot/wiki/Updates-and-releases)** System > Check for Updates installs this fork's releases, never
   upstream's.
 
 Your Frame Blending choice carries over when you update.
@@ -85,7 +85,7 @@ GBA games on mGBA run at full speed so they stay smooth.
 
 ## How to configure
 
-Join your Wi-Fi network from **Network** in the shelf menu. For RetroAchievements, the release
+Join your Wi-Fi network from **Settings > System > Wi-Fi** in the shelf menu. For RetroAchievements, the release
 includes `Config/retroachievements.toml.example`. Remove `.example` from the name, and fill in
 your account. Everything else is automatic.
 
@@ -94,7 +94,7 @@ your account. Everything else is automatic.
 A release of this fork uses upstream's version with a suffix. `v1.4.0-pvaibhav.1` is the
 first release built on upstream 1.4.0, and `v1.4.0-pvaibhav.2` would be the second.
 
-The current release is [v1.15.2-pvaibhav.3](https://github.com/pvaibhav/slot/releases/tag/v1.15.2-pvaibhav.3).
+The current release is [v1.15.3-pvaibhav.1](https://github.com/pvaibhav/slot/releases/tag/v1.15.3-pvaibhav.1).
 Its [release notes](RELEASE_NOTES.md) describe the changes since the previous fork release.
 
 ## Release cadence

@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.15.3](https://github.com/slot-cfw/slot/releases/tag/v1.15.3)
+
+- Auto Load State was split into two rows: Resume on Insert and Resume on Power On. Having these two behaviors split allows for all the combinations that y'all have requested. ([#208](https://github.com/slot-cfw/slot/issues/208))
+- The Shelf wallpaper option is now called Per Shelf. A shelf or collection without its own file shows `Default.png` from `Wallpapers/`, or a black background if there isn't one.
+- With Wallpaper set to Per Shelf, a collection without its own wallpaper no longer shows `Favorites.png`. ([#216](https://github.com/slot-cfw/slot/issues/216))
+- slot's bundled wallpapers are now seeded as `Slot.png` and `Slot Blur.png` in `Wallpapers/`, so you can delete them like any other wallpaper. Random and Per Shelf no longer fall back to slot's bundled wallpaper.
+- Battery Display in Settings → System shows the battery as an icon, a percentage or both. The settings menu is regrouped. ([#212](https://github.com/slot-cfw/slot/issues/212))
+- Changing Wallpaper Tint now shows the shelf for a moment with the new tint.
+- The settings menu on the shelf now shows the battery and clock in the top corners, like the in-game menu.
+
 ## [1.15.2](https://github.com/slot-cfw/slot/releases/tag/v1.15.2)
 
 - Load State on Insert is now Auto Load State, with a new Power On option. Carts you insert start fresh, but powering on still picks up the game you were playing. On and Off are now Always and Never. Save State on Eject is now Eject Save State. ([#206](https://github.com/slot-cfw/slot/issues/206))

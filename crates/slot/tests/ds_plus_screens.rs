@@ -58,6 +58,17 @@ fn big_tex(list: &[slot_gfx::Draw]) -> Option<[f32; 4]> {
     })
 }
 
+fn carts_shown(list: &[slot_gfx::Draw], canvas_w: f32) -> usize {
+    list.iter()
+        .filter(|d| match **d {
+            slot_gfx::Draw::Tex { x, w, h, .. } | slot_gfx::Draw::Rect { x, w, h, .. } => {
+                h > 100.0 && w < 600.0 && x + w > 0.0 && x < canvas_w
+            }
+            _ => false,
+        })
+        .count()
+}
+
 fn bottom(a: &slot::app::App) -> Vec<slot_gfx::Draw> {
     let mut out = Vec::new();
     a.draw_screen(Screen::Bottom, &mut out);
@@ -185,10 +196,10 @@ fn two_panel_ds_app() -> (tempfile::TempDir, slot::app::App) {
 }
 
 #[test]
-fn a_ds_cart_flings_up_while_the_shelf_stays_on_the_bottom() {
+fn a_ds_cart_flings_up_while_the_shelf_parts_on_the_bottom() {
     let (_d, mut a) = two_panel_ds_app();
     a.apply(slot_input::Action::Insert);
-    let (mut early, mut late, mut secs) = (0, 0, 0.0);
+    let (mut early, mut parted, mut late, mut secs) = (0, 0, 0, 0.0);
     for _ in 0..1200 {
         a.update(1.0 / 240.0);
         let seat = a.seat();
@@ -201,7 +212,19 @@ fn a_ds_cart_flings_up_while_the_shelf_stays_on_the_bottom() {
             slot::app::BottomSource::Compositor,
             "the shelf left the bottom at seat {seat}"
         );
-        if seat < 0.3 {
+        let w = a.canvas().w;
+        if seat > 0.2 && seat < 0.25 {
+            parted += 1;
+            assert_eq!(
+                carts_shown(&bottom(&a), w),
+                1,
+                "a neighbour is still on the bottom at seat {seat}"
+            );
+        }
+        if seat >= 0.3 {
+            assert_eq!(carts_shown(&bottom(&a), w), 0, "carts on the bottom at seat {seat}");
+        }
+        if seat < 0.25 {
             early += 1;
             assert!(
                 big_tex(&bottom(&a)).is_some(),
@@ -224,8 +247,8 @@ fn a_ds_cart_flings_up_while_the_shelf_stays_on_the_bottom() {
         }
     }
     assert!(
-        early > 0 && late > 0,
-        "the insert never passed both halves: {early} {late}"
+        early > 0 && parted > 0 && late > 0,
+        "the insert never passed every stage: {early} {parted} {late}"
     );
     assert!(
         secs > 1.2,
@@ -280,6 +303,19 @@ fn a_ds_cart_springs_out_of_the_top_slot_and_lands_on_the_shelf() {
         matches!(a.phase(), slot::app::Phase::Shelf),
         "{:?}",
         a.phase()
+    );
+    let w = a.canvas().w;
+    assert_eq!(
+        carts_shown(&bottom(&a), w),
+        1,
+        "the neighbours were back before the card landed"
+    );
+    for _ in 0..120 {
+        a.update(1.0 / 240.0);
+    }
+    assert!(
+        carts_shown(&bottom(&a), w) > 1,
+        "the neighbours did not come back after the card landed"
     );
 }
 
@@ -426,7 +462,7 @@ mod rendered {
         let mut list = Vec::new();
         r.f.app().draw_screen(Screen::Top, &mut list);
         assert!(
-            !list.iter().any(|d| matches!(d, slot_gfx::Draw::Rect { colour, w, .. } if colour[3] > 0.5 && *w > 600.0)),
+            list.iter().filter(|d| matches!(d, slot_gfx::Draw::Rect { colour, w, .. } if colour[3] > 0.5 && *w > 600.0)).count() <= 1,
             "the menu's scrim is on the top screen"
         );
         assert_eq!(r.f.bottom_source(), BottomSource::Compositor);
@@ -458,6 +494,10 @@ mod rendered {
         r.tap(Btn::Menu);
         r.run_for(0.6);
         let hidden = r.f.app().hidden_rows();
+        for _ in 0..QuickRow::System.position(&hidden) {
+            r.tap(Btn::Down);
+        }
+        r.tap(Btn::A);
         for _ in 0..QuickRow::About.position(&hidden) {
             r.tap(Btn::Down);
         }
@@ -539,8 +579,15 @@ mod rendered {
         );
     }
 
-    fn title_band(px: &[u8]) -> usize {
-        white_in(px, 470, 120, 1000, 640)
+    pub fn dimmed_game(draws: &[slot_gfx::Draw]) -> bool {
+        draws.iter().any(|d| matches!(d, slot_gfx::Draw::Game))
+            && draws.iter().any(|d| matches!(d, slot_gfx::Draw::Rect { colour, .. } if *colour == [0.0, 0.0, 0.0, 0.8]))
+    }
+
+    fn assert_dimmed_game(r: &Rig) {
+        let mut draws = Vec::new();
+        r.f.app().draw_screen(Screen::Top, &mut draws);
+        assert!(dimmed_game(&draws), "no dimmed game on the top screen");
     }
 
     #[test]
@@ -551,17 +598,13 @@ mod rendered {
         r.open_menu();
         r.run_for(0.3);
         let top = r.shot(Screen::Top, "box-top");
-        assert!(
-            title_band(&top) > 300,
-            "no title ink on the top screen: {}",
-            title_band(&top)
-        );
+        assert_dimmed_game(&r);
         assert_ne!(before, top);
         let mut list = Vec::new();
         r.f.app().draw_screen(Screen::Top, &mut list);
         assert!(
-            !list.iter().any(|d| matches!(d, slot_gfx::Draw::Game)),
-            "the game still shows under the menu"
+            dimmed_game(&list),
+            "the game is not dimmed under the menu"
         );
     }
 
@@ -599,8 +642,8 @@ mod rendered {
         let mut list = Vec::new();
         r.f.app().draw_screen(Screen::Top, &mut list);
         assert!(
-            !list.iter().any(|d| matches!(d, slot_gfx::Draw::Game)),
-            "the preview stayed after leaving the screen rows"
+            dimmed_game(&list),
+            "the game is not dimmed after leaving the screen rows"
         );
     }
 
@@ -702,7 +745,7 @@ mod rendered {
     }
 
     #[test]
-    fn a_corrupt_box_file_draws_title_only() {
+    fn a_corrupt_box_file_keeps_the_dimmed_game() {
         let mut r = with_box(b"not a png at all".to_vec());
         let top = menu_with_art(&mut r);
         assert!(
@@ -711,19 +754,19 @@ mod rendered {
             r.f.app().box_art()
         );
         assert_eq!(red_left(&top), 0);
-        assert!(title_band(&top) > 300, "no title on the top screen");
+        assert_dimmed_game(&r);
     }
 
     #[test]
-    fn a_cart_without_box_art_draws_title_only() {
+    fn a_cart_without_box_art_keeps_the_dimmed_game() {
         let mut r = Rig::gba();
-        let top = menu_with_art(&mut r);
+        let _top = menu_with_art(&mut r);
         assert!(r
             .f
             .app()
             .box_art()
             .is_none_or(|a| a.boxed.is_none() && a.logo.is_none()));
-        assert!(title_band(&top) > 300, "no title on the top screen");
+        assert_dimmed_game(&r);
     }
 
     #[test]
@@ -916,10 +959,8 @@ fn a_ds_card_sits_deeper_than_flush_between_its_two_clicks() {
                 deep.push(foot - flush);
             }
         }
-        if !matches!(a.phase(), slot::app::Phase::Inserting { .. }) || a.seat() >= 1.0 {
-            if a.seat() >= 1.0 {
-                break;
-            }
+        if a.seat() >= 1.0 {
+            break;
         }
     }
     assert!(sound_at.is_some(), "no insert sound");
@@ -1032,4 +1073,55 @@ fn both_screens_power_off_together_when_a_ds_card_ejects() {
         }
     }
     assert!(powering > 0 && dark_hold > 0, "{powering} {dark_hold}");
+}
+
+#[cfg(target_os = "macos")]
+mod menu_step {
+    use super::rendered::Rig;
+    use slot::app::BottomSource;
+    use slot::screen::Screen;
+    use slot_input::{Btn, Millis, RawEvent};
+
+    #[test]
+    fn a_ds_games_menu_changes_both_screens_on_the_same_frame() {
+        let mut r = Rig::ds();
+        r.play();
+        let mut now: Millis = 300_000;
+        r.input.0.push_back(vec![RawEvent::Down(Btn::Menu)]);
+        r.f.advance_at(&mut r.input, now, 1.0 / 60.0);
+        r.input.0.push_back(vec![RawEvent::Up(Btn::Menu)]);
+        let (mut top_at, mut bottom_at): (Option<u32>, Option<u32>) = (None, None);
+        for frame in 0..60 {
+            now += 16;
+            r.f.advance_at(&mut r.input, now, 1.0 / 60.0);
+            let mut top = Vec::new();
+            r.f.app().draw_screen(Screen::Top, &mut top);
+            let game_on_top = top.iter().any(|d| matches!(d, slot_gfx::Draw::Game));
+            if game_on_top {
+                let px = r.shot(Screen::Top, &format!("menu-step-top-{frame:02}"));
+                let w = 1024usize;
+                let green = (150..600)
+                    .step_by(7)
+                    .flat_map(|y| (20..250).step_by(9).map(move |x| (y * w + x) * 4 + 1))
+                    .map(|i| px[i])
+                    .max()
+                    .unwrap_or(0);
+                assert!(green < 140, "the top screen showed the DS bottom screen on frame {frame} (green {green})");
+            }
+            if top_at.is_none() && super::rendered::dimmed_game(&top) {
+                top_at = Some(frame);
+            }
+            if bottom_at.is_none() && r.f.bottom_source() == BottomSource::Compositor {
+                bottom_at = Some(frame);
+            }
+            if top_at.is_some() && bottom_at.is_some() {
+                break;
+            }
+        }
+        let (Some(t), Some(b)) = (top_at, bottom_at) else {
+            panic!("the menu never showed: top {top_at:?} bottom {bottom_at:?}");
+        };
+        assert_eq!(t, b, "the top changed on frame {t}, the bottom on frame {b}");
+    }
+
 }

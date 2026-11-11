@@ -43,13 +43,13 @@ With RetroAchievements set up, a holographic trophy seal on a cart's bottom-left
 
 ## Recents
 
-Turn on Recents in Settings → General to get a shelf of the last 10 games you played.
+Turn on Recents in Settings → Shelf to get a shelf of the last 10 games you played.
 
 Press <kbd>X</kbd> on the Recents shelf to remove the selected game.
 
 ## Game titles
 
-Turn on Game Titles in Settings → General and they will appear above the slot.
+Turn on Game Titles in Settings → Shelf and they will appear above the slot.
 
 ## Adding games
 

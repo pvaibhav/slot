@@ -56,6 +56,7 @@ fn a_ds_game_draws_direct_and_shows_its_bottom_screen_under_the_menu() {
     std::fs::write(d.path().join("Games/NDS/Kart.nds"), vec![0u8; 0x200]).unwrap();
     clocked(d.path());
     let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+    f.set_two_panels(true);
     f.upload_faces(&mut c);
     let mut input = Script(VecDeque::new());
     tap(&mut f, &mut input, Btn::A);
@@ -83,7 +84,8 @@ fn a_ds_game_draws_direct_and_shows_its_bottom_screen_under_the_menu() {
     assert!(f.app().in_game_menu().is_some());
     assert!(!f.ds_direct());
     assert!(f.ds_menu_below(), "the menu over a DS game is not on the bottom screen");
-    f.compose(&mut c);
+    f.render_screen(&mut c, (1024, 768), slot::screen::Screen::Top);
+    f.render_screen(&mut c, (1024, 768), slot::screen::Screen::Bottom);
     let (w, h) = c.frame_size();
     let px = c.read_frame();
     if let Ok(dir) = std::env::var("SCRATCH_PNG_DIR") {

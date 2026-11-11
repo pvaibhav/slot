@@ -195,6 +195,8 @@ fn folder(platform: Platform) -> &'static str {
         Platform::Gb => "Nintendo - Game Boy",
         Platform::Gbc => "Nintendo - Game Boy Color",
         Platform::Gba | Platform::Gbav => "Nintendo - Game Boy Advance",
+        #[cfg(feature = "nds")]
+        Platform::Nds => "Nintendo - Nintendo DS",
     }
 }
 
@@ -204,6 +206,8 @@ fn shelves(platform: Platform) -> &'static [Platform] {
     match platform {
         Platform::Gb | Platform::Gbc => &[Platform::Gb, Platform::Gbc],
         Platform::Gba | Platform::Gbav => &[Platform::Gba],
+        #[cfg(feature = "nds")]
+        Platform::Nds => &[Platform::Nds],
     }
 }
 

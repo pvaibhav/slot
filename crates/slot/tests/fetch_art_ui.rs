@@ -23,7 +23,7 @@ fn booted(wifi: bool) -> (TempDir, App) {
     (d, a)
 }
 
-fn open_tools(a: &mut App) {
+fn open_network(a: &mut App) {
     a.apply(Action::QuickMenu);
     while a.quick_menu() != Some(QuickRow::Network) {
         press(a, Btn::Down);
@@ -32,15 +32,21 @@ fn open_tools(a: &mut App) {
 }
 
 #[test]
-fn row_shown_only_while_connected() {
+fn the_row_asks_for_wifi_until_connected() {
     for wifi in [false, true] {
         let (_d, mut a) = booted(wifi);
-        open_tools(&mut a);
-        assert_eq!(a.quick_menu(), Some(QuickRow::Network), "wifi.conf {wifi}");
+        open_network(&mut a);
+        assert!(a.quick_menu().is_some_and(|r| r.page() == QuickRow::NETWORK), "wifi.conf {wifi}");
+        while a.quick_menu() != Some(QuickRow::FetchArt) {
+            press(&mut a, Btn::Down);
+        }
+        press(&mut a, Btn::A);
+        assert!(a.update_text().is_some(), "wifi.conf {wifi}");
+        assert!(a.fetch_art().is_none(), "wifi.conf {wifi}");
     }
     let (_d, mut a) = booted(true);
     common::connect(&mut a);
-    open_tools(&mut a);
+    open_network(&mut a);
     assert_eq!(a.quick_menu(), Some(QuickRow::Server));
     assert!(!a.hidden_rows().contains(&QuickRow::FetchArt));
 }
@@ -513,7 +519,7 @@ fn box_run() -> (TempDir, App, FakeArt) {
     let art = FakeArt::default();
     a.set_art_jobs(Box::new(art.clone()));
     assert!(!a.hidden_rows().contains(&QuickRow::FetchBoxArt));
-    open_tools(&mut a);
+    open_network(&mut a);
     while a.quick_menu() != Some(QuickRow::FetchBoxArt) {
         press(&mut a, Btn::Down);
     }

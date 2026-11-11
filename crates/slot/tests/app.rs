@@ -746,7 +746,14 @@ fn both_b_and_menu_take_the_about_screen_back_to_the_quick_menu() {
     ] {
         let (mut s, _motor) = common::session_with_platform(d.path());
         s.app_mut().apply(slot_input::Action::QuickMenu);
-        for _ in 0..slot_ui::QuickRow::About.position(&[]) {
+        for _ in 0..slot_ui::QuickRow::System.position(&[]) {
+            s.app_mut()
+                .apply(slot_input::Action::GbaDown(slot_input::Btn::Down));
+        }
+        s.app_mut()
+            .apply(slot_input::Action::GbaDown(slot_input::Btn::A));
+        let hidden = s.app().hidden_rows();
+        for _ in 0..slot_ui::QuickRow::About.position(&hidden) {
             s.app_mut()
                 .apply(slot_input::Action::GbaDown(slot_input::Btn::Down));
         }

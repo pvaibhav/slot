@@ -7,7 +7,7 @@ use slot_input::{Action, Btn, RawEvent, MENU_DOUBLE_TAP_MS, MUTE_CHORD_MS};
 use slot_power::{Battery, Charge, LedState, LidPolicy, Power, RepairResult};
 use slot_retro::LinkChannel;
 use slot_store::{
-    format_stamp, parse_stamp, read_slot_state, scan, write_slot_state, AutoLoad, BezelPick,
+    format_stamp, parse_stamp, read_slot_state, scan, write_slot_state, BatteryDisplay, BezelPick,
     Blending, Cart, Collection, Core, GbColors, GbModel, KidMode, Platform, Recent, Scale, Shader,
     ShelfMode, ShotDir, ShotEntry, SlotState, StateEntry, StateRing, Stretch, WallpaperPick,
     WallpaperTint, BLUE_LIGHT_MAX, BRIGHTNESS_MAX, CONTRAST_MAX, DIM_MAX, FF_SPEEDS, RING_MAX,
@@ -68,6 +68,7 @@ pub const EJECT_S: f32 = SEATED_AT;
 
 const EJECT_HOLD_S: f32 = 0.35;
 const DS_INSERT_FLY_S: f32 = 1.8;
+const DS_PART_S: f32 = 0.3;
 const DS_EJECT_FLY_S: f32 = 1.8;
 const DS_CLICK_GAP_S: f32 = 0.53;
 
@@ -84,6 +85,9 @@ const BLANK_DIM: f32 = 0.1;
 const VOLUME_STEP: u8 = 5;
 
 const AUTOSAVE_MS: Millis = 60_000;
+const PEEK_IN_MS: Millis = 120;
+const PEEK_HOLD_MS: Millis = 680;
+const PEEK_OUT_MS: Millis = 200;
 const RESUME_MS: Millis = 300_000;
 const SETTLED_MS: Millis = 10_000;
 const CARD_CHECK_MS: Millis = 2_000;
@@ -688,6 +692,7 @@ pub struct App {
     footer_row: Option<QuickRow>,
     states_from_menu: bool,
     menu_tap: Option<(Millis, Option<QuickRow>)>,
+    tint_peek: Option<Millis>,
     sticker_face: Option<(TexId, u32, u32)>,
     ground: Option<TexId>,
     ground_w: u32,
@@ -730,8 +735,7 @@ pub struct App {
     two_panels: bool,
     ds_slot_faces: Option<(TexId, TexId)>,
     box_art: Option<BoxArtFaces>,
-    box_title: slot_ui::Printed,
-    box_system: slot_ui::Printed,
+    ds_landed: Option<f64>,
     card_writes: Arc<crate::card_log::CardWrites>,
     resume_unread: bool,
     card_read_only: bool,
@@ -887,19 +891,19 @@ fn shelves_of(carts: Vec<Cart>, collections: usize) -> Vec<(Rack, Shelf)> {
         .collect()
 }
 
+const SHELF_FALLBACK_WALLPAPER: &str = "default";
+
 fn wallpaper_of_rack(rack: Rack, files: &[String]) -> Option<String> {
-    let rack = match rack {
-        Rack::Collection(_) => Rack::Favorites,
-        rack => rack,
-    };
     std::iter::once(rack)
         .chain(rack.platform().map(|p| Rack::Of(p.hardware())))
-        .find_map(|rack| {
+        .map(|rack| rack.key())
+        .chain(std::iter::once(SHELF_FALLBACK_WALLPAPER.to_owned()))
+        .find_map(|key| {
             files
                 .iter()
                 .find(|file| {
                     file.rsplit_once('.')
-                        .is_some_and(|(stem, _)| stem.eq_ignore_ascii_case(&rack.key()))
+                        .is_some_and(|(stem, _)| stem.eq_ignore_ascii_case(&key))
                 })
                 .cloned()
         })
@@ -1189,6 +1193,7 @@ impl App {
             footer_row: None,
             states_from_menu: false,
             menu_tap: None,
+            tint_peek: None,
             sticker_face: None,
             ground: None,
             ground_w: OUT_W,
@@ -1231,8 +1236,7 @@ impl App {
             two_panels: false,
             ds_slot_faces: None,
             box_art: None,
-            box_title: slot_ui::Printed::default(),
-            box_system: slot_ui::Printed::default(),
+            ds_landed: None,
             card_writes,
             resume_unread: false,
             card_read_only: false,
@@ -1263,6 +1267,7 @@ impl App {
         app.root = Some(root.to_path_buf());
         app.loading = loading;
         app.state = read_slot_state(root);
+        app.give_wallpapers(root);
         tell_libc_the_zone(app.state.zone);
         app.romm = crate::romm::RommConf::load(root);
         app.gifts = crate::romm::Gifts::load(root);
@@ -1323,7 +1328,7 @@ impl App {
             Some((at, i)) => {
                 self.shelf_at = at;
                 self.shelf_mut().select(i);
-                self.insert(!self.state.auto_load.at_power_on());
+                self.insert(!self.state.resume_power_on);
                 if let Phase::Inserting { resumed, t, .. } = &mut self.phase {
                     *resumed = true;
                     *t = INSERT_S;
@@ -2821,12 +2826,8 @@ impl App {
             QuickRow::GbcShader => Some(shader_value(self.state.shader_gbc)),
             QuickRow::Rumble => Some(QuickValue::flag(self.state.rumble)),
             QuickRow::LeftStick => Some(QuickValue::flag(self.state.left_stick_dpad)),
-            QuickRow::AutoLoad => Some(match self.state.auto_load {
-                AutoLoad::Always => QuickValue::Always,
-                AutoLoad::PowerOn => QuickValue::PowerOn,
-                AutoLoad::Never => QuickValue::Never,
-            }),
-            QuickRow::EjectSave => Some(QuickValue::flag(self.state.eject_save)),
+            QuickRow::ResumeInsert => Some(QuickValue::flag(self.state.resume_insert)),
+            QuickRow::ResumePowerOn => Some(QuickValue::flag(self.state.resume_power_on)),
             QuickRow::Turbo => Some(QuickValue::flag(self.state.turbo)),
             QuickRow::Rewind => Some(QuickValue::flag(self.state.rewind)),
             QuickRow::Recents => Some(if self.state.show_recents {
@@ -2847,6 +2848,11 @@ impl App {
                 QuickValue::Show
             } else {
                 QuickValue::Hide
+            }),
+            QuickRow::BatteryDisplay => Some(match self.state.battery_display {
+                BatteryDisplay::Both => QuickValue::Both,
+                BatteryDisplay::Icon => QuickValue::Icon,
+                BatteryDisplay::Percent => QuickValue::Percentage,
             }),
             QuickRow::WallpaperTint => Some(match self.state.wallpaper_tint {
                 WallpaperTint::Off => QuickValue::Off,
@@ -2914,6 +2920,7 @@ impl App {
             | QuickRow::GbaBezel
             | QuickRow::Bezel
             | QuickRow::General
+            | QuickRow::System
             | QuickRow::ShelfPrev
             | QuickRow::ShelfNext
             | QuickRow::ShelfFavorite
@@ -2996,7 +3003,7 @@ impl App {
         }
         let wifi = self.wifi_up().then(|| self.wifi_face()).flatten();
         let face = self.kid_icon_faces.map(|f| f[usize::from(self.light())]);
-        slot_ui::draw_kid_icon(self.canvas(), self.battery_percent, wifi, face, out);
+        slot_ui::draw_kid_icon(self.canvas(), self.gauge(), wifi, face, out);
     }
 
     pub fn set_kid_faces(&mut self, faces: Vec<(TexId, u32, u32)>) {
@@ -3415,6 +3422,25 @@ impl App {
         self.root().map(crate::wallpaper::list).unwrap_or_default()
     }
 
+    fn give_wallpapers(&mut self, root: &Path) {
+        if self.state.wallpapers_given {
+            return;
+        }
+        if let Err(e) = crate::wallpaper::give(root) {
+            eprintln!("slot: wallpapers: {e}");
+            return;
+        }
+        self.state.wallpaper = match &self.state.wallpaper {
+            WallpaperPick::Default => WallpaperPick::File(crate::wallpaper::SLOT_FILE.into()),
+            WallpaperPick::Blur => WallpaperPick::File(crate::wallpaper::SLOT_BLUR_FILE.into()),
+            other => other.clone(),
+        };
+        self.state.wallpapers_given = true;
+        if let Err(e) = write_slot_state(root, &self.state) {
+            eprintln!("slot: slot.state: {e}");
+        }
+    }
+
     pub fn wallpaper(&self) -> WallpaperPick {
         self.state.wallpaper.clone()
     }
@@ -3422,7 +3448,7 @@ impl App {
     pub fn resolved_wallpaper(&self) -> WallpaperPick {
         match &self.state.wallpaper {
             WallpaperPick::File(name) if !self.wallpaper_files().iter().any(|n| n == name) => {
-                WallpaperPick::Default
+                WallpaperPick::None
             }
             other => other.clone(),
         }
@@ -3518,12 +3544,10 @@ impl App {
             WallpaperPick::None,
             WallpaperPick::Random,
             WallpaperPick::Shelf,
-            WallpaperPick::Default,
-            WallpaperPick::Blur,
         ];
         choices.extend(self.wallpaper_files().into_iter().map(WallpaperPick::File));
         let key = self.resolved_wallpaper().key();
-        let at = choices.iter().position(|c| c.key() == key).unwrap_or(3);
+        let at = choices.iter().position(|c| c.key() == key).unwrap_or(0);
         let n = choices.len();
         let next = if right {
             (at + 1) % n
@@ -3536,14 +3560,20 @@ impl App {
     fn grounds(&self) -> [Option<(TexId, u32)>; 3] {
         let ground = self.ground.map(|t| (t, self.ground_w));
         let blur = self.blur.map(|t| (t, self.ground_w)).or(ground);
-        let own = self
-            .wallpaper
-            .map(|t| (t, self.wallpaper_size().0))
-            .or(ground);
+        let own = self.wallpaper.map(|t| (t, self.wallpaper_size().0));
         [ground, blur, own]
     }
 
-    fn menu_ground(&self) -> Option<(TexId, u32)> {
+    fn menu_ground(&self) -> Option<slot_ui::MenuGround> {
+        let tint = match self.own_wallpaper_shown() {
+            true => tint_alpha(self.state.wallpaper_tint),
+            false => 0.0,
+        };
+        self.menu_backdrop()
+            .map(|(tex, w)| slot_ui::MenuGround { tex, w, tint })
+    }
+
+    fn menu_backdrop(&self) -> Option<(TexId, u32)> {
         let [_, blur, own] = self.grounds();
         if self.collection_wallpaper.is_some() {
             return own;
@@ -3551,8 +3581,8 @@ impl App {
         match &self.state.wallpaper {
             WallpaperPick::None => None,
             WallpaperPick::Default | WallpaperPick::Blur => blur,
-            WallpaperPick::Random if !self.random_drawn() => blur,
-            WallpaperPick::Shelf if self.shelf_wallpaper.is_none() => blur,
+            WallpaperPick::Random if !self.random_drawn() => None,
+            WallpaperPick::Shelf if self.shelf_wallpaper.is_none() => None,
             WallpaperPick::File(_) | WallpaperPick::Random | WallpaperPick::Shelf => own,
         }
     }
@@ -3563,8 +3593,8 @@ impl App {
             _ if self.collection_wallpaper.is_some() => own,
             WallpaperPick::None => None,
             WallpaperPick::Default => ground,
-            WallpaperPick::Random if !self.random_drawn() => ground,
-            WallpaperPick::Shelf if self.shelf_wallpaper.is_none() => ground,
+            WallpaperPick::Random if !self.random_drawn() => None,
+            WallpaperPick::Shelf if self.shelf_wallpaper.is_none() => None,
             WallpaperPick::Blur => blur,
             WallpaperPick::File(_) | WallpaperPick::Random | WallpaperPick::Shelf => own,
         };
@@ -3931,6 +3961,14 @@ impl App {
 
     pub fn set_battery_percent_face(&mut self, face: TexId, w: u32) {
         self.battery_percent = slot_ui::Printed::new(face, w);
+    }
+
+    fn gauge(&self) -> slot_ui::Gauge {
+        slot_ui::Gauge {
+            battery: self.battery,
+            percent: self.battery_percent,
+            display: self.state.battery_display,
+        }
     }
 
     pub fn set_shelf_clock_face(&mut self, face: TexId, w: u32) {
@@ -5424,11 +5462,11 @@ impl App {
                 Action::GbaDown(Btn::A) => self.play_held = Some(now),
                 Action::GbaUp(Btn::A) => {
                     if self.play_held.take().is_some() && !self.unwrap_seated() {
-                        self.insert(!self.state.auto_load.on_insert());
+                        self.insert(!self.state.resume_insert);
                     }
                 }
                 Action::Insert if !self.unwrap_seated() => {
-                    self.insert(!self.state.auto_load.on_insert());
+                    self.insert(!self.state.resume_insert);
                 }
                 _ => {}
             },
@@ -5513,6 +5551,14 @@ impl App {
                 _ => {}
             }
         }
+        match (row, action) {
+            (QuickRow::WallpaperTint, Action::GbaDown(btn @ (Btn::Left | Btn::Right))) => {
+                self.change_setting(row, btn == Btn::Right);
+                return self.peek_tint();
+            }
+            (_, Action::GbaDown(_)) if self.tint_peek.take().is_some() => self.hud.hush(),
+            _ => {}
+        }
         let row = match action {
             Action::GbaDown(Btn::Up) => row.up(&self.hidden_rows()),
             Action::GbaDown(Btn::Down) => row.down(&self.hidden_rows()),
@@ -5529,6 +5575,61 @@ impl App {
             _ => return,
         };
         self.phase = Phase::QuickMenu { row };
+    }
+
+    fn peek_tint(&mut self) {
+        let now = self.now();
+        let into = (self.tint_peek_alpha(now) * PEEK_IN_MS as f32) as Millis;
+        self.tint_peek = Some(now.saturating_sub(into));
+        let said = match self.state.wallpaper_tint {
+            WallpaperTint::Off => Toast::TintOff,
+            WallpaperTint::Low => Toast::TintLow,
+            WallpaperTint::Medium => Toast::TintMedium,
+            WallpaperTint::High => Toast::TintHigh,
+        };
+        self.hud.toast(said, now);
+    }
+
+    pub fn tint_peek_alpha(&self, now: Millis) -> f32 {
+        let Some(at) = self.tint_peek else {
+            return 0.0;
+        };
+        let t = now.saturating_sub(at);
+        if t < PEEK_IN_MS {
+            t as f32 / PEEK_IN_MS as f32
+        } else if t < PEEK_IN_MS + PEEK_HOLD_MS {
+            1.0
+        } else {
+            let out = t - PEEK_IN_MS - PEEK_HOLD_MS;
+            (1.0 - out as f32 / PEEK_OUT_MS as f32).max(0.0)
+        }
+    }
+
+    fn draw_tint_peek(&self, out: &mut Vec<Draw>) {
+        let alpha = self.tint_peek_alpha(self.now());
+        let Some((tex, tex_w)) = self.menu_backdrop().filter(|_| alpha > 0.0) else {
+            return;
+        };
+        let canvas = self.canvas();
+        out.push(Draw::Part {
+            x: 0.0,
+            y: 0.0,
+            w: canvas.w,
+            h: canvas.h,
+            tex,
+            alpha,
+            uv: canvas.cover(tex_w as f32),
+        });
+        let tint = tint_alpha(self.state.wallpaper_tint);
+        if tint > 0.0 && self.own_wallpaper_shown() {
+            out.push(Draw::Rect {
+                x: 0.0,
+                y: 0.0,
+                w: canvas.w,
+                h: canvas.h,
+                colour: [0.0, 0.0, 0.0, tint * alpha],
+            });
+        }
     }
 
     fn in_game_menu_input(&mut self, row: QuickRow, action: Action) {
@@ -5677,6 +5778,13 @@ impl App {
 
     fn open_quick_row(&mut self, row: QuickRow) {
         match row {
+            QuickRow::Server | QuickRow::Romm | QuickRow::FetchArt if !self.wifi_up() => {
+                self.set_update(Some(UpdateState::Notice(NetNotice::NoNetwork)));
+            }
+            #[cfg(feature = "nds")]
+            QuickRow::FetchBoxArt if !self.wifi_up() => {
+                self.set_update(Some(UpdateState::Notice(NetNotice::NoNetwork)));
+            }
             QuickRow::DateTime => {
                 // Another frontend may have changed BaseOS's choice since.
                 self.phase = clock_screen(self.utc_secs(), &self.state, self.has_saved(), true);
@@ -5687,9 +5795,6 @@ impl App {
             QuickRow::FetchBoxArt => self.open_fetch_box_art(),
             QuickRow::CheckUpdates => self.open_check_for_updates(),
             QuickRow::Server => self.open_server(),
-            QuickRow::Network if !self.wifi_up() => {
-                self.set_update(Some(UpdateState::Notice(NetNotice::NoNetwork)));
-            }
             QuickRow::WifiPower => self.set_wifi_off(!self.state.wifi_off),
             QuickRow::Networks => self.open_networks(),
             QuickRow::RommProtocol | QuickRow::RommSelfSigned => self.change_setting(row, true),
@@ -5726,6 +5831,7 @@ impl App {
             | QuickRow::ScreenGb
             | QuickRow::Shortcuts
             | QuickRow::General
+            | QuickRow::System
             | QuickRow::Network
             | QuickRow::Romm
             | QuickRow::Wifi
@@ -5746,8 +5852,8 @@ impl App {
             | QuickRow::PlayBlueLight
             | QuickRow::PlaySaturation
             | QuickRow::PlayContrast
-            | QuickRow::AutoLoad
-            | QuickRow::EjectSave
+            | QuickRow::ResumeInsert
+            | QuickRow::ResumePowerOn
             | QuickRow::Turbo
             | QuickRow::Rewind
             | QuickRow::FastForward
@@ -5767,6 +5873,7 @@ impl App {
             | QuickRow::Recents
             | QuickRow::ShelfMode
             | QuickRow::ShowTitles
+            | QuickRow::BatteryDisplay
             | QuickRow::KidMode
             | QuickRow::KidShelf
             | QuickRow::Wallpaper
@@ -6064,8 +6171,8 @@ impl App {
             QuickRow::GbcReflection => s.reflection_gbc = !s.reflection_gbc,
             QuickRow::Rumble => s.rumble = !s.rumble,
             QuickRow::LeftStick => s.left_stick_dpad = !s.left_stick_dpad,
-            QuickRow::AutoLoad => s.auto_load = s.auto_load.step(right),
-            QuickRow::EjectSave => s.eject_save = !s.eject_save,
+            QuickRow::ResumeInsert => s.resume_insert = !s.resume_insert,
+            QuickRow::ResumePowerOn => s.resume_power_on = !s.resume_power_on,
             QuickRow::Turbo => s.turbo = !s.turbo,
             QuickRow::Rewind => s.rewind = !s.rewind,
             QuickRow::GbaBlending => {
@@ -6078,6 +6185,7 @@ impl App {
                 s.blending_gb = s.blending_gb.step(&Blending::ALL, right);
             }
             QuickRow::Theme => s.appearance = s.appearance.toggle(),
+            QuickRow::BatteryDisplay => s.battery_display = s.battery_display.step(right),
             QuickRow::WallpaperTint => s.wallpaper_tint = s.wallpaper_tint.step(right),
             QuickRow::ScreenGeneral
             | QuickRow::Brightness
@@ -6138,6 +6246,7 @@ impl App {
             | QuickRow::Bezel
             | QuickRow::Reflection
             | QuickRow::General
+            | QuickRow::System
             | QuickRow::ShelfPrev
             | QuickRow::ShelfNext
             | QuickRow::ShelfFavorite
@@ -6615,6 +6724,9 @@ impl App {
             });
         }
         if let Some(phase) = next {
+            if matches!(self.phase, Phase::Ejecting { .. }) && self.two_panels && self.ds_seated() {
+                self.ds_landed = Some(self.clock);
+            }
             self.phase = phase;
             self.refused_from = None;
             if matches!(self.phase, Phase::Shelf) {
@@ -7341,6 +7453,12 @@ impl App {
         self.draw_status_footer(out);
     }
 
+    fn ds_parted(&self) -> Option<f32> {
+        let at = self.ds_landed?;
+        let k = ((self.clock - at) / 1000.0) as f32 / DS_PART_S;
+        (k < 1.0).then(|| 1.0 - ease(k.max(0.0)))
+    }
+
     fn draw_ds_fling_bottom(&self, out: &mut Vec<Draw>) {
         let canvas = self.canvas();
         self.draw_background(out);
@@ -7348,8 +7466,11 @@ impl App {
             return;
         };
         let seat = self.seat();
-        self.shelf()
-            .draw_row(canvas, Some(stem), 0.0, seat, 1.0, out);
+        let part = match self.ds_inserting() {
+            true => ease((seat * DS_INSERT_FLY_S / DS_PART_S).clamp(0.0, 1.0)),
+            false => 1.0,
+        };
+        self.shelf().draw_row_parted(canvas, Some(stem), part, out);
         let placed = match self.ds_inserting() {
             true => ds_insert_bottom(seat),
             false => ds_eject_bottom(1.0 - seat),
@@ -7412,8 +7533,7 @@ impl App {
     fn draw_status_footer(&self, out: &mut Vec<Draw>) {
         draw_footer(
             self.canvas(),
-            self.battery,
-            self.battery_percent,
+            self.gauge(),
             self.bolt,
             self.shelf_clock,
             footer_ink(self.light()),
@@ -7426,8 +7546,7 @@ impl App {
         draw_empty_slot(self.canvas(), self.top_slot_faces(), out);
         draw_footer(
             self.canvas(),
-            self.battery,
-            self.battery_percent,
+            self.gauge(),
             self.bolt,
             self.shelf_clock,
             footer_ink(self.light()),
@@ -7443,8 +7562,7 @@ impl App {
         self.draw_seated_mouth(cart, out);
         draw_footer(
             self.canvas(),
-            self.battery,
-            self.battery_percent,
+            self.gauge(),
             self.bolt,
             self.shelf_clock,
             footer_ink(self.light()),
@@ -7517,19 +7635,6 @@ impl App {
         self.box_art.as_ref()
     }
 
-    pub fn box_text(&self) -> Option<(String, String)> {
-        if !self.two_panels {
-            return None;
-        }
-        let cart = self.seated_cart()?;
-        Some((slot_ui::label_text(cart), cart.platform.name().to_string()))
-    }
-
-    pub fn set_box_text_faces(&mut self, title: slot_ui::Printed, system: slot_ui::Printed) {
-        self.box_title = title;
-        self.box_system = system;
-    }
-
     pub fn top_previews_game(&self) -> bool {
         !self.ds_seated()
             && matches!(self.phase, Phase::Playing { .. })
@@ -7543,7 +7648,11 @@ impl App {
             self.push_game(out);
             return;
         }
-        self.draw_background(out);
+        let over_game = matches!(self.phase, Phase::Playing { .. }) && self.game_visible();
+        match over_game {
+            true => out.push(Draw::Game),
+            false => self.draw_background(out),
+        }
         #[cfg(feature = "nds")]
         {
             let art = self.box_art.as_ref().filter(|a| {
@@ -7554,8 +7663,7 @@ impl App {
                 canvas: self.canvas(),
                 boxed: art.and_then(|a| a.boxed),
                 logo: art.and_then(|a| a.logo),
-                title: self.box_title,
-                system: self.box_system,
+                over_game,
             }
             .draw(out);
         }
@@ -7565,8 +7673,7 @@ impl App {
         }
         draw_footer(
             self.canvas(),
-            self.battery,
-            self.battery_percent,
+            self.gauge(),
             self.bolt,
             self.shelf_clock,
             footer_ink(self.light()),
@@ -7657,33 +7764,45 @@ impl App {
                 return;
             }
             Phase::QuickMenu { .. } if self.keyboard.is_some() => self.draw_networks(out),
-            Phase::QuickMenu { row } => QuickMenu {
-                row: *row,
-                hidden: &self.hidden_rows(),
-                bound: Some(&self.bound_faces()),
-                description: self.description(*row),
-                values: QuickRow::ALL.map(|r| self.quick_value(r)),
-                clock: self.quick_clock_faces,
-                wallpaper: self.quick_wallpaper_faces,
-                networks: self.quick_network_faces,
-                romm: self.quick_romm_faces,
-                kid_shelf: self.quick_kid_shelf_faces,
-                faces: self.quick_menu_faces.as_ref(),
-                ground: self.menu_ground(),
-                palette: self.quick_palette_faces,
-                gba_bezel: self.quick_bezel_faces[bezel_slot(Platform::Gba)],
-                gb_bezel: self.quick_bezel_faces[bezel_slot(Platform::Gb)],
-                gbc_bezel: self.quick_bezel_faces[bezel_slot(Platform::Gbc)],
-                bezel: None,
-                gba_overlay: self.quick_overlay_faces[overlay_slot(Platform::Gba)],
-                gb_overlay: self.quick_overlay_faces[overlay_slot(Platform::Gb)],
-                gbc_overlay: self.quick_overlay_faces[overlay_slot(Platform::Gbc)],
-                overlay: None,
-                over_game: false,
-                footer_top: self.canvas().h,
-                canvas: self.canvas(),
+            Phase::QuickMenu { row } => {
+                QuickMenu {
+                    row: *row,
+                    hidden: &self.hidden_rows(),
+                    bound: Some(&self.bound_faces()),
+                    description: self.description(*row),
+                    values: QuickRow::ALL.map(|r| self.quick_value(r)),
+                    clock: self.quick_clock_faces,
+                    wallpaper: self.quick_wallpaper_faces,
+                    networks: self.quick_network_faces,
+                    romm: self.quick_romm_faces,
+                    kid_shelf: self.quick_kid_shelf_faces,
+                    faces: self.quick_menu_faces.as_ref(),
+                    ground: self.menu_ground(),
+                    palette: self.quick_palette_faces,
+                    gba_bezel: self.quick_bezel_faces[bezel_slot(Platform::Gba)],
+                    gb_bezel: self.quick_bezel_faces[bezel_slot(Platform::Gb)],
+                    gbc_bezel: self.quick_bezel_faces[bezel_slot(Platform::Gbc)],
+                    bezel: None,
+                    gba_overlay: self.quick_overlay_faces[overlay_slot(Platform::Gba)],
+                    gb_overlay: self.quick_overlay_faces[overlay_slot(Platform::Gb)],
+                    gbc_overlay: self.quick_overlay_faces[overlay_slot(Platform::Gbc)],
+                    overlay: None,
+                    over_game: false,
+                    footer_top: self.canvas().h,
+                    canvas: self.canvas(),
+                }
+                .draw(out);
+                if !self.two_panels {
+                    slot_ui::draw_corners(
+                        self.canvas(),
+                        self.gauge(),
+                        self.hud_bolt,
+                        self.shelf_clock,
+                        out,
+                    );
+                }
+                self.draw_tint_peek(out);
             }
-            .draw(out),
             Phase::Shelf if self.keyboard.is_some() => self.draw_networks(out),
             Phase::Shelf | Phase::Unwrap { .. } => {
                 self.draw_background(out);
@@ -7705,6 +7824,9 @@ impl App {
                         if self.edit.is_some() {
                             self.draw_picking(out);
                         } else if self.draw_leaving(out) || self.draw_pressing(out) {
+                        } else if let Some(part) = self.ds_parted() {
+                            self.shelf().draw_row_parted(self.canvas(), None, part, out);
+                            draw_empty_slot(self.canvas(), self.slot_faces, out);
                         } else if !self.draw_unwrap(out) {
                             self.shelf().draw(
                                 self.canvas(),
@@ -7740,20 +7862,14 @@ impl App {
                 } else {
                     draw_footer(
                         self.canvas(),
-                        self.battery,
-                        self.battery_percent,
+                        self.gauge(),
                         self.bolt,
                         self.shelf_clock,
                         footer_ink(self.light()),
                         out,
                     );
                     if self.wifi_up() {
-                        slot_ui::draw_wifi_icon(
-                            self.canvas(),
-                            self.battery_percent,
-                            self.wifi_face(),
-                            out,
-                        );
+                        slot_ui::draw_wifi_icon(self.canvas(), self.gauge(), self.wifi_face(), out);
                     }
                     if let Some(icon) = self.achievement_sync {
                         slot_ui::draw_footer_sync(self.canvas(), self.shelf_clock, icon, out);
@@ -7818,8 +7934,7 @@ impl App {
                 if let Some((g, _)) = &self.guide {
                     g.draw(
                         self.canvas(),
-                        self.battery,
-                        self.battery_percent,
+                        self.gauge(),
                         self.hud_bolt,
                         self.shelf_clock,
                         out,
@@ -7830,8 +7945,7 @@ impl App {
                 if let Some(v) = &self.shot_viewer {
                     v.draw(
                         self.canvas(),
-                        self.battery,
-                        self.battery_percent,
+                        self.gauge(),
                         self.hud_bolt,
                         self.shelf_clock,
                         out,
@@ -7845,8 +7959,7 @@ impl App {
                     self.draw_sp_strip(out);
                     p.draw_chrome(
                         self.canvas(),
-                        self.battery,
-                        self.battery_percent,
+                        self.gauge(),
                         self.hud_bolt,
                         self.shelf_clock,
                         out,
@@ -7917,11 +8030,10 @@ impl App {
                 }
                 .draw(out);
             }
-            if row.page() != QuickRow::PLAY_SCREEN {
+            if row.page() != QuickRow::PLAY_SCREEN && !self.two_panels {
                 slot_ui::draw_corners(
                     self.canvas(),
-                    self.battery,
-                    self.battery_percent,
+                    self.gauge(),
                     self.hud_bolt,
                     self.shelf_clock,
                     out,
@@ -8024,15 +8136,14 @@ impl App {
         }
         draw_footer(
             self.canvas(),
-            self.battery,
-            self.battery_percent,
+            self.gauge(),
             self.bolt,
             self.shelf_clock,
             footer_ink(self.light()),
             out,
         );
         if self.wifi_up() {
-            slot_ui::draw_wifi_icon(self.canvas(), self.battery_percent, self.wifi_face(), out);
+            slot_ui::draw_wifi_icon(self.canvas(), self.gauge(), self.wifi_face(), out);
         }
         self.draw_kid_icon(out);
         shift_down(&mut out[start..], self.menu_footer_offset());
@@ -9963,7 +10074,7 @@ impl App {
             return;
         }
         if self.now().saturating_sub(at) >= PLAY_HOLD_MS && !self.unwrap_seated() {
-            self.insert(!self.kid_locked() || !self.state.auto_load.on_insert());
+            self.insert(!self.kid_locked() || !self.state.resume_insert);
         }
     }
 
@@ -10007,7 +10118,6 @@ impl App {
             }
         };
         let got = began.elapsed();
-        let state = state.filter(|_| self.state.eject_save);
         self.state_writer.flush();
         let flushed = began.elapsed();
         let (root, platform, core, stem, slot) = (
@@ -10419,13 +10529,10 @@ impl App {
             self.wifi_wanted_at = Some(now + WIFI_RETRY_MS);
         }
         if let Phase::QuickMenu { row } = self.phase {
-            if (row.page() == QuickRow::NETWORK || row.page() == QuickRow::ROMM)
-                && self.update.is_none()
-                && !self.wifi_up()
-            {
+            if row.page() == QuickRow::ROMM && self.update.is_none() && !self.wifi_up() {
                 self.keyboard = None;
                 self.phase = Phase::QuickMenu {
-                    row: QuickRow::Network,
+                    row: QuickRow::Romm,
                 };
                 self.set_update(Some(UpdateState::Notice(NetNotice::NoNetwork)));
             }
@@ -10433,7 +10540,7 @@ impl App {
         if matches!(self.phase, Phase::RommPair) && self.update.is_none() && !self.wifi_up() {
             self.romm_jobs.ask(RommJob::CancelPair);
             self.phase = Phase::QuickMenu {
-                row: QuickRow::Network,
+                row: QuickRow::Romm,
             };
             self.set_update(Some(UpdateState::Notice(NetNotice::NoNetwork)));
         }
@@ -13351,10 +13458,9 @@ impl App {
             ),
             UpdateState::Notice(NetNotice::Password) => ("Invalid Password".into(), String::new()),
             UpdateState::Notice(NetNotice::RommPort) => ("Invalid Port".into(), String::new()),
-            UpdateState::Notice(NetNotice::NoNetwork) => (
-                "Not connected".into(),
-                "Join a Wi-Fi network to use Tools.".into(),
-            ),
+            UpdateState::Notice(NetNotice::NoNetwork) => {
+                ("Not connected".into(), "Join a Wi-Fi network first.".into())
+            }
             UpdateState::Notice(NetNotice::RommNoServer) => (
                 "Enter a server first".into(),
                 "Set Server before pairing.".into(),
@@ -13368,7 +13474,7 @@ impl App {
             UpdateState::Failed(f) => {
                 let (title, detail) = match f {
                     UpdateFail::NoWifi => {
-                        ("Could not join Wi-Fi", "Check Wi-Fi in the General menu.")
+                        ("Could not join Wi-Fi", "Check Wi-Fi in the System menu.")
                     }
                     UpdateFail::Offline => (
                         "Could not connect",

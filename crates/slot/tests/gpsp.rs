@@ -192,9 +192,9 @@ fn mgba_is_given_its_own_frameskip_and_none_of_gpsps() {
 
 #[test]
 fn both_cores_are_told_about_colour_correction_in_their_own_words() {
-    for (which, key, on, off) in [
-        (Core::Mgba, "mgba_color_correction", "Auto", "OFF"),
-        (Core::Gpsp, "gpsp_color_correction", "enabled", "disabled"),
+    for (which, key, on, off, theirs) in [
+        (Core::Mgba, "mgba_color_correction", "Auto", "OFF", "gpsp_color_correction"),
+        (Core::Gpsp, "gpsp_color_correction", "enabled", "disabled", "mgba_color_correction"),
     ] {
         let path = dylib_for(which);
         if !path.exists() {
@@ -220,11 +220,6 @@ fn both_cores_are_told_about_colour_correction_in_their_own_words() {
                 which.as_str()
             );
         }
-        let theirs = match which {
-            Core::Mgba => "gpsp_color_correction",
-            Core::Gpsp => "mgba_color_correction",
-            Core::Gambatte => "gambatte_gbc_color_correction",
-        };
         assert_eq!(
             core.option(theirs),
             None,

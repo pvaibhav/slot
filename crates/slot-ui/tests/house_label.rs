@@ -59,10 +59,10 @@ fn gba_logo_label_is_1280_by_661() {
 }
 
 #[test]
-fn gb_real_label_is_1024_by_901() {
+fn gb_real_label_fits_the_current_game_boy_well() {
     let label = Label::full(&solid_png(600, 528, [200, 40, 40, 255]), Platform::Gb).unwrap();
     let (w, h, _) = decoded(&label.png());
-    assert_eq!((w, h), (1024, 901));
+    assert_eq!((w, h), (1024, 913));
 }
 
 #[test]

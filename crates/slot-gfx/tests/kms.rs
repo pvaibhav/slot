@@ -122,3 +122,50 @@ fn the_first_commit_sets_the_mode_and_wires_each_panel() {
     assert!(plan.contains(&(31, 3105, 1024 << 16)), "source width in 16.16");
     assert!(plan.contains(&(31, 3110, 768)), "destination height");
 }
+
+#[test]
+fn a_panel_with_no_flip_in_flight_flips_a_new_frame_at_once() {
+    let mut q = slot_gfx::FlipQueue::default();
+    let step = q.submit(1);
+    assert_eq!((step.flip, step.release), (Some(1), None));
+}
+
+#[test]
+fn a_frame_drawn_while_a_flip_is_in_flight_waits_without_blocking() {
+    let mut q = slot_gfx::FlipQueue::default();
+    q.submit(1);
+    let step = q.submit(2);
+    assert_eq!((step.flip, step.release), (None, None));
+}
+
+#[test]
+fn a_newer_waiting_frame_replaces_the_older_one() {
+    let mut q = slot_gfx::FlipQueue::default();
+    q.submit(1);
+    q.submit(2);
+    let step = q.submit(3);
+    assert_eq!((step.flip, step.release), (None, Some(2)));
+    let step = q.retire();
+    assert_eq!(step.flip, Some(3));
+}
+
+#[test]
+fn a_retired_flip_frees_the_old_frame_and_flips_the_waiting_one() {
+    let mut q = slot_gfx::FlipQueue::default();
+    q.show(0);
+    q.submit(1);
+    q.submit(2);
+    let step = q.retire();
+    assert_eq!((step.flip, step.release), (Some(2), Some(0)));
+    let step = q.retire();
+    assert_eq!((step.flip, step.release), (None, Some(1)));
+    assert_eq!(q.submit(3).flip, Some(3));
+}
+
+#[test]
+fn a_failed_flip_hands_its_frame_back() {
+    let mut q = slot_gfx::FlipQueue::default();
+    q.submit(1);
+    assert_eq!(q.flip_failed(), Some(1));
+    assert_eq!(q.submit(2).flip, Some(2));
+}

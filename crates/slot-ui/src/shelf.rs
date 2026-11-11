@@ -637,7 +637,29 @@ impl Shelf {
         shift: &dyn Fn(usize) -> (f32, f32, f32),
         out: &mut Vec<Draw>,
     ) {
-        self.row(canvas, hidden, 0.0, 0.0, dim, turn, shift, out);
+        self.row(canvas, hidden, 0.0, 0.0, 0.0, dim, turn, shift, out);
+    }
+
+    pub fn draw_row_parted(
+        &self,
+        canvas: Canvas,
+        hidden: Option<&str>,
+        part: f32,
+        out: &mut Vec<Draw>,
+    ) {
+        let spread = part.clamp(0.0, 1.0) * canvas.w;
+        let still = (0.0, 0.0, 1.0);
+        self.row(
+            canvas,
+            hidden,
+            0.0,
+            0.0,
+            spread,
+            1.0,
+            &|_| 0.0,
+            &|_| still,
+            out,
+        );
     }
 
     pub fn draw_row(
@@ -654,6 +676,7 @@ impl Shelf {
             hidden,
             shake,
             recede,
+            0.0,
             dim,
             &|_| 0.0,
             &|_| (0.0, 0.0, 1.0),
@@ -668,6 +691,7 @@ impl Shelf {
         hidden: Option<&str>,
         shake: f32,
         recede: f32,
+        spread: f32,
         dim: f32,
         turn: &dyn Fn(usize) -> f32,
         shift: &dyn Fn(usize) -> (f32, f32, f32),
@@ -701,7 +725,9 @@ impl Shelf {
                 true => self.pitch(slot - 1, u),
                 false => self.pitch(slot, u),
             };
-            let x = self.centre(canvas, slot) + dx * step - w / 2.0 + away * PART * recede;
+            let x = self.centre(canvas, slot) + dx * step - w / 2.0
+                + away * PART * recede
+                + slot.signum() as f32 * spread;
             alpha *= edge_fade(canvas, x, w);
             if x + w <= 0.0 || x >= canvas.w || alpha <= 0.0 {
                 continue;

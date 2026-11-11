@@ -10,7 +10,7 @@ hide:
 <summary>Over the Air</summary>
 Make sure you are connected to Wi-Fi.
 
-From the shelf, open the menu and pick Network → Check for Updates.
+From the shelf, open the menu and pick System → Check for Updates.
 
 The OTA updater will reach out to GitHub to see if there is a new release of slot or BaseOS.
 

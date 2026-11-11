@@ -49,12 +49,13 @@ mod toast;
 
 pub use art::decode as decode_png;
 pub use backdrop::{
-    bezel_face, blur_background, blur_background_at, cast_screen_shadow, clear_glass_reflection, default_background,
-    default_background_at, default_game_bezel_face, draw_backdrop, draw_ground, game_bezel_face,
-    reference_ground_covers, wallpaper_face, BezelArt,
+    bezel_face, blur_background, blur_background_at, cast_screen_shadow, clear_glass_reflection,
+    default_background, default_background_at, default_game_bezel_face, draw_backdrop, draw_ground,
+    game_bezel_face, reference_ground_covers, wallpaper_face, BezelArt, SLOT_BLUR_WALLPAPER_PNG,
+    SLOT_WALLPAPER_PNG,
 };
 pub use barcode::{code39, CODE39_NARROW, CODE39_WIDE};
-pub use battery::{draw_gauge, BOLT_PX, GAUGE_H, GAUGE_W, WALL};
+pub use battery::{draw_gauge, Gauge, BOLT_PX, GAUGE_H, GAUGE_W, WALL};
 #[cfg(feature = "nds")]
 pub use bitmaps::{
     ds_slot_back, ds_slot_back_light, ds_slot_front, ds_slot_front_light, DS_CART_H, DS_CART_W,
@@ -133,8 +134,9 @@ pub use quick_menu::{
     picking_legend_faces, print_stop_legend, prompt_legends, quick_description_face,
     quick_label_face, quick_legend_faces, quick_pointer_face, quick_row_top, quick_row_top_at,
     quick_scroll, quick_value_face, quick_warning_value_face, quick_window, repair_legends,
-    studio_legend, update_legends, visible_rows, CheatPage, QuickMenu, QuickMenuFaces, QuickRow,
-    QuickScroll, QuickValue, StudioGlyph, QUICK_EDGE, QUICK_LABEL_X, QUICK_PITCH, QUICK_VISIBLE,
+    studio_legend, update_legends, visible_rows, CheatPage, MenuGround, QuickMenu, QuickMenuFaces,
+    QuickRow, QuickScroll, QuickValue, StudioGlyph, QUICK_EDGE, QUICK_LABEL_X, QUICK_PITCH,
+    QUICK_VISIBLE,
 };
 pub use rebuild::{headline_face, rebuild_count_face, rebuild_title_face, RebuildScreen};
 pub use receipt::{receipt_blank, receipt_face, ReceiptText};

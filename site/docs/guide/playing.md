@@ -6,7 +6,7 @@ Tap <kbd>A</kbd> on a cart to insert it. If you've played it before, you pick up
 
 Hold <kbd>A</kbd> to start the game fresh. The game will launch without autoloading your save state.
 
-If you'd rather always start fresh, set Auto Load State to Never in Settings → Gameplay. Power On starts carts fresh but still resumes the game you powered off in.
+If you'd rather always start fresh, turn off Resume on Insert in Settings → Gameplay. Resume on Power On decides the same for the game you powered off in.
 
 To restart a game while you're playing it, bind Reset Game in [Shortcuts](controls.md). Pressed it by mistake? Open the menu and select `Undo Reset` within 30 seconds.
 
@@ -14,7 +14,7 @@ To restart a game while you're playing it, bind Reset Game in [Shortcuts](contro
 
 Hold <kbd>MENU</kbd> to eject the cart and go back to the shelf. 
 
-slot creates a save state on the way out, unless you've turned off Eject Save State in Settings → Gameplay.
+slot creates a save state on the way out.
 
 ## The in-game menu
 

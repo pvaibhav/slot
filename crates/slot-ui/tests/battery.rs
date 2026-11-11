@@ -1,8 +1,17 @@
 use slot_power::{Battery, Charge};
-use slot_ui::{draw_gauge, Draw, Printed, TexId, GAUGE_H, GAUGE_W, HUD_INK, WALL};
+use slot_store::BatteryDisplay;
+use slot_ui::{draw_gauge, Draw, Gauge, Printed, TexId, GAUGE_H, GAUGE_W, HUD_INK, WALL};
 
 fn percent_face() -> Printed {
     Printed { face: None, w: 30 }
+}
+
+fn gauge(battery: Option<Battery>) -> Gauge {
+    Gauge {
+        battery,
+        percent: percent_face(),
+        display: BatteryDisplay::Both,
+    }
 }
 
 fn quads(out: &[Draw]) -> Vec<(f32, f32, f32, f32)> {
@@ -25,8 +34,7 @@ fn nothing_moves_when_the_charge_state_changes() {
     draw_gauge(
         24.0,
         400.0,
-        at(68, Charge::Discharging),
-        percent_face(),
+        gauge(at(68, Charge::Discharging)),
         None,
         HUD_INK,
         &mut idle,
@@ -34,8 +42,7 @@ fn nothing_moves_when_the_charge_state_changes() {
     draw_gauge(
         24.0,
         400.0,
-        at(68, Charge::Charging),
-        percent_face(),
+        gauge(at(68, Charge::Charging)),
         Some(TexId::from_raw(7)),
         HUD_INK,
         &mut charging,
@@ -56,8 +63,7 @@ fn the_bolt_is_only_drawn_while_charging() {
         draw_gauge(
             24.0,
             400.0,
-            at(68, charge),
-            percent_face(),
+            gauge(at(68, charge)),
             Some(TexId::from_raw(7)),
             HUD_INK,
             &mut out,
@@ -79,8 +85,7 @@ fn the_fill_tracks_the_percent_and_never_leaves_the_capsule() {
         draw_gauge(
             24.0,
             400.0,
-            at(percent, Charge::Discharging),
-            percent_face(),
+            gauge(at(percent, Charge::Discharging)),
             None,
             HUD_INK,
             &mut out,
@@ -123,6 +128,77 @@ fn the_capsule_is_a_fifth_larger_than_it_was() {
 #[test]
 fn no_reading_draws_nothing() {
     let mut out = Vec::new();
-    draw_gauge(24.0, 400.0, None, percent_face(), None, HUD_INK, &mut out);
+    draw_gauge(24.0, 400.0, gauge(None), None, HUD_INK, &mut out);
     assert!(out.is_empty());
+}
+
+fn shown(display: BatteryDisplay) -> Vec<(f32, f32, f32, f32)> {
+    let mut out = Vec::new();
+    draw_gauge(
+        24.0,
+        400.0,
+        Gauge {
+            display,
+            ..gauge(at(68, Charge::Discharging))
+        },
+        None,
+        HUD_INK,
+        &mut out,
+    );
+    quads(&out)
+}
+
+fn is_text(q: &(f32, f32, f32, f32)) -> bool {
+    (q.2 - percent_face().w as f32).abs() < 0.01
+}
+
+#[test]
+fn icon_draws_the_capsule_and_no_number() {
+    let icon = shown(BatteryDisplay::Icon);
+    assert!(!icon.iter().any(is_text), "{icon:?}");
+    let both = shown(BatteryDisplay::Both);
+    let capsule: Vec<_> = both.iter().filter(|q| !is_text(q)).copied().collect();
+    assert_eq!(icon, capsule);
+}
+
+#[test]
+fn percentage_draws_the_number_where_the_capsule_starts() {
+    let both = shown(BatteryDisplay::Both);
+    let capsule_left = both
+        .iter()
+        .filter(|q| !is_text(q))
+        .map(|q| q.0)
+        .fold(f32::MAX, f32::min);
+    let percent = shown(BatteryDisplay::Percent);
+    assert_eq!(percent.len(), 1, "{percent:?}");
+    assert!(is_text(&percent[0]));
+    assert!((percent[0].0 - capsule_left).abs() < 0.01, "{percent:?}");
+}
+
+#[test]
+fn the_wifi_icon_keeps_the_same_gap_after_every_display() {
+    let face = (TexId::from_raw(2), 18, 14);
+    for display in BatteryDisplay::ALL {
+        let g = Gauge {
+            display,
+            ..gauge(at(68, Charge::Charging))
+        };
+        let mut drawn = Vec::new();
+        draw_gauge(
+            24.0,
+            400.0,
+            g,
+            Some(TexId::from_raw(7)),
+            HUD_INK,
+            &mut drawn,
+        );
+        let right = quads(&drawn).iter().map(|q| q.0 + q.2).fold(0.0, f32::max);
+        let mut wifi = Vec::new();
+        slot_ui::draw_wifi_icon(slot_ui::Canvas::FRAMED, g, Some(face), &mut wifi);
+        let left = quads(&wifi)[0].0;
+        assert!(
+            (left - right - 12.0).abs() <= 1.0,
+            "{display:?}: the gauge ends at {right} and Wi-Fi starts at {left}"
+        );
+    }
 }

@@ -81,7 +81,6 @@ fn tools_lists_romm_after_gamebit() {
             "Fetch Missing Art",
             #[cfg(feature = "nds")]
             "Fetch Box Art",
-            "Check for Updates"
         ]
     );
     let (_d, mut a) = booted();

@@ -58,7 +58,7 @@ fn logged(log: &Log, line: &str) -> bool {
 
 fn open_networks(a: &mut App) {
     a.apply(Action::QuickMenu);
-    for row in [QuickRow::General, QuickRow::Wifi, QuickRow::Networks] {
+    for row in [QuickRow::System, QuickRow::Wifi, QuickRow::Networks] {
         for _ in 0..12 {
             if a.quick_menu() == Some(row) {
                 break;
@@ -712,7 +712,7 @@ fn forgetting_the_only_network_releases_the_radio_on_the_shelf() {
 }
 
 #[test]
-fn the_tools_page_opens_only_while_connected() {
+fn the_tools_page_opens_offline_and_its_rows_wait_for_wifi() {
     let _g = serial();
     let (_d, mut a, _log) = booted(Fake::demo());
     assert!(!a.wifi_up());
@@ -725,17 +725,23 @@ fn the_tools_page_opens_only_while_connected() {
         press(&mut a, Btn::Down);
     }
     press(&mut a, Btn::A);
-    assert_eq!(a.quick_menu(), Some(QuickRow::Network));
+    assert!(a.quick_menu().is_some_and(|r| r.page() == QuickRow::NETWORK));
+    assert!(a.update_text().is_none());
+    while a.quick_menu() != Some(QuickRow::FetchArt) {
+        press(&mut a, Btn::Down);
+    }
+    press(&mut a, Btn::A);
     assert!(a.update_text().is_some());
+    assert!(a.fetch_art().is_none());
     press(&mut a, Btn::B);
     join(&mut a, "CoffeeShop Guest", "");
     assert!(a.wifi_up());
     press(&mut a, Btn::A);
-    assert_eq!(a.quick_menu(), Some(QuickRow::Server));
+    assert!(a.update_text().is_none());
 }
 
 #[test]
-fn losing_the_connection_moves_the_pointer_off_a_tool() {
+fn losing_the_connection_leaves_the_pointer_on_its_tool() {
     let _g = serial();
     let (_d, mut a, _log) = booted(Fake::demo());
     join(&mut a, "CoffeeShop Guest", "");
@@ -762,7 +768,7 @@ fn losing_the_connection_moves_the_pointer_off_a_tool() {
     a.wifi_send(Cmd::Disconnect);
     settle(&mut a);
     assert!(!a.wifi_up());
-    assert_eq!(a.quick_menu(), Some(QuickRow::Network));
+    assert_eq!(a.quick_menu(), Some(QuickRow::FetchArt));
 }
 
 fn open_scan(a: &mut App) {

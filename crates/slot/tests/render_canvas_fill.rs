@@ -245,11 +245,11 @@ fn menu_text_is_the_same_size_on_every_panel() {
     let Some((_s, mut c)) = compositor() else {
         return;
     };
-    let taps = [Btn::Menu, Btn::A];
+    let taps = [Btn::Menu, Btn::Down, Btn::Down, Btn::A, Btn::Down, Btn::Down, Btn::A];
     let reference = shelf(&mut c, (720, 480), &taps);
     let square = shelf(&mut c, (720, 720), &taps);
-    let low = text_lines(&lit_rows(&reference, 40..300, 0..422));
-    let high = text_lines(&lit_rows(&square, 120..300, 0..662));
+    let low = text_lines(&lit_rows(&reference, 40..300, 50..422));
+    let high = text_lines(&lit_rows(&square, 120..300, 50..662));
     assert!(
         high.len() > low.len(),
         "{} rows at 720x480, {} at 720x720",
@@ -257,9 +257,9 @@ fn menu_text_is_the_same_size_on_every_panel() {
         high.len()
     );
     assert_eq!(
-        bounds(&ink(&square, 40, 112)),
-        bounds(&ink(&reference, 40, 70)),
-        "the first row's text is not the 720x480 text, 42 rows lower"
+        bounds(&ink(&square, 40, high[0].0 - 3)),
+        bounds(&ink(&reference, 40, low[0].0 - 3)),
+        "the first row's text changes size on the taller panel"
     );
 }
 

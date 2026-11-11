@@ -1,6 +1,7 @@
 use std::time::{Duration, Instant};
 
 const MARGIN: Duration = Duration::from_micros(1500);
+const VBLANK_MARGIN: Duration = Duration::from_millis(5);
 const WORK_WINDOW: usize = 32;
 
 pub struct Pacer {
@@ -10,6 +11,8 @@ pub struct Pacer {
     works: [Duration; WORK_WINDOW],
     next: usize,
     learns: bool,
+    vblank: Option<Instant>,
+    aimed: Option<Instant>,
 }
 
 impl Default for Pacer {
@@ -27,6 +30,8 @@ impl Pacer {
             works: [Duration::from_millis(4); WORK_WINDOW],
             next: 0,
             learns: true,
+            vblank: None,
+            aimed: None,
         }
     }
 
@@ -46,13 +51,42 @@ impl Pacer {
         self.work
     }
 
-    pub fn wait(&self) {
-        let Some(last) = self.last_return else {
-            return;
-        };
-        let delay = self.period.saturating_sub(self.work + MARGIN);
-        if let Some(left) = (last + delay).checked_duration_since(Instant::now()) {
+    pub fn lock_to(&mut self, vblank: Instant) {
+        self.vblank = Some(vblank);
+    }
+
+    pub fn wait(&mut self) {
+        let now = Instant::now();
+        if let Some(left) = self.plan(now).and_then(|at| at.checked_duration_since(now)) {
             std::thread::sleep(left);
+        }
+    }
+
+    pub fn plan(&mut self, now: Instant) -> Option<Instant> {
+        let Some(vblank) = self.vblank else {
+            let delay = self.period.saturating_sub(self.work + MARGIN);
+            return self.last_return.map(|last| last + delay);
+        };
+        let mut earliest = now + self.work;
+        if let Some(aimed) = self.aimed {
+            earliest = earliest.max(aimed + self.period / 2);
+        }
+        let target = self.vblank_after(vblank, earliest);
+        self.aimed = Some(target);
+        Some((target - self.work - VBLANK_MARGIN).max(now))
+    }
+
+    fn vblank_after(&self, vblank: Instant, t: Instant) -> Instant {
+        let period = self.period.as_nanos().max(1);
+        match t.checked_duration_since(vblank) {
+            Some(since) => {
+                let n = since.as_nanos() / period + 1;
+                vblank + Duration::from_nanos((n * period) as u64)
+            }
+            None => {
+                let before = (vblank - t).as_nanos() / period;
+                vblank - Duration::from_nanos((before * period) as u64)
+            }
         }
     }
 

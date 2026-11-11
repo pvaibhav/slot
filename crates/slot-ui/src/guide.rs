@@ -3,7 +3,7 @@ use std::sync::OnceLock;
 
 use fontdue::{Font, FontSettings, Metrics};
 use slot_gfx::{Canvas, Draw, TexId};
-use slot_power::Battery;
+use crate::battery::Gauge;
 use slot_store::GuideSpot;
 
 use crate::bitmaps::ButtonLegend;
@@ -373,8 +373,7 @@ impl Guide {
     pub fn draw(
         &self,
         canvas: Canvas,
-        battery: Option<Battery>,
-        battery_percent: Printed,
+        gauge: Gauge,
         bolt: Option<TexId>,
         clock: Printed,
         out: &mut Vec<Draw>,
@@ -400,8 +399,7 @@ impl Guide {
                 ways_out: WAYS_OUT,
                 dots: None,
             },
-            battery,
-            battery_percent,
+            gauge,
             bolt,
             clock,
             out,

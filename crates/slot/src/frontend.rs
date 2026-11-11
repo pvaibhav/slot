@@ -9,11 +9,11 @@ use slot_input::{InputSource, Millis};
 use slot_power::{Platform, Power};
 use slot_store::{format_stamp, BezelPick, Platform as Console};
 use slot_ui::{
-    badge_face, bare_board_face, bezel_face, cart_shadow, cast_screen_shadow, cheat_name_face, clear_glass_reflection,
-    chip_face, chip_face_text, chip_shadow_face, core_button_legends, date_time_text,
-    default_game_bezel_face, delete_legends, footer_ink, game_bezel_face, gb_cart_shadow,
-    hint_face, icon_face, link_button_legends, menu_detail_face, menu_face, padded, photo_face,
-    prompt_legends, quick_description_face, quick_label_face, quick_legend_faces,
+    badge_face, bare_board_face, bezel_face, cart_shadow, cast_screen_shadow, cheat_name_face,
+    chip_face, chip_face_text, chip_shadow_face, clear_glass_reflection, core_button_legends,
+    date_time_text, default_game_bezel_face, delete_legends, footer_ink, game_bezel_face,
+    gb_cart_shadow, hint_face, icon_face, link_button_legends, menu_detail_face, menu_face, padded,
+    photo_face, prompt_legends, quick_description_face, quick_label_face, quick_legend_faces,
     quick_pointer_face, quick_value_face, quick_warning_value_face, rebuild_count_face,
     rebuild_title_face, repair_legends, slot_back, slot_back_light, slot_front, slot_front_light,
     socket_face, socket_face_text, sticker_face, time_text, title_face, toast_face,
@@ -67,7 +67,6 @@ pub struct Frontend {
     switcher: Switcher,
     guide_page: GuidePage,
     clocks: Clocks,
-    box_text: BoxTextSync,
     box_art: BoxArtSync,
     about: AboutFace,
     update_text: UpdateText,
@@ -637,7 +636,6 @@ impl Frontend {
             switcher: Switcher::default(),
             guide_page: GuidePage::default(),
             clocks: Clocks::default(),
-            box_text: BoxTextSync::default(),
             box_art: BoxArtSync::default(),
             about: AboutFace::default(),
             update_text: UpdateText::default(),
@@ -1237,7 +1235,6 @@ impl Frontend {
         self.sync_seals();
         self.cart_faces.sync(self.session.app_mut(), compositor);
         sync_clock(self.session.app_mut(), compositor, &mut self.clocks);
-        sync_box_text(self.session.app_mut(), compositor, &mut self.box_text);
         sync_box_art(self.session.app_mut(), compositor, &mut self.box_art);
         sync_binding_faces(self.session.app_mut(), compositor);
         sync_about(self.session.app_mut(), compositor, &mut self.about);
@@ -2900,36 +2897,6 @@ fn sync_box_art(app: &mut App, compositor: &mut Compositor, sync: &mut BoxArtSyn
         stem: art.stem,
         platform: art.platform,
     }));
-}
-
-#[derive(Default)]
-struct BoxTextSync {
-    shown: Option<(String, String)>,
-    title: Option<TexId>,
-    system: Option<TexId>,
-}
-
-fn sync_box_text(app: &mut App, compositor: &mut Compositor, sync: &mut BoxTextSync) {
-    let want = app.box_text();
-    if want == sync.shown {
-        return;
-    }
-    sync.shown = want.clone();
-    let Some((title, system)) = want else {
-        app.set_box_text_faces(slot_ui::Printed::default(), slot_ui::Printed::default());
-        return;
-    };
-    let mut put = |text: &str, slot: &mut Option<TexId>| {
-        let face = slot_ui::title_line_face(text);
-        let w = face.w;
-        match w {
-            0 => slot_ui::Printed::default(),
-            _ => slot_ui::Printed::new(upload(compositor, slot, face), w),
-        }
-    };
-    let title = put(&title, &mut sync.title);
-    let system = put(&system, &mut sync.system);
-    app.set_box_text_faces(title, system);
 }
 
 fn upload(compositor: &mut Compositor, slot: &mut Option<TexId>, face: slot_ui::UndoFace) -> TexId {

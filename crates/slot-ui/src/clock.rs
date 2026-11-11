@@ -448,7 +448,7 @@ pub struct ClockScreen<'a> {
     pub faces: Option<&'a ClockFaces>,
     pub title: Option<Face>,
     pub pointer: Option<Face>,
-    pub ground: Option<(TexId, u32)>,
+    pub ground: Option<crate::MenuGround>,
     pub canvas: Canvas,
 }
 

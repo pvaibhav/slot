@@ -4,7 +4,7 @@
 
 - Is it unzipped? slot doesn't read `.zip` or `.7z`.
 - Is it right in `Games/GBA`, `Games/GB` or `Games/GBC`, and not in a nested directory?
-- Did slot boot since you added it? Restart from Settings → About.
+- Did slot boot since you added it? Restart from Settings → System → About.
 - Does it end in `.gba`, `.gb` or `.gbc`? GBA games only show up in `Games/GBA`.
 
 ## My save / save state is missing

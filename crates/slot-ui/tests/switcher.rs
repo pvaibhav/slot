@@ -3,7 +3,7 @@ use std::path::Path;
 use slot_gfx::{Draw, OUT_H, OUT_W};
 use slot_store::{StateEntry, RING_MAX};
 use slot_ui::{
-    hint_face, hint_width, Polaroids, Printed, DOT, HINT_H, LEGEND, PLATE_H,
+    hint_face, hint_width, Gauge, Polaroids, Printed, DOT, HINT_H, LEGEND, PLATE_H,
 };
 
 fn entry(stamp: &str) -> StateEntry {
@@ -24,7 +24,7 @@ fn switcher_with(n: usize) -> Polaroids {
 
 fn draw(p: &Polaroids) -> Vec<Draw> {
     let mut out = Vec::new();
-    p.draw(None, Printed::default(), None, Printed::default(), &mut out);
+    p.draw(Gauge::default(), None, Printed::default(), &mut out);
     out
 }
 

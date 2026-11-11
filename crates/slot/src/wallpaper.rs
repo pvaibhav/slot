@@ -60,6 +60,24 @@ impl WallpaperLoader {
     }
 }
 
+pub const SLOT_FILE: &str = "Slot.png";
+pub const SLOT_BLUR_FILE: &str = "Slot Blur.png";
+
+pub fn give(root: &Path) -> std::io::Result<()> {
+    let dir = root.join("Wallpapers");
+    std::fs::create_dir_all(&dir)?;
+    for (name, bytes) in [
+        (SLOT_FILE, slot_ui::SLOT_WALLPAPER_PNG),
+        (SLOT_BLUR_FILE, slot_ui::SLOT_BLUR_WALLPAPER_PNG),
+    ] {
+        let path = dir.join(name);
+        if !path.exists() {
+            slot_store::atomic_write(&path, bytes)?;
+        }
+    }
+    Ok(())
+}
+
 pub fn list(root: &Path) -> Vec<String> {
     let mut files = pngs(&root.join("Wallpapers"));
     files.sort_by(|a, b| {

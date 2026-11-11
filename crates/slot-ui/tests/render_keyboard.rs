@@ -37,7 +37,11 @@ fn shot(px: &[u8], name: &str) {
 
 fn rendered(c: &mut Compositor, kb: &Keyboard) -> Vec<u8> {
     let canvas = Canvas::FRAMED;
-    let ground = default_background().map(|g| (c.create_texture(OUT_W, OUT_H, g), OUT_W));
+    let ground = default_background().map(|g| slot_ui::MenuGround {
+        tex: c.create_texture(OUT_W, OUT_H, g),
+        w: OUT_W,
+        tint: 0.0,
+    });
     let back = c.create_texture(SLOT_W, SLOT_H, slot_back());
     let front = c.create_texture(SLOT_W, SLOT_H, slot_front());
     let tex = keyboard_faces(kb, canvas).upload(|f| c.create_texture(f.w, f.h, &f.rgba));

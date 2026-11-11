@@ -12,6 +12,7 @@ fn ds_cart() -> Cart {
         title: String::new(),
         code: String::new(),
         shell: None,
+        sealed: false,
     }
 }
 

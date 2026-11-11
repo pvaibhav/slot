@@ -1,5 +1,5 @@
 use slot_gfx::{Canvas, Draw, TexId};
-use slot_power::Battery;
+use crate::battery::Gauge;
 use slot_store::ShotEntry;
 
 use crate::footer::Printed;
@@ -471,8 +471,7 @@ impl ShotViewer {
     pub fn draw(
         &self,
         canvas: Canvas,
-        battery: Option<Battery>,
-        battery_percent: Printed,
+        gauge: Gauge,
         bolt: Option<TexId>,
         clock: Printed,
         out: &mut Vec<Draw>,
@@ -503,8 +502,7 @@ impl ShotViewer {
                 ways_out: hints.len(),
                 dots: None,
             },
-            battery,
-            battery_percent,
+            gauge,
             bolt,
             clock,
             out,

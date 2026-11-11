@@ -4,24 +4,22 @@ Tap <kbd>MENU</kbd> on the shelf to open settings.
 
 All settings save as soon as you change an option.
 
-## General
+## Shelf
 
 | Setting | Choices | Default | Does |
 | --- | --- | --- | --- |
 | Theme | Dark, Light | Dark | The look of the shelf and menus |
-| Wallpaper | None, Random, Shelf, Default, Default Blur, your own | Default | What's behind the shelf |
-| Wallpaper Tint | Off, 25%, 45%, 65% | Off | Darkens your own wallpaper so carts stand out. Only shows for your own, Random or Shelf |
+| Wallpaper | None, Random, Per Shelf, any file in `Wallpapers/` | Slot | What's behind the shelf |
+| Wallpaper Tint | Off, 25%, 45%, 65% | Off | Darkens the wallpaper so carts stand out. Hidden for None |
 | Shelf Mode | All, Collections | All | Collections hides the system shelves and puts your [collections](collections.md) in the row |
 | Recents | Show, Hide | Hide | A shelf of your last 10 games |
 | Game Titles | Show, Hide | Hide | Shows the name of the cart you're on |
-| Lid Power Off | 1, 3, 5, 10, 15, 30 min | 3 min | How long slot sleeps before powering off |
 | Kid Mode | Off, One Shelf, Shelves | Off | Locks slot so a kid can only pick a game and play it, see [Kid Mode](#kid-mode) |
 | Kid Shelf | All Games, any shelf | All Games | The one shelf a kid sees.<br>Only shows for One Shelf |
-| Date & Time | | | Sets the clock, your city and 12 or 24-hour time |
 
-Random picks a different wallpaper each boot. 
+Random picks a different wallpaper each boot.
 
-The `Shelf` option gives each shelf its own wallpaper, see [Wallpapers](customizing.md#wallpapers).
+The `Per Shelf` option gives each shelf its own wallpaper, see [Wallpapers](customizing.md#wallpapers).
 
 ### Kid Mode
 
@@ -40,6 +38,23 @@ In a game, a tap of menu saves and goes back to the shelf. L2 and R2 turn the br
 To disable kid mode, hold <kbd>START + SELECT + L2 + R2</kbd> while turning the device on. Kid Mode
 is off until the next restart, so you can change settings or turn it off for good. Restart without the buttons and it
 locks again.
+
+## Gameplay
+
+| Setting | Choices | Default | Does |
+| --- | --- | --- | --- |
+| Fast Forward | Off, 1.5x, 2x, 3x, 4x, 6x | 6x | The top speed when fast-forwarding |
+| Fast Forward Sound | On, Off | Off | Sound while fast-forwarding |
+| Rewind | On, Off | On | Hold <kbd>L2</kbd> to go back |
+| Turbo Buttons | On, Off | On | Turbo A and Turbo B |
+| Rumble | On, Off | On | For games with a rumble pak |
+| Left Stick as D-Pad | On, Off | On | Only on devices with a left stick |
+| Resume on Insert | On, Off | On | Inserting a cart picks up where you left off |
+| Resume on Power On | On, Off | On | Powering on mid-game picks up where you left off |
+
+## Controls
+
+See [Controls](controls.md).
 
 ## Screen
 
@@ -68,26 +83,26 @@ Each system has its own page.
 
 See [The Screen](screen.md) for what Scale, Stretch, Frame Blending, Saturation and Contrast do.
 
-## Gameplay
+## Tools
+
+| Setting | Does |
+| --- | --- |
+| Gamebit | See [Gamebit](gamebit.md) |
+| RomM | Pairs slot with your RomM server |
+| Fetch Missing Art | Downloads labels for carts that have none |
+
+All three need Wi-Fi.
+
+## System
 
 | Setting | Choices | Default | Does |
 | --- | --- | --- | --- |
-| Fast Forward | Off, 1.5x, 2x, 3x, 4x, 6x | 6x | The top speed when fast-forwarding |
-| Fast Forward Sound | On, Off | Off | Sound while fast-forwarding |
-| Rewind | On, Off | On | Hold <kbd>L2</kbd> to go back |
-| Turbo Buttons | On, Off | On | Turbo A and Turbo B |
-| Rumble | On, Off | On | For games with a rumble pak |
-| Left Stick as D-Pad | On, Off | On | Only on devices with a left stick |
-| Auto Load State | Always, Power On, Never | Always | Inserting a cart picks up where you left off.<br>Power On resumes only the game you powered off in |
-| Eject Save State | On, Off | On | Ejecting saves where you were |
-
-## Controls
-
-See [Controls](controls.md).
-
-## About
-
-Your device's sticker, with the version of slot and more. Press <kbd>X</kbd> to restart.
+| Wi-Fi | | | Turns Wi-Fi on or off and picks a network |
+| Date & Time | | | Sets the clock, your city and 12 or 24-hour time |
+| Lid Power Off | 1, 3, 5, 10, 15, 30 min | 3 min | How long slot sleeps before powering off |
+| Battery Display | Both, Icon, Percentage | Both | Whether the battery shows as an icon, a percentage or both |
+| Check for Updates | | | Downloads and installs a new version of slot |
+| About | | | Your device's sticker, with the version of slot and more. Press <kbd>X</kbd> to restart |
 
 ## The in-game menu
 

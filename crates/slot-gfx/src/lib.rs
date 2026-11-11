@@ -50,7 +50,7 @@ pub use headless::HeadlessSurface;
 pub use host::HostSurface;
 #[cfg(unix)]
 pub use kms::{
-    free_crtc, preferred_mode, retry_until, KmsSurface, Panel, CONNECTOR_DSI, MODE_TYPE_PREFERRED,
+    free_crtc, preferred_mode, retry_until, FlipQueue, FlipStep, KmsSurface, Panel, CONNECTOR_DSI, MODE_TYPE_PREFERRED,
 };
 #[cfg(unix)]
 pub use kms_atomic::{atomic_plan, primary_plane_for, AtomicIds, PlaneInfo, PLANE_TYPE_PRIMARY};

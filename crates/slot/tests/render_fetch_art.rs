@@ -66,6 +66,9 @@ fn setup_with_shell(
     let compositor = Compositor::new(&surface).ok()?;
     let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
     clocked(d.path());
+    let mut state = slot_store::read_slot_state(d.path());
+    state.wallpaper = slot_store::WallpaperPick::None;
+    slot_store::write_slot_state(d.path(), &state).unwrap();
     std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
     if let Some(shell) = shell {
         std::fs::write(d.path().join("Config/cart_shell.txt"), shell).unwrap();

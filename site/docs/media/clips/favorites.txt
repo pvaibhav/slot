@@ -1,0 +1,12 @@
+# cart:
+# state: show_recents=0
+# state: show_titles=0
+# state: wallpaper=default
+# shell: Pokémon - Recharged Yellow = auto e9a826 solid
+wait 180
+rec favorites
+wait 50
+tap y
+wait 110
+tap y
+wait 60

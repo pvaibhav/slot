@@ -30,6 +30,7 @@ fn ds_cart(dir: &std::path::Path, label: Option<std::path::PathBuf>) -> Cart {
         title: String::new(),
         code: String::new(),
         shell: None,
+        sealed: false,
     }
 }
 

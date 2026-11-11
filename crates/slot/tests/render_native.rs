@@ -209,6 +209,70 @@ fn a_panel_sized_wallpaper_lands_pixel_for_pixel_on_a_4_by_3_panel() {
     }
 }
 
+#[test]
+fn changing_the_tint_peeks_at_the_shelf_then_darkens_the_menu() {
+    let Ok(surface) = HeadlessSurface::new() else {
+        return;
+    };
+    let Ok(mut c) = Compositor::new(&surface) else {
+        return;
+    };
+    let d = tmp_root_with_carts(&["Emerald", "Zzz"]);
+    clocked(d.path());
+    let (w, h) = (640usize, 480usize);
+    let paper: Vec<u8> = [200u8, 200, 200, 255].repeat(w * h);
+    let dir = d.path().join("Wallpapers");
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = std::fs::File::create(dir.join("grey.png")).unwrap();
+    let mut e = png::Encoder::new(std::io::BufWriter::new(file), w as u32, h as u32);
+    e.set_color(png::ColorType::Rgba);
+    e.set_depth(png::BitDepth::Eight);
+    e.write_header().unwrap().write_image_data(&paper).unwrap();
+    let state = slot_store::read_slot_state(d.path());
+    slot_store::write_slot_state(
+        d.path(),
+        &slot_store::SlotState {
+            wallpaper: slot_store::WallpaperPick::File("grey.png".into()),
+            ..state
+        },
+    )
+    .unwrap();
+    let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+    f.app_mut().set_panel((640, 480));
+    f.upload_faces(&mut c);
+    let mut input = Script(VecDeque::new());
+    for _ in 0..10 {
+        f.advance(&mut input);
+    }
+    c.fit((640, 480));
+    tap(&mut f, &mut input, Btn::Menu);
+    tap(&mut f, &mut input, Btn::A);
+    while f.app().quick_menu() != Some(QuickRow::WallpaperTint) {
+        tap(&mut f, &mut input, Btn::Down);
+    }
+    let mut shot = |f: &mut Frontend, input: &mut Script, name: &str| {
+        f.advance(input);
+        f.compose(&mut c);
+        let frame = c.read_frame();
+        write_png(&format!("native-menu-tint-{name}"), 640, 480, &frame);
+        frame[(60 * w + 20) * 4]
+    };
+    let menu_off = shot(&mut f, &mut input, "menu-off");
+    tap(&mut f, &mut input, Btn::Right);
+    std::thread::sleep(std::time::Duration::from_millis(250));
+    let peek_low = shot(&mut f, &mut input, "peek-low");
+    std::thread::sleep(std::time::Duration::from_millis(1_500));
+    let menu_low = shot(&mut f, &mut input, "menu-low");
+    assert!(
+        peek_low.abs_diff(150) <= 3,
+        "the peek is not the wallpaper at 25% tint: {peek_low}"
+    );
+    assert!(
+        menu_low < menu_off,
+        "the menu did not darken: {menu_off} then {menu_low}"
+    );
+}
+
 type Paint = fn(usize, usize, usize, usize) -> [u8; 4];
 
 fn edges(x: usize, y: usize, w: usize, h: usize) -> [u8; 4] {

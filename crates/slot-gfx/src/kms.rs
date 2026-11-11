@@ -2,7 +2,7 @@ use std::ffi::{c_char, c_void};
 use std::fs::File;
 use std::os::unix::io::AsRawFd;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use libloading::Library;
 
@@ -14,7 +14,7 @@ use crate::fbdev::{
 use crate::surface::{GfxError, Surface};
 
 const CARD: &str = "/dev/dri/card0";
-const LEGACY_FLAG: &str = "/mnt/sdcard/System/kms-legacy.on";
+const ATOMIC_FLAG: &str = "/mnt/sdcard/System/kms-atomic.on";
 
 pub const CONNECTOR_DSI: u32 = 16;
 const CONNECTED: i32 = 1;
@@ -143,8 +143,17 @@ struct PollFd {
     revents: i16,
 }
 
+#[repr(C)]
+struct Timespec {
+    sec: i64,
+    nsec: i64,
+}
+
+const CLOCK_MONOTONIC: i32 = 1;
+
 extern "C" {
     fn poll(fds: *mut PollFd, count: u64, timeout: i32) -> i32;
+    fn clock_gettime(clock: i32, ts: *mut Timespec) -> i32;
 }
 
 struct Drm {
@@ -194,6 +203,7 @@ struct Gbm {
     surface_destroy: unsafe extern "C" fn(Ptr),
     lock_front_buffer: unsafe extern "C" fn(Ptr) -> Ptr,
     release_buffer: unsafe extern "C" fn(Ptr, Ptr),
+    has_free_buffers: unsafe extern "C" fn(Ptr) -> i32,
     bo_get_handle: unsafe extern "C" fn(Ptr) -> u64,
     bo_get_stride: unsafe extern "C" fn(Ptr) -> u32,
     _lib: Library,
@@ -210,11 +220,71 @@ impl Gbm {
                 surface_destroy: sym(&lib, "gbm_surface_destroy")?,
                 lock_front_buffer: sym(&lib, "gbm_surface_lock_front_buffer")?,
                 release_buffer: sym(&lib, "gbm_surface_release_buffer")?,
+                has_free_buffers: sym(&lib, "gbm_surface_has_free_buffers")?,
                 bo_get_handle: sym(&lib, "gbm_bo_get_handle")?,
                 bo_get_stride: sym(&lib, "gbm_bo_get_stride")?,
                 _lib: lib,
             })
         }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct FlipStep<T> {
+    pub flip: Option<T>,
+    pub release: Option<T>,
+}
+
+#[derive(Debug)]
+pub struct FlipQueue<T> {
+    shown: Option<T>,
+    pending: Option<T>,
+    waiting: Option<T>,
+}
+
+impl<T> Default for FlipQueue<T> {
+    fn default() -> Self {
+        FlipQueue {
+            shown: None,
+            pending: None,
+            waiting: None,
+        }
+    }
+}
+
+impl<T: Copy> FlipQueue<T> {
+    pub fn show(&mut self, frame: T) -> Option<T> {
+        self.shown.replace(frame)
+    }
+
+    pub fn submit(&mut self, frame: T) -> FlipStep<T> {
+        match self.pending {
+            None => {
+                self.pending = Some(frame);
+                FlipStep { flip: Some(frame), release: None }
+            }
+            Some(_) => FlipStep {
+                flip: None,
+                release: self.waiting.replace(frame),
+            },
+        }
+    }
+
+    pub fn retire(&mut self) -> FlipStep<T> {
+        let Some(done) = self.pending.take() else {
+            return FlipStep { flip: None, release: None };
+        };
+        let release = self.shown.replace(done);
+        self.pending = self.waiting.take();
+        FlipStep { flip: self.pending, release }
+    }
+
+    pub fn flip_failed(&mut self) -> Option<T> {
+        self.pending.take()
+    }
+
+    pub fn in_flight(&self) -> bool {
+        self.pending.is_some()
     }
 }
 
@@ -227,7 +297,8 @@ struct Output {
     egl_surface: Ptr,
     shown: Ptr,
     queued: Ptr,
-    flipping: Box<AtomicBool>,
+    flipping: Box<Flip>,
+    flips: FlipQueue<(Ptr, u32)>,
     lit: bool,
     fbs: Vec<(Ptr, u32)>,
 }
@@ -313,8 +384,16 @@ unsafe fn atomic_for(fd: i32, found: &[Found; 2]) -> Result<Atomic, GfxError> {
     })
 }
 
-unsafe extern "C" fn flipped(_fd: i32, _seq: u32, _sec: u32, _usec: u32, data: *mut c_void) {
-    (*(data as *const AtomicBool)).store(false, Ordering::Release);
+#[derive(Default)]
+struct Flip {
+    busy: AtomicBool,
+    at_us: std::sync::atomic::AtomicU64,
+}
+
+unsafe extern "C" fn flipped(_fd: i32, _seq: u32, sec: u32, usec: u32, data: *mut c_void) {
+    let flip = &*(data as *const Flip);
+    flip.at_us.store(u64::from(sec) * 1_000_000 + u64::from(usec), Ordering::Release);
+    flip.busy.store(false, Ordering::Release);
 }
 
 struct Found {
@@ -445,10 +524,9 @@ impl KmsSurface {
         let gles = open("libGLESv2.so.2").or_else(|_| open("libGLESv2.so"))?;
         unsafe {
             let found = find(&drm, fd)?;
-            let legacy = std::path::Path::new(LEGACY_FLAG).is_file();
-            let atomic = match legacy {
-                true => Err(GfxError::Context(format!("{LEGACY_FLAG} is set"))),
-                false => atomic_for(fd, &found),
+            let atomic = match std::path::Path::new(ATOMIC_FLAG).is_file() {
+                true => atomic_for(fd, &found),
+                false => Err(GfxError::Context(format!("{ATOMIC_FLAG} is not set"))),
             };
             let atomic = match atomic {
                 Ok(a) => {
@@ -520,7 +598,8 @@ impl KmsSurface {
                     egl_surface,
                     shown: std::ptr::null_mut(),
                     queued: std::ptr::null_mut(),
-                    flipping: Box::new(AtomicBool::new(false)),
+                    flipping: Box::new(Flip::default()),
+                    flips: FlipQueue::default(),
                     lit: false,
                     fbs: Vec::new(),
                 });
@@ -720,36 +799,71 @@ impl KmsSurface {
         Ok(())
     }
 
-    fn wait_flip(&mut self) -> Result<(), GfxError> {
+    fn pump(&mut self, block: bool) -> Result<(), GfxError> {
         let fd = self.card.as_raw_fd();
-        let out = &mut self.outputs[self.current];
-        while out.flipping.load(Ordering::Acquire) {
-            let mut pfd = PollFd {
-                fd,
-                events: POLLIN,
-                revents: 0,
-            };
-            if unsafe { poll(&mut pfd, 1, -1) } < 0 {
-                let e = std::io::Error::last_os_error();
-                if e.kind() == std::io::ErrorKind::Interrupted {
-                    continue;
-                }
-                return Err(GfxError::Context(format!("poll {CARD}: {e}")));
+        let mut pfd = PollFd {
+            fd,
+            events: POLLIN,
+            revents: 0,
+        };
+        let ready = unsafe { poll(&mut pfd, 1, if block { 1000 } else { 0 }) };
+        if ready < 0 {
+            let e = std::io::Error::last_os_error();
+            if e.kind() == std::io::ErrorKind::Interrupted {
+                return Ok(());
             }
-            let mut ctx = EventContext {
-                version: 2,
-                vblank_handler: None,
-                page_flip_handler: Some(flipped),
-            };
-            unsafe { (self.drm.handle_event)(fd, &mut ctx) };
+            return Err(GfxError::Context(format!("poll {CARD}: {e}")));
         }
-        if !out.queued.is_null() {
-            if !out.shown.is_null() {
-                unsafe { (self.gbm.release_buffer)(out.gbm_surface, out.shown) };
+        if ready == 0 {
+            return match block {
+                true => Err(GfxError::Context(format!("{CARD}: no flip completed in 1 s"))),
+                false => Ok(()),
+            };
+        }
+        let mut ctx = EventContext {
+            version: 2,
+            vblank_handler: None,
+            page_flip_handler: Some(flipped),
+        };
+        unsafe { (self.drm.handle_event)(fd, &mut ctx) };
+        for i in 0..self.outputs.len() {
+            let out = &self.outputs[i];
+            if out.flips.in_flight() && !out.flipping.busy.load(Ordering::Acquire) {
+                let step = self.outputs[i].flips.retire();
+                self.apply(i, step)?;
             }
-            out.shown = std::mem::replace(&mut out.queued, std::ptr::null_mut());
         }
         Ok(())
+    }
+
+    fn apply(&mut self, i: usize, step: FlipStep<(Ptr, u32)>) -> Result<(), GfxError> {
+        let fd = self.card.as_raw_fd();
+        let out = &mut self.outputs[i];
+        if let Some((bo, _)) = step.release {
+            unsafe { (self.gbm.release_buffer)(out.gbm_surface, bo) };
+        }
+        let Some((_, fb)) = step.flip else {
+            return Ok(());
+        };
+        out.flipping.busy.store(true, Ordering::Release);
+        let data = &*out.flipping as *const Flip as *mut c_void;
+        let rc = unsafe { (self.drm.page_flip)(fd, out.crtc, fb, PAGE_FLIP_EVENT, data) };
+        if rc != 0 {
+            out.flipping.busy.store(false, Ordering::Release);
+            if let Some((bo, _)) = out.flips.flip_failed() {
+                unsafe { (self.gbm.release_buffer)(out.gbm_surface, bo) };
+            }
+            return Err(GfxError::Context(format!("drmModePageFlip: {rc}")));
+        }
+        Ok(())
+    }
+
+    fn settle(&mut self) {
+        while self.outputs.iter().any(|o| o.flips.in_flight()) {
+            if self.pump(true).is_err() {
+                break;
+            }
+        }
     }
 }
 
@@ -774,7 +888,7 @@ impl Surface for KmsSurface {
         if unsafe { (self.egl.swap_buffers)(self.display, s) } == 0 {
             return Err(self.egl.fail("eglSwapBuffers"));
         }
-        self.wait_flip()?;
+        self.pump(false)?;
         let gbm_surface = self.outputs[self.current].gbm_surface;
         let bo = unsafe { (self.gbm.lock_front_buffer)(gbm_surface) };
         if bo.is_null() {
@@ -784,9 +898,10 @@ impl Surface for KmsSurface {
         }
         let fb = self.fb_for(bo)?;
         let fd = self.card.as_raw_fd();
-        if !self.outputs[self.current].lit {
+        let i = self.current;
+        if !self.outputs[i].lit {
             self.take_master();
-            let out = &mut self.outputs[self.current];
+            let out = &mut self.outputs[i];
             let rc = unsafe {
                 (self.drm.set_crtc)(fd, out.crtc, fb, 0, 0, &out.connector, 1, &out.mode)
             };
@@ -794,22 +909,16 @@ impl Surface for KmsSurface {
                 return Err(GfxError::Context(format!("drmModeSetCrtc: {rc}")));
             }
             out.lit = true;
-            if !out.shown.is_null() {
-                unsafe { (self.gbm.release_buffer)(out.gbm_surface, out.shown) };
+            if let Some((old, _)) = out.flips.show((bo, fb)) {
+                unsafe { (self.gbm.release_buffer)(out.gbm_surface, old) };
             }
-            out.shown = bo;
             return Ok(());
         }
-        let out = &mut self.outputs[self.current];
-        out.flipping.store(true, Ordering::Release);
-        let data = &*out.flipping as *const AtomicBool as *mut c_void;
-        let rc = unsafe { (self.drm.page_flip)(fd, out.crtc, fb, PAGE_FLIP_EVENT, data) };
-        if rc != 0 {
-            out.flipping.store(false, Ordering::Release);
-            unsafe { (self.gbm.release_buffer)(out.gbm_surface, bo) };
-            return Err(GfxError::Context(format!("drmModePageFlip: {rc}")));
+        let step = self.outputs[i].flips.submit((bo, fb));
+        self.apply(i, step)?;
+        while unsafe { (self.gbm.has_free_buffers)(gbm_surface) } == 0 {
+            self.pump(true)?;
         }
-        out.queued = bo;
         Ok(())
     }
 
@@ -826,6 +935,22 @@ impl Surface for KmsSurface {
         crate::surface::mode_period(m.clock, m.htotal, m.vtotal)
     }
 
+    fn flip_times_us(&self) -> Option<[u64; 2]> {
+        let at = |i: usize| self.outputs.get(i).map(|o| o.flipping.at_us.load(Ordering::Acquire));
+        Some([at(0)?, at(1)?]).filter(|t| t[0] > 0 && t[1] > 0)
+    }
+
+    fn last_vblank(&self) -> Option<std::time::Instant> {
+        let at = self.outputs[Panel::Top.index()].flipping.at_us.load(Ordering::Acquire);
+        let mut ts = Timespec { sec: 0, nsec: 0 };
+        if at == 0 || unsafe { clock_gettime(CLOCK_MONOTONIC, &mut ts) } != 0 {
+            return None;
+        }
+        let now = Instant::now();
+        let mono = ts.sec as u64 * 1_000_000 + ts.nsec as u64 / 1000;
+        now.checked_sub(Duration::from_micros(mono.saturating_sub(at)))
+    }
+
     fn select_panel(&mut self, index: usize) -> Result<(), GfxError> {
         match Panel::of_index(index) {
             Some(panel) => self.select(panel),
@@ -837,10 +962,7 @@ impl Surface for KmsSurface {
 impl Drop for KmsSurface {
     fn drop(&mut self) {
         let _ = self.wait_atomic();
-        for i in 0..self.outputs.len() {
-            self.current = i;
-            let _ = self.wait_flip();
-        }
+        self.settle();
         let fd = self.card.as_raw_fd();
         unsafe {
             (self.egl.make_current)(

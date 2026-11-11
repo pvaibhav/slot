@@ -7,6 +7,12 @@
   {% include "partials/foot-base.html" %}
 </footer>
 {% endblock %}
+{% block hero %}
+<aside class="notice" id="notice" aria-label="News" hidden>
+  <p><span class="pill">FEATURED PORT</span>The mad lad <a href="https://github.com/FrankieT19">FrankieT19</a> brought slot to the EZ&#8209;Flash Omega carts. <a href="https://github.com/FrankieT19/slot-advance" target="_blank" rel="noopener">Get it here!</a></p>
+  <button class="notice-close" id="notice-close" type="button" aria-label="Dismiss"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+</aside>
+{% endblock %}
 {% block content %}
 <section class="hero" aria-label="slot.">
   <div class="hero-copy">
