@@ -49,8 +49,8 @@ locks again.
 | Turbo Buttons | On, Off | On | Turbo A and Turbo B |
 | Rumble | On, Off | On | For games with a rumble pak |
 | Left Stick as D-Pad | On, Off | On | Only on devices with a left stick |
-| Auto Load State | Always, Power On, Never | Always | Inserting a cart picks up where you left off.<br>Power On resumes only the game you powered off in |
-| Eject Save State | On, Off | On | Ejecting saves where you were |
+| Resume on Insert | On, Off | On | Inserting a cart picks up where you left off |
+| Resume on Power On | On, Off | On | Powering on mid-game picks up where you left off |
 
 ## Controls
 

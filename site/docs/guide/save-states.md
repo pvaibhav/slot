@@ -42,13 +42,15 @@ slot writes it:
 - every 5 minutes while you play
 - when you close the lid or tap <kbd>POWER</kbd>
 - when you power off
-- when you eject, if the Eject Save State setting is on
+- when you eject
 - when the battery hits 5% and slot powers off to protect your saves
 
 There are two options in Settings → Gameplay that control this:
 
-- **Auto Load State** decides whether putting a cart in loads it. Always loads it every time. Power On starts carts fresh, but powering on picks up the game you were playing. Never means every cart starts fresh, including when powering on.
-- **Eject Save State** decides whether ejecting writes it.
+- **Resume on Insert** decides whether putting a cart in loads it.
+- **Resume on Power On** decides whether powering on with a cart inserted loads the last state.
+
+Turn both off and every game starts fresh.
 
 ## States and cores
 
