@@ -386,7 +386,7 @@ const DS_CASED_TRACKING: f32 = 0.3;
 pub const DS_CREDITS: &str = "The exquisite skeuomorphic artwork made by Markus. \
 Emulation powered by DSperate, mGBA, gpSP and Gambatte. Type is Open Sans and Nerd \
 Fonts Symbols by Ryan L McIntyre. The panel mask is derived from Gigaherz's LCD3x. \
-The cart sounds are my childhood Game\u{a0}Boy.";
+The cart sounds are my childhood Game\u{a0}Boy and my adulthood DS\u{a0}Lite.";
 
 pub const DS_MODEL_NO: &str = "MODEL NO. NTR-002";
 
