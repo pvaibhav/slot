@@ -9,8 +9,8 @@ All settings save as soon as you change an option.
 | Setting | Choices | Default | Does |
 | --- | --- | --- | --- |
 | Theme | Dark, Light | Dark | The look of the shelf and menus |
-| Wallpaper | None, Random, Shelf, Default, Default Blur, your own | Default | What's behind the shelf |
-| Wallpaper Tint | Off, 25%, 45%, 65% | Off | Darkens your own wallpaper so carts stand out. Only shows for your own, Random or Shelf |
+| Wallpaper | None, Random, Per Shelf, any file in `Wallpapers/` | Slot | What's behind the shelf |
+| Wallpaper Tint | Off, 25%, 45%, 65% | Off | Darkens the wallpaper so carts stand out. Hidden for None |
 | Shelf Mode | All, Collections | All | Collections hides the system shelves and puts your [collections](collections.md) in the row |
 | Recents | Show, Hide | Hide | A shelf of your last 10 games |
 | Game Titles | Show, Hide | Hide | Shows the name of the cart you're on |
@@ -19,7 +19,7 @@ All settings save as soon as you change an option.
 
 Random picks a different wallpaper each boot.
 
-The `Shelf` option gives each shelf its own wallpaper, see [Wallpapers](customizing.md#wallpapers).
+The `Per Shelf` option gives each shelf its own wallpaper, see [Wallpapers](customizing.md#wallpapers).
 
 ### Kid Mode
 

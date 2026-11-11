@@ -51,6 +51,7 @@ pub use backdrop::{
     bezel_face, blur_background, blur_background_at, default_background, default_background_at,
     default_game_bezel_face, draw_backdrop, reference_ground_covers,
     draw_ground, game_bezel_face, wallpaper_face, BezelArt,
+    SLOT_BLUR_WALLPAPER_PNG, SLOT_WALLPAPER_PNG,
 };
 pub use barcode::{code39, CODE39_NARROW, CODE39_WIDE};
 pub use battery::{draw_gauge, Gauge, BOLT_PX, GAUGE_H, GAUGE_W, WALL};

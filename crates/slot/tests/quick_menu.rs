@@ -115,46 +115,45 @@ fn the_quick_menu_is_only_on_the_carousel() {
 }
 
 #[test]
-fn wallpaper_cycles_none_random_shelf_default_blur_then_the_folder_and_saves() {
+fn wallpaper_cycles_none_random_per_shelf_then_the_folder_and_saves() {
     let (d, mut a, _) = on_carousel();
     let dir = d.path().join("Wallpapers");
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("b.png"), b"png").unwrap();
-    std::fs::write(dir.join("Crt.png"), b"png").unwrap();
-    std::fs::write(dir.join("a.png"), b"png").unwrap();
+    for name in ["b.png", "Crt.png", "a.png", "Default.png"] {
+        std::fs::write(dir.join(name), b"png").unwrap();
+    }
     open_at(&mut a, QuickRow::Wallpaper);
     assert_eq!(a.quick_menu(), Some(QuickRow::Wallpaper));
     assert_eq!(
         a.resolved_wallpaper(),
-        WallpaperPick::Default,
-        "a new card did not start on Default"
+        WallpaperPick::File("Slot.png".into()),
+        "a new card did not start on Slot.png"
     );
-    press(&mut a, Btn::Right);
-    assert_eq!(a.resolved_wallpaper(), WallpaperPick::Blur);
-    assert_eq!(a.resolved_wallpaper().label(), "DEFAULT BLUR");
-    for name in ["a.png", "b.png", "Crt.png"] {
-        press(&mut a, Btn::Right);
-        assert_eq!(a.resolved_wallpaper(), WallpaperPick::File(name.into()));
-    }
     press(&mut a, Btn::Right);
     assert_eq!(a.resolved_wallpaper(), WallpaperPick::None);
     assert_eq!(read_slot_state(d.path()).wallpaper, WallpaperPick::None);
     press(&mut a, Btn::Right);
     assert_eq!(a.resolved_wallpaper(), WallpaperPick::Random);
     assert_eq!(a.resolved_wallpaper().label(), "Random");
-    assert_eq!(read_slot_state(d.path()).wallpaper, WallpaperPick::Random);
     press(&mut a, Btn::Right);
     assert_eq!(a.resolved_wallpaper(), WallpaperPick::Shelf);
-    assert_eq!(a.resolved_wallpaper().label(), "Shelf");
+    assert_eq!(a.resolved_wallpaper().label(), "Per Shelf");
     assert_eq!(read_slot_state(d.path()).wallpaper, WallpaperPick::Shelf);
-    press(&mut a, Btn::Right);
-    assert_eq!(a.resolved_wallpaper(), WallpaperPick::Default);
+    for name in [
+        "a.png",
+        "b.png",
+        "Crt.png",
+        "Default.png",
+        "Slot Blur.png",
+        "Slot.png",
+    ] {
+        press(&mut a, Btn::Right);
+        assert_eq!(a.resolved_wallpaper(), WallpaperPick::File(name.into()));
+    }
     press(&mut a, Btn::Left);
-    assert_eq!(a.resolved_wallpaper(), WallpaperPick::Shelf);
-    press(&mut a, Btn::Left);
-    assert_eq!(a.resolved_wallpaper(), WallpaperPick::Random);
-    press(&mut a, Btn::Left);
-    assert_eq!(a.resolved_wallpaper(), WallpaperPick::None);
+    assert_eq!(
+        a.resolved_wallpaper(),
+        WallpaperPick::File("Slot Blur.png".into())
+    );
     press(&mut a, Btn::A);
     assert_eq!(
         a.quick_menu(),
@@ -166,6 +165,7 @@ fn wallpaper_cycles_none_random_shelf_default_blur_then_the_folder_and_saves() {
 fn random_card(names: &[&str]) -> TempDir {
     let (d, _, _) = on_carousel_with(SlotState {
         wallpaper: WallpaperPick::Random,
+        wallpapers_given: true,
         ..SlotState::default()
     });
     let dir = d.path().join("Wallpapers");
@@ -1423,7 +1423,11 @@ fn black_washes(draws: &[Draw]) -> Vec<f32> {
 
 #[test]
 fn wallpaper_tint_hides_until_a_wallpaper_of_your_own_is_picked() {
-    let (d, mut a, _) = on_carousel();
+    let (d, mut a, _) = on_carousel_with(SlotState {
+        wallpaper: WallpaperPick::None,
+        wallpapers_given: true,
+        ..SlotState::default()
+    });
     let dir = d.path().join("Wallpapers");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("a.png"), b"png").unwrap();
@@ -1432,16 +1436,14 @@ fn wallpaper_tint_hides_until_a_wallpaper_of_your_own_is_picked() {
     assert_eq!(
         a.quick_menu(),
         Some(QuickRow::ShelfMode),
-        "the tint row showed on the default wallpaper"
+        "the tint row showed with no wallpaper"
     );
     press(&mut a, Btn::Up);
     for (pick, shown) in [
-        (WallpaperPick::Blur, false),
-        (WallpaperPick::File("a.png".into()), true),
-        (WallpaperPick::None, false),
         (WallpaperPick::Random, true),
         (WallpaperPick::Shelf, true),
-        (WallpaperPick::Default, false),
+        (WallpaperPick::File("a.png".into()), true),
+        (WallpaperPick::None, false),
     ] {
         press(&mut a, Btn::Right);
         assert_eq!(a.resolved_wallpaper(), pick);
@@ -1580,6 +1582,46 @@ fn the_tint_leaves_the_default_wallpaper_alone() {
     });
     a.set_ground(TexId::from_raw(800));
     assert_eq!(black_washes(&frame(&a)), Vec::<f32>::new());
+}
+
+fn slot_ground_drawn(wallpaper: WallpaperPick, menu: bool) -> bool {
+    let (_d, mut a, _) = on_carousel_with(SlotState {
+        wallpaper,
+        wallpapers_given: true,
+        ..SlotState::default()
+    });
+    a.set_ground(TexId::from_raw(800));
+    a.set_blur(TexId::from_raw(801));
+    if menu {
+        open_at(&mut a, QuickRow::Wallpaper);
+    }
+    frame(&a).iter().any(|d| {
+        matches!(d, Draw::Part { tex, .. }
+            if *tex == TexId::from_raw(800) || *tex == TexId::from_raw(801))
+    })
+}
+
+#[test]
+fn slot_wallpaper_shows_only_when_picked() {
+    for menu in [false, true] {
+        assert!(
+            slot_ground_drawn(WallpaperPick::Default, menu),
+            "menu {menu}"
+        );
+        assert!(slot_ground_drawn(WallpaperPick::Blur, menu), "menu {menu}");
+        assert!(
+            !slot_ground_drawn(WallpaperPick::Shelf, menu),
+            "menu {menu}"
+        );
+        assert!(
+            !slot_ground_drawn(WallpaperPick::Random, menu),
+            "menu {menu}"
+        );
+        assert!(
+            !slot_ground_drawn(WallpaperPick::File("gone.png".into()), menu),
+            "menu {menu}"
+        );
+    }
 }
 
 #[test]

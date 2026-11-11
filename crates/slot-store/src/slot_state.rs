@@ -241,9 +241,9 @@ impl WallpaperPick {
         match self {
             WallpaperPick::None => "None".to_string(),
             WallpaperPick::Random => "Random".to_string(),
-            WallpaperPick::Shelf => "Shelf".to_string(),
-            WallpaperPick::Default => "Default".to_string(),
-            WallpaperPick::Blur => "DEFAULT BLUR".to_string(),
+            WallpaperPick::Shelf => "Per Shelf".to_string(),
+            WallpaperPick::Default => "Slot".to_string(),
+            WallpaperPick::Blur => "Slot Blur".to_string(),
             WallpaperPick::File(name) => name
                 .rsplit_once('.')
                 .map(|(stem, _)| stem)
@@ -475,6 +475,7 @@ pub struct SlotState {
     pub appearance: Appearance,
     pub wallpaper: WallpaperPick,
     pub wallpaper_tint: WallpaperTint,
+    pub wallpapers_given: bool,
     pub show_recents: bool,
     pub show_titles: bool,
     pub battery_display: BatteryDisplay,
@@ -663,6 +664,7 @@ impl Default for SlotState {
             appearance: Appearance::Dark,
             wallpaper: WallpaperPick::Default,
             wallpaper_tint: WallpaperTint::Off,
+            wallpapers_given: false,
             show_recents: false,
             show_titles: false,
             battery_display: BatteryDisplay::Both,
@@ -783,6 +785,7 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
     text.push_str(&format!("saturation={}\n", s.saturation));
     text.push_str(&format!("contrast={}\n", s.contrast));
     text.push_str(&format!("wallpaper_tint={}\n", s.wallpaper_tint.key()));
+    text.push_str(&format!("wallpapers_given={}\n", s.wallpapers_given as u8));
     text.push_str(&format!("show_recents={}\n", s.show_recents as u8));
     text.push_str(&format!("show_titles={}\n", s.show_titles as u8));
     text.push_str(&format!("battery_display={}\n", s.battery_display.key()));
@@ -873,6 +876,7 @@ fn parse(text: &str) -> Option<SlotState> {
     let mut auto_load = None;
     let mut resume_insert = None;
     let mut resume_power_on = None;
+    let mut wallpapers_given = None;
     let mut turbo = None;
     let mut rewind = None;
     let mut gb_palettes = None;
@@ -942,6 +946,7 @@ fn parse(text: &str) -> Option<SlotState> {
             "auto_load" => auto_load = auto_load_value(value),
             "resume_insert" => resume_insert = flag(value),
             "resume_power_on" => resume_power_on = flag(value),
+            "wallpapers_given" => wallpapers_given = flag(value),
             "turbo" => turbo = flag(value),
             "rewind" => rewind = flag(value),
             "gb_palettes" => gb_palettes = flag(value),
@@ -1031,6 +1036,7 @@ fn parse(text: &str) -> Option<SlotState> {
         appearance: appearance.unwrap_or(fallback.appearance),
         wallpaper: wallpaper.unwrap_or(fallback.wallpaper),
         wallpaper_tint: wallpaper_tint.unwrap_or(fallback.wallpaper_tint),
+        wallpapers_given: wallpapers_given.unwrap_or(fallback.wallpapers_given),
         show_recents: show_recents.unwrap_or(fallback.show_recents),
         show_titles: show_titles.unwrap_or(fallback.show_titles),
         battery_display: battery_display.unwrap_or(fallback.battery_display),

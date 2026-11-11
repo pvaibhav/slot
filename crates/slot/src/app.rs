@@ -879,19 +879,19 @@ fn shelves_of(carts: Vec<Cart>, collections: usize) -> Vec<(Rack, Shelf)> {
         .collect()
 }
 
+const SHELF_FALLBACK_WALLPAPER: &str = "default";
+
 fn wallpaper_of_rack(rack: Rack, files: &[String]) -> Option<String> {
-    let rack = match rack {
-        Rack::Collection(_) => Rack::Favorites,
-        rack => rack,
-    };
     std::iter::once(rack)
         .chain(rack.platform().map(|p| Rack::Of(p.hardware())))
-        .find_map(|rack| {
+        .map(|rack| rack.key())
+        .chain(std::iter::once(SHELF_FALLBACK_WALLPAPER.to_owned()))
+        .find_map(|key| {
             files
                 .iter()
                 .find(|file| {
                     file.rsplit_once('.')
-                        .is_some_and(|(stem, _)| stem.eq_ignore_ascii_case(&rack.key()))
+                        .is_some_and(|(stem, _)| stem.eq_ignore_ascii_case(&key))
                 })
                 .cloned()
         })
@@ -1251,6 +1251,7 @@ impl App {
         app.root = Some(root.to_path_buf());
         app.loading = loading;
         app.state = read_slot_state(root);
+        app.give_wallpapers(root);
         tell_libc_the_zone(app.state.zone);
         app.romm = crate::romm::RommConf::load(root);
         app.gifts = crate::romm::Gifts::load(root);
@@ -3340,6 +3341,25 @@ impl App {
         self.root().map(crate::wallpaper::list).unwrap_or_default()
     }
 
+    fn give_wallpapers(&mut self, root: &Path) {
+        if self.state.wallpapers_given {
+            return;
+        }
+        if let Err(e) = crate::wallpaper::give(root) {
+            eprintln!("slot: wallpapers: {e}");
+            return;
+        }
+        self.state.wallpaper = match &self.state.wallpaper {
+            WallpaperPick::Default => WallpaperPick::File(crate::wallpaper::SLOT_FILE.into()),
+            WallpaperPick::Blur => WallpaperPick::File(crate::wallpaper::SLOT_BLUR_FILE.into()),
+            other => other.clone(),
+        };
+        self.state.wallpapers_given = true;
+        if let Err(e) = write_slot_state(root, &self.state) {
+            eprintln!("slot: slot.state: {e}");
+        }
+    }
+
     pub fn wallpaper(&self) -> WallpaperPick {
         self.state.wallpaper.clone()
     }
@@ -3347,7 +3367,7 @@ impl App {
     pub fn resolved_wallpaper(&self) -> WallpaperPick {
         match &self.state.wallpaper {
             WallpaperPick::File(name) if !self.wallpaper_files().iter().any(|n| n == name) => {
-                WallpaperPick::Default
+                WallpaperPick::None
             }
             other => other.clone(),
         }
@@ -3444,12 +3464,10 @@ impl App {
             WallpaperPick::None,
             WallpaperPick::Random,
             WallpaperPick::Shelf,
-            WallpaperPick::Default,
-            WallpaperPick::Blur,
         ];
         choices.extend(self.wallpaper_files().into_iter().map(WallpaperPick::File));
         let key = self.resolved_wallpaper().key();
-        let at = choices.iter().position(|c| c.key() == key).unwrap_or(3);
+        let at = choices.iter().position(|c| c.key() == key).unwrap_or(0);
         let n = choices.len();
         let next = if right {
             (at + 1) % n
@@ -3462,10 +3480,7 @@ impl App {
     fn grounds(&self) -> [Option<(TexId, u32)>; 3] {
         let ground = self.ground.map(|t| (t, self.ground_w));
         let blur = self.blur.map(|t| (t, self.ground_w)).or(ground);
-        let own = self
-            .wallpaper
-            .map(|t| (t, self.wallpaper_size().0))
-            .or(ground);
+        let own = self.wallpaper.map(|t| (t, self.wallpaper_size().0));
         [ground, blur, own]
     }
 
@@ -3486,8 +3501,8 @@ impl App {
         match &self.state.wallpaper {
             WallpaperPick::None => None,
             WallpaperPick::Default | WallpaperPick::Blur => blur,
-            WallpaperPick::Random if !self.random_drawn() => blur,
-            WallpaperPick::Shelf if self.shelf_wallpaper.is_none() => blur,
+            WallpaperPick::Random if !self.random_drawn() => None,
+            WallpaperPick::Shelf if self.shelf_wallpaper.is_none() => None,
             WallpaperPick::File(_) | WallpaperPick::Random | WallpaperPick::Shelf => own,
         }
     }
@@ -3498,8 +3513,8 @@ impl App {
             _ if self.collection_wallpaper.is_some() => own,
             WallpaperPick::None => None,
             WallpaperPick::Default => ground,
-            WallpaperPick::Random if !self.random_drawn() => ground,
-            WallpaperPick::Shelf if self.shelf_wallpaper.is_none() => ground,
+            WallpaperPick::Random if !self.random_drawn() => None,
+            WallpaperPick::Shelf if self.shelf_wallpaper.is_none() => None,
             WallpaperPick::Blur => blur,
             WallpaperPick::File(_) | WallpaperPick::Random | WallpaperPick::Shelf => own,
         };

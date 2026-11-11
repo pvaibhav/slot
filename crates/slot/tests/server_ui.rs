@@ -901,7 +901,10 @@ mod screen {
 
     fn cue_rig() -> Option<(Rig, std::sync::Arc<Ring>)> {
         let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
-        clocked(d.path());
+        let mut state = slot_store::read_slot_state(d.path());
+        state.clock_set = true;
+        state.wallpapers_given = true;
+        slot_store::write_slot_state(d.path(), &state).unwrap();
         let mut sink = StubSink::new();
         sink.open(48_000).unwrap();
         let ring = sink.ring();
