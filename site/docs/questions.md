@@ -10,21 +10,27 @@ hide:
 
 <div class="devices" markdown>
 
-| Device                | Supported | Since Version |
-|-----------------------|-----------|---------------|
-| Anbernic RG SP        | **Yes**   | Always        |
-| Anbernic RG 34XX      | **Yes**   | 1.4.0         |
-| Anbernic RG 34XXSP    | **Yes**   | 1.4.0         |
-| Anbernic RG 35XXSP    | **Yes**   | 1.5.0         |
-| Anbernic RG 35XX Plus | **Yes**   | 1.5.0         |
-| Anbernic RG 35XX-H    | **Yes**   | 1.7.0         |
-| Anbernic RG 35XX Pro  | **Yes**   | 1.15.0        |
-| Anbernic RG 28XX      | **Yes**   | 1.6.0         |
+| Device                | Since Version |
+|-----------------------|---------------|
+| Anbernic RG SP        | Always        |
+| Anbernic RG 34XX      | 1.4.0         |
+| Anbernic RG 34XXSP    | 1.4.0         |
 
 </div>
 
-If you have tried slot on a device not listed,
-please [open an issue on GitHub](https://github.com/slot-cfw/slot/issues) and let me know how it went.
+### Devices I never wanted to support that slot works on.
+
+<div class="devices" markdown>
+
+| Device                | Since Version |
+|-----------------------|---------------|
+| Anbernic RG 35XXSP    | 1.5.0         |
+| Anbernic RG 35XX Plus | 1.5.0         |
+| Anbernic RG 35XX-H    | 1.7.0         |
+| Anbernic RG 35XX Pro  | 1.15.0        |
+| Anbernic RG 28XX      | 1.6.0         |
+
+</div>
 
 ### Will slot run anything other than GBA?
 
@@ -44,6 +50,9 @@ No. These are two features I do not want to support.
 
 If they matter to you, a few of the forks have added them.
 
+### I need more shaders!  Will you add more?
+No you don't. Also, no.
+
 ### The carousel sucks with a large collection. Will a list view be added?
 
 No, and that is the whole point of the carousel! Curate your games or use a different frontend.
@@ -53,9 +62,7 @@ No, and that is the whole point of the carousel! Curate your games or use a diff
 No. Use the headphone jack.
 
 ### Do you accept contributions?
+No.
 
-I am not opposed to accepting pull requests. I just ask that you come discuss planned work in an issue on GitHub ahead
-of time.
-
-slot is intentionally light on features. I am not looking to add the kitchen sink. If this form of collaboration doesn't
-appeal to you, several individuals have forked slot and gone off to make it their own.
+### Do you accept suggestions?
+Not anymore.
