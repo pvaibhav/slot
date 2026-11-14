@@ -46,6 +46,7 @@ fn brightness(d: &TempDir) -> u32 {
 
 fn platform(d: &TempDir) -> DevicePlatform {
     DevicePlatform::probe(d.path(), PathBuf::from("/mnt/sdcard"))
+        .with_sound_cards(d.path().join("asound/cards"))
 }
 
 #[test]
@@ -378,6 +379,30 @@ fn headphones_follow_the_detection_pin() {
     assert!(platform(&d).headphones());
     with_jack(&d, "lo");
     assert!(!platform(&d).headphones());
+}
+
+const ONBOARD_CARDS: &str =
+    " 0 [audiocodec     ]: audiocodec - audiocodec\n                      audiocodec\n";
+
+const USB_DAC_CARDS: &str = " 0 [audiocodec     ]: audiocodec - audiocodec\n                      audiocodec\n 1 [D700           ]: USB-Audio - BTD 700\n                      Sennheiser BTD 700 at usb-sunxi-ehci-1, full speed\n";
+
+#[test]
+fn a_usb_audio_card_is_found_by_its_driver() {
+    assert_eq!(slot_power::usb_card(ONBOARD_CARDS), None);
+    assert_eq!(slot_power::usb_card(""), None);
+    assert_eq!(slot_power::usb_card(USB_DAC_CARDS), Some(1));
+}
+
+#[test]
+fn a_usb_dac_counts_as_headphones() {
+    let d = sysfs("255", "87");
+    with_jack(&d, "lo");
+    let cards = d.path().join("asound/cards");
+    fs::create_dir_all(cards.parent().unwrap()).unwrap();
+    fs::write(&cards, ONBOARD_CARDS).unwrap();
+    assert!(!platform(&d).headphones());
+    fs::write(&cards, USB_DAC_CARDS).unwrap();
+    assert!(platform(&d).headphones());
 }
 
 const MOUNTS: &str = "\

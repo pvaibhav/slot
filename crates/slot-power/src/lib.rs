@@ -13,7 +13,7 @@ mod sim;
 pub use device::{
     card_kernel_lines, card_mount_in, has_bit, motor_change, read_only, read_only_in,
     record_first_frame, rumble_node, stage_repair, take_repair_result, trace_first_frame,
-    uptime_seconds, CardMount, DevicePlatform,
+    uptime_seconds, usb_card, CardMount, DevicePlatform, SOUND_CARDS,
 };
 pub use motor::Motor;
 pub use power::Power;
