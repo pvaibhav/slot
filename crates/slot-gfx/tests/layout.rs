@@ -311,8 +311,16 @@ fn the_placeholder_bezel_collapses_with_the_screen() {
     let on = placeholder_frame(&mut c, 1.0);
     assert_eq!(at(&on, 30), lime);
     let opening = placeholder_frame(&mut c, 0.5);
-    assert_ne!(at(&opening, 30), lime, "lime shows outside the opening screen");
-    assert_eq!(at(&opening, 130), lime, "lime is missing around the opening picture");
+    assert_ne!(
+        at(&opening, 30),
+        lime,
+        "lime shows outside the opening screen"
+    );
+    assert_eq!(
+        at(&opening, 130),
+        lime,
+        "lime is missing around the opening picture"
+    );
 }
 
 #[test]

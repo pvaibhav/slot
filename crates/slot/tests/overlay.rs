@@ -123,5 +123,8 @@ fn a_gray_alpha_overlay_decodes_to_rgba() {
     writer.write_image_data(&[90, 128]).unwrap();
     drop(writer);
     std::fs::write(&path, out).unwrap();
-    assert_eq!(slot::overlay::decode_rgba(&path).unwrap().2, [90, 90, 90, 128]);
+    assert_eq!(
+        slot::overlay::decode_rgba(&path).unwrap().2,
+        [90, 90, 90, 128]
+    );
 }

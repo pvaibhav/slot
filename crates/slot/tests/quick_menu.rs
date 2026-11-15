@@ -428,38 +428,37 @@ fn each_systems_colour_correction_flips_on_either_arrow_and_saves_alone() {
 }
 
 #[test]
-fn the_game_page_flips_turbo_rewind_and_both_resume_rows_and_saves_each() {
+fn the_game_page_flips_rewind_and_both_resume_rows_and_saves_each() {
     let (d, mut a, _) = on_carousel();
     open_at(&mut a, QuickRow::Rewind);
     let card = |d: &TempDir| {
         let s = read_slot_state(d.path());
-        (s.resume_insert, s.resume_power_on, s.turbo, s.rewind)
+        (s.resume_insert, s.resume_power_on, s.rewind)
     };
-    assert_eq!(card(&d), (true, true, true, true));
+    assert_eq!(card(&d), (true, true, true));
     press(&mut a, Btn::Right);
-    assert_eq!(card(&d), (true, true, true, false));
+    assert_eq!(card(&d), (true, true, false));
     assert!(!a.may_rewind(), "rewind still offered with it off");
-    press(&mut a, Btn::Down);
-    press(&mut a, Btn::Left);
-    assert_eq!(card(&d), (true, true, false, false));
-    assert!(!a.turbo());
-    press(&mut a, Btn::Down);
-    press(&mut a, Btn::Down);
-    assert_eq!(a.quick_menu(), Some(QuickRow::ResumeInsert));
+    common::reach(
+        &mut a,
+        QuickRow::ResumeInsert,
+        |a| a.quick_menu(),
+        |a| press(a, Btn::Down),
+    );
     press(&mut a, Btn::Right);
-    assert_eq!(card(&d), (false, true, false, false));
+    assert_eq!(card(&d), (false, true, false));
     assert_eq!(a.quick_value(QuickRow::ResumeInsert), Some(QuickValue::Off));
     press(&mut a, Btn::Down);
     assert_eq!(a.quick_menu(), Some(QuickRow::ResumePowerOn));
     press(&mut a, Btn::Right);
-    assert_eq!(card(&d), (false, false, false, false));
+    assert_eq!(card(&d), (false, false, false));
     assert_eq!(
         a.quick_value(QuickRow::ResumePowerOn),
         Some(QuickValue::Off)
     );
     press(&mut a, Btn::Up);
     press(&mut a, Btn::Left);
-    assert_eq!(card(&d), (true, false, false, false));
+    assert_eq!(card(&d), (true, false, false));
     press(&mut a, Btn::B);
     assert_eq!(a.quick_menu(), Some(QuickRow::Game));
 }
@@ -1091,7 +1090,12 @@ fn the_carousel_menu_keeps_the_empty_footer_where_the_shelf_left_it() {
         "Open is not on the right: {right}"
     );
     assert!(!drawn(&open, 403), "Resume is on the carousel menu");
-    press(&mut a, Btn::Down);
+    common::reach(
+        &mut a,
+        QuickRow::Game,
+        |a| a.quick_menu(),
+        |a| press(a, Btn::Down),
+    );
     press(&mut a, Btn::A);
     assert_eq!(a.quick_menu(), Some(QuickRow::FastForward));
     for _ in 0..30 {

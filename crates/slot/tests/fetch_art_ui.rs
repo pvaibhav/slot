@@ -36,7 +36,11 @@ fn the_row_asks_for_wifi_until_connected() {
     for wifi in [false, true] {
         let (_d, mut a) = booted(wifi);
         open_network(&mut a);
-        assert!(a.quick_menu().is_some_and(|r| r.page() == QuickRow::NETWORK), "wifi.conf {wifi}");
+        assert!(
+            a.quick_menu()
+                .is_some_and(|r| r.page() == QuickRow::NETWORK),
+            "wifi.conf {wifi}"
+        );
         while a.quick_menu() != Some(QuickRow::FetchArt) {
             press(&mut a, Btn::Down);
         }
@@ -180,7 +184,13 @@ fn missed_carts_play_nothing() {
     art.send(&mut a, ArtEvent::Counted(1));
     art.send(&mut a, ArtEvent::Missed { stem: "X".into() });
     assert!(scene_stem(&a).is_none());
-    art.send(&mut a, ArtEvent::Done { landed: 0, missed: vec!["X".into()] });
+    art.send(
+        &mut a,
+        ArtEvent::Done {
+            landed: 0,
+            missed: vec!["X".into()],
+        },
+    );
     advance(&mut a, 100.0);
     match a.fetch_art() {
         Some(FetchArt::Summary { missed, .. }) => assert_eq!(missed, &vec!["X".to_string()]),
@@ -198,9 +208,19 @@ fn stop_finishes_the_current_cart() {
     press(&mut a, Btn::B);
     assert_eq!(art.asked().last(), Some(&ArtJob::Cancel));
     assert_eq!(scene_stem(&a).as_deref(), Some("Emerald"));
-    art.send(&mut a, ArtEvent::Done { landed: 2, missed: vec![] });
+    art.send(
+        &mut a,
+        ArtEvent::Done {
+            landed: 2,
+            missed: vec![],
+        },
+    );
     advance(&mut a, SCENE_MS);
-    assert!(matches!(a.fetch_art(), Some(FetchArt::Summary { .. })), "{:?}", a.fetch_art());
+    assert!(
+        matches!(a.fetch_art(), Some(FetchArt::Summary { .. })),
+        "{:?}",
+        a.fetch_art()
+    );
     assert!(a.fetch_landed().iter().any(|l| l.stem == "Fusion"));
 }
 
@@ -230,7 +250,10 @@ fn lid_close_cancels() {
 #[test]
 fn stage_timeline() {
     assert_eq!(stage_at(0.0), (Stage::Arrive, 0.0));
-    assert_eq!(stage_at(slot::fetch_art::stage_start(Stage::Peel) + 1.0).0, Stage::Peel);
+    assert_eq!(
+        stage_at(slot::fetch_art::stage_start(Stage::Peel) + 1.0).0,
+        Stage::Peel
+    );
     assert_eq!(stage_at(SCENE_MS - 1.0).0, Stage::Leave);
 }
 
@@ -266,14 +289,26 @@ fn relabel_reaches_favorites() {
             path: path.clone(),
         },
     );
-    art.send(&mut a, ArtEvent::Done { landed: 1, missed: vec![] });
+    art.send(
+        &mut a,
+        ArtEvent::Done {
+            landed: 1,
+            missed: vec![],
+        },
+    );
     advance(&mut a, SCENE_MS + 100.0);
-    assert!(a.cart_labels(Platform::Gba, "Fusion").iter().all(Option::is_none));
+    assert!(a
+        .cart_labels(Platform::Gba, "Fusion")
+        .iter()
+        .all(Option::is_none));
     press(&mut a, Btn::B);
     advance(&mut a, 50.0);
     let copies = a.cart_labels(Platform::Gba, "Fusion");
     assert!(copies.len() >= 2, "{copies:?}");
-    assert!(copies.iter().all(|l| l.as_deref() == Some(path.as_path())), "{copies:?}");
+    assert!(
+        copies.iter().all(|l| l.as_deref() == Some(path.as_path())),
+        "{copies:?}"
+    );
     assert!(a.take_core_stale());
 }
 
@@ -284,9 +319,19 @@ fn stop_waits_for_the_worker() {
     press(&mut a, Btn::B);
     assert_eq!(art.asked().last(), Some(&ArtJob::Cancel));
     advance(&mut a, 100.0);
-    assert!(matches!(a.fetch_art(), Some(FetchArt::Running(_))), "{:?}", a.fetch_art());
+    assert!(
+        matches!(a.fetch_art(), Some(FetchArt::Running(_))),
+        "{:?}",
+        a.fetch_art()
+    );
     art.send(&mut a, landed("A"));
-    art.send(&mut a, ArtEvent::Done { landed: 1, missed: vec![] });
+    art.send(
+        &mut a,
+        ArtEvent::Done {
+            landed: 1,
+            missed: vec![],
+        },
+    );
     advance(&mut a, 100.0);
     match a.fetch_art() {
         Some(FetchArt::Summary { landed, .. }) => assert_eq!(*landed, 1),
@@ -306,7 +351,13 @@ fn power_tap_cancels() {
 fn the_art_worker_holds_the_radio() {
     let (_d, mut a, art) = running();
     assert!(a.art_busy());
-    art.send(&mut a, ArtEvent::Done { landed: 0, missed: vec![] });
+    art.send(
+        &mut a,
+        ArtEvent::Done {
+            landed: 0,
+            missed: vec![],
+        },
+    );
     assert!(!a.art_busy());
 }
 
@@ -315,9 +366,19 @@ fn a_cart_off_the_shelf_does_not_hang() {
     let (_d, mut a, art) = running();
     art.send(&mut a, ArtEvent::Counted(1));
     art.send(&mut a, landed("Ghost"));
-    art.send(&mut a, ArtEvent::Done { landed: 1, missed: vec![] });
+    art.send(
+        &mut a,
+        ArtEvent::Done {
+            landed: 1,
+            missed: vec![],
+        },
+    );
     advance(&mut a, 200.0);
-    assert!(matches!(a.fetch_art(), Some(FetchArt::Summary { .. })), "{:?}", a.fetch_art());
+    assert!(
+        matches!(a.fetch_art(), Some(FetchArt::Summary { .. })),
+        "{:?}",
+        a.fetch_art()
+    );
 }
 
 #[test]
@@ -342,9 +403,20 @@ fn summary_reads_as_rows() {
     let (_d, mut a, art) = running();
     art.send(&mut a, ArtEvent::Counted(1));
     art.send(&mut a, ArtEvent::Missed { stem: "X".into() });
-    art.send(&mut a, ArtEvent::Done { landed: 0, missed: vec!["X".into()] });
+    art.send(
+        &mut a,
+        ArtEvent::Done {
+            landed: 0,
+            missed: vec!["X".into()],
+        },
+    );
     advance(&mut a, 100.0);
-    assert_eq!(a.fetch_art_lines(), ["All Done", "Added", "0", "No Art Found", "1"].map(String::from).to_vec());
+    assert_eq!(
+        a.fetch_art_lines(),
+        ["All Done", "Added", "0", "No Art Found", "1"]
+            .map(String::from)
+            .to_vec()
+    );
 }
 
 #[test]
@@ -352,7 +424,13 @@ fn a_stopped_run_says_so() {
     let (_d, mut a, art) = running();
     art.send(&mut a, ArtEvent::Counted(3));
     press(&mut a, Btn::B);
-    art.send(&mut a, ArtEvent::Done { landed: 0, missed: vec![] });
+    art.send(
+        &mut a,
+        ArtEvent::Done {
+            landed: 0,
+            missed: vec![],
+        },
+    );
     advance(&mut a, 100.0);
     assert_eq!(a.fetch_art_lines()[0], "Stopped");
 }
@@ -371,10 +449,19 @@ fn summary_features_a_cart_from_this_run() {
     art.send(&mut a, ArtEvent::Counted(2));
     art.send(&mut a, landed("Emerald"));
     art.send(&mut a, landed("Fusion"));
-    art.send(&mut a, ArtEvent::Done { landed: 2, missed: vec![] });
+    art.send(
+        &mut a,
+        ArtEvent::Done {
+            landed: 2,
+            missed: vec![],
+        },
+    );
     advance(&mut a, SCENE_MS * 2.2);
     match a.fetch_art() {
-        Some(FetchArt::Summary { featured: Some(cart), .. }) => {
+        Some(FetchArt::Summary {
+            featured: Some(cart),
+            ..
+        }) => {
             assert!(cart.stem == "Emerald" || cart.stem == "Fusion");
             assert_eq!(a.fetch_wanted(), vec![cart.clone()]);
         }
@@ -385,9 +472,18 @@ fn summary_features_a_cart_from_this_run() {
 #[test]
 fn nothing_landed_features_nothing() {
     let (_d, mut a, art) = running();
-    art.send(&mut a, ArtEvent::Done { landed: 0, missed: vec![] });
+    art.send(
+        &mut a,
+        ArtEvent::Done {
+            landed: 0,
+            missed: vec![],
+        },
+    );
     advance(&mut a, 100.0);
-    assert!(matches!(a.fetch_art(), Some(FetchArt::Summary { featured: None, .. })));
+    assert!(matches!(
+        a.fetch_art(),
+        Some(FetchArt::Summary { featured: None, .. })
+    ));
     assert!(a.fetch_wanted().is_empty());
 }
 
@@ -398,7 +494,9 @@ fn a_scene_reads_applying_labels() {
     art.send(&mut a, landed("Emerald"));
     assert_eq!(
         a.fetch_art_lines(),
-        ["Applying Labels", "Emerald", "1 of 2"].map(String::from).to_vec()
+        ["Applying Labels", "Emerald", "1 of 2"]
+            .map(String::from)
+            .to_vec()
     );
 }
 
@@ -419,7 +517,13 @@ fn x_skips_the_animations() {
     assert_eq!(scene_stem(&a), None);
     assert_eq!(a.fetch_art_lines()[1], "2 of 2");
     assert!(a.fetch_wanted().is_empty());
-    art.send(&mut a, ArtEvent::Done { landed: 2, missed: vec![] });
+    art.send(
+        &mut a,
+        ArtEvent::Done {
+            landed: 2,
+            missed: vec![],
+        },
+    );
     assert!(matches!(a.fetch_art(), Some(FetchArt::Summary { .. })));
 }
 
@@ -443,20 +547,32 @@ fn x_does_nothing_before_a_scene() {
 fn skipping_shows_a_progress_bar_and_no_carts() {
     use slot_gfx::Draw;
     let (_d, mut a, art) = running();
-    a.set_fetch_text(vec![(slot_gfx::TexId::from_raw(50), 100, 30), (slot_gfx::TexId::from_raw(51), 60, 30)]);
+    a.set_fetch_text(vec![
+        (slot_gfx::TexId::from_raw(50), 100, 30),
+        (slot_gfx::TexId::from_raw(51), 60, 30),
+    ]);
     art.send(&mut a, ArtEvent::Counted(4));
     art.send(&mut a, landed("Emerald"));
     press(&mut a, Btn::X);
     art.send(&mut a, landed("Fusion"));
     a.tick_ms(a.now() + 1);
-    assert_eq!(a.fetch_art_lines(), vec!["Applying Labels".to_string(), "2 of 4".to_string()]);
-    assert!(a.fetch_wanted().is_empty(), "no cart should be built while skipping");
+    assert_eq!(
+        a.fetch_art_lines(),
+        vec!["Applying Labels".to_string(), "2 of 4".to_string()]
+    );
+    assert!(
+        a.fetch_wanted().is_empty(),
+        "no cart should be built while skipping"
+    );
     let mut out = Vec::new();
     a.draw(&mut out);
-    let rects: Vec<(f32, f32)> = out.iter().filter_map(|d| match d {
-        Draw::Rect { w, h, .. } if *h == 14.0 && *w > 10.0 => Some((*w, *h)),
-        _ => None,
-    }).collect();
+    let rects: Vec<(f32, f32)> = out
+        .iter()
+        .filter_map(|d| match d {
+            Draw::Rect { w, h, .. } if *h == 14.0 && *w > 10.0 => Some((*w, *h)),
+            _ => None,
+        })
+        .collect();
     assert_eq!(rects.len(), 2, "{rects:?}");
     assert_eq!(rects[1].0, rects[0].0 / 2.0);
 }
@@ -468,10 +584,22 @@ fn the_summary_waits_for_its_cart_then_gives_up() {
     art.send(&mut a, landed("Emerald"));
     press(&mut a, Btn::X);
     a.require_fetch_faces();
-    art.send(&mut a, ArtEvent::Done { landed: 1, missed: vec![] });
-    assert!(matches!(a.fetch_art(), Some(FetchArt::Running(_))), "the summary opened without its cart");
+    art.send(
+        &mut a,
+        ArtEvent::Done {
+            landed: 1,
+            missed: vec![],
+        },
+    );
+    assert!(
+        matches!(a.fetch_art(), Some(FetchArt::Running(_))),
+        "the summary opened without its cart"
+    );
     assert_eq!(a.fetch_wanted()[0].stem, "Emerald");
-    assert_eq!(a.fetch_art_lines(), vec!["Applying Labels".to_string(), "1 of 1".to_string()]);
+    assert_eq!(
+        a.fetch_art_lines(),
+        vec!["Applying Labels".to_string(), "1 of 1".to_string()]
+    );
     a.tick_ms(a.now() + 500);
     assert!(matches!(a.fetch_art(), Some(FetchArt::Running(_))));
     a.tick_ms(a.now() + 1500);
@@ -497,10 +625,7 @@ fn already_connected_skips_the_connecting_line() {
         hidden: false,
     });
     a.tick_ms(a.now() + 1);
-    assert_eq!(
-        a.fetch_art_lines(),
-        vec!["Fetching Art".to_string()]
-    );
+    assert_eq!(a.fetch_art_lines(), vec!["Fetching Art".to_string()]);
 }
 
 #[cfg(feature = "nds")]
@@ -532,7 +657,11 @@ fn box_run() -> (TempDir, App, FakeArt) {
 fn fetch_box_art_shows_on_two_panels_and_asks_for_the_job() {
     let (_d, a, art) = box_run();
     assert_eq!(art.asked(), vec![ArtJob::FetchBoxArt]);
-    assert!(matches!(a.fetch_art(), Some(FetchArt::Running(run)) if run.boxes), "{:?}", a.fetch_art());
+    assert!(
+        matches!(a.fetch_art(), Some(FetchArt::Running(run)) if run.boxes),
+        "{:?}",
+        a.fetch_art()
+    );
 }
 
 #[cfg(feature = "nds")]
@@ -540,14 +669,41 @@ fn fetch_box_art_shows_on_two_panels_and_asks_for_the_job() {
 fn fetch_box_art_counts_up_and_ends_on_a_summary() {
     let (_d, mut a, art) = box_run();
     art.send(&mut a, ArtEvent::Counted(2));
-    art.send(&mut a, ArtEvent::BoxLanded { stem: "Emerald".into(), platform: Platform::Gba });
+    art.send(
+        &mut a,
+        ArtEvent::BoxLanded {
+            stem: "Emerald".into(),
+            platform: Platform::Gba,
+        },
+    );
     let lines = a.fetch_art_lines();
-    assert_eq!(lines, vec!["Fetching Box Art".to_string(), "1 of 2".to_string()]);
-    art.send(&mut a, ArtEvent::Missed { stem: "Fusion".into() });
-    art.send(&mut a, ArtEvent::Done { landed: 1, missed: vec!["Fusion".into()] });
+    assert_eq!(
+        lines,
+        vec!["Fetching Box Art".to_string(), "1 of 2".to_string()]
+    );
+    art.send(
+        &mut a,
+        ArtEvent::Missed {
+            stem: "Fusion".into(),
+        },
+    );
+    art.send(
+        &mut a,
+        ArtEvent::Done {
+            landed: 1,
+            missed: vec!["Fusion".into()],
+        },
+    );
     advance(&mut a, 100.0);
     assert!(
-        matches!(a.fetch_art(), Some(FetchArt::Summary { landed: 1, featured: None, .. })),
+        matches!(
+            a.fetch_art(),
+            Some(FetchArt::Summary {
+                landed: 1,
+                featured: None,
+                ..
+            })
+        ),
         "{:?}",
         a.fetch_art()
     );
@@ -559,4 +715,69 @@ fn b_stops_fetch_box_art() {
     let (_d, mut a, art) = box_run();
     press(&mut a, Btn::B);
     assert_eq!(art.asked(), vec![ArtJob::FetchBoxArt, ArtJob::Cancel]);
+}
+
+#[test]
+fn a_handwritten_cart_keeps_its_ink_and_skips_the_peel() {
+    use slot_gfx::{Draw, TexId};
+    let (_d, mut a, art) = running();
+    art.send(&mut a, ArtEvent::Counted(1));
+    art.send(&mut a, landed("Emerald"));
+    a.tick_ms(a.now() + 1);
+    let (title, bare, done) = (
+        TexId::from_raw(60),
+        TexId::from_raw(61),
+        TexId::from_raw(62),
+    );
+    a.set_fetch_tex(
+        Platform::Gba,
+        "Emerald",
+        slot::fetch_art::FetchTex {
+            title,
+            bare,
+            done,
+            under: None,
+            w: 372,
+            h: 209,
+            inked: true,
+        },
+    );
+    for stage in [Stage::Peel, Stage::Toss, Stage::Fly, Stage::Roll] {
+        let start = match a.fetch_art() {
+            Some(FetchArt::Running(run)) => run.scene.as_ref().unwrap().started_ms,
+            _ => panic!("no scene"),
+        };
+        let at = start + slot::fetch_art::stage_start(stage) + 20.0;
+        a.tick_ms(at as u64);
+        let mut out = Vec::new();
+        a.draw(&mut out);
+        let peeled = out
+            .iter()
+            .any(|d| matches!(d, Draw::Quad { tex, .. } if *tex == title));
+        assert!(!peeled, "{stage:?} peels the ink");
+        let faces: Vec<TexId> = out
+            .iter()
+            .filter_map(|d| match d {
+                Draw::Tex { tex, .. } if [title, bare].contains(tex) => Some(*tex),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(faces, vec![title], "{stage:?} shows {faces:?}");
+    }
+}
+
+#[test]
+fn the_faces_of_a_cart_with_no_label_say_they_are_handwritten() {
+    let cart = slot_store::Cart {
+        platform: Platform::Gba,
+        stem: "Metroid Fusion".into(),
+        rom: PathBuf::from("Games/GBA/Metroid Fusion.gba"),
+        label: Some(PathBuf::from("Labels/GBA/Metroid Fusion.png")),
+        code: String::new(),
+        shell: None,
+        title: "METROID FUSION".into(),
+        tags: Vec::new(),
+        sealed: false,
+    };
+    assert!(slot::fetch_faces::faces_for(&cart).inked);
 }

@@ -289,7 +289,14 @@ pub fn draw_slot_back(
     out.push(band(bay_x, BAND_Y + dy, BAY_W, LIP_H, housing(), alpha));
     out.push(band(mouth_x, BAND_Y + dy, MOUTH_W, LIP_H, edge(), alpha));
     out.push(band(bay_x, BAY_Y + dy, BAY_W, RECESS_H, recess(), alpha));
-    out.push(band(mouth_x, SLIT_Y + dy, MOUTH_W, SLIT_H, opening(), alpha));
+    out.push(band(
+        mouth_x,
+        SLIT_Y + dy,
+        MOUTH_W,
+        SLIT_H,
+        opening(),
+        alpha,
+    ));
     for_each_scoop_span(canvas, |x, w, depth| {
         out.push(band(x, SCOOP_Y + dy, w, depth, opening(), alpha));
     });

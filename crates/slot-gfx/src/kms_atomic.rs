@@ -45,7 +45,10 @@ pub fn primary_plane_for(planes: &[PlaneInfo], crtc_index: usize, taken: &[u32])
         .map(|p| p.id)
 }
 
-pub fn atomic_plan(outputs: &[(AtomicIds, u32, (u32, u32), u32)], modeset: bool) -> Vec<(u32, u32, u64)> {
+pub fn atomic_plan(
+    outputs: &[(AtomicIds, u32, (u32, u32), u32)],
+    modeset: bool,
+) -> Vec<(u32, u32, u64)> {
     let mut plan = Vec::new();
     for &(ids, fb, (w, h), mode_blob) in outputs {
         plan.push((ids.plane, ids.plane_fb_id, fb as u64));
@@ -154,7 +157,9 @@ impl AtomicApi {
             if (self.set_client_cap)(fd, CLIENT_CAP_UNIVERSAL_PLANES, 1) != 0
                 || (self.set_client_cap)(fd, CLIENT_CAP_ATOMIC, 1) != 0
             {
-                return Err(GfxError::Context("the driver refuses atomic modesetting".into()));
+                return Err(GfxError::Context(
+                    "the driver refuses atomic modesetting".into(),
+                ));
             }
         }
         Ok(())
@@ -224,7 +229,13 @@ impl AtomicApi {
         self.find(fd, object, kind, name).map(|(_, v)| v)
     }
 
-    pub fn ids(&self, fd: i32, plane: u32, crtc: u32, connector: u32) -> Result<AtomicIds, GfxError> {
+    pub fn ids(
+        &self,
+        fd: i32,
+        plane: u32,
+        crtc: u32,
+        connector: u32,
+    ) -> Result<AtomicIds, GfxError> {
         let p = |name| self.prop(fd, plane, OBJECT_PLANE, name);
         Ok(AtomicIds {
             plane,
@@ -243,7 +254,12 @@ impl AtomicApi {
     pub fn mode_blob<T>(&self, fd: i32, mode: &T) -> Result<u32, GfxError> {
         let mut id = 0;
         let rc = unsafe {
-            (self.create_blob)(fd, mode as *const T as *const c_void, std::mem::size_of::<T>(), &mut id)
+            (self.create_blob)(
+                fd,
+                mode as *const T as *const c_void,
+                std::mem::size_of::<T>(),
+                &mut id,
+            )
         };
         match rc {
             0 => Ok(id),
@@ -251,7 +267,13 @@ impl AtomicApi {
         }
     }
 
-    pub fn commit(&self, fd: i32, plan: &[(u32, u32, u64)], flags: u32, data: *mut c_void) -> Result<(), GfxError> {
+    pub fn commit(
+        &self,
+        fd: i32,
+        plan: &[(u32, u32, u64)],
+        flags: u32,
+        data: *mut c_void,
+    ) -> Result<(), GfxError> {
         unsafe {
             let req = (self.alloc)();
             if req.is_null() {
@@ -260,7 +282,9 @@ impl AtomicApi {
             for &(object, prop, value) in plan {
                 if (self.add_property)(req, object, prop, value) < 0 {
                     (self.free)(req);
-                    return Err(GfxError::Context(format!("drmModeAtomicAddProperty {object}.{prop}")));
+                    return Err(GfxError::Context(format!(
+                        "drmModeAtomicAddProperty {object}.{prop}"
+                    )));
                 }
             }
             let rc = (self.commit)(fd, req, flags, data);

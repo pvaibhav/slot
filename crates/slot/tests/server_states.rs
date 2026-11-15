@@ -25,8 +25,15 @@ fn call(port: u16, method: &str, target: &str) -> (u16, String) {
     let mut out = Vec::new();
     let _ = s.read_to_end(&mut out);
     let text = String::from_utf8_lossy(&out).into_owned();
-    let status = text.split_whitespace().nth(1).and_then(|c| c.parse().ok()).unwrap_or(0);
-    let body = text.split_once("\r\n\r\n").map(|(_, b)| b.to_string()).unwrap_or_default();
+    let status = text
+        .split_whitespace()
+        .nth(1)
+        .and_then(|c| c.parse().ok())
+        .unwrap_or(0);
+    let body = text
+        .split_once("\r\n\r\n")
+        .map(|(_, b)| b.to_string())
+        .unwrap_or_default();
     (status, body)
 }
 
@@ -48,7 +55,9 @@ fn states_group_by_core() {
     let (d, server) = start();
     library(d.path());
     ring(d.path(), Core::Mgba).push(b"one", b"png1", A).unwrap();
-    ring(d.path(), Core::Mgba).push(b"three", b"png2", B).unwrap();
+    ring(d.path(), Core::Mgba)
+        .push(b"three", b"png2", B)
+        .unwrap();
     ring(d.path(), Core::Gpsp).push(b"gp", b"png3", A).unwrap();
     let p = server.port();
     let (status, body) = call(p, "GET", "/api/games/GBA/0/states");
@@ -67,8 +76,14 @@ fn states_group_by_core() {
     assert_eq!((status, body.as_str()), (200, "one"));
     let (status, body) = call(p, "GET", &format!("/api/games/GBA/0/states/mgba/{A}/thumb"));
     assert_eq!((status, body.as_str()), (200, "png1"));
-    assert_eq!(call(p, "GET", &format!("/api/games/GBA/0/states/nope/{A}")).0, 400);
-    assert_eq!(call(p, "GET", "/api/games/GBA/0/states/mgba/2026-10-09_10-00-00").0, 404);
+    assert_eq!(
+        call(p, "GET", &format!("/api/games/GBA/0/states/nope/{A}")).0,
+        400
+    );
+    assert_eq!(
+        call(p, "GET", "/api/games/GBA/0/states/mgba/2026-10-09_10-00-00").0,
+        404
+    );
     server.stop();
 }
 
@@ -83,7 +98,10 @@ fn resume_is_listed() {
     assert_eq!(v["cores"][0]["states"].as_array().unwrap().len(), 0);
     let (status, body) = call(p, "GET", "/api/games/GBA/0/states/mgba/resume");
     assert_eq!((status, body.as_str()), (200, "resumed"));
-    assert_eq!(call(p, "GET", "/api/games/GBA/0/states/mgba/resume/thumb").0, 404);
+    assert_eq!(
+        call(p, "GET", "/api/games/GBA/0/states/mgba/resume/thumb").0,
+        404
+    );
     server.stop();
 }
 
@@ -97,7 +115,12 @@ fn refused_resume_files_are_not_shown() {
     let p = server.port();
     let v = json(&call(p, "GET", "/api/games/GBA/0/states").1);
     assert_eq!(v["cores"].as_array().unwrap().len(), 0);
-    let status = call(p, "GET", &format!("/api/games/GBA/0/states/mgba/resume-refused-{A}")).0;
+    let status = call(
+        p,
+        "GET",
+        &format!("/api/games/GBA/0/states/mgba/resume-refused-{A}"),
+    )
+    .0;
     assert_eq!(status, 400);
     server.stop();
 }
@@ -113,7 +136,10 @@ fn delete_removes_state_and_thumb() {
     let dir = d.path().join("States/GBA/mgba/Alpha");
     assert!(!dir.join(format!("{A}.state")).exists());
     assert!(!dir.join(format!("{A}.png")).exists());
-    assert_eq!(call(p, "DELETE", &format!("/api/games/GBA/0/states/mgba/{A}")).0, 404);
+    assert_eq!(
+        call(p, "DELETE", &format!("/api/games/GBA/0/states/mgba/{A}")).0,
+        404
+    );
     server.stop();
 }
 
@@ -123,7 +149,10 @@ fn delete_resume_removes_it() {
     library(d.path());
     ring(d.path(), Core::Mgba).write_resume(b"r").unwrap();
     let p = server.port();
-    assert_eq!(call(p, "DELETE", "/api/games/GBA/0/states/mgba/resume").0, 200);
+    assert_eq!(
+        call(p, "DELETE", "/api/games/GBA/0/states/mgba/resume").0,
+        200
+    );
     assert!(!ring(d.path(), Core::Mgba).has_resume());
     server.stop();
 }
@@ -134,7 +163,10 @@ fn post_is_refused() {
     library(d.path());
     let p = server.port();
     assert_eq!(call(p, "POST", "/api/games/GBA/0/states").0, 405);
-    assert_eq!(call(p, "POST", &format!("/api/games/GBA/0/states/mgba/{A}")).0, 405);
+    assert_eq!(
+        call(p, "POST", &format!("/api/games/GBA/0/states/mgba/{A}")).0,
+        405
+    );
     server.stop();
 }
 
@@ -145,7 +177,10 @@ fn bad_stamp_is_refused() {
     let p = server.port();
     assert_eq!(call(p, "GET", "/api/games/GBA/0/states/mgba/..").0, 400);
     assert_eq!(call(p, "DELETE", "/api/games/GBA/0/states/mgba/..").0, 400);
-    assert_eq!(call(p, "GET", "/api/games/GBA/0/states/mgba/x.state").0, 400);
+    assert_eq!(
+        call(p, "GET", "/api/games/GBA/0/states/mgba/x.state").0,
+        400
+    );
     server.stop();
 }
 
@@ -163,9 +198,18 @@ fn symlinked_stem_dir_is_not_followed() {
     let p = server.port();
     let v = json(&call(p, "GET", "/api/games/GBA/0/states").1);
     assert_eq!(v["cores"].as_array().unwrap().len(), 0);
-    assert_eq!(call(p, "GET", &format!("/api/games/GBA/0/states/mgba/{A}")).0, 403);
-    assert_eq!(call(p, "DELETE", &format!("/api/games/GBA/0/states/mgba/{A}")).0, 403);
-    assert_eq!(call(p, "DELETE", "/api/games/GBA/0/states/mgba/resume").0, 403);
+    assert_eq!(
+        call(p, "GET", &format!("/api/games/GBA/0/states/mgba/{A}")).0,
+        403
+    );
+    assert_eq!(
+        call(p, "DELETE", &format!("/api/games/GBA/0/states/mgba/{A}")).0,
+        403
+    );
+    assert_eq!(
+        call(p, "DELETE", "/api/games/GBA/0/states/mgba/resume").0,
+        403
+    );
     assert!(outside.path().join(format!("{A}.state")).exists());
     assert!(outside.path().join("resume.state").exists());
     server.stop();
@@ -176,7 +220,9 @@ fn lists_for(platform: Platform, tag: &str, file: &str) -> Vec<String> {
     std::fs::create_dir_all(d.path().join("Games").join(tag)).unwrap();
     std::fs::write(d.path().join("Games").join(tag).join(file), b"rom").unwrap();
     for core in Core::ALL {
-        StateRing::new(d.path(), platform, core, "Alpha").push(b"s", b"png", A).unwrap();
+        StateRing::new(d.path(), platform, core, "Alpha")
+            .push(b"s", b"png", A)
+            .unwrap();
     }
     let (status, body) = call(server.port(), "GET", &format!("/api/games/{tag}/0/states"));
     assert_eq!(status, 200, "{body}");
@@ -192,10 +238,16 @@ fn lists_for(platform: Platform, tag: &str, file: &str) -> Vec<String> {
 
 #[test]
 fn a_gb_game_lists_mgba_and_gambatte_only() {
-    assert_eq!(lists_for(Platform::Gb, "GB", "Alpha.gb"), ["mgba", "gambatte"]);
+    assert_eq!(
+        lists_for(Platform::Gb, "GB", "Alpha.gb"),
+        ["mgba", "gambatte"]
+    );
 }
 
 #[test]
 fn a_gba_game_lists_mgba_and_gpsp_only() {
-    assert_eq!(lists_for(Platform::Gba, "GBA", "Alpha.gba"), ["mgba", "gpsp"]);
+    assert_eq!(
+        lists_for(Platform::Gba, "GBA", "Alpha.gba"),
+        ["mgba", "gpsp"]
+    );
 }

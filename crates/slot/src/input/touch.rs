@@ -89,7 +89,9 @@ fn find(dev: &Path, sys: &Path) -> Option<PathBuf> {
         })
         .collect();
     nodes.sort();
-    nodes.into_iter().find(|n| device_name(sys, n) == TOUCH_NAME)
+    nodes
+        .into_iter()
+        .find(|n| device_name(sys, n) == TOUCH_NAME)
 }
 
 #[cfg(target_os = "linux")]

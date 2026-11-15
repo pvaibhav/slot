@@ -699,7 +699,10 @@ fn a_rewrites_order_and_stays_on_the_moved_collection() {
     settle(&mut a, 1000);
     press(&mut a, Btn::A);
     assert!(a.edit().is_none());
-    assert_eq!(read(d.path(), "order.txt"), "Racing\nEmpty\nDozers\nPuzzlers\n");
+    assert_eq!(
+        read(d.path(), "order.txt"),
+        "Racing\nEmpty\nDozers\nPuzzlers\n"
+    );
     assert_eq!(a.shelf_platform_name(), Some("Puzzlers"));
     assert_eq!(a.shelf_stems(), ["Apotris", "Catrap"]);
 }
@@ -713,7 +716,10 @@ fn an_empty_collection_keeps_its_place_across_the_wrap() {
     hold_dir(&mut a, Btn::Left, 20);
     settle(&mut a, 1000);
     press(&mut a, Btn::A);
-    assert_eq!(read(d.path(), "order.txt"), "Dozers\nPuzzlers\nRacing\nEmpty\n");
+    assert_eq!(
+        read(d.path(), "order.txt"),
+        "Dozers\nPuzzlers\nRacing\nEmpty\n"
+    );
 }
 
 #[test]
@@ -739,7 +745,10 @@ fn b_restores_the_collection_order() {
     settle(&mut a, 1000);
     press(&mut a, Btn::B);
     assert!(a.edit().is_none());
-    assert_eq!(read(d.path(), "order.txt"), "Racing\nEmpty\nPuzzlers\nDozers\n");
+    assert_eq!(
+        read(d.path(), "order.txt"),
+        "Racing\nEmpty\nPuzzlers\nDozers\n"
+    );
     assert_eq!(a.shelf_platform_name(), Some("Puzzlers"));
 }
 
@@ -775,7 +784,11 @@ fn big_card() -> TempDir {
     let stems: Vec<String> = (0..30).map(|i| format!("Game {i:02}")).collect();
     let refs: Vec<&str> = stems.iter().map(String::as_str).collect();
     let d = tmp_root_with_carts(&refs);
-    put(d.path(), "Puzzlers.txt", "gba/Game 15\ngba/Game 16\ngba/Game 17\ngba/Game 18\n");
+    put(
+        d.path(),
+        "Puzzlers.txt",
+        "gba/Game 15\ngba/Game 16\ngba/Game 17\ngba/Game 18\n",
+    );
     put(d.path(), "order.txt", "Puzzlers\n");
     d
 }
@@ -820,6 +833,12 @@ fn the_remove_screen_draws_carts_whose_faces_are_already_wanted() {
     go_to(&mut a, "Puzzlers");
     let browsing = wanted(&a);
     hold_y(&mut a);
-    let extra: Vec<_> = wanted(&a).into_iter().filter(|s| !browsing.contains(s)).collect();
-    assert!(extra.is_empty(), "the remove screen needs new faces {extra:?}");
+    let extra: Vec<_> = wanted(&a)
+        .into_iter()
+        .filter(|s| !browsing.contains(s))
+        .collect();
+    assert!(
+        extra.is_empty(),
+        "the remove screen needs new faces {extra:?}"
+    );
 }

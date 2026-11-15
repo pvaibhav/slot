@@ -21,6 +21,7 @@ fn cart() -> Cart {
         shell: None,
         title: "POKEMON EMER".into(),
         sealed: false,
+        tags: Vec::new(),
     }
 }
 
@@ -34,6 +35,7 @@ fn pak() -> Cart {
         shell: None,
         title: "TETRIS".into(),
         sealed: false,
+        tags: Vec::new(),
     }
 }
 

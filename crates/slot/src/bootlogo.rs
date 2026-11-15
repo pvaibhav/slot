@@ -217,7 +217,11 @@ pub fn chosen(card: &Path) -> Option<Logo> {
 
 pub fn remember(card: &Path) {
     let user = card.join(USER_LOGO);
-    let source = if user.is_file() { user } else { card.join(CARD_LOGO) };
+    let source = if user.is_file() {
+        user
+    } else {
+        card.join(CARD_LOGO)
+    };
     let Ok(logo) = fs::read(source) else {
         return;
     };

@@ -8,14 +8,14 @@ use std::sync::{Arc, Mutex};
 use slot::app::{GameMenu, LinkLegend, LinkRow};
 use slot::link_kind::LinkKind;
 use slot::link_net::Cancel;
-use slot::link_radio::{LinkRole, RadioJob, RadioJobs};
+use slot::link_radio::{RadioFail, RadioJob, RadioJobs, RadioRole};
 use slot::link_screen::{draw_link_art, LinkSprites, Sprite};
 use slot::link_start::{LinkFail, LinkStarter, LinkStep};
 use slot_input::Action;
 use slot_store::Core;
 use slot_ui::{
-    arrows_hint_face, hint_face, link_art, menu_face, toast_face, Canvas, CartFace, Draw, TexId,
-    Toast, UndoFace, OUT_H, OUT_W, PORT_Y,
+    arrows_hint_face, hint_face, link_art, menu_detail_face, menu_face, toast_face, Canvas,
+    CartFace, Draw, TexId, Toast, UndoFace, OUT_H, OUT_W, PORT_Y,
 };
 
 struct Face {
@@ -586,7 +586,7 @@ fn step_faces() -> Vec<(TexId, Face)> {
         .collect()
 }
 
-fn first_step_pixels(warm: bool, name: &str) -> (Vec<u8>, Vec<RadioJob>) {
+fn first_step_pixels(warm: bool, name: &str) -> (Vec<u8>, Vec<RadioJob>, Vec<LinkStep>) {
     let d = common::tmp_root_with_carts(&["Zzz"]);
     common::write_retail_header(&d, "Cart", "POKEMON RUBY", "AXVE");
     let mut app = common::boot(d.path());
@@ -608,10 +608,10 @@ fn first_step_pixels(warm: bool, name: &str) -> (Vec<u8>, Vec<RadioJob>) {
         LinkStarter::spawn_with(
             Box::new(move |_, _| {
                 let _ = held.recv();
-                Ok(())
+                Ok(None)
             }),
             Box::new(|| {}),
-            LinkRole::Host,
+            RadioRole::Host,
             0,
             Box::new(|_, _: &Cancel| Err(io::Error::new(io::ErrorKind::TimedOut, "from a test"))),
         ),
@@ -634,15 +634,286 @@ fn first_step_pixels(warm: bool, name: &str) -> (Vec<u8>, Vec<RadioJob>) {
         .into_iter()
         .filter(|d| matches!(*d, Draw::Tex { tex, .. } if faces.iter().any(|(t, _)| *t == tex)))
         .collect();
+    let drawn = line
+        .iter()
+        .filter_map(|d| match *d {
+            Draw::Tex { tex, .. } => LinkStep::ALL
+                .into_iter()
+                .find(|s| TexId::from_raw(950 + s.index()) == tex),
+            _ => None,
+        })
+        .collect();
     let px = composite(&line, &faces);
     dump(&px, name);
     drop(release);
     let asked = radio.asked.lock().expect("radio log").clone();
-    (px, asked)
+    (px, asked, drawn)
 }
 
 fn line_ink(step: LinkStep) -> usize {
-    let f: Face = menu_face(step.line()).into();
+    sentence_ink(step.line())
+}
+
+fn says_waiting_for_a_friend_up_top(px: &[u8], what: &str) {
+    assert!(
+        ink(px) > 0,
+        "{what}: the step put no sentence on the frame at all"
+    );
+    assert_eq!(
+        ink(px),
+        line_ink(LinkStep::Waiting),
+        "{what}: the sentence on the frame is not Waiting for a friend"
+    );
+    let (first, last) = inked_rows(px);
+    assert!(
+        last < OUT_H as usize / 2,
+        "{what}: the line is not up where the link screen's sentence goes: rows {first}..{last}"
+    );
+}
+
+#[test]
+fn both_radio_steps_say_waiting_for_a_friend() {
+    for step in LinkStep::ALL {
+        assert_eq!(step.line(), "Waiting for a friend", "{step:?}");
+    }
+}
+
+#[test]
+fn a_cold_radio_asks_for_a_warm_and_waits_for_a_friend() {
+    let (px, asked, drawn) = first_step_pixels(false, "step-radio-cold");
+    assert!(
+        asked.contains(&RadioJob::Warm),
+        "the screen never asked for a warm, so this frame says nothing about finishing one"
+    );
+    assert_eq!(
+        drawn,
+        vec![LinkStep::Radio],
+        "a screen whose warm has not finished drew another step's face"
+    );
+    says_waiting_for_a_friend_up_top(&px, "cold");
+}
+
+#[test]
+fn a_warm_radio_goes_straight_to_the_waiting_step() {
+    let (px, _, drawn) = first_step_pixels(true, "step-radio-warm");
+    assert_eq!(
+        drawn,
+        vec![LinkStep::Waiting],
+        "a warm radio is still drawing the radio step's face"
+    );
+    says_waiting_for_a_friend_up_top(&px, "warm");
+}
+
+type FailFaces = (Vec<(TexId, Face)>, Vec<Option<(TexId, Face)>>);
+
+fn fail_faces() -> FailFaces {
+    let lines = LinkFail::SHOWN
+        .iter()
+        .enumerate()
+        .map(|(i, f)| {
+            (
+                TexId::from_raw(970 + i),
+                menu_face(f.line(LinkKind::Cable)).into(),
+            )
+        })
+        .collect();
+    let hints = LinkFail::SHOWN
+        .iter()
+        .enumerate()
+        .map(|(i, f)| {
+            f.hint()
+                .map(|h| (TexId::from_raw(980 + i), menu_detail_face(h).into()))
+        })
+        .collect();
+    (lines, hints)
+}
+
+fn failure_pixels(fail: RadioFail, name: &str) -> Vec<u8> {
+    let d = common::tmp_root_with_carts(&["Zzz"]);
+    common::write_retail_header(&d, "Cart", "POKEMON RUBY", "AXVE");
+    let mut app = common::boot(d.path());
+    app.apply(Action::Insert);
+    app.set_core(Core::Gpsp);
+    app.on_core_ready();
+    for _ in 0..120 {
+        app.update(1.0 / 60.0);
+    }
+    let (lines, hints) = fail_faces();
+    app.set_link_fail_faces(
+        lines.iter().map(|(t, f)| (*t, f.w, f.h)).collect(),
+        hints
+            .iter()
+            .map(|h| h.as_ref().map(|(t, f)| (*t, f.w, f.h)))
+            .collect(),
+    );
+    app.apply(Action::GameMenu);
+    assert!(app.game_menu_open(), "the link screen never opened");
+    app.start_link(
+        LinkStarter::spawn_with(
+            Box::new(move |_, _| Err(fail.clone())),
+            Box::new(|| {}),
+            RadioRole::Host,
+            0,
+            Box::new(|_, _: &Cancel| Err(io::Error::new(io::ErrorKind::TimedOut, "from a test"))),
+        ),
+        0,
+    );
+    for _ in 0..200 {
+        if matches!(app.game_menu(), Some(GameMenu::Failed { .. })) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        app.update(1.0 / 60.0);
+    }
+    assert!(
+        matches!(app.game_menu(), Some(GameMenu::Failed { .. })),
+        "the screen never failed: {:?}",
+        app.game_menu()
+    );
+    let faces: Vec<(TexId, Face)> = lines
+        .into_iter()
+        .chain(hints.into_iter().flatten())
+        .collect();
+    let mut out = Vec::new();
+    app.draw(&mut out);
+    let text: Vec<Draw> = out
+        .into_iter()
+        .filter(|d| matches!(*d, Draw::Tex { tex, .. } if faces.iter().any(|(t, _)| *t == tex)))
+        .collect();
+    let px = composite(&text, &faces);
+    dump(&px, name);
+    px
+}
+
+fn bands(px: &[u8]) -> Vec<(usize, usize)> {
+    let mut out: Vec<(usize, usize)> = Vec::new();
+    for y in 0..OUT_H as usize {
+        if !(0..OUT_W as usize).any(|x| lit(px, (y * OUT_W as usize + x) * 4)) {
+            continue;
+        }
+        match out.last_mut() {
+            Some((_, end)) if *end + 1 == y => *end = y,
+            _ => out.push((y, y)),
+        }
+    }
+    out
+}
+
+#[test]
+fn a_radio_failure_says_check_logs_on_the_line_below() {
+    let px = failure_pixels(RadioFail::Radio("from a test".into()), "fail-radio");
+    let rows = bands(&px);
+    assert_eq!(
+        rows.len(),
+        2,
+        "want the sentence and the hint, got bands {rows:?}"
+    );
+    assert!(
+        rows[1].0 > rows[0].1,
+        "the hint is not below the sentence: {rows:?}"
+    );
+}
+
+#[test]
+fn nobody_joining_has_no_second_line() {
+    let px = failure_pixels(RadioFail::NoHost, "fail-nobody");
+    assert_eq!(bands(&px).len(), 1, "a timeout grew a hint line");
+}
+
+fn dropped_pixels(title: &str, code: &str, name: &str) -> (Vec<u8>, Vec<u8>, Vec<Draw>) {
+    let d = common::tmp_root_with_carts(&["Zzz"]);
+    common::write_retail_header(&d, "Cart", title, code);
+    let mut app = common::boot(d.path());
+    app.apply(Action::Insert);
+    app.set_core(Core::Gpsp);
+    app.on_core_ready();
+    for _ in 0..120 {
+        app.update(1.0 / 60.0);
+    }
+    let (sprites, mut faces) = sprites_and_faces();
+    app.set_link_sprites(sprites);
+    let (lines, _) = fail_faces();
+    let wireless: Vec<Option<(TexId, Face)>> = LinkFail::SHOWN
+        .iter()
+        .enumerate()
+        .map(|(i, f)| {
+            let line = f.line(LinkKind::Wireless);
+            (line != f.line(LinkKind::Cable))
+                .then(|| (TexId::from_raw(990 + i), menu_face(line).into()))
+        })
+        .collect();
+    app.set_link_fail_faces(
+        lines.iter().map(|(t, f)| (*t, f.w, f.h)).collect(),
+        vec![None; LinkFail::SHOWN.len()],
+    );
+    app.set_link_fail_wireless_faces(
+        wireless
+            .iter()
+            .map(|w| w.as_ref().map(|(t, f)| (*t, f.w, f.h)))
+            .collect(),
+    );
+    app.apply(Action::GameMenu);
+    assert!(app.game_menu_open(), "the link screen never opened");
+    app.start_link(
+        LinkStarter::spawn_with(
+            Box::new(|_, _| Ok(None)),
+            Box::new(|| {}),
+            RadioRole::Host,
+            0,
+            Box::new(|_, _: &Cancel| {
+                Err(io::Error::new(
+                    io::ErrorKind::ConnectionRefused,
+                    "from a test",
+                ))
+            }),
+        ),
+        0,
+    );
+    for _ in 0..200 {
+        if matches!(app.game_menu(), Some(GameMenu::Failed { .. })) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        app.update(1.0 / 60.0);
+    }
+    assert!(
+        matches!(
+            app.game_menu(),
+            Some(GameMenu::Failed {
+                fail: LinkFail::PeerVanished,
+                ..
+            })
+        ),
+        "the link never dropped: {:?}",
+        app.game_menu()
+    );
+    for _ in 0..60 {
+        app.update(1.0 / 60.0);
+    }
+    let text: Vec<(TexId, Face)> = lines
+        .into_iter()
+        .chain(wireless.into_iter().flatten())
+        .collect();
+    let text_ids: Vec<TexId> = text.iter().map(|(t, _)| *t).collect();
+    faces.extend(text);
+    let mut out = Vec::new();
+    app.draw(&mut out);
+    let out: Vec<Draw> = out
+        .into_iter()
+        .filter(|d| matches!(*d, Draw::Tex { tex, .. } | Draw::Turned { tex, .. } if faces.iter().any(|(t, _)| *t == tex)))
+        .collect();
+    let line: Vec<Draw> = out
+        .iter()
+        .filter(|d| matches!(**d, Draw::Tex { tex, .. } if text_ids.contains(&tex)))
+        .copied()
+        .collect();
+    let whole = composite(&out, &faces);
+    dump(&whole, name);
+    (composite(&line, &faces), whole, out)
+}
+
+fn sentence_ink(line: &str) -> usize {
+    let f: Face = menu_face(line).into();
     let (w, h) = (f.w as f32, f.h as f32);
     let tex = TexId::from_raw(1);
     let draw = Draw::Tex {
@@ -656,38 +927,126 @@ fn line_ink(step: LinkStep) -> usize {
     ink(&composite(&[draw], &[(tex, f)]))
 }
 
-#[test]
-fn a_cold_radio_says_it_is_bringing_the_radio_up() {
-    let (px, asked) = first_step_pixels(false, "step-radio-cold");
-    assert!(ink(&px) > 0, "the step put no sentence on the frame at all");
-    assert!(
-        asked.contains(&RadioJob::Warm),
-        "the screen never asked for a warm, so this frame says nothing about finishing one"
-    );
-    assert_ne!(
-        line_ink(LinkStep::Radio),
-        line_ink(LinkStep::Waiting),
-        "the two sentences carry the same ink, so neither frame below proves anything"
-    );
-    assert_eq!(
-        ink(&px),
-        line_ink(LinkStep::Radio),
-        "a screen whose warm has not finished is not saying the radio is coming up"
-    );
+fn drew(out: &[Draw], s: Sprite) -> bool {
+    out.iter()
+        .any(|d| matches!(*d, Draw::Tex { tex, .. } | Draw::Turned { tex, .. } if tex == s.tex))
 }
 
 #[test]
-fn a_warm_radio_goes_straight_to_looking_for_the_other_player() {
-    let (px, _) = first_step_pixels(true, "step-radio-warm");
-    assert!(ink(&px) > 0, "the step put no sentence on the frame at all");
-    assert_eq!(
-        ink(&px),
-        line_ink(LinkStep::Waiting),
-        "a warm radio is still being announced as coming up"
+fn a_dropped_wireless_link_says_it_lost_the_connection() {
+    let (line, _, out) = dropped_pixels("POKEMON EMER", "BPEE", "fail-dropped-wireless");
+    let (sprites, _) = sprites_and_faces();
+    assert!(drew(&out, sprites.adapter), "no adapter over the failure");
+    assert_ne!(
+        sentence_ink("Lost the connection"),
+        sentence_ink("The cable came loose"),
+        "the two sentences carry the same ink, so the frame below proves nothing"
     );
-    let (first, last) = inked_rows(&px);
+    assert_eq!(
+        ink(&line),
+        sentence_ink("Lost the connection"),
+        "a dropped adapter link does not say Lost the connection"
+    );
+    let (first, last) = inked_rows(&line);
     assert!(
         last < OUT_H as usize / 2,
         "the line is not up where the link screen's sentence goes: rows {first}..{last}"
     );
+}
+
+#[test]
+fn a_dropped_cable_link_says_the_cable_came_loose() {
+    let (line, _, out) = dropped_pixels("POKEMON RUBY", "AXVE", "fail-dropped-cable");
+    let (sprites, _) = sprites_and_faces();
+    assert!(drew(&out, sprites.plug_host), "no plug over the failure");
+    assert_eq!(
+        ink(&line),
+        sentence_ink("The cable came loose"),
+        "a dropped cable link does not say The cable came loose"
+    );
+}
+
+fn unplug_pixels(title: &str, code: &str, role: LinkRow, age: u64, name: &str) -> Vec<u8> {
+    let d = common::tmp_root_with_carts(&["Zzz"]);
+    common::write_retail_header(&d, "Cart", title, code);
+    let mut app = common::boot(d.path());
+    app.apply(Action::Insert);
+    app.set_core(Core::Gpsp);
+    app.on_core_ready();
+    for _ in 0..120 {
+        app.update(1.0 / 60.0);
+    }
+    let (sprites, faces) = sprites_and_faces();
+    app.set_link_sprites(sprites);
+    app.apply(Action::GameMenu);
+    app.apply(Action::GbaDown(slot_input::Btn::B));
+    assert!(
+        !app.game_menu_open(),
+        "{name}: the link screen never closed"
+    );
+    app.begin_link(role.client_id());
+    match role {
+        LinkRow::Host => {
+            app.apply(Action::GameMenu);
+            app.apply(Action::GbaDown(slot_input::Btn::A));
+        }
+        LinkRow::Join => app.peer_ended(),
+    }
+    let Some(GameMenu::Unplug { since, .. }) = app.game_menu() else {
+        panic!("{name}: the end did not unplug: {:?}", app.game_menu());
+    };
+    while app.now() < since + age {
+        app.update(1.0 / 60.0);
+    }
+    let mut out = Vec::new();
+    app.draw(&mut out);
+    let out: Vec<Draw> = out
+        .into_iter()
+        .filter(|d| matches!(*d, Draw::Tex { tex, .. } | Draw::Turned { tex, .. } if faces.iter().any(|(t, _)| *t == tex)))
+        .collect();
+    let px = composite(&out, &faces);
+    dump(&px, name);
+    px
+}
+
+fn port_only() -> Vec<u8> {
+    let (sprites, faces) = sprites_and_faces();
+    let mut out = Vec::new();
+    let dx = Canvas::FRAMED.centred(sprites.port.w as f32);
+    out.push(Draw::Tex {
+        x: dx,
+        y: PORT_Y,
+        w: sprites.port.w as f32,
+        h: sprites.port.h as f32,
+        tex: sprites.port.tex,
+        alpha: 1.0,
+    });
+    composite(&out, &faces)
+}
+
+#[test]
+fn the_unplug_screen_keeps_the_port_along_the_bottom_until_it_leaves() {
+    let port = port_only();
+    let below_the_plug = PORT_Y as usize + 36;
+    let band = |px: &[u8]| -> Vec<u8> { px[below_the_plug * OUT_W as usize * 4..].to_vec() };
+    assert!(
+        ink(&band(&port)) > 1000,
+        "the port strip carries too little ink below the plug to prove anything"
+    );
+    let late = slot::app::UNPLUG_HOLD_MS - 100;
+    for (title, code, kind) in [
+        ("POKEMON RUBY", "AXVE", "cable"),
+        ("POKEMON EMER", "BPEE", "wireless"),
+    ] {
+        for role in LinkRow::ALL {
+            for age in [0, 300, late] {
+                let name = format!("unplug-{kind}-{}-{age}ms", role.text().to_lowercase());
+                let px = unplug_pixels(title, code, role, age, &name);
+                assert!(
+                    band(&px) == band(&port),
+                    "{name}: the port strip is not along the bottom of the unplug screen"
+                );
+            }
+        }
+    }
 }

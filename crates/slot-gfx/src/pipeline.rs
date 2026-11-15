@@ -1,4 +1,5 @@
-use crate::authentic::{Ghost, Screen};
+use crate::authentic::Screen;
+use crate::ghost::{FrameBlend, Ghost, Lcd};
 use crate::lcd3x::ScreenEffect;
 use crate::power::{screen_brightness, screen_rect_above};
 use crate::quad::Quad;
@@ -11,19 +12,6 @@ pub const SRC_H: u32 = OUT_H / SCALE;
 
 pub const WHOLE_TEXTURE: [f32; 4] = [0.0, 0.0, 1.0, 1.0];
 
-/// How each new frame meets the ones before it, at the game's own size before any scaling.
-/// Authentic always draws its LCD's response, whatever this is.
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
-pub enum FrameBlend {
-    #[default]
-    Off,
-    /// Each frame half and half with the one before it.
-    Mix,
-    /// Authentic's LCD response for the screen in play: each pixel slow to change, slower
-    /// while it turns lighter.
-    Ghosting,
-}
-
 const FULL: [f32; 4] = [0.0, 0.0, OUT_W as f32, OUT_H as f32];
 
 pub struct GamePass {
@@ -34,6 +22,7 @@ pub struct GamePass {
     /// How many of `game` hold frames of the picture now showing, up to both.
     held: usize,
     blend: FrameBlend,
+    lcd: Lcd,
     u_rect: gl::types::GLint,
     u_bright: gl::types::GLint,
     u_uv: gl::types::GLint,
@@ -139,6 +128,7 @@ impl GamePass {
             at: 0,
             held: 0,
             blend: FrameBlend::Off,
+            lcd: Lcd::Gba,
             u_rect,
             u_bright,
             u_uv,
@@ -269,7 +259,7 @@ impl GamePass {
             }
             (FrameBlend::Ghosting, _) => {
                 self.ghost.respond(last, [0.0; 2], quad);
-                self.ghost.respond(game, self.screen.look().ghost, quad);
+                self.ghost.respond(game, self.response(), quad);
             }
         }
     }
@@ -281,12 +271,27 @@ impl GamePass {
         }
     }
 
+    fn response(&self) -> [f32; 2] {
+        if self.effect == ScreenEffect::Authentic {
+            self.screen.look().ghost
+        } else {
+            self.lcd.response()
+        }
+    }
+
     pub fn set_glass(&mut self, sheen: bool, shade: bool) {
         self.sheen = [sheen, shade].map(|on| if on { 1.0 } else { 0.0 });
     }
 
     pub fn set_screen(&mut self, screen: Screen) {
         self.screen = screen;
+    }
+
+    pub fn set_lcd(&mut self, lcd: Lcd, quad: &Quad) {
+        if lcd != self.lcd {
+            self.lcd = lcd;
+            self.reblend(quad);
+        }
     }
 
     pub fn set_paper(&mut self, size: u32, gray: &[u8]) {
@@ -333,7 +338,7 @@ impl GamePass {
         match self.blend() {
             FrameBlend::Off => {}
             FrameBlend::Mix => self.ghost.mix(game, last, quad),
-            FrameBlend::Ghosting => self.ghost.respond(game, self.screen.look().ghost, quad),
+            FrameBlend::Ghosting => self.ghost.respond(game, self.response(), quad),
         }
     }
 

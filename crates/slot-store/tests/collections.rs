@@ -168,8 +168,23 @@ fn names_that_cannot_be_files_are_refused() {
         games: vec![],
     }];
     for bad in [
-        "", "order", "ORDER", "a/b", "a:b", "a\\b", "a*", "a?", "a\"", "a<", "a>", "a|", "name.",
-        "name ", "puzzlers", ".hack", "x".repeat(252).as_str(),
+        "",
+        "order",
+        "ORDER",
+        "a/b",
+        "a:b",
+        "a\\b",
+        "a*",
+        "a?",
+        "a\"",
+        "a<",
+        "a>",
+        "a|",
+        "name.",
+        "name ",
+        "puzzlers",
+        ".hack",
+        "x".repeat(252).as_str(),
     ] {
         assert!(!name_ok(bad, &existing), "{bad:?} was allowed");
     }
@@ -197,6 +212,9 @@ fn a_latin_1_file_still_loads_every_line() {
     let c = read_collections(d.path());
     assert_eq!(
         c[0].games,
-        [game(Platform::Gba, "Apotris"), game(Platform::Gba, "Pokémon")]
+        [
+            game(Platform::Gba, "Apotris"),
+            game(Platform::Gba, "Pokémon")
+        ]
     );
 }

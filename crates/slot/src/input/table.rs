@@ -19,20 +19,11 @@ pub struct Table {
 }
 
 impl Table {
-    pub fn new(
-        controls: &Controls,
-        shortcuts: &ShortcutKeys,
-        carousel: &CarouselKeys,
-        turbo: bool,
-    ) -> Table {
+    pub fn new(controls: &Controls, shortcuts: &ShortcutKeys, carousel: &CarouselKeys) -> Table {
         let rows = QuickRow::ALL
             .into_iter()
             .filter_map(|row| {
                 if let Some(g) = row.game_button() {
-                    let turbo_row = matches!(row, QuickRow::GameTurboA | QuickRow::GameTurboB);
-                    if turbo_row && !turbo {
-                        return None;
-                    }
                     return controls.game(g).map(|binding| Row {
                         row,
                         binding,
@@ -70,9 +61,8 @@ impl Table {
         shortcuts: &ShortcutKeys,
         carousel: &CarouselKeys,
         mode: KidMode,
-        turbo: bool,
     ) -> Table {
-        let mut rows: Vec<Row> = Table::new(controls, shortcuts, carousel, turbo)
+        let mut rows: Vec<Row> = Table::new(controls, shortcuts, carousel)
             .rows
             .into_iter()
             .filter(|r| match (r.action, r.contexts == Contexts::SHELF) {

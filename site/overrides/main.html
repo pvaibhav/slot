@@ -1,2 +1,33 @@
 {% extends "base.html" %}
 {% block tabs %}{% endblock %}
+{% block extrahead %}
+<script>
+(function(){
+  var SHELLS = [
+    { name:"silver",     light:"#e2e5e9", base:"#b8bcc2", shade:"#7e838b", btn:"#c2c6cc", btnHi:"#e9ecf0", etch:"rgba(0,0,0,.46)" },
+    { name:"pink",       light:"#f6d3dd", base:"#e6a6b8", shade:"#a76d7e", btn:"#dbd1d5", btnHi:"#f2eaed", etch:"rgba(0,0,0,.44)" },
+    { name:"light blue", light:"#dbe9f2", base:"#a8c4d8", shade:"#6d8ba1", btn:"#d0dae3", btnHi:"#edf3f8", etch:"rgba(0,0,0,.44)" },
+    { name:"black",      light:"#5a5d64", base:"#34363b", shade:"#16171a", btn:"#3c3e43", btnHi:"#5c5f66", etch:"rgba(255,255,255,.42)" }
+  ];
+
+  var want = (location.search.match(/[?&]shell=([^&]+)/) || [])[1];
+  var shell = SHELLS[Math.floor(Math.random() * SHELLS.length)];
+  if (want) {
+    want = decodeURIComponent(want).replace(/\+/g, " ").toLowerCase();
+    for (var si = 0; si < SHELLS.length; si++) {
+      if (SHELLS[si].name === want) { shell = SHELLS[si]; break; }
+    }
+  }
+
+  var root = document.documentElement.style;
+  root.setProperty("--shell-light", shell.light);
+  root.setProperty("--shell-base",  shell.base);
+  root.setProperty("--shell-shade", shell.shade);
+  root.setProperty("--btn",         shell.btn);
+  root.setProperty("--btn-hi",      shell.btnHi);
+  root.setProperty("--etch",        shell.etch);
+  window.slotShells = SHELLS;
+  window.slotShell = shell;
+})();
+</script>
+{% endblock %}

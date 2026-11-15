@@ -60,11 +60,16 @@ pub(super) fn at(root: &Path, segments: &[&str]) -> Result<PathBuf, Refused> {
 }
 
 fn file_name(path: &Path) -> String {
-    path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+    path.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 fn stem_of(name: &str) -> String {
-    Path::new(name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
+    Path::new(name)
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 pub(super) fn modified_ms(path: &Path) -> u64 {
@@ -86,13 +91,21 @@ impl Index {
     fn new(root: &Path, platform: Platform) -> Index {
         let tag = platform.dir_name();
         let mut saves: HashMap<String, Vec<String>> = HashMap::new();
-        if let Some(entries) = at(root, &["Saves", tag]).ok().and_then(|d| fs::read_dir(d).ok()) {
+        if let Some(entries) = at(root, &["Saves", tag])
+            .ok()
+            .and_then(|d| fs::read_dir(d).ok())
+        {
             for entry in entries.filter_map(|e| e.ok()) {
-                let Ok(name) = entry.file_name().into_string() else { continue };
+                let Ok(name) = entry.file_name().into_string() else {
+                    continue;
+                };
                 if name.starts_with('.') || name.ends_with(".part") || !entry.path().is_file() {
                     continue;
                 }
-                saves.entry(stem_of(&name).to_lowercase()).or_default().push(name);
+                saves
+                    .entry(stem_of(&name).to_lowercase())
+                    .or_default()
+                    .push(name);
             }
         }
         for names in saves.values_mut() {
@@ -112,17 +125,25 @@ impl Index {
                     .ok()
                     .and_then(|d| fs::read_dir(d).ok())
                     .map(|rd| {
-                        rd.filter_map(|e| e.ok()?.file_name().into_string().ok()).collect::<HashSet<_>>()
+                        rd.filter_map(|e| e.ok()?.file_name().into_string().ok())
+                            .collect::<HashSet<_>>()
                     })
                     .unwrap_or_default();
                 (*c, dirs)
             })
             .collect();
-        Index { saves, guides, states }
+        Index {
+            saves,
+            guides,
+            states,
+        }
     }
 
     fn saves(&self, stem: &str) -> &[String] {
-        self.saves.get(&stem.to_lowercase()).map(Vec::as_slice).unwrap_or(&[])
+        self.saves
+            .get(&stem.to_lowercase())
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
     }
 
     fn guide(&self, stem: &str) -> Option<&str> {
@@ -134,7 +155,10 @@ impl Index {
             .iter()
             .filter(|(_, dirs)| dirs.contains(&cart.stem))
             .map(|(c, _)| {
-                StateRing::new(root, cart.platform, *c, &cart.stem).list().map(|l| l.len()).unwrap_or(0)
+                StateRing::new(root, cart.platform, *c, &cart.stem)
+                    .list()
+                    .map(|l| l.len())
+                    .unwrap_or(0)
             })
             .sum()
     }
@@ -199,7 +223,11 @@ pub fn games(root: &Path, mut req: Request) -> Reply {
             return Reply::error(405, "method not allowed");
         }
         let index = index();
-        let rows: Vec<Value> = list.iter().enumerate().map(|(i, c)| row(root, &index, c, i)).collect();
+        let rows: Vec<Value> = list
+            .iter()
+            .enumerate()
+            .map(|(i, c)| row(root, &index, c, i))
+            .collect();
         return Reply::json(json!({
             "platform": platform.dir_name(),
             "displayName": platform.name(),
@@ -290,14 +318,20 @@ fn art(root: &Path, cart: &Cart, req: &mut Request) -> Reply {
     let tag = cart.platform.dir_name();
     match req.method.as_str() {
         "GET" | "HEAD" => {
-            let Some(label) = &cart.label else { return Reply::error(404, "not found") };
+            let Some(label) = &cart.label else {
+                return Reply::error(404, "not found");
+            };
             match at(root, &["Labels", tag, &file_name(label)]) {
                 Ok(path) => Reply::file(path).with_header("Cache-Control", IMMUTABLE),
                 Err(r) => refused(r),
             }
         }
         "POST" => {
-            let name = cart.label.as_ref().map(|l| file_name(l)).unwrap_or_else(|| format!("{}.png", cart.stem));
+            let name = cart
+                .label
+                .as_ref()
+                .map(|l| file_name(l))
+                .unwrap_or_else(|| format!("{}.png", cart.stem));
             let dest = card_name(&name).and_then(|_| at(root, &["Labels", tag, &name]));
             let dest = match dest {
                 Ok(d) => d,
@@ -327,7 +361,9 @@ fn art(root: &Path, cart: &Cart, req: &mut Request) -> Reply {
             }
         }
         "DELETE" => {
-            let Some(label) = &cart.label else { return Reply::error(404, "not found") };
+            let Some(label) = &cart.label else {
+                return Reply::error(404, "not found");
+            };
             match at(root, &["Labels", tag, &file_name(label)]) {
                 Ok(p) => match fs::remove_file(p) {
                     Ok(()) => ok(),
@@ -343,7 +379,13 @@ fn art(root: &Path, cart: &Cart, req: &mut Request) -> Reply {
 fn state_dirs(root: &Path, cart: &Cart) -> Vec<PathBuf> {
     Core::ALL
         .iter()
-        .filter_map(|c| at(root, &["States", cart.platform.dir_name(), c.as_str(), &cart.stem]).ok())
+        .filter_map(|c| {
+            at(
+                root,
+                &["States", cart.platform.dir_name(), c.as_str(), &cart.stem],
+            )
+            .ok()
+        })
         .collect()
 }
 
@@ -367,7 +409,9 @@ fn delete(root: &Path, index: &Index, cart: &Cart, req: &Request) -> Reply {
     let purge = req.query.get("purge").map(String::as_str) == Some("true");
     let rom_name = file_name(&cart.rom);
     match req.query.get("rom") {
-        Some(rom) if *rom != rom_name => return Reply::error(409, "the game at that id has changed"),
+        Some(rom) if *rom != rom_name => {
+            return Reply::error(409, "the game at that id has changed")
+        }
         None if purge => return Reply::error(400, "rom param required"),
         _ => {}
     }
@@ -419,7 +463,11 @@ fn new_rom_name(cart: &Cart, name: &str) -> Result<String, Refused> {
     if cart.platform.accepts(Path::new(name)) {
         return Ok(name.to_string());
     }
-    let ext = cart.rom.extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
+    let ext = cart
+        .rom
+        .extension()
+        .map(|e| e.to_string_lossy().into_owned())
+        .unwrap_or_default();
     let full = format!("{name}.{ext}");
     card_name(&full)?;
     Ok(full)
@@ -443,21 +491,33 @@ fn plan_step(
     old: &str,
 ) -> Result<(), Refused> {
     let to = renamed(old, new_stem)?;
-    plan.push((at(root, &[folder, tag, old])?, at(root, &[folder, tag, &to])?));
+    plan.push((
+        at(root, &[folder, tag, old])?,
+        at(root, &[folder, tag, &to])?,
+    ));
     Ok(())
 }
 
 fn clean_stem(stem: &str) -> &str {
-    stem.trim_start().trim_end_matches(|c: char| c == '.' || c.is_whitespace())
+    stem.trim_start()
+        .trim_end_matches(|c: char| c == '.' || c.is_whitespace())
 }
 
 fn needs_sweep(root: &Path, platform: Platform) -> bool {
-    let Ok(dir) = at(root, &["Games", platform.dir_name()]) else { return false };
-    let Ok(entries) = fs::read_dir(dir) else { return false };
-    entries.filter_map(|e| e.ok()?.file_name().into_string().ok()).any(|name| {
-        let stem = stem_of(&name);
-        platform.accepts(Path::new(&name)) && !clean_stem(&stem).is_empty() && clean_stem(&stem) != stem
-    })
+    let Ok(dir) = at(root, &["Games", platform.dir_name()]) else {
+        return false;
+    };
+    let Ok(entries) = fs::read_dir(dir) else {
+        return false;
+    };
+    entries
+        .filter_map(|e| e.ok()?.file_name().into_string().ok())
+        .any(|name| {
+            let stem = stem_of(&name);
+            platform.accepts(Path::new(&name))
+                && !clean_stem(&stem).is_empty()
+                && clean_stem(&stem) != stem
+        })
 }
 
 pub fn sweep_names(root: &Path) {
@@ -471,7 +531,11 @@ pub fn sweep_names(root: &Path) {
             if clean.is_empty() || clean == cart.stem {
                 continue;
             }
-            let ext = cart.rom.extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
+            let ext = cart
+                .rom
+                .extension()
+                .map(|e| e.to_string_lossy().into_owned())
+                .unwrap_or_default();
             let name = format!("{clean}.{ext}");
             let old = file_name(&cart.rom);
             match rename(root, &index, &cart, &name) {
@@ -494,7 +558,10 @@ fn rename(root: &Path, index: &Index, cart: &Cart, name: &str) -> Result<(), Ref
         return Ok(());
     }
     let mut plan: Vec<(PathBuf, PathBuf)> = Vec::new();
-    plan.push((at(root, &["Games", tag, &rom_name])?, at(root, &["Games", tag, &new_rom])?));
+    plan.push((
+        at(root, &["Games", tag, &rom_name])?,
+        at(root, &["Games", tag, &new_rom])?,
+    ));
     for save in index.saves(&cart.stem) {
         plan_step(&mut plan, root, tag, &new_stem, "Saves", save)?;
     }
@@ -510,14 +577,21 @@ fn rename(root: &Path, index: &Index, cart: &Cart, name: &str) -> Result<(), Ref
         None => None,
     };
     for core in Core::ALL {
-        let from = root.join("States").join(tag).join(core.as_str()).join(&cart.stem);
+        let from = root
+            .join("States")
+            .join(tag)
+            .join(core.as_str())
+            .join(&cart.stem);
         if from.is_dir() {
             plan.push((from, at(root, &["States", tag, core.as_str(), &new_stem])?));
         }
     }
     for (from, to) in &plan {
         if fs::symlink_metadata(to).is_ok() && !same_inode(from, to) {
-            return Err(Refused::new(409, format!("{} already exists", file_name(to))));
+            return Err(Refused::new(
+                409,
+                format!("{} already exists", file_name(to)),
+            ));
         }
     }
     let mut done: Vec<&(PathBuf, PathBuf)> = Vec::new();
@@ -563,7 +637,11 @@ fn extension(name: &str) -> Option<String> {
         .filter(|e| !e.is_empty())
 }
 
-fn upload(req: &mut Request, dest: Result<PathBuf, Refused>, max: Option<usize>) -> Result<(), Reply> {
+fn upload(
+    req: &mut Request,
+    dest: Result<PathBuf, Refused>,
+    max: Option<usize>,
+) -> Result<(), Reply> {
     let dest = match dest {
         Ok(d) => d,
         Err(r) => {
@@ -571,7 +649,11 @@ fn upload(req: &mut Request, dest: Result<PathBuf, Refused>, max: Option<usize>)
             return Err(refused(r));
         }
     };
-    if dest.parent().map(fs::create_dir_all).is_some_and(|r| r.is_err()) {
+    if dest
+        .parent()
+        .map(fs::create_dir_all)
+        .is_some_and(|r| r.is_err())
+    {
         drain(req);
         return Err(Reply::error(500, "upload failed"));
     }
@@ -579,7 +661,8 @@ fn upload(req: &mut Request, dest: Result<PathBuf, Refused>, max: Option<usize>)
     if max.is_some_and(|m| body.len() > m as u64) {
         return Err(Reply::error(413, "file too large"));
     }
-    body.save_to(&dest).map_err(|_| Reply::error(500, "upload failed"))
+    body.save_to(&dest)
+        .map_err(|_| Reply::error(500, "upload failed"))
 }
 
 fn saves(root: &Path, index: &Index, cart: &Cart, req: &mut Request) -> Reply {
@@ -620,7 +703,8 @@ fn saves(root: &Path, index: &Index, cart: &Cart, req: &mut Request) -> Reply {
                 return Reply::error(400, "name param required");
             };
             let dest = card_name(&name).and_then(|_| {
-                let ext = extension(&name).ok_or_else(|| Refused::new(400, "name needs an extension"))?;
+                let ext =
+                    extension(&name).ok_or_else(|| Refused::new(400, "name needs an extension"))?;
                 if !SAVE_EXTENSIONS.contains(&ext.as_str()) {
                     return Err(Refused::new(400, "saves are .sav or .srm"));
                 }
@@ -629,7 +713,9 @@ fn saves(root: &Path, index: &Index, cart: &Cart, req: &mut Request) -> Reply {
                 at(root, &["Saves", tag, &target])
             });
             match upload(req, dest, None) {
-                Ok(()) => Reply::json(json!({ "ok": true, "resumeCores": resume_cores(root, cart) })),
+                Ok(()) => {
+                    Reply::json(json!({ "ok": true, "resumeCores": resume_cores(root, cart) }))
+                }
                 Err(reply) => reply,
             }
         }
@@ -678,7 +764,9 @@ fn guides(root: &Path, index: &Index, cart: &Cart, req: &mut Request) -> Reply {
                 if extension(&name).as_deref() != Some("txt") {
                     return Err(Refused::new(400, "guides are .txt"));
                 }
-                let target = owned.map(str::to_string).unwrap_or_else(|| format!("{}.txt", cart.stem));
+                let target = owned
+                    .map(str::to_string)
+                    .unwrap_or_else(|| format!("{}.txt", cart.stem));
                 card_name(&target)?;
                 at(root, &["Guides", tag, &target])
             });

@@ -1,4 +1,4 @@
-import base64, io, json, pathlib, shutil, subprocess, tempfile, time, urllib.request
+import argparse, base64, io, json, pathlib, shutil, subprocess, tempfile, time, urllib.request
 
 import websocket
 from PIL import Image
@@ -6,13 +6,27 @@ from PIL import Image
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 PORT = 9337
 HERE = pathlib.Path(__file__).resolve().parent
-OUT = HERE.parent.parent / "assets" / "romm"
-LAYERS = {
-    "box_body": (296, 154),
-    "box_inside": (296, 36),
-    "lid": (322, 108),
-    "glow": (440, 272),
-}
+FINISHES = ("platinum", "graphite", "pearl_blue", "pearl_pink")
+parser = argparse.ArgumentParser()
+parser.add_argument("--finish", choices=FINISHES)
+finish = parser.parse_args().finish
+if finish:
+    OUT = HERE.parent.parent / "assets" / "gift"
+    LAYERS = {
+        "box_body": (296, 154, f"{finish}_body"),
+        "box_inside": (296, 36, f"{finish}_inside"),
+        "lid": (322, 124, f"{finish}_lid"),
+    }
+    QUERY = f"&finish={finish}"
+else:
+    OUT = HERE.parent.parent / "assets" / "romm"
+    LAYERS = {
+        "box_body": (296, 154, "box_body"),
+        "box_inside": (296, 36, "box_inside"),
+        "lid": (322, 108, "lid"),
+        "glow": (440, 272, "glow"),
+    }
+    QUERY = ""
 
 profile = tempfile.mkdtemp()
 chrome = subprocess.Popen(
@@ -52,8 +66,8 @@ try:
     call("Emulation.setDeviceMetricsOverride", width=720, height=480, deviceScaleFactor=1, mobile=False)
     call("Emulation.setDefaultBackgroundColorOverride", color={"r": 0, "g": 0, "b": 0, "a": 0})
     OUT.mkdir(exist_ok=True)
-    for name, size in LAYERS.items():
-        call("Page.navigate", url=f"{(HERE / 'unwrap.html').as_uri()}?layer={name}")
+    for name, (w, h, file) in LAYERS.items():
+        call("Page.navigate", url=f"{(HERE / 'unwrap.html').as_uri()}?layer={name}{QUERY}")
         for _ in range(100):
             title = call("Runtime.evaluate", expression="document.title")
             if title["result"].get("value") == "done":
@@ -61,7 +75,7 @@ try:
             time.sleep(0.05)
         shot = call("Page.captureScreenshot", format="png")
         png = Image.open(io.BytesIO(base64.b64decode(shot["data"]))).convert("RGBA")
-        png.crop((0, 0, *size)).save(OUT / f"{name}.png", optimize=True)
+        png.crop((0, 0, w, h)).save(OUT / f"{file}.png", optimize=True)
 finally:
     chrome.kill()
     shutil.rmtree(profile, ignore_errors=True)

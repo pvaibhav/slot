@@ -14,6 +14,7 @@
 </aside>
 {% endblock %}
 {% block content %}
+{% include "partials/device.svg" %}
 <section class="hero" aria-label="slot.">
   <div class="hero-copy">
     <div class="wordmark-row">
@@ -47,20 +48,15 @@
         <div class="dv-back" aria-hidden="true">
           <svg viewBox="0 0 820 725" preserveAspectRatio="none"><use href="#lidBackArt"/></svg>
         </div>
-        <span class="dv-edge" aria-hidden="true"></span>
-        <span class="f3d side-l" aria-hidden="true"></span>
-        <span class="f3d side-r" aria-hidden="true"></span>
       </div>
       <div class="dv-deck">
         <svg viewBox="0 725 820 830" aria-hidden="true" focusable="false">
           <use href="#deckArt"/>
         </svg>
-        <span class="f3d side-l deck-l" aria-hidden="true"></span>
-        <span class="f3d side-r deck-r" aria-hidden="true"></span>
-        <span class="f3d dv-bottom" aria-hidden="true"></span>
         <span class="dv-ao" aria-hidden="true"></span>
       </div>
     </div>
   </div>
 </section>
+<script>{% include "partials/device-depth.js" %}</script>
 {% endblock %}

@@ -123,11 +123,15 @@ mod tag {
     fn stripping_leaves_the_bytes_a_plain_encode_makes() {
         let w = wheel();
         assert_eq!(untagged(&w), w);
-        let tagged = Label::from_png(&w, [1, 2, 3], Platform::Gba, None).unwrap().png();
+        let tagged = Label::from_png(&w, [1, 2, 3], Platform::Gba, None)
+            .unwrap()
+            .png();
         let bare = untagged(&tagged);
         assert_eq!(logo_tag(&bare), None);
         assert!(bare.len() < tagged.len());
-        let mut reader = png::Decoder::new(std::io::Cursor::new(&bare)).read_info().unwrap();
+        let mut reader = png::Decoder::new(std::io::Cursor::new(&bare))
+            .read_info()
+            .unwrap();
         let mut buf = vec![0; reader.output_buffer_size()];
         reader.next_frame(&mut buf).unwrap();
     }

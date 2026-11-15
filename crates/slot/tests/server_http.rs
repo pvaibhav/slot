@@ -1,6 +1,6 @@
 use slot::server::{parse_target, qr_modules, qr_url, shown_address, Reply, Server};
-use std::net::Ipv4Addr;
 use std::io::{Read, Write};
+use std::net::Ipv4Addr;
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
 
@@ -23,7 +23,10 @@ fn b64(input: &str) -> String {
     const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::new();
     for chunk in input.as_bytes().chunks(3) {
-        let n = chunk.iter().enumerate().fold(0u32, |a, (i, b)| a | (*b as u32) << (16 - 8 * i));
+        let n = chunk
+            .iter()
+            .enumerate()
+            .fold(0u32, |a, (i, b)| a | (*b as u32) << (16 - 8 * i));
         for i in 0..4 {
             if i <= chunk.len() {
                 out.push(T[(n >> (18 - 6 * i) & 63) as usize] as char);
@@ -50,11 +53,20 @@ fn api_needs_the_pin() {
     let p = server.port();
     let r = request(p, "GET /api/anything HTTP/1.1\r\nHost: x\r\n\r\n");
     assert!(r.starts_with("HTTP/1.1 401"), "{r}");
-    let bad = format!("GET /api/anything HTTP/1.1\r\nAuthorization: Basic {}\r\n\r\n", b64("slot:0000"));
+    let bad = format!(
+        "GET /api/anything HTTP/1.1\r\nAuthorization: Basic {}\r\n\r\n",
+        b64("slot:0000")
+    );
     assert!(request(p, &bad).starts_with("HTTP/1.1 401"));
-    let wrong_user = format!("GET /api/anything HTTP/1.1\r\nAuthorization: Basic {}\r\n\r\n", b64("nonna:1234"));
+    let wrong_user = format!(
+        "GET /api/anything HTTP/1.1\r\nAuthorization: Basic {}\r\n\r\n",
+        b64("nonna:1234")
+    );
     assert!(request(p, &wrong_user).starts_with("HTTP/1.1 401"));
-    let good = format!("GET /api/anything HTTP/1.1\r\nAuthorization: Basic {}\r\n\r\n", b64("slot:1234"));
+    let good = format!(
+        "GET /api/anything HTTP/1.1\r\nAuthorization: Basic {}\r\n\r\n",
+        b64("slot:1234")
+    );
     assert!(!request(p, &good).starts_with("HTTP/1.1 401"));
     server.stop();
 }
@@ -83,12 +95,11 @@ fn stop_frees_the_port() {
 #[test]
 fn stop_during_a_stalled_upload_returns() {
     let dir = tempfile::tempdir().unwrap();
-    let handler: slot::server::Handler = std::sync::Arc::new(|root, req| {
-        match req.body.save_to(&root.join("up.bin")) {
+    let handler: slot::server::Handler =
+        std::sync::Arc::new(|root, req| match req.body.save_to(&root.join("up.bin")) {
             Ok(()) => Reply::json(serde_json::json!({})),
             Err(_) => Reply::error(500, "failed"),
-        }
-    });
+        });
     let server = Server::start_with(dir.path().to_path_buf(), 0, "1234".into(), handler).unwrap();
     let auth = b64("slot:1234");
     let mut s = TcpStream::connect(("127.0.0.1", server.port())).unwrap();
@@ -116,11 +127,16 @@ fn stop_during_a_stalled_download_returns() {
     let big = dir.path().join("big.bin");
     std::fs::write(&big, vec![7u8; 64 * 1024 * 1024]).unwrap();
     let target = big.clone();
-    let handler: slot::server::Handler = std::sync::Arc::new(move |_, _| Reply::file(target.clone()));
+    let handler: slot::server::Handler =
+        std::sync::Arc::new(move |_, _| Reply::file(target.clone()));
     let server = Server::start_with(dir.path().to_path_buf(), 0, "1234".into(), handler).unwrap();
     let auth = b64("slot:1234");
     let mut s = TcpStream::connect(("127.0.0.1", server.port())).unwrap();
-    write!(s, "GET /api/file HTTP/1.1\r\nAuthorization: Basic {auth}\r\n\r\n").unwrap();
+    write!(
+        s,
+        "GET /api/file HTTP/1.1\r\nAuthorization: Basic {auth}\r\n\r\n"
+    )
+    .unwrap();
     let mut first = [0u8; 16];
     s.read_exact(&mut first).unwrap();
     std::thread::sleep(Duration::from_millis(500));
@@ -134,7 +150,9 @@ fn stop_during_a_stalled_download_returns() {
 fn malformed_content_length_is_400() {
     let (_d, server) = start("1234");
     let auth = b64("slot:1234");
-    let raw = format!("POST /api/x HTTP/1.1\r\nAuthorization: Basic {auth}\r\nContent-Length: abc\r\n\r\n");
+    let raw = format!(
+        "POST /api/x HTTP/1.1\r\nAuthorization: Basic {auth}\r\nContent-Length: abc\r\n\r\n"
+    );
     assert!(request(server.port(), &raw).starts_with("HTTP/1.1 400"));
     server.stop();
 }
@@ -185,7 +203,10 @@ fn root_serves_index() {
 #[test]
 fn router_paths_fall_back_to_index() {
     let (_d, server) = with_web();
-    let r = request(server.port(), "GET /platform/GBA HTTP/1.1\r\nHost: x\r\n\r\n");
+    let r = request(
+        server.port(),
+        "GET /platform/GBA HTTP/1.1\r\nHost: x\r\n\r\n",
+    );
     assert!(r.starts_with("HTTP/1.1 200"), "{r}");
     assert!(r.ends_with("<html>slot</html>"), "{r}");
     let guide = request(
@@ -193,7 +214,10 @@ fn router_paths_fall_back_to_index() {
         "GET /platform/GBA/game/3/guides/Walkthrough.txt HTTP/1.1\r\nHost: x\r\n\r\n",
     );
     assert!(guide.ends_with("<html>slot</html>"), "{guide}");
-    let missing = request(server.port(), "GET /assets/none.js HTTP/1.1\r\nHost: x\r\n\r\n");
+    let missing = request(
+        server.port(),
+        "GET /assets/none.js HTTP/1.1\r\nHost: x\r\n\r\n",
+    );
     assert!(missing.starts_with("HTTP/1.1 404"), "{missing}");
     server.stop();
 }
@@ -207,7 +231,9 @@ fn web_folder_is_served_though_system_is_refused_by_api() {
     assert!(js.contains("text/javascript"), "{js}");
     assert!(js.ends_with("let a = 1;"), "{js}");
     let auth = b64("slot:1234");
-    let api = format!("GET /api/fs/card/System/web/index.html HTTP/1.1\r\nAuthorization: Basic {auth}\r\n\r\n");
+    let api = format!(
+        "GET /api/fs/card/System/web/index.html HTTP/1.1\r\nAuthorization: Basic {auth}\r\n\r\n"
+    );
     assert!(request(p, &api).starts_with("HTTP/1.1 403"));
     server.stop();
 }
@@ -216,7 +242,15 @@ fn web_folder_is_served_though_system_is_refused_by_api() {
 fn static_paths_cannot_leave_the_web_folder() {
     let (_d, server) = with_web();
     let p = server.port();
-    for target in ["/..%2Fsecret.txt", "/../secret.txt", "/assets/%2e%2e/%2e%2e/secret.txt", "/assets/..%5C..%5Csecret.txt", "/..%20/secret.txt", "/.../secret.txt", "/.. /secret.txt"] {
+    for target in [
+        "/..%2Fsecret.txt",
+        "/../secret.txt",
+        "/assets/%2e%2e/%2e%2e/secret.txt",
+        "/assets/..%5C..%5Csecret.txt",
+        "/..%20/secret.txt",
+        "/.../secret.txt",
+        "/.. /secret.txt",
+    ] {
         let r = request(p, &format!("GET {target} HTTP/1.1\r\nHost: x\r\n\r\n"));
         assert!(!r.contains("hidden"), "{target}: {r}");
         assert!(!r.starts_with("HTTP/1.1 200"), "{target}: {r}");
@@ -226,12 +260,18 @@ fn static_paths_cannot_leave_the_web_folder() {
 
 #[test]
 fn qr_url_has_pin() {
-    assert_eq!(qr_url(Ipv4Addr::new(192, 168, 1, 42), 80, "4821"), "http://192.168.1.42/?pin=4821");
+    assert_eq!(
+        qr_url(Ipv4Addr::new(192, 168, 1, 42), 80, "4821"),
+        "http://192.168.1.42/?pin=4821"
+    );
 }
 
 #[test]
 fn fallback_url_has_port() {
-    assert_eq!(qr_url(Ipv4Addr::new(192, 168, 1, 42), 2003, "4821"), "http://192.168.1.42:2003/?pin=4821");
+    assert_eq!(
+        qr_url(Ipv4Addr::new(192, 168, 1, 42), 2003, "4821"),
+        "http://192.168.1.42:2003/?pin=4821"
+    );
 }
 
 #[test]
@@ -259,7 +299,8 @@ fn a_full_server_reads_the_head_before_refusing() {
         }
         Reply::Empty(204)
     });
-    let server = Server::start_with(dir.path().to_path_buf(), 0, "1234".to_string(), handler).unwrap();
+    let server =
+        Server::start_with(dir.path().to_path_buf(), 0, "1234".to_string(), handler).unwrap();
     let port = server.port();
     let raw = "GET /page HTTP/1.1\r\nHost: x\r\n\r\n";
     let held: Vec<_> = (0..8)

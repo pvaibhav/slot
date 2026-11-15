@@ -249,13 +249,7 @@ use slot_ui::{thumbnail, Draw, Gauge, Printed, TexId};
 
 fn drawn(v: &ShotViewer, canvas: Canvas) -> Vec<Draw> {
     let mut out = Vec::new();
-    v.draw(
-        canvas,
-        Gauge::default(),
-        None,
-        Printed::default(),
-        &mut out,
-    );
+    v.draw(canvas, Gauge::default(), None, Printed::default(), &mut out);
     out
 }
 

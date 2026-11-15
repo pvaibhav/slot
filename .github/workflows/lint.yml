@@ -1,0 +1,40 @@
+name: lint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clippy:
+    name: clippy, host, device and RG DS+
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Task
+        run: |
+          set -eu
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL https://taskfile.dev/install.sh | sh -s -- -b "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: task lint
+        run: task lint
+
+      - name: task lint:device
+        if: ${{ !cancelled() }}
+        run: task lint:device
+
+      - name: task lint:nds
+        if: ${{ !cancelled() }}
+        run: task lint:nds

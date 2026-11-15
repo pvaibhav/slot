@@ -4,6 +4,7 @@ use std::io::Cursor;
 
 fn cart(stem: &str) -> Cart {
     Cart {
+        tags: Vec::new(),
         platform: slot_store::Platform::Gba,
         stem: stem.into(),
         rom: format!("Games/GBA/{stem}.gba").into(),

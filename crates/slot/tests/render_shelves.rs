@@ -142,6 +142,26 @@ fn put_game_boy_carts(root: &Path) {
     }
 }
 
+fn put_labels(root: &Path) {
+    for (dir, stem, rgb) in [
+        ("GBA", "Emerald", [40u8, 160, 90]),
+        ("GBA", "Fusion", [150, 60, 170]),
+        ("GB", "Tetris Rosy Retrospection", [210, 120, 40]),
+        ("GBC", "Tetris Chromatic", [40, 110, 210]),
+    ] {
+        let path = root.join(format!("Labels/{dir}/{stem}.png"));
+        std::fs::create_dir_all(path.parent().expect("a labels folder")).expect("make Labels");
+        let file = std::fs::File::create(&path).expect("create label");
+        let mut e = png::Encoder::new(std::io::BufWriter::new(file), 640, 330);
+        e.set_color(png::ColorType::Rgb);
+        e.set_depth(png::BitDepth::Eight);
+        e.write_header()
+            .expect("label header")
+            .write_image_data(&rgb.repeat(640 * 330))
+            .expect("label data");
+    }
+}
+
 fn gb_rom(cgb: u8) -> Vec<u8> {
     let mut rom = vec![0u8; 0x8000];
     rom[0x143] = cgb;
@@ -177,6 +197,7 @@ fn the_shoulders_ring_over_a_shelf_for_each_system() {
     };
     let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
     put_game_boy_carts(d.path());
+    put_labels(d.path());
     clocked(d.path());
     let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
     f.upload_faces(&mut c);
@@ -714,6 +735,7 @@ fn cartridges() -> [(&'static str, Cart); 2] {
                 shell: None,
                 title: "POKEMON EMER".into(),
                 sealed: false,
+                tags: Vec::new(),
             },
         ),
         (
@@ -727,6 +749,7 @@ fn cartridges() -> [(&'static str, Cart); 2] {
                 shell: None,
                 title: "TETRIS".into(),
                 sealed: false,
+                tags: Vec::new(),
             },
         ),
     ]
@@ -904,6 +927,7 @@ fn a_recents_shelf_rings_paks_and_carts_together() {
     };
     let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
     put_game_boy_carts(d.path());
+    put_labels(d.path());
     let mut s = slot_store::read_slot_state(d.path());
     s.clock_set = true;
     s.show_recents = true;

@@ -36,7 +36,12 @@ pub struct RouteWatch {
 impl RouteWatch {
     pub fn new(alsa_config_path: Option<&str>) -> Self {
         let paths = alsa_config_path
-            .map(|p| p.split(':').filter(|s| !s.is_empty()).map(Into::into).collect())
+            .map(|p| {
+                p.split(':')
+                    .filter(|s| !s.is_empty())
+                    .map(Into::into)
+                    .collect()
+            })
             .unwrap_or_default();
         RouteWatch { paths, seen: None }
     }

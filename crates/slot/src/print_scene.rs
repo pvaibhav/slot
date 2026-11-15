@@ -5,8 +5,7 @@ use crate::app::shift_down;
 use slot_gfx::{paper_flap_shows, Canvas, Compositor, Draw, GfxError, TexId, OUT_H, OUT_W};
 use slot_input::Millis;
 use slot_ui::{
-    cover_bytes, default_background, ease, receipt_blank, receipt_face, ReceiptText,
-    UndoFace,
+    cover_bytes, default_background, ease, receipt_blank, receipt_face, ReceiptText, UndoFace,
 };
 
 const SLIDE: Millis = 260;

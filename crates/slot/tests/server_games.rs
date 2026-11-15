@@ -564,6 +564,7 @@ fn art_upload_over_a_label_learned_at_boot_shows_the_new_label() {
         code: String::new(),
         shell: None,
         sealed: false,
+        tags: Vec::new(),
     };
     assert_eq!(
         &slot::label_cache::label_art(root, &cart).unwrap()[..3],

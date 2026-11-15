@@ -30,9 +30,16 @@ fn a_ds_picture_keeps_its_4_by_3_shape_on_the_rg_ds_plus() {
     for _ in 0..120 {
         a.update(1.0 / 60.0);
     }
-    assert!(matches!(a.phase(), Phase::Playing { .. }), "{:?}", a.phase());
+    assert!(
+        matches!(a.phase(), Phase::Playing { .. }),
+        "{:?}",
+        a.phase()
+    );
     assert_eq!(a.playing_platform(), Platform::Nds);
     let [_, _, w, h] = a.game_layout().rect;
     let shape = (w * panel.0 as f32 / OUT_W as f32) / (h * panel.1 as f32 / OUT_H as f32);
-    assert!((shape - 4.0 / 3.0).abs() < 0.01, "the DS picture is {shape:.3}:1, not 4:3");
+    assert!(
+        (shape - 4.0 / 3.0).abs() < 0.01,
+        "the DS picture is {shape:.3}:1, not 4:3"
+    );
 }

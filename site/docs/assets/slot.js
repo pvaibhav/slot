@@ -1,32 +1,18 @@
 (function(){
   "use strict";
 
-  fetch(new URL("device.svg", document.currentScript.src))
-    .then(function(r){ return r.text(); })
-    .then(function(txt){
-      var holder = document.createElement("div");
-      holder.innerHTML = txt;
-      var defs = holder.querySelector("svg");
-      if (!defs) return;
-      document.body.insertBefore(defs, document.body.firstChild);
-      var peerTxt = txt
-        .replace(/id="([\w-]+)"/g, 'id="$1-peer"')
-        .replace(/url\(#([\w-]+)\)/g, "url(#$1-peer)")
-        .replace(/href="#([\w-]+)"/g, 'href="#$1-peer"');
-      holder.innerHTML = peerTxt;
-      var peerDefs = holder.querySelector("svg");
-      if (peerDefs) {
-        peerDefs.classList.add("peer-defs");
-        document.body.insertBefore(peerDefs, defs.nextSibling);
-      }
-      var uses = document.querySelectorAll("use");
-      for (var i = 0; i < uses.length; i++) {
-        var h = uses[i].getAttribute("href");
-        uses[i].removeAttribute("href");
-        uses[i].setAttribute("href", h);
-      }
-    })
-    .catch(function(){});
+  var defs = document.querySelector("svg.device-defs");
+  if (!defs) return;
+  var holder = document.createElement("div");
+  holder.innerHTML = defs.outerHTML
+    .replace(/id="([\w-]+)"/g, 'id="$1-peer"')
+    .replace(/url\(#([\w-]+)\)/g, "url(#$1-peer)")
+    .replace(/href="#([\w-]+)"/g, 'href="#$1-peer"');
+  var peerDefs = holder.querySelector("svg");
+  if (peerDefs) {
+    peerDefs.classList.add("peer-defs");
+    defs.parentNode.insertBefore(peerDefs, defs.nextSibling);
+  }
 })();
 
 (function(){
@@ -34,29 +20,10 @@
 
   var MEDIA = new URL("../media/", document.currentScript.src).href;
 
-  var SHELLS = [
-    { name:"silver",     light:"#e2e5e9", base:"#b8bcc2", shade:"#7e838b", btn:"#c2c6cc", btnHi:"#e9ecf0", etch:"rgba(0,0,0,.46)" },
-    { name:"pink",       light:"#f6d3dd", base:"#e6a6b8", shade:"#a76d7e", btn:"#dbd1d5", btnHi:"#f2eaed", etch:"rgba(0,0,0,.44)" },
-    { name:"light blue", light:"#dbe9f2", base:"#a8c4d8", shade:"#6d8ba1", btn:"#d0dae3", btnHi:"#edf3f8", etch:"rgba(0,0,0,.44)" },
-    { name:"black",      light:"#5a5d64", base:"#34363b", shade:"#16171a", btn:"#3c3e43", btnHi:"#5c5f66", etch:"rgba(255,255,255,.42)" }
-  ];
-
-  var want = (location.search.match(/[?&]shell=([^&]+)/) || [])[1];
-  var shell = SHELLS[Math.floor(Math.random() * SHELLS.length)];
-  if (want) {
-    want = decodeURIComponent(want).replace(/\+/g, " ").toLowerCase();
-    for (var si = 0; si < SHELLS.length; si++) {
-      if (SHELLS[si].name === want) { shell = SHELLS[si]; break; }
-    }
-  }
-
+  var SHELLS = window.slotShells;
+  var shell = window.slotShell;
   var root = document.documentElement.style;
-  root.setProperty("--shell-light", shell.light);
-  root.setProperty("--shell-base",  shell.base);
-  root.setProperty("--shell-shade", shell.shade);
-  root.setProperty("--btn",         shell.btn);
-  root.setProperty("--btn-hi",      shell.btnHi);
-  root.setProperty("--etch",        shell.etch);
+
 
   var pose = (location.search.match(/[?&]pose=(flat|hero)/) || [])[1];
   if (pose) {
@@ -142,6 +109,9 @@
     peer = gdev.cloneNode(true);
     peer.classList.add("is-peer");
     peer.classList.remove("is-waiting", "is-shut", "is-swinging");
+    Array.prototype.forEach.call(peer.querySelectorAll(".dv-depth, .dv-wall, .dv-side"), function(el){
+      el.parentNode.removeChild(el);
+    });
     peer.setAttribute("aria-hidden", "true");
     var others = SHELLS.filter(function(x){ return x !== shell; });
     var their = others[Math.floor(Math.random() * others.length)];
@@ -158,6 +128,7 @@
     for (var pu = 0; pu < peerUses.length; pu++) {
       peerUses[pu].setAttribute("href", peerUses[pu].getAttribute("href") + "-peer");
     }
+    window.slotAddDepth(peer);
     pvid = peer.querySelector("video");
     pvid.classList.remove("guide-screen");
     stage.appendChild(peer);

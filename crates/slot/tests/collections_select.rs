@@ -434,7 +434,10 @@ fn a_bad_name_keeps_the_keyboard_open() {
     assert_ne!(a.toast(), Some(Toast::Collection));
     let kb = a.keyboard().unwrap();
     assert_eq!(kb.text(), "order");
-    assert_eq!(kb.subtitle(), Some("Name not allowed, use a different name"));
+    assert_eq!(
+        kb.subtitle(),
+        Some("Name not allowed, use a different name")
+    );
 }
 
 #[test]
@@ -565,7 +568,10 @@ fn the_add_screen_asks_for_the_faces_in_every_stack() {
         .filter_map(|w| a.face_cart(w.shelf, w.index).map(|c| c.stem.clone()))
         .collect();
     for stem in ["Fusion", "Apotris", "Catrap"] {
-        assert!(wanted.iter().any(|s| s == stem), "{stem} missing from {wanted:?}");
+        assert!(
+            wanted.iter().any(|s| s == stem),
+            "{stem} missing from {wanted:?}"
+        );
     }
 }
 
@@ -609,6 +615,10 @@ fn leaving_the_shelf_with_y_held_drops_the_jiggle() {
     for _ in 0..30 {
         a.update(0.016);
     }
-    assert!(!matches!(a.phase(), slot::app::Phase::Shelf), "{:?}", a.phase());
+    assert!(
+        !matches!(a.phase(), slot::app::Phase::Shelf),
+        "{:?}",
+        a.phase()
+    );
     assert!(!a.pressing());
 }

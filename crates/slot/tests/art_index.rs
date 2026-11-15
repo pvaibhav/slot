@@ -7,7 +7,10 @@ fn a_crc_key_finds_its_entry() {
     )
     .unwrap();
     let entry = index.get(0x31CB6526).unwrap();
-    assert_eq!(entry.real.as_deref(), Some("GB/support-texture/31CB6526.png"));
+    assert_eq!(
+        entry.real.as_deref(),
+        Some("GB/support-texture/31CB6526.png")
+    );
     assert_eq!(entry.logo.as_deref(), Some("GB/wheel/31CB6526.png"));
     assert!(entry.look.is_none());
 }
@@ -51,5 +54,8 @@ fn junk_is_none() {
 #[test]
 fn an_entry_reads_its_box() {
     let index = ArtIndex::parse(r#"{"00038342":{"box-3D":"NDS/box-3D/00038342.png"}}"#).unwrap();
-    assert_eq!(index.get(0x00038342).unwrap().boxed.as_deref(), Some("NDS/box-3D/00038342.png"));
+    assert_eq!(
+        index.get(0x00038342).unwrap().boxed.as_deref(),
+        Some("NDS/box-3D/00038342.png")
+    );
 }

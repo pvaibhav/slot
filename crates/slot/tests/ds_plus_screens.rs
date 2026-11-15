@@ -126,7 +126,7 @@ fn a_gba_cart_inserts_on_the_bottom_screen() {
 }
 
 #[test]
-fn a_gba_cart_stays_seated_in_the_bottom_slot_while_it_plays() {
+fn the_bottom_screen_goes_black_while_a_gba_cart_plays() {
     let (_d, mut a) = two_panel_app();
     a.set_snapshot(StubSnapshot::boxed());
     a.apply(slot_input::Action::Insert);
@@ -139,11 +139,7 @@ fn a_gba_cart_stays_seated_in_the_bottom_slot_while_it_plays() {
         "{:?}",
         a.phase()
     );
-    assert_eq!(a.bottom_source(), slot::app::BottomSource::Compositor);
-    assert!(
-        big_tex(&bottom(&a)).is_some(),
-        "no seated cart on the bottom screen"
-    );
+    assert_eq!(a.bottom_source(), slot::app::BottomSource::Black);
     a.set_game_ready(true);
     let mut top = Vec::new();
     a.draw_screen(Screen::Top, &mut top);
@@ -222,7 +218,11 @@ fn a_ds_cart_flings_up_while_the_shelf_parts_on_the_bottom() {
             );
         }
         if seat >= 0.3 {
-            assert_eq!(carts_shown(&bottom(&a), w), 0, "carts on the bottom at seat {seat}");
+            assert_eq!(
+                carts_shown(&bottom(&a), w),
+                0,
+                "carts on the bottom at seat {seat}"
+            );
         }
         if seat < 0.25 {
             early += 1;
@@ -445,6 +445,25 @@ mod rendered {
         white_in(px, 300, 140, 700, 560)
     }
 
+    pub fn dimmed(list: &[slot_gfx::Draw]) -> bool {
+        list.windows(2).any(|pair| {
+            matches!(pair[0], slot_gfx::Draw::Game)
+                && matches!(
+                    pair[1],
+                    slot_gfx::Draw::Rect { x, y, colour: [r, g, b, a], .. }
+                        if x == 0.0 && y == 0.0 && r == 0.0 && g == 0.0 && b == 0.0 && a > 0.0 && a < 1.0
+                )
+        })
+    }
+
+    fn brightness(px: &[u8]) -> u64 {
+        let w = PANEL.0 as usize;
+        (80..680)
+            .flat_map(|y| (40..980).map(move |x| (y * w + x) * 4))
+            .map(|o| px[o] as u64 + px[o + 1] as u64 + px[o + 2] as u64)
+            .sum()
+    }
+
     #[test]
     fn a_gba_games_menu_draws_on_the_bottom_screen() {
         let mut r = Rig::gba();
@@ -545,7 +564,7 @@ mod rendered {
     }
 
     #[test]
-    fn the_bottom_screen_shows_the_gba_slot_on_the_shelf_and_while_playing() {
+    fn the_bottom_screen_shows_the_gba_slot_on_the_shelf_and_goes_black_in_game() {
         let mut r = Rig::gba();
         assert_eq!(r.f.bottom_source(), BottomSource::Compositor);
         let shelf = r.shot(Screen::Bottom, "slot-shelf-bottom");
@@ -571,41 +590,33 @@ mod rendered {
             r.shot(Screen::Bottom, &format!("slot-insert-bottom-{i}"));
         }
         r.run_for(4.0);
+        assert_eq!(r.f.bottom_source(), BottomSource::Black);
         let playing = r.shot(Screen::Bottom, "slot-play-bottom");
         r.shot(Screen::Top, "slot-play-top");
-        assert_ne!(
-            shelf, playing,
-            "the seated cart does not show on the bottom"
-        );
-    }
-
-    pub fn dimmed_game(draws: &[slot_gfx::Draw]) -> bool {
-        draws.iter().any(|d| matches!(d, slot_gfx::Draw::Game))
-            && draws.iter().any(|d| matches!(d, slot_gfx::Draw::Rect { colour, .. } if *colour == [0.0, 0.0, 0.0, 0.8]))
-    }
-
-    fn assert_dimmed_game(r: &Rig) {
-        let mut draws = Vec::new();
-        r.f.app().draw_screen(Screen::Top, &mut draws);
-        assert!(dimmed_game(&draws), "no dimmed game on the top screen");
+        let lit = playing
+            .chunks(4)
+            .filter(|p| p[0] > 30 || p[1] > 30 || p[2] > 30)
+            .count();
+        assert_eq!(lit, 0, "the bottom screen is lit in game");
     }
 
     #[test]
-    fn the_top_screen_shows_the_box_screen_while_the_menu_is_open() {
+    fn the_top_screen_dims_the_game_while_the_menu_is_open() {
         let mut r = Rig::gba();
         r.play();
         let before = r.shot(Screen::Top, "box-before");
         r.open_menu();
         r.run_for(0.3);
         let top = r.shot(Screen::Top, "box-top");
-        assert_dimmed_game(&r);
-        assert_ne!(before, top);
+        assert!(
+            brightness(&top) * 3 < brightness(&before),
+            "the game is not dimmed under the menu: {} against {}",
+            brightness(&top),
+            brightness(&before)
+        );
         let mut list = Vec::new();
         r.f.app().draw_screen(Screen::Top, &mut list);
-        assert!(
-            dimmed_game(&list),
-            "the game is not dimmed under the menu"
-        );
+        assert!(dimmed(&list), "the game is not dimmed under the menu");
     }
 
     #[test]
@@ -622,7 +633,7 @@ mod rendered {
         let mut list = Vec::new();
         r.f.app().draw_screen(Screen::Top, &mut list);
         assert!(
-            list.iter().any(|d| matches!(d, slot_gfx::Draw::Game)),
+            list.iter().any(|d| matches!(d, slot_gfx::Draw::Game)) && !dimmed(&list),
             "no game preview on the Screen row"
         );
         r.tap(Btn::A);
@@ -634,7 +645,7 @@ mod rendered {
         let mut list = Vec::new();
         r.f.app().draw_screen(Screen::Top, &mut list);
         assert!(
-            list.iter().any(|d| matches!(d, slot_gfx::Draw::Game)),
+            list.iter().any(|d| matches!(d, slot_gfx::Draw::Game)) && !dimmed(&list),
             "no game preview on a screen setting"
         );
         r.tap(Btn::B);
@@ -642,8 +653,8 @@ mod rendered {
         let mut list = Vec::new();
         r.f.app().draw_screen(Screen::Top, &mut list);
         assert!(
-            dimmed_game(&list),
-            "the game is not dimmed after leaving the screen rows"
+            dimmed(&list),
+            "the preview stayed after leaving the screen rows"
         );
     }
 
@@ -745,7 +756,7 @@ mod rendered {
     }
 
     #[test]
-    fn a_corrupt_box_file_keeps_the_dimmed_game() {
+    fn a_corrupt_box_file_draws_no_box() {
         let mut r = with_box(b"not a png at all".to_vec());
         let top = menu_with_art(&mut r);
         assert!(
@@ -754,19 +765,18 @@ mod rendered {
             r.f.app().box_art()
         );
         assert_eq!(red_left(&top), 0);
-        assert_dimmed_game(&r);
     }
 
     #[test]
-    fn a_cart_without_box_art_keeps_the_dimmed_game() {
+    fn a_cart_without_box_art_draws_no_box() {
         let mut r = Rig::gba();
-        let _top = menu_with_art(&mut r);
+        let top = menu_with_art(&mut r);
         assert!(r
             .f
             .app()
             .box_art()
             .is_none_or(|a| a.boxed.is_none() && a.logo.is_none()));
-        assert_dimmed_game(&r);
+        assert_eq!(red_left(&top), 0);
     }
 
     #[test]
@@ -1077,7 +1087,7 @@ fn both_screens_power_off_together_when_a_ds_card_ejects() {
 
 #[cfg(target_os = "macos")]
 mod menu_step {
-    use super::rendered::Rig;
+    use super::rendered::{dimmed, Rig};
     use slot::app::BottomSource;
     use slot::screen::Screen;
     use slot_input::{Btn, Millis, RawEvent};
@@ -1106,9 +1116,12 @@ mod menu_step {
                     .map(|i| px[i])
                     .max()
                     .unwrap_or(0);
-                assert!(green < 140, "the top screen showed the DS bottom screen on frame {frame} (green {green})");
+                assert!(
+                    green < 140,
+                    "the top screen showed the DS bottom screen on frame {frame} (green {green})"
+                );
             }
-            if top_at.is_none() && super::rendered::dimmed_game(&top) {
+            if top_at.is_none() && dimmed(&top) {
                 top_at = Some(frame);
             }
             if bottom_at.is_none() && r.f.bottom_source() == BottomSource::Compositor {
@@ -1121,7 +1134,9 @@ mod menu_step {
         let (Some(t), Some(b)) = (top_at, bottom_at) else {
             panic!("the menu never showed: top {top_at:?} bottom {bottom_at:?}");
         };
-        assert_eq!(t, b, "the top changed on frame {t}, the bottom on frame {b}");
+        assert_eq!(
+            t, b,
+            "the top changed on frame {t}, the bottom on frame {b}"
+        );
     }
-
 }

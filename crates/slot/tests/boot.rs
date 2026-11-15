@@ -26,7 +26,9 @@ fn boot_with_a_seated_cart_never_shows_the_shelf() {
 
 #[test]
 fn resume_on_power_on_alone_decides_whether_boot_reseats_the_cart_fresh() {
-    for (resume_insert, resume_power_on) in [(true, true), (true, false), (false, true), (false, false)] {
+    for (resume_insert, resume_power_on) in
+        [(true, true), (true, false), (false, true), (false, false)]
+    {
         let d = tmp_root_with_carts(&["Emerald"]);
         let s = SlotState {
             resume_insert,
@@ -65,7 +67,11 @@ fn an_old_auto_load_state_becomes_the_two_resume_rows() {
             + &format!("auto_load={value}\neject_save=0\n");
         std::fs::write(&path, old).unwrap();
         let s = read_slot_state(d.path());
-        assert_eq!((s.resume_insert, s.resume_power_on), (insert, power_on), "{value}");
+        assert_eq!(
+            (s.resume_insert, s.resume_power_on),
+            (insert, power_on),
+            "{value}"
+        );
         let a = App::boot(d.path());
         assert_eq!(a.starting_clean(), !power_on, "{value}");
     }

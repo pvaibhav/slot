@@ -5,6 +5,7 @@ use slot_store::KidMode;
 pub enum KidWhere {
     Shelf,
     Playing,
+    Invite,
     Other,
 }
 
@@ -28,7 +29,9 @@ pub fn allowed(at: KidWhere, mode: KidMode, action: Action) -> Option<Action> {
             | Action::PreviousCollection
             | Action::NextCollection,
         ) => mode == KidMode::Shelves,
-        (KidWhere::Other, Action::GbaDown(b) | Action::GbaUp(b)) => matches!(b, Btn::A | Btn::B),
+        (KidWhere::Invite | KidWhere::Other, Action::GbaDown(b) | Action::GbaUp(b)) => {
+            matches!(b, Btn::A | Btn::B)
+        }
         _ => false,
     };
     kept.then_some(action)

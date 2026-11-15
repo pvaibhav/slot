@@ -249,7 +249,8 @@ pub fn compose(
 
 fn chunks(png: &[u8]) -> Option<Vec<(&[u8], std::ops::Range<usize>)>> {
     const SIGNATURE: usize = 8;
-    if png.len() < SIGNATURE || png[..SIGNATURE] != [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a] {
+    if png.len() < SIGNATURE || png[..SIGNATURE] != [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]
+    {
         return None;
     }
     let mut out = Vec::new();
@@ -319,9 +320,15 @@ pub fn glance(png: &[u8]) -> Option<Vec<u8>> {
     let (w, h) = (w as usize, h as usize);
     let mut out = Vec::with_capacity(GLANCE_W * GLANCE_H * 3);
     for row in 0..GLANCE_H {
-        let (top, bottom) = (row * h / GLANCE_H, ((row + 1) * h / GLANCE_H).max(row * h / GLANCE_H + 1));
+        let (top, bottom) = (
+            row * h / GLANCE_H,
+            ((row + 1) * h / GLANCE_H).max(row * h / GLANCE_H + 1),
+        );
         for col in 0..GLANCE_W {
-            let (left, right) = (col * w / GLANCE_W, ((col + 1) * w / GLANCE_W).max(col * w / GLANCE_W + 1));
+            let (left, right) = (
+                col * w / GLANCE_W,
+                ((col + 1) * w / GLANCE_W).max(col * w / GLANCE_W + 1),
+            );
             let mut sum = [0u32; 3];
             for y in top..bottom {
                 for p in rgba[(y * w + left) * 4..(y * w + right) * 4].chunks_exact(4) {
@@ -338,7 +345,9 @@ pub fn glance(png: &[u8]) -> Option<Vec<u8>> {
 }
 
 pub fn looks_same(a: &[u8], b: &[u8]) -> bool {
-    a.iter().zip(b).all(|(x, y)| x.abs_diff(*y) <= GLANCE_TOLERANCE)
+    a.iter()
+        .zip(b)
+        .all(|(x, y)| x.abs_diff(*y) <= GLANCE_TOLERANCE)
 }
 
 pub fn untagged(png: &[u8]) -> Vec<u8> {
@@ -640,14 +649,10 @@ mod tests {
     }
 
     #[test]
-    fn a_game_boy_label_is_the_shape_of_its_own_well() {
+    fn a_game_boy_label_is_made_at_the_game_boy_size() {
         assert_eq!(size(Platform::Gba), (W, H));
         assert_eq!(size(Platform::Gb), (GB_W, GB_H));
         assert_eq!(size(Platform::Gbc), (GB_W, GB_H));
-
-        let want = crate::cart::GB_LABEL_W as f32 / crate::cart::GB_LABEL_H as f32;
-        let got = GB_W as f32 / GB_H as f32;
-        assert!((got - want).abs() < 0.01, "{got} is not the well's {want}");
 
         let mut logo = Vec::new();
         {

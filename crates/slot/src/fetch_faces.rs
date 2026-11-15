@@ -4,7 +4,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use slot_store::{Cart, Platform};
 use slot_ui::{
     bare_face, cart_backing, cart_face, cart_face_with, cart_interior, cover_bytes, gb_shell_of,
-    label_size, shows_interior, CartFace,
+    label_size, shows_interior, writes_by_hand, CartFace,
 };
 
 pub struct FaceSet {
@@ -12,6 +12,7 @@ pub struct FaceSet {
     pub bare: CartFace,
     pub done: CartFace,
     pub under: Option<[CartFace; 2]>,
+    pub inked: bool,
 }
 
 pub enum FaceJob {
@@ -37,6 +38,7 @@ pub fn faces_for(cart: &Cart) -> FaceSet {
         bare: bare_face(cart),
         done: cart_face(cart),
         under: shows_interior(cart).then(|| [cart_interior(cart), cart_backing(gb_shell_of(cart))]),
+        inked: writes_by_hand(&untitled),
     }
 }
 
@@ -53,6 +55,7 @@ pub fn example_faces() -> [CartFace; 2] {
         code: String::new(),
         shell: None,
         sealed: false,
+        tags: Vec::new(),
     };
     let (w, h) = label_size(&cart);
     [EXAMPLE_REAL, EXAMPLE_LOGO].map(|png| cart_face_with(&cart, cover_bytes(png, w, h)))

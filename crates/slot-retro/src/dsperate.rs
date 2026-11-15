@@ -37,9 +37,9 @@ struct Api {
 impl Api {
     fn load(lib: &Library) -> Result<Api, CoreError> {
         unsafe fn sym<T: Copy>(lib: &Library, name: &[u8]) -> Result<T, CoreError> {
-            lib.get::<T>(name).map(|s| *s).map_err(|e| {
-                CoreError::Load(format!("{}: {e}", String::from_utf8_lossy(name)))
-            })
+            lib.get::<T>(name)
+                .map(|s| *s)
+                .map_err(|e| CoreError::Load(format!("{}: {e}", String::from_utf8_lossy(name))))
         }
         unsafe {
             Ok(Api {
@@ -165,7 +165,10 @@ impl RetroCore for DsperateCore {
                 self.copy_video();
                 Ok(())
             }
-            _ => Err(CoreError::Load(format!("{}: DSperate could not load it", rom.display()))),
+            _ => Err(CoreError::Load(format!(
+                "{}: DSperate could not load it",
+                rom.display()
+            ))),
         }
     }
 

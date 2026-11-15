@@ -42,7 +42,12 @@ const BODY_W: f32 = 292.0;
 const BODY_H: f32 = 150.0;
 const LID_FRONT: f32 = 56.0;
 const RIM_H: f32 = 4.0;
-const RIM: [f32; 4] = [0x6b as f32 / 255.0, 0x52 as f32 / 255.0, 0xb4 as f32 / 255.0, 1.0];
+const RIM: [f32; 4] = [
+    0x6b as f32 / 255.0,
+    0x52 as f32 / 255.0,
+    0xb4 as f32 / 255.0,
+    1.0,
+];
 const GLOW_ABOVE: f32 = 16.0;
 const BODY_RECT: [f32; 4] = [-148.0, -152.0, 296.0, 154.0];
 const INSIDE_RECT: [f32; 4] = [-148.0, -184.0, 296.0, 36.0];
@@ -102,11 +107,7 @@ fn lid_at(t: Millis) -> Option<(f32, f32, f32)> {
         return None;
     }
     let k = seg(t, LID_AT, LID_END);
-    Some((
-        k * LID_DX,
-        -k * LID_DRIFT - LID_FLING * k * k,
-        k * LID_TURN,
-    ))
+    Some((k * LID_DX, -k * LID_DRIFT - LID_FLING * k * k, k * LID_TURN))
 }
 
 fn cart_at(t: Millis) -> Option<(f32, f32)> {

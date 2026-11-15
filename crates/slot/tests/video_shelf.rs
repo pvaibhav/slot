@@ -71,7 +71,10 @@ fn video_is_not_in_the_l1_r1_row() {
     let d = card(true);
     let mut a = on_gba(&d);
     let seen = row(&mut a);
-    assert!(!seen.iter().any(|n| n == "Game Boy Advance Video"), "{seen:?}");
+    assert!(
+        !seen.iter().any(|n| n == "Game Boy Advance Video"),
+        "{seen:?}"
+    );
 }
 
 #[test]
@@ -105,7 +108,10 @@ fn with_no_gba_games_video_takes_the_gba_seat() {
     let d = card(false);
     let mut a = boot(&d, "gb", Platform::Gb, "Tetris");
     let seen = row(&mut a);
-    assert!(seen.iter().any(|n| n == "Game Boy Advance Video"), "{seen:?}");
+    assert!(
+        seen.iter().any(|n| n == "Game Boy Advance Video"),
+        "{seen:?}"
+    );
 }
 
 #[test]

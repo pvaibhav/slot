@@ -37,6 +37,7 @@ fn app_with_carts(stems: &[&str]) -> App {
                 shell: None,
                 title: stem.to_uppercase(),
                 sealed: false,
+                tags: Vec::new(),
             })
             .collect(),
     )
@@ -320,6 +321,7 @@ fn app_with_platforms(carts: &[(Platform, &str)]) -> App {
                 shell: None,
                 title: stem.to_uppercase(),
                 sealed: false,
+                tags: Vec::new(),
             })
             .collect(),
     )

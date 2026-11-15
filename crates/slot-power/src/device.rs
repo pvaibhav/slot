@@ -100,6 +100,7 @@ enum Led {
 pub struct DevicePlatform {
     root: PathBuf,
     sysfs: PathBuf,
+    sound_cards: PathBuf,
     backlight: Option<Backlight>,
     max_brightness: u32,
     battery: Option<PathBuf>,
@@ -128,6 +129,11 @@ impl DevicePlatform {
 
     pub fn with_sleep(mut self, command: PathBuf) -> Self {
         self.sleep_command = Some(command);
+        self
+    }
+
+    pub fn with_sound_cards(mut self, cards: PathBuf) -> Self {
+        self.sound_cards = cards;
         self
     }
 
@@ -170,6 +176,7 @@ impl DevicePlatform {
         DevicePlatform {
             root,
             sysfs: sysfs.to_path_buf(),
+            sound_cards: PathBuf::from(SOUND_CARDS),
             backlight,
             max_brightness,
             battery,
@@ -503,6 +510,16 @@ fn charge_at(dir: &Path) -> Charge {
     }
 }
 
+pub const SOUND_CARDS: &str = "/proc/asound/cards";
+
+pub fn usb_card(cards: &str) -> Option<u32> {
+    cards.lines().find_map(|line| {
+        let (index, rest) = line.trim_start().split_once(' ')?;
+        let index = index.parse().ok()?;
+        rest.contains("USB-Audio").then_some(index)
+    })
+}
+
 fn headphones_in(gpio: &str) -> bool {
     gpio.lines()
         .find(|l| l.contains("|Headphone detection"))
@@ -556,7 +573,9 @@ impl Platform for DevicePlatform {
     }
 
     fn headphones(&self) -> bool {
-        fs::read_to_string(self.sysfs.join("kernel/debug/gpio")).is_ok_and(|g| headphones_in(&g))
+        let jack = fs::read_to_string(self.sysfs.join("kernel/debug/gpio"))
+            .is_ok_and(|g| headphones_in(&g));
+        jack || fs::read_to_string(&self.sound_cards).is_ok_and(|c| usb_card(&c).is_some())
     }
 
     fn card_read_only(&self) -> bool {
@@ -599,6 +618,19 @@ impl Platform for DevicePlatform {
                 write(dir.join("param"), value.to_string());
                 write(dir.join("start"), "1".to_string());
             }
+        }
+    }
+
+    fn set_bottom_backlight(&mut self, on: bool) {
+        let Some(Backlight::Class(dirs)) = &self.backlight else {
+            return;
+        };
+        let [(bottom, _), _] = dirs.as_slice() else {
+            return;
+        };
+        let file = bottom.join("bl_power");
+        if let Err(e) = fs::write(&file, if on { "0" } else { "4" }) {
+            eprintln!("slot: {}: {e}", file.display());
         }
     }
 

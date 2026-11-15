@@ -15,6 +15,7 @@ fn carts(stems: &[&str]) -> Vec<Cart> {
             shell: None,
             title: stem.to_uppercase(),
             sealed: false,
+            tags: Vec::new(),
         })
         .collect()
 }

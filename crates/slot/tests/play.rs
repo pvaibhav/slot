@@ -35,7 +35,9 @@ fn a_tap_resumes_and_a_hold_starts_clean() {
 
 #[test]
 fn resume_on_insert_alone_decides_whether_a_tap_resumes() {
-    for (resume_insert, resume_power_on) in [(true, true), (true, false), (false, true), (false, false)] {
+    for (resume_insert, resume_power_on) in
+        [(true, true), (true, false), (false, true), (false, false)]
+    {
         let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
         StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
             .write_resume(&[7u8; 64])

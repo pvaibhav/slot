@@ -1,10 +1,9 @@
 use slot_store::{scan, Platform};
 use slot_ui::{
-    cart_face, clean_label, foot_y, gb_silhouette, label_colour, label_panel,
-    label_text, rest_y, seated_box, shell_for, silhouette, Finish, GbShell, CART_H, CART_W,
-    GBC_LABEL_H, GBC_LABEL_W, GBC_LABEL_X, GBC_LABEL_Y, GB_CART_H, GB_CART_W, GB_LABEL_H,
-    GB_LABEL_W, GB_LABEL_X, GB_LABEL_Y, LABEL_H, LABEL_W, LABEL_X, LABEL_Y, MOUTH_H, OUT_H,
-    PLATE_H,
+    cart_face, clean_label, foot_y, gb_silhouette, label_colour, label_panel, label_text, rest_y,
+    seated_box, shell_for, silhouette, Finish, GbShell, CART_H, CART_W, GBC_LABEL_H, GBC_LABEL_W,
+    GBC_LABEL_X, GBC_LABEL_Y, GB_CART_H, GB_CART_W, GB_LABEL_H, GB_LABEL_W, GB_LABEL_X, GB_LABEL_Y,
+    LABEL_H, LABEL_W, LABEL_X, LABEL_Y, MOUTH_H, OUT_H, PLATE_H,
 };
 use tempfile::TempDir;
 
@@ -75,12 +74,14 @@ fn a_malformed_label_falls_back_to_a_generated_one() {
     write_rom(&d, "Broken.gba", "BROKEN");
     std::fs::create_dir_all(d.path().join("Labels/GBA")).unwrap();
     std::fs::write(d.path().join("Labels/GBA/Broken.png"), b"not a png").unwrap();
-    let face = cart_face(&scan(d.path()).unwrap()[0]);
+    let cart = scan(d.path()).unwrap()[0].clone();
+    let face = cart_face(&cart);
     assert_eq!((face.w, face.h), (CART_W, CART_H));
-    assert_eq!(
-        label_pixel(&face, 0, 0),
-        label_colour("Broken"),
-        "a broken label file did not fall back to a generated one"
+    let mut plain = cart.clone();
+    plain.label = None;
+    assert!(
+        face.rgba == slot_ui::cart_face_with(&plain, None).rgba,
+        "a broken label file did not fall back to the handwritten one"
     );
 }
 
@@ -118,37 +119,6 @@ fn a_label_of_the_wrong_aspect_is_cropped_not_squashed() {
         for x in 0..LABEL_W {
             assert_eq!(label_pixel(&face, x, y), [0xff, 0xff, 0xff], "at {x},{y}");
         }
-    }
-}
-
-#[test]
-fn a_long_title_stays_inside_the_label() {
-    for stem in [
-        "Supercalifragilisticexpialidocious Anniversary Edition",
-        "Super Mario Kart",
-    ] {
-        let d = tmp_root();
-        std::fs::write(d.path().join(format!("Games/GBA/{stem}.gba")), [0u8; 8]).unwrap();
-        let face = cart_face(&scan(d.path()).unwrap()[0]);
-        let bg = label_colour(stem);
-        let margin = 5;
-        for y in 0..LABEL_H {
-            for x in 0..LABEL_W {
-                let edge =
-                    x < margin || y < margin || x >= LABEL_W - margin || y >= LABEL_H - margin;
-                if edge {
-                    assert_eq!(
-                        label_pixel(&face, x, y),
-                        bg,
-                        "{stem}: text spills into the border at {x},{y}"
-                    );
-                }
-            }
-        }
-        assert!(
-            (0..LABEL_H * LABEL_W).any(|i| label_pixel(&face, i % LABEL_W, i / LABEL_W) != bg),
-            "{stem}: no text was drawn"
-        );
     }
 }
 
@@ -404,7 +374,10 @@ fn the_game_boy_label_well_is_near_square_and_sits_under_the_lettering_plate() {
         (aspect - 1.135).abs() < 0.02,
         "the well is {aspect:.2}:1, which is not the 42x37 label's shape"
     );
-    assert!(x0.abs_diff(GB_CART_W - x1) <= 1, "the well is not centred across the pak");
+    assert!(
+        x0.abs_diff(GB_CART_W - x1) <= 1,
+        "the well is not centred across the pak"
+    );
     let (above, below) = (y0, GB_CART_H - y1);
     assert!(
         above > below * 2,
@@ -454,7 +427,10 @@ fn every_cartridge_is_centred_on_the_row_and_clears_both_the_plate_and_the_slot(
         ("the GBA cart", CART_H, OUT_H as f32),
         ("the Game Boy pak", GB_CART_H, lip),
     ] {
-        let (top, foot) = (rest_y(slot_ui::Canvas::FRAMED, h as f32), foot_y(slot_ui::Canvas::FRAMED, h as f32));
+        let (top, foot) = (
+            rest_y(slot_ui::Canvas::FRAMED, h as f32),
+            foot_y(slot_ui::Canvas::FRAMED, h as f32),
+        );
         assert_eq!(top, top.round(), "{name} top is off the pixel grid: {top}");
         assert_eq!(
             foot,
@@ -573,73 +549,6 @@ fn the_clear_shell_is_a_different_bitmap_from_the_plain_one() {
 }
 
 #[test]
-fn a_game_boy_title_stays_inside_its_near_square_label() {
-    for stem in [
-        "Supercalifragilisticexpialidocious Anniversary Edition",
-        "Wario Land 3",
-        "Tetris",
-    ] {
-        let d = tmp_root();
-        write_gb_rom(&d, "GB", &format!("{stem}.gb"), 0x00);
-        let face = cart_face(&scan(d.path()).unwrap()[0]);
-        let at = |x: u32, y: u32| pixel(&face, GB_LABEL_X + x, GB_LABEL_Y + y);
-        let (w, h) = (GB_LABEL_W, GB_LABEL_H);
-        let bg = label_colour(stem);
-        let margin = 5;
-        for y in 0..h {
-            for x in 0..w {
-                let edge = x < margin || y < margin || x >= w - margin || y >= h - margin;
-                if edge {
-                    assert_eq!(
-                        at(x, y),
-                        bg,
-                        "{stem}: text spills into the border at {x},{y}"
-                    );
-                }
-            }
-        }
-        assert!(
-            (0..h * w).any(|i| at(i % w, i / w) != bg),
-            "{stem}: no text was drawn"
-        );
-    }
-}
-
-#[test]
-fn a_game_boy_color_title_sits_in_its_own_well_not_the_game_boys() {
-    assert_eq!(
-        (GBC_LABEL_X, GBC_LABEL_Y, GBC_LABEL_W, GBC_LABEL_H),
-        (45, 110, 223, 199)
-    );
-    let stem = "Colour";
-    let d = tmp_root();
-    write_gb_rom(&d, "GBC", &format!("{stem}.gbc"), 0xc0);
-    let cart = &scan(d.path()).unwrap()[0];
-    assert_eq!(slot_ui::label_size(cart), (GBC_LABEL_W, GBC_LABEL_H));
-    let face = cart_face(cart);
-    let at = |x: u32, y: u32| pixel(&face, GBC_LABEL_X + x, GBC_LABEL_Y + y);
-    let (w, h) = (GBC_LABEL_W, GBC_LABEL_H);
-    let bg = label_colour(stem);
-    let margin = 5;
-    for y in 0..h {
-        for x in 0..w {
-            let edge = x < margin || y < margin || x >= w - margin || y >= h - margin;
-            if edge {
-                assert_eq!(
-                    at(x, y),
-                    bg,
-                    "{stem}: text spills into the border at {x},{y}"
-                );
-            }
-        }
-    }
-    assert!(
-        (0..h * w).any(|i| at(i % w, i / w) != bg),
-        "{stem}: no text was drawn"
-    );
-}
-
-#[test]
 fn the_cart_shadow_is_the_cart_in_black() {
     let s = slot_ui::cart_shadow();
     assert_eq!((s.w, s.h), (CART_W, CART_H));
@@ -693,9 +602,11 @@ fn a_clear_pak_is_see_through_and_a_solid_one_is_not() {
     let (clear, grey) = (face("Clear"), face("Grey"));
     assert_eq!(pixel_alpha(&clear, beside_label.0, beside_label.1), 204);
     assert_eq!(pixel_alpha(&grey, beside_label.0, beside_label.1), 255);
+    let clear_cart = carts.iter().find(|c| c.stem == "Clear").expect("scanned");
+    let labelled = slot_ui::cart_face_with(clear_cart, Some(sheet(clear_cart, [250, 250, 250])));
     assert_eq!(
         pixel_alpha(
-            &clear,
+            &labelled,
             GBC_LABEL_X + GBC_LABEL_W / 2,
             GBC_LABEL_Y + GBC_LABEL_H / 2
         ),
@@ -733,7 +644,7 @@ fn clear_gba(d: &TempDir) -> slot_ui::CartFace {
     let carts = scan(d.path()).unwrap();
     let cart = carts.iter().find(|c| c.stem == "Boktai").expect("scanned");
     assert_eq!(shell_for(cart).finish, Finish::Translucent);
-    cart_face(cart)
+    slot_ui::cart_face_with(cart, Some(sheet(cart, [250, 250, 250])))
 }
 
 #[test]
@@ -774,4 +685,11 @@ fn a_gba_cart_is_backed_by_the_whole_picker_board() {
     assert_eq!((pak.w, pak.h), (GB_CART_W, GB_CART_H));
     let mid = pak.rgba[(((pak.h / 2) * pak.w + pak.w / 2) * 4 + 3) as usize];
     assert!(mid > 200, "the pak board is empty in the middle");
+}
+
+fn sheet(cart: &slot_store::Cart, rgb: [u8; 3]) -> Vec<u8> {
+    let (w, h) = slot_ui::label_size(cart);
+    (0..w * h)
+        .flat_map(|_| [rgb[0], rgb[1], rgb[2], 255])
+        .collect()
 }

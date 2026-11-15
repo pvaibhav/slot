@@ -3,10 +3,10 @@ mod common;
 use common::{app_booting_at, tmp_root_with_carts, CLOCK_IS_SET};
 use slot::app::{App, KeyboardFor, Phase};
 use slot::romm::{PairFail, Protocol, RommConf, RommEvent, RommJob, RommJobs};
-use std::sync::{Arc, Mutex};
 use slot_input::{Action, Btn, Millis};
 use slot_store::{write_slot_state, Platform, SlotState};
 use slot_ui::QuickRow;
+use std::sync::{Arc, Mutex};
 use tempfile::TempDir;
 
 fn booted() -> (TempDir, App) {
@@ -240,7 +240,12 @@ fn pump(a: &mut App) {
 }
 
 fn texts(a: &App) -> Vec<String> {
-    a.pair_view().unwrap().lines.into_iter().map(|(_, t)| t).collect()
+    a.pair_view()
+        .unwrap()
+        .lines
+        .into_iter()
+        .map(|(_, t)| t)
+        .collect()
 }
 
 #[test]
@@ -615,7 +620,11 @@ fn romm_row_reads_setup_again_after_unpairing() {
 fn a_note_shows_in_status_until_cleared() {
     let (_d, mut a, script) = paired_on_the_shelf();
     assert_eq!(a.romm_texts()[3], "Paired");
-    script.events.lock().unwrap().push(RommEvent::Note("Off".into()));
+    script
+        .events
+        .lock()
+        .unwrap()
+        .push(RommEvent::Note("Off".into()));
     pump(&mut a);
     assert_eq!(a.romm_texts()[3], "Off");
     script.events.lock().unwrap().push(RommEvent::NoteCleared);

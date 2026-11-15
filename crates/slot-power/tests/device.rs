@@ -46,6 +46,7 @@ fn brightness(d: &TempDir) -> u32 {
 
 fn platform(d: &TempDir) -> DevicePlatform {
     DevicePlatform::probe(d.path(), PathBuf::from("/mnt/sdcard"), None)
+        .with_sound_cards(d.path().join("asound/cards"))
 }
 
 #[test]
@@ -177,7 +178,9 @@ fn the_probe_reports_what_it_found() {
 #[test]
 fn a_probe_that_found_nothing_says_so_rather_than_saying_nothing() {
     let d = tempfile::tempdir().unwrap();
-    let report = DevicePlatform::probe(d.path(), PathBuf::from("/mnt/sdcard"), None).report();
+    let report = DevicePlatform::probe(d.path(), PathBuf::from("/mnt/sdcard"), None)
+        .with_sound_cards(d.path().join("asound/cards"))
+        .report();
     assert!(report.contains("no backlight"), "{report}");
     assert!(report.contains("no battery"), "{report}");
     assert!(report.contains("no rtc"), "{report}");
@@ -211,7 +214,8 @@ fn dispdbg(d: &TempDir, file: &str) -> String {
 #[test]
 fn a_tree_with_no_backlight_class_drives_the_panel_through_dispdbg() {
     let d = dispdbg_tree();
-    let mut p = DevicePlatform::probe(d.path(), PathBuf::from("/mnt/sdcard"), None);
+    let mut p = DevicePlatform::probe(d.path(), PathBuf::from("/mnt/sdcard"), None)
+        .with_sound_cards(d.path().join("asound/cards"));
     p.set_backlight(10);
     assert_eq!(dispdbg(&d, "name"), "lcd0");
     assert_eq!(dispdbg(&d, "command"), "setbl");
@@ -339,7 +343,8 @@ fn relinking_adb_rebinds_the_gadget_to_the_controller() {
     fs::create_dir_all(&gadget).unwrap();
     fs::write(gadget.join("UDC"), "\n").unwrap();
 
-    let mut p = DevicePlatform::probe(d.path(), PathBuf::from("/mnt/sdcard"), None);
+    let mut p = DevicePlatform::probe(d.path(), PathBuf::from("/mnt/sdcard"), None)
+        .with_sound_cards(d.path().join("asound/cards"));
     assert!(
         p.relink_adb(),
         "the gadget and a controller were both there"
@@ -354,7 +359,8 @@ fn relinking_adb_rebinds_the_gadget_to_the_controller() {
 fn relinking_adb_without_a_gadget_does_nothing() {
     let d = tempfile::tempdir().unwrap();
     fs::create_dir_all(d.path().join("class/udc/5100000.udc-controller")).unwrap();
-    let mut p = DevicePlatform::probe(d.path(), PathBuf::from("/mnt/sdcard"), None);
+    let mut p = DevicePlatform::probe(d.path(), PathBuf::from("/mnt/sdcard"), None)
+        .with_sound_cards(d.path().join("asound/cards"));
     assert!(!p.relink_adb());
 }
 
@@ -378,6 +384,30 @@ fn headphones_follow_the_detection_pin() {
     assert!(platform(&d).headphones());
     with_jack(&d, "lo");
     assert!(!platform(&d).headphones());
+}
+
+const ONBOARD_CARDS: &str =
+    " 0 [audiocodec     ]: audiocodec - audiocodec\n                      audiocodec\n";
+
+const USB_DAC_CARDS: &str = " 0 [audiocodec     ]: audiocodec - audiocodec\n                      audiocodec\n 1 [D700           ]: USB-Audio - BTD 700\n                      Sennheiser BTD 700 at usb-sunxi-ehci-1, full speed\n";
+
+#[test]
+fn a_usb_audio_card_is_found_by_its_driver() {
+    assert_eq!(slot_power::usb_card(ONBOARD_CARDS), None);
+    assert_eq!(slot_power::usb_card(""), None);
+    assert_eq!(slot_power::usb_card(USB_DAC_CARDS), Some(1));
+}
+
+#[test]
+fn a_usb_dac_counts_as_headphones() {
+    let d = sysfs("255", "87");
+    with_jack(&d, "lo");
+    let cards = d.path().join("asound/cards");
+    fs::create_dir_all(cards.parent().unwrap()).unwrap();
+    fs::write(&cards, ONBOARD_CARDS).unwrap();
+    assert!(!platform(&d).headphones());
+    fs::write(&cards, USB_DAC_CARDS).unwrap();
+    assert!(platform(&d).headphones());
 }
 
 const MOUNTS: &str = "\
@@ -613,4 +643,30 @@ fn the_charging_led_is_left_to_the_kernel() {
         "slot drove the kernel's charging LED"
     );
     assert_eq!(read(&d, "green:power/brightness"), "255");
+}
+
+#[test]
+fn the_bottom_screen_backlight_powers_down_and_back_on_its_own() {
+    let d = sysfs("1666", "87");
+    let top = second_panel(&d, "1666");
+    let bottom_power = d.path().join("class/backlight/backlight-lcd0/bl_power");
+    let mut p = platform(&d);
+    p.set_bottom_backlight(false);
+    assert_eq!(fs::read_to_string(&bottom_power).unwrap(), "4");
+    assert!(!top.with_file_name("bl_power").exists());
+    p.set_backlight(10);
+    assert_eq!(fs::read_to_string(&bottom_power).unwrap(), "4");
+    p.set_bottom_backlight(true);
+    assert_eq!(fs::read_to_string(&bottom_power).unwrap(), "0");
+}
+
+#[test]
+fn one_screen_has_no_bottom_backlight_to_switch() {
+    let d = sysfs("255", "87");
+    let mut p = platform(&d);
+    p.set_bottom_backlight(false);
+    assert!(!d
+        .path()
+        .join("class/backlight/backlight-lcd0/bl_power")
+        .exists());
 }

@@ -1809,6 +1809,11 @@ fn blended(blend: FrameBlend, screen: Screen, frames: &[[u8; 3]]) -> Option<Vec<
     c.set_game_source_rect(WHOLE);
     c.set_screen_effect(ScreenEffect::None);
     c.set_authentic_screen(screen);
+    c.set_lcd(match screen {
+        Screen::Gba => slot_gfx::Lcd::Gba,
+        Screen::Gbc => slot_gfx::Lcd::Gbc,
+        _ => slot_gfx::Lcd::Dmg,
+    });
     c.set_frame_blend(blend);
     c.set_screen_power(1.0);
     let shown = frames

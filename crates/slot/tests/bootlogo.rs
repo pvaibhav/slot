@@ -189,14 +189,20 @@ fn a_config_logo_is_installed_byte_for_byte() {
 fn the_installed_copy_follows_the_logo_in_config() {
     let d = card_with(&[(USER_LOGO, b"mine"), (CARD_LOGO, b"shipped")]);
     bootlogo::remember(d.path());
-    assert_eq!(std::fs::read(d.path().join(bootlogo::INSTALLED_COPY)).unwrap(), b"mine");
+    assert_eq!(
+        std::fs::read(d.path().join(bootlogo::INSTALLED_COPY)).unwrap(),
+        b"mine"
+    );
 }
 
 #[test]
 fn the_installed_copy_falls_back_to_the_shipped_logo() {
     let d = card_with(&[(CARD_LOGO, b"shipped")]);
     bootlogo::remember(d.path());
-    assert_eq!(std::fs::read(d.path().join(bootlogo::INSTALLED_COPY)).unwrap(), b"shipped");
+    assert_eq!(
+        std::fs::read(d.path().join(bootlogo::INSTALLED_COPY)).unwrap(),
+        b"shipped"
+    );
 }
 
 #[test]

@@ -1,9 +1,9 @@
-shelf 720x480 8b6c56839ff543b6
-shelf 640x480 2613b35201b52555
-quick-menu 720x480 6b61b92e6485142c
-quick-menu 640x480 e062650c5b2b6667
-settings-long-list 720x480 2976eb3ff77a321a
-settings-long-list 640x480 e7aa7da3e37e10d9
+shelf 720x480 146624870dab6faf
+shelf 640x480 36d8ceac6b189d43
+quick-menu 720x480 bae3668081479ac2
+quick-menu 640x480 dde1fe5a255725a8
+settings-long-list 720x480 5c4c964f7d3e1675
+settings-long-list 640x480 b0c542138b8f8eff
 gba-sp-frame 720x480 ca438bd6f9bf87c0
 gba-sp-frame 640x480 3c37d7ef4065304a
 gba-integer 720x480 ca438bd6f9bf87c0

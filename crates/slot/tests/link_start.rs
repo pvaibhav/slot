@@ -5,16 +5,21 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use slot::link_net::{Cancel, TcpLink};
-use slot::link_radio::{LinkRole, RadioFail};
+use slot::link_radio::{HostAp, RadioFail, RadioRole};
 use slot::link_start::{LinkFail, LinkProgress, LinkStarter, LinkStep};
 
 const BAIL: Duration = Duration::from_secs(5);
+
+const AP: HostAp = HostAp {
+    freq_mhz: 5180,
+    bssid: [2, 0, 0, 0, 0, 1],
+};
 
 fn drain(starter: &mut LinkStarter) -> LinkProgress {
     let deadline = Instant::now() + BAIL;
     loop {
         match starter.poll() {
-            Some(LinkProgress::At(_)) => {}
+            Some(LinkProgress::At(_) | LinkProgress::Hosting(_)) => {}
             Some(outcome) => return outcome,
             None => std::thread::sleep(Duration::from_millis(2)),
         }
@@ -31,6 +36,7 @@ fn drain_steps(starter: &mut LinkStarter) -> Vec<LinkStep> {
     loop {
         match starter.poll() {
             Some(LinkProgress::At(step)) => steps.push(step),
+            Some(LinkProgress::Hosting(_)) => {}
             Some(_) => return steps,
             None => std::thread::sleep(Duration::from_millis(2)),
         }
@@ -52,7 +58,7 @@ fn a_radio_that_will_not_come_up_stops_before_the_socket() {
         Box::new(move || {
             count.fetch_add(1, Ordering::SeqCst);
         }),
-        LinkRole::Host,
+        RadioRole::Host,
         0,
         Box::new(move |_, _| {
             seen.store(true, Ordering::SeqCst);
@@ -77,11 +83,11 @@ fn a_failure_always_takes_the_radio_back_down() {
     let downs = Arc::new(AtomicUsize::new(0));
     let count = downs.clone();
     let mut starter = LinkStarter::spawn_with(
-        Box::new(|_, _| Ok(())),
+        Box::new(|_, _| Ok(None)),
         Box::new(move || {
             count.fetch_add(1, Ordering::SeqCst);
         }),
-        LinkRole::Host,
+        RadioRole::Host,
         0,
         Box::new(|_, _| Err(io::Error::new(io::ErrorKind::TimedOut, "nobody"))),
     );
@@ -113,11 +119,11 @@ fn a_link_that_comes_up_leaves_the_radio_up() {
         TcpLink::join("127.0.0.1", port)
     });
     let mut starter = LinkStarter::spawn_with(
-        Box::new(|_, _| Ok(())),
+        Box::new(|_, _| Ok(None)),
         Box::new(move || {
             count.fetch_add(1, Ordering::SeqCst);
         }),
-        LinkRole::Host,
+        RadioRole::Host,
         port,
         Box::new(|port, cancel: &Cancel| {
             TcpLink::host_until("127.0.0.1", port, Duration::from_secs(10), cancel)
@@ -143,9 +149,9 @@ fn a_link_that_comes_up_leaves_the_radio_up() {
 #[test]
 fn the_steps_are_reported_in_order_before_the_outcome() {
     let mut starter = LinkStarter::spawn_with(
-        Box::new(|_, _| Ok(())),
+        Box::new(|_, _| Ok(None)),
         Box::new(|| {}),
-        LinkRole::Host,
+        RadioRole::Host,
         0,
         Box::new(|_, _| Err(io::Error::new(io::ErrorKind::TimedOut, "nobody"))),
     );
@@ -156,9 +162,9 @@ fn the_steps_are_reported_in_order_before_the_outcome() {
 #[test]
 fn cancelling_reports_cancelled_rather_than_a_timeout() {
     let mut starter = LinkStarter::spawn_with(
-        Box::new(|_, _| Ok(())),
+        Box::new(|_, _| Ok(None)),
         Box::new(|| {}),
-        LinkRole::Host,
+        RadioRole::Host,
         0,
         Box::new(|_, cancel: &Cancel| {
             while !cancel.is_cancelled() {
@@ -178,9 +184,9 @@ fn cancelling_reports_cancelled_rather_than_a_timeout() {
 #[test]
 fn a_socket_fault_that_is_neither_a_deadline_nor_a_cancel_blames_the_wire() {
     let mut starter = LinkStarter::spawn_with(
-        Box::new(|_, _| Ok(())),
+        Box::new(|_, _| Ok(None)),
         Box::new(|| {}),
-        LinkRole::Join,
+        RadioRole::Join(AP),
         0,
         Box::new(|_, _| Err(io::Error::new(io::ErrorKind::ConnectionRefused, "refused"))),
     );
@@ -195,7 +201,7 @@ fn a_worker_that_dies_is_reported_rather_than_polled_forever() {
     let mut starter = LinkStarter::spawn_with(
         Box::new(|_, _| panic!("the radio call blew up")),
         Box::new(|| {}),
-        LinkRole::Host,
+        RadioRole::Host,
         0,
         Box::new(|_, _| Err(io::Error::other("must not be reached"))),
     );
@@ -221,11 +227,11 @@ fn a_link_that_comes_up_after_the_player_left_puts_the_radio_back() {
     let open = gate.clone();
 
     let starter = LinkStarter::spawn_with(
-        Box::new(|_, _| Ok(())),
+        Box::new(|_, _| Ok(None)),
         Box::new(move || {
             count.fetch_add(1, Ordering::SeqCst);
         }),
-        LinkRole::Join,
+        RadioRole::Join(AP),
         port,
         Box::new(move |p, _| {
             while !open.load(Ordering::SeqCst) {
@@ -257,7 +263,7 @@ fn a_join_that_found_no_host_says_nobody_arrived() {
     let mut starter = LinkStarter::spawn_with(
         Box::new(|_, _| Err(RadioFail::NoHost)),
         Box::new(|| {}),
-        LinkRole::Join,
+        RadioRole::Join(AP),
         0,
         Box::new(move |_, _| {
             seen.store(true, Ordering::SeqCst);
@@ -284,7 +290,7 @@ fn a_cancel_while_the_radio_is_coming_up_is_not_a_fault() {
             Err(RadioFail::Cancelled)
         }),
         Box::new(|| {}),
-        LinkRole::Join,
+        RadioRole::Join(AP),
         0,
         Box::new(|_, _| Err(io::Error::other("must not be reached"))),
     );
@@ -300,9 +306,9 @@ fn a_starter_that_is_dropped_stops_waiting() {
     let gave_up = Arc::new(AtomicBool::new(false));
     let noticed = gave_up.clone();
     let starter = LinkStarter::spawn_with(
-        Box::new(|_, _| Ok(())),
+        Box::new(|_, _| Ok(None)),
         Box::new(|| {}),
-        LinkRole::Host,
+        RadioRole::Host,
         0,
         Box::new(move |_, cancel| {
             let deadline = Instant::now() + BAIL;
@@ -328,4 +334,124 @@ fn a_starter_that_is_dropped_stops_waiting() {
         );
         std::thread::sleep(Duration::from_millis(2));
     }
+}
+
+#[test]
+fn a_host_reports_its_hotspot_before_waiting() {
+    let mut starter = LinkStarter::spawn_with(
+        Box::new(|_, _| Ok(Some(AP))),
+        Box::new(|| {}),
+        RadioRole::Host,
+        0,
+        Box::new(|_, _| Err(io::Error::new(io::ErrorKind::TimedOut, "nobody"))),
+    );
+    let deadline = Instant::now() + BAIL;
+    let mut seen = Vec::new();
+    loop {
+        match starter.poll() {
+            Some(LinkProgress::At(step)) => seen.push(format!("{step:?}")),
+            Some(LinkProgress::Hosting(ap)) => seen.push(format!("{ap:?}")),
+            Some(_) => break,
+            None => std::thread::sleep(Duration::from_millis(2)),
+        }
+        assert!(Instant::now() < deadline, "the worker never finished");
+    }
+    assert_eq!(
+        seen,
+        [
+            "Radio".to_string(),
+            format!("{AP:?}"),
+            "Waiting".to_string()
+        ]
+    );
+}
+
+#[test]
+fn a_join_passes_the_address_to_the_radio() {
+    let got = Arc::new(std::sync::Mutex::new(None));
+    let slot = got.clone();
+    let mut starter = LinkStarter::spawn_with(
+        Box::new(move |role, _| {
+            *slot.lock().unwrap() = Some(role);
+            Ok(None)
+        }),
+        Box::new(|| {}),
+        RadioRole::Join(AP),
+        0,
+        Box::new(|_, _| Err(io::Error::new(io::ErrorKind::TimedOut, "nobody"))),
+    );
+    drain(&mut starter);
+    assert_eq!(*got.lock().unwrap(), Some(RadioRole::Join(AP)));
+}
+
+#[test]
+fn a_held_join_brings_the_radio_up_and_waits_for_go_before_the_socket() {
+    let radio = Arc::new(AtomicBool::new(false));
+    let socket = Arc::new(AtomicBool::new(false));
+    let (up, tried) = (radio.clone(), socket.clone());
+    let mut starter = LinkStarter::spawn_held_with(
+        Box::new(move |_, _| {
+            up.store(true, Ordering::SeqCst);
+            Ok(None)
+        }),
+        Box::new(|| {}),
+        RadioRole::Join(AP),
+        0,
+        Box::new(move |_, _| {
+            tried.store(true, Ordering::SeqCst);
+            Err(io::Error::new(io::ErrorKind::ConnectionRefused, "refused"))
+        }),
+        true,
+    );
+    let deadline = Instant::now() + BAIL;
+    while !radio.load(Ordering::SeqCst) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    assert!(
+        radio.load(Ordering::SeqCst),
+        "the held join never brought the radio up"
+    );
+    std::thread::sleep(Duration::from_millis(100));
+    assert!(
+        !socket.load(Ordering::SeqCst),
+        "a held join opened its socket before go"
+    );
+    starter.go();
+    assert!(matches!(
+        drain(&mut starter),
+        LinkProgress::Failed(LinkFail::PeerVanished)
+    ));
+    assert!(socket.load(Ordering::SeqCst), "go never reached the socket");
+}
+
+#[test]
+fn a_held_join_dropped_before_go_puts_the_radio_back() {
+    let downs = Arc::new(AtomicUsize::new(0));
+    let count = downs.clone();
+    let socket = Arc::new(AtomicBool::new(false));
+    let tried = socket.clone();
+    let starter = LinkStarter::spawn_held_with(
+        Box::new(|_, _| Ok(None)),
+        Box::new(move || {
+            count.fetch_add(1, Ordering::SeqCst);
+        }),
+        RadioRole::Join(AP),
+        0,
+        Box::new(move |_, _| {
+            tried.store(true, Ordering::SeqCst);
+            Err(io::Error::other("must not be reached"))
+        }),
+        true,
+    );
+    std::thread::sleep(Duration::from_millis(50));
+    drop(starter);
+    let deadline = Instant::now() + BAIL;
+    while downs.load(Ordering::SeqCst) == 0 && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    assert_eq!(downs.load(Ordering::SeqCst), 1, "the radio was left up");
+    assert!(
+        !socket.load(Ordering::SeqCst),
+        "a dropped held join opened its socket"
+    );
 }

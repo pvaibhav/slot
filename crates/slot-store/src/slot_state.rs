@@ -489,7 +489,6 @@ pub struct SlotState {
     pub shader_gbc: Shader,
     pub resume_insert: bool,
     pub resume_power_on: bool,
-    pub turbo: bool,
     pub rewind: bool,
     pub high_refresh: bool,
     pub gb_palettes: bool,
@@ -502,6 +501,7 @@ pub struct SlotState {
     pub show_titles: bool,
     pub battery_display: BatteryDisplay,
     pub wifi_off: bool,
+    pub nickname: String,
     pub gb_core: Core,
     pub left_stick_dpad: bool,
     pub lid_off_min: Option<u8>,
@@ -697,7 +697,6 @@ impl Default for SlotState {
             shader_gbc: Shader::Simpletex,
             resume_insert: true,
             resume_power_on: true,
-            turbo: true,
             rewind: true,
             high_refresh: true,
             gb_palettes: false,
@@ -710,6 +709,7 @@ impl Default for SlotState {
             show_titles: false,
             battery_display: BatteryDisplay::Both,
             wifi_off: false,
+            nickname: String::new(),
             gb_core: Core::Gambatte,
             left_stick_dpad: true,
             lid_off_min: None,
@@ -748,6 +748,14 @@ impl Default for SlotState {
 
 fn state_path(root: &Path) -> PathBuf {
     root.join("Config").join("slot.state")
+}
+
+pub fn legacy_turbo_off(root: &Path) -> bool {
+    std::fs::read_to_string(state_path(root)).is_ok_and(|text| {
+        text.lines()
+            .filter_map(|l| l.split_once('='))
+            .any(|(key, value)| key.trim() == "turbo" && flag(value.trim()) == Some(false))
+    })
 }
 
 const RECENTS_FILE: &str = "recents.txt";
@@ -794,7 +802,7 @@ fn write_list(root: &Path, name: &str, list: &[Recent]) -> std::io::Result<()> {
 
 pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
     let mut text = format!(
-        "cart={}\ncart_platform={}\nbrightness={}\nblue_light={}\nvolume={}\nvolume_hp={}\nmuted={}\nmuted_hp={}\nclock_set={}\nzone={}\nclock_24h={}\nnetwork_time={}\nrumble={}\nff_speed={}\nff_sound={}\ncolour_correction_gba={}\ncolour_correction_gb={}\nshader_gba={}\nshader_gb={}\nturbo={}\nrewind={}\nhigh_refresh={}\ngb_palettes={}\ngb_palette={}\nappearance={}\nwallpaper={}\n",
+        "cart={}\ncart_platform={}\nbrightness={}\nblue_light={}\nvolume={}\nvolume_hp={}\nmuted={}\nmuted_hp={}\nclock_set={}\nzone={}\nclock_24h={}\nnetwork_time={}\nrumble={}\nff_speed={}\nff_sound={}\ncolour_correction_gba={}\ncolour_correction_gb={}\nshader_gba={}\nshader_gb={}\nrewind={}\nhigh_refresh={}\ngb_palettes={}\ngb_palette={}\nappearance={}\nwallpaper={}\n",
         s.cart.as_deref().unwrap_or(""),
         s.cart_platform.map_or(String::new(), platform_key),
         s.brightness,
@@ -814,7 +822,6 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
         s.colour_correction_gb as u8,
         s.shader_gba.name(),
         s.shader_gb.name(),
-        s.turbo as u8,
         s.rewind as u8,
         s.high_refresh as u8,
         s.gb_palettes as u8,
@@ -837,6 +844,9 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
     text.push_str(&format!("battery_display={}\n", s.battery_display.key()));
     if s.wifi_off {
         text.push_str("wifi_off=1\n");
+    }
+    if !s.nickname.is_empty() {
+        text.push_str(&format!("nickname={}\n", s.nickname));
     }
     text.push_str(&format!("gb_core={}\n", s.gb_core.as_str()));
     text.push_str(&format!("left_stick_dpad={}\n", s.left_stick_dpad as u8));
@@ -942,7 +952,6 @@ fn parse(text: &str) -> Option<SlotState> {
     let mut resume_insert = None;
     let mut resume_power_on = None;
     let mut wallpapers_given = None;
-    let mut turbo = None;
     let mut rewind = None;
     let mut high_refresh = None;
     let mut gb_palettes = None;
@@ -954,6 +963,7 @@ fn parse(text: &str) -> Option<SlotState> {
     let mut show_titles = None;
     let mut battery_display = None;
     let mut wifi_off = None;
+    let mut nickname = None;
     let mut gb_core = None;
     let mut left_stick_dpad = None;
     let mut lid_off_min = None;
@@ -1020,7 +1030,6 @@ fn parse(text: &str) -> Option<SlotState> {
             "resume_insert" => resume_insert = flag(value),
             "resume_power_on" => resume_power_on = flag(value),
             "wallpapers_given" => wallpapers_given = flag(value),
-            "turbo" => turbo = flag(value),
             "rewind" => rewind = flag(value),
             "high_refresh" => high_refresh = Some(flag(value).unwrap_or(false)),
             "gb_palettes" => gb_palettes = flag(value),
@@ -1032,6 +1041,7 @@ fn parse(text: &str) -> Option<SlotState> {
             "show_titles" => show_titles = flag(value),
             "battery_display" => battery_display = BatteryDisplay::parse(value),
             "wifi_off" => wifi_off = flag(value),
+            "nickname" => nickname = Some(value.to_string()),
             "gb_core" => gb_core = Core::parse(value).filter(|c| c.runs(Platform::Gb)),
             "left_stick_dpad" => left_stick_dpad = flag(value),
             "lid_off_min" => lid_off_min = value.parse().ok().filter(|m| LID_OFF_MIN.contains(m)),
@@ -1111,7 +1121,6 @@ fn parse(text: &str) -> Option<SlotState> {
         resume_power_on: resume_power_on
             .or(auto_load.map(|(_, power_on)| power_on))
             .unwrap_or(fallback.resume_power_on),
-        turbo: turbo.unwrap_or(fallback.turbo),
         rewind: rewind.unwrap_or(fallback.rewind),
         high_refresh: high_refresh.unwrap_or(fallback.high_refresh),
         gb_palettes: gb_palettes.unwrap_or(fallback.gb_palettes),
@@ -1124,6 +1133,7 @@ fn parse(text: &str) -> Option<SlotState> {
         show_titles: show_titles.unwrap_or(fallback.show_titles),
         battery_display: battery_display.unwrap_or(fallback.battery_display),
         wifi_off: wifi_off.unwrap_or(fallback.wifi_off),
+        nickname: nickname.unwrap_or_default(),
         gb_core: gb_core.unwrap_or(Core::Mgba),
         left_stick_dpad: left_stick_dpad.unwrap_or(fallback.left_stick_dpad),
         lid_off_min,

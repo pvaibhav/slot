@@ -1,12 +1,6 @@
 <div align="center">
 
-<img src=".github/resources/banner.png" width="100%" alt="slot. A bespoke, Game Boy-centric frontend for the Anbernic RG SP.">
-
-<a href="LICENSE"><img src="https://img.shields.io/github/license/slot-cfw/slot?style=for-the-badge&labelColor=242429&color=4d4d57" height="36" alt="License"></a>
-<a href="https://github.com/slot-cfw/slot/stargazers"><img src="https://img.shields.io/github/stars/slot-cfw/slot?style=for-the-badge&labelColor=242429&color=4d4d57" height="36" alt="Stars"></a>
-<a href="https://github.com/slot-cfw/slot/releases"><img src="https://img.shields.io/github/downloads/slot-cfw/slot/total?style=for-the-badge&labelColor=242429&color=4d4d57" height="36" alt="Downloads"></a>
-<a href="https://slot-cfw.fyi"><img src="https://img.shields.io/badge/Guide-slot--cfw.fyi-4d4d57?style=for-the-badge&labelColor=242429" height="36" alt="Docs"></a>
-<a href="https://discord.gg/NYRWsSuPUu"><img src="https://img.shields.io/badge/Discord-4d4d57?style=for-the-badge&labelColor=242429&logo=discord&logoColor=white" height="36" alt="Discord"></a>
+<img align="top" src=".github/resources/hero.webp" width="100%" alt="slot. A bespoke, Game Boy-centric frontend for the Anbernic RG SP."><br><a href="https://github.com/slot-cfw/slot/releases/latest"><img align="top" src="https://badges.slot-cfw.fyi/release.svg" width="20.7142%" alt="Download"></a><a href="https://slot-cfw.fyi"><img align="top" src=".github/resources/badges/guide.svg" width="19.5238%" alt="Guide"></a><a href="https://discord.gg/NYRWsSuPUu"><img align="top" src=".github/resources/badges/discord.svg" width="19.5238%" alt="Discord"></a><a href="https://github.com/slot-cfw/slot/stargazers"><img align="top" src="https://badges.slot-cfw.fyi/stars.svg" width="19.5238%" alt="Stars"></a><a href="https://github.com/slot-cfw/slot/releases"><img align="top" src="https://badges.slot-cfw.fyi/downloads.svg" width="20.7142%" alt="Downloads"></a>
 
 </div>
 
@@ -42,9 +36,8 @@ Each feature links to a [wiki](https://github.com/pvaibhav/slot/wiki) page with 
   The shaders are also [available for NextUI](https://github.com/pvaibhav/authentic-shaders).
 - ~~**LCD ghosting / interframe blending.**~~ Included upstream since **v1.10.0**
   as **Frame Blending** under Settings > Screen.
-- **[Frame Blending on the GPU.](https://github.com/pvaibhav/slot/wiki/GPU-frame-blending)** Mix and Ghosting work the same on every shader and core,
-  so gpSP gets Ghosting too, and the emulator spends no CPU time on blending. Ghosting
-  fades like the console's own LCD, as Authentic does.
+- ~~**[Frame Blending on the GPU.](https://github.com/pvaibhav/slot/wiki/GPU-frame-blending)**~~ Included upstream since **v1.16.0**.
+  Mix and Ghosting work across cores, including gpSP and Gambatte. Authentic keeps its model-specific LCD response.
 - **[Colour calibration](https://github.com/pvaibhav/slot/wiki/Panel-colour-calibration)** for the RG SP and RG34XXSP panels, based on an accurate 3x1D LUT
   measured by me. Both white point and gamma curve are corrected. Currently no other firmware
   has this!
@@ -94,7 +87,7 @@ your account. Everything else is automatic.
 A release of this fork uses upstream's version with a suffix. `v1.4.0-pvaibhav.1` is the
 first release built on upstream 1.4.0, and `v1.4.0-pvaibhav.2` would be the second.
 
-The current release is [v1.15.3-pvaibhav.1](https://github.com/pvaibhav/slot/releases/tag/v1.15.3-pvaibhav.1).
+The current release is [v1.16.0-pvaibhav.1](https://github.com/pvaibhav/slot/releases/tag/v1.16.0-pvaibhav.1).
 Its [release notes](RELEASE_NOTES.md) describe the changes since the previous fork release.
 
 ## Release cadence
@@ -134,29 +127,21 @@ frames at 720×480 with this release's shaders and bezels.
 
 # Supported Devices
 
-| Device                | Supported | Since Version |
-|-----------------------|-----------|---------------|
-| Anbernic RG SP        | **Yes**   | Always        |
-| Anbernic RG 34XX      | **Yes**   | 1.4.0         |
-| Anbernic RG 34XXSP    | **Yes**   | 1.4.0         |
-| Anbernic RG 35XXSP    | **Yes**   | 1.5.0         |
-| Anbernic RG 35XX Plus | **Yes**   | 1.5.0         |
-| Anbernic RG 35XX-H    | **Yes**   | 1.7.0         |
-| Anbernic RG 35XX Pro  | **Yes**   | 1.15.0        |
-| Anbernic RG 28XX      | **Yes**   | 1.6.0         |
+| Device                | Since Version |
+|-----------------------|---------------|
+| Anbernic RG SP        | Always        |
+| Anbernic RG 34XX      | 1.4.0         |
+| Anbernic RG 34XXSP    | 1.4.0         |
 
-If you have one of the untested devices, or have tried slot on a device not listed,
-please [open an issue on GitHub](https://github.com/slot-cfw/slot/issues) and let me know how it went.
+## Devices I never wanted to support that slot works on
 
----
-
-# Discord Community
-
-slot has a [Discord server](https://discord.gg/NYRWsSuPUu) for questions, sharing setups, and talking about the project.
-
-It is open to everyone in the slot universe. That includes folks running or building forks of slot.
-
-There is no reason for this community to be fragmented so long as we are having fun!
+| Device                | Since Version |
+|-----------------------|---------------|
+| Anbernic RG 35XXSP    | 1.5.0         |
+| Anbernic RG 35XX Plus | 1.5.0         |
+| Anbernic RG 35XX-H    | 1.7.0         |
+| Anbernic RG 35XX Pro  | 1.15.0        |
+| Anbernic RG 28XX      | 1.6.0         |
 
 ---
 

@@ -53,7 +53,11 @@ const TABLE: [Entry; 4] = [
     ),
 ];
 
-pub fn table_placement(canvas: (u32, u32), picture: (u32, u32), sizing: Sizing) -> Option<[f32; 4]> {
+pub fn table_placement(
+    canvas: (u32, u32),
+    picture: (u32, u32),
+    sizing: Sizing,
+) -> Option<[f32; 4]> {
     let column = match sizing {
         Sizing::Band => 0,
         Sizing::Integer => 1,

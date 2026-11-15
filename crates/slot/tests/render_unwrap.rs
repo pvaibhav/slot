@@ -10,10 +10,11 @@ use slot::app::{App, Phase};
 use slot::frontend::Frontend;
 use slot::romm::{RommEvent, RommJob, RommJobs, GIFTS};
 use slot::unwrap_scene::{
-    box_face, cart_rect, footer_top, rim_y, unwrap_art, unwrap_draws, UnwrapFrame, UnwrapScene, UnwrapTextures,
+    box_face, cart_rect, footer_top, rim_y, unwrap_art, unwrap_draws, UnwrapFrame, UnwrapScene,
+    UnwrapTextures,
 };
-use slot_gfx::{Canvas, Compositor, Draw, HeadlessSurface, TexId, OUT_H, OUT_W};
 use slot::wifi::{Fake, Wifi};
+use slot_gfx::{Canvas, Compositor, Draw, HeadlessSurface, TexId, OUT_H, OUT_W};
 use slot_input::{Action, Btn, InputSource, Millis, RawEvent};
 use slot_power::SimPlatform;
 use slot_store::Platform;
@@ -179,7 +180,11 @@ fn box_sits_in_the_cart_box() {
         let px = r.face_shot(i, p);
         save(&format!("face-{p:?}"), OUT_W, &px);
         let mid = w / 2;
-        assert!(purple(at(&px, w, mid, foot - 4)), "{:?}", at(&px, w, mid, foot - 4));
+        assert!(
+            purple(at(&px, w, mid, foot - 4)),
+            "{:?}",
+            at(&px, w, mid, foot - 4)
+        );
         assert_eq!(at(&px, w, mid, foot + 2), GROUND);
         let body = (146.0 * bw as f32 / 318.0) as usize;
         assert!(purple(at(&px, w, mid - body + 4, foot - 30)));
@@ -211,12 +216,18 @@ fn the_scene_opens_on_exactly_the_shelf_face() {
                     continue;
                 }
                 total += 1;
-                let d = (0..3).map(|c| (a[c] as i32 - b[c] as i32).abs()).max().unwrap();
+                let d = (0..3)
+                    .map(|c| (a[c] as i32 - b[c] as i32).abs())
+                    .max()
+                    .unwrap();
                 worst = worst.max(d);
                 off += (d > 24) as usize;
             }
         }
-        assert!(off * 100 < total, "{p:?}: {off} of {total} differ, worst {worst}");
+        assert!(
+            off * 100 < total,
+            "{p:?}: {off} of {total} differ, worst {worst}"
+        );
     }
 }
 
@@ -231,15 +242,26 @@ fn cart_stays_behind_the_front_wall() {
             let px = r.at_ms(900, p, window, &format!("wall-{p:?}-{window}"));
             let rim = rim_y(slot_ui::Canvas::FRAMED, p) as usize;
             let mid = w / 2;
-            assert!(purple(at(&px, w, mid, rim + 1)), "{:?}", at(&px, w, mid, rim + 1));
+            assert!(
+                purple(at(&px, w, mid, rim + 1)),
+                "{:?}",
+                at(&px, w, mid, rim + 1)
+            );
             for y in rim..rim + 140 {
-                assert!(!near(at(&px, w, mid, y), CART, 40), "{p:?} cart on the wall at {y}");
+                assert!(
+                    !near(at(&px, w, mid, y), CART, 40),
+                    "{p:?} cart on the wall at {y}"
+                );
             }
             let frame = UnwrapScene::new(0).frame(900);
             let [_, top, _, _] = cart_rect(frame.cart.unwrap(), p, Canvas::of((window, OUT_H)));
             let above = (top + 3.0) as usize;
             if above + 1 < rim {
-                assert!(near(at(&px, w, mid, above), CART, 40), "{:?}", at(&px, w, mid, above));
+                assert!(
+                    near(at(&px, w, mid, above), CART, 40),
+                    "{:?}",
+                    at(&px, w, mid, above)
+                );
             }
         }
     }
@@ -274,7 +296,11 @@ fn glow_is_gone_before_the_cart_lands() {
     let lit = r.at_ms(800, Platform::Gba, OUT_W, "glow");
     assert_ne!(at(&lit, w, w / 2 - 120, 150), GROUND);
     let px = r.at_ms(1800, Platform::Gba, OUT_W, "glow");
-    let [x, y, cw, ch] = cart_rect(UnwrapScene::new(0).frame(1800).cart.unwrap(), Platform::Gba, Canvas::FRAMED);
+    let [x, y, cw, ch] = cart_rect(
+        UnwrapScene::new(0).frame(1800).cart.unwrap(),
+        Platform::Gba,
+        Canvas::FRAMED,
+    );
     for py in 0..footer_top(slot_ui::Canvas::FRAMED) as usize {
         for px_x in (0..w).step_by(5) {
             let inside = (px_x as f32) > x - 2.0
@@ -350,7 +376,11 @@ fn a_gift_unwraps_on_the_real_shelf() {
     save("real-box", OUT_W, &c.read_frame());
     tick(&mut f, &mut input, vec![RawEvent::Down(Btn::A)]);
     tick(&mut f, &mut input, vec![RawEvent::Up(Btn::A)]);
-    assert!(matches!(f.app().phase(), Phase::Unwrap { .. }), "{:?}", f.app().phase());
+    assert!(
+        matches!(f.app().phase(), Phase::Unwrap { .. }),
+        "{:?}",
+        f.app().phase()
+    );
     let start = f.app().now();
     let mut shots = vec![130u64, 700, 1000, 1380, 1500, 2000];
     while matches!(f.app().phase(), Phase::Unwrap { .. }) {
@@ -371,7 +401,10 @@ fn a_gift_unwraps_on_the_real_shelf() {
     assert!(shots.is_empty(), "{shots:?}");
     assert!(matches!(f.app().phase(), Phase::Shelf));
     assert!(!f.app().gift_held(Platform::Gba, STEM));
-    assert!(f.app().browsed_rom().is_some_and(|r| r.to_string_lossy().contains(STEM)));
+    assert!(f
+        .app()
+        .browsed_rom()
+        .is_some_and(|r| r.to_string_lossy().contains(STEM)));
     f.compose(&mut c);
     save("real-2220", OUT_W, &c.read_frame());
 }
@@ -460,6 +493,10 @@ fn a_rescan_waits_for_the_scene_to_end() {
     assert!(a.gift_wants().is_empty(), "{:?}", a.gift_wants());
     run(&mut a, 800);
     assert!(matches!(a.phase(), Phase::Shelf), "{:?}", a.phase());
-    let stems: Vec<String> = a.gift_wants().into_iter().map(|(_, (_, stem))| stem).collect();
+    let stems: Vec<String> = a
+        .gift_wants()
+        .into_iter()
+        .map(|(_, (_, stem))| stem)
+        .collect();
     assert_eq!(stems, ["Sent"]);
 }

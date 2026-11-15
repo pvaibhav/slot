@@ -60,10 +60,7 @@ impl Rig {
         })
     }
 
-    fn build(
-        cols_in: &[(&str, &str)],
-        tweak: impl Fn(&mut slot_store::SlotState),
-    ) -> Option<Rig> {
+    fn build(cols_in: &[(&str, &str)], tweak: impl Fn(&mut slot_store::SlotState)) -> Option<Rig> {
         let surface = HeadlessSurface::new().ok()?;
         let mut c = Compositor::new(&surface).ok()?;
         let d = tmp_root_with_carts(&["Apotris", "Boktai", "Drill Dozer", "Fusion"]);
@@ -190,7 +187,6 @@ fn on_puzzlers(r: &mut Rig) {
 const W: usize = OUT_W as usize;
 const H: usize = OUT_H as usize;
 
-
 #[test]
 fn ticked_carts_show_no_box() {
     let Some(mut r) = Rig::new() else {
@@ -251,7 +247,10 @@ fn the_add_screen_draws_stacks_and_the_heading() {
     assert_eq!(r.f.app().choice_names(), ["Puzzlers", "New Collection"]);
     r.settle(60);
     let add = r.frame("add-pair");
-    assert!(lit_in(&add, W / 2 - 160..W / 2 + 160, 10..34) > 60, "no heading");
+    assert!(
+        lit_in(&add, W / 2 - 160..W / 2 + 160, 10..34) > 60,
+        "no heading"
+    );
     assert!(
         changed(&shelf, &add, 0..W / 2, 180..360) > 4000,
         "no stack on the left"
@@ -271,7 +270,10 @@ fn the_picked_name_stays() {
     r.tap(Btn::Right);
     r.settle(200);
     let px = r.frame("add-name-later");
-    assert!(lit_in(&px, 0..W / 2, 355..395) > 60, "the picked name faded");
+    assert!(
+        lit_in(&px, 0..W / 2, 355..395) > 60,
+        "the picked name faded"
+    );
 }
 
 #[test]
@@ -285,7 +287,10 @@ fn the_remove_screen_draws_the_stack_low_and_the_cart_under_the_heading() {
     assert_eq!(r.f.app().removing(), Some(("Puzzlers", false)));
     r.settle(60);
     let px = r.frame("remove");
-    assert!(lit_in(&px, W / 2 - 160..W / 2 + 160, 10..34) > 60, "no heading");
+    assert!(
+        lit_in(&px, W / 2 - 160..W / 2 + 160, 10..34) > 60,
+        "no heading"
+    );
     assert!(
         changed(&shelf, &px, W / 2 - 90..W / 2 + 90, 40..170) > 2000,
         "no floating cart under the heading"
@@ -301,7 +306,10 @@ fn the_last_game_heading_is_larger() {
     assert_eq!(r.f.app().removing(), Some(("Solo", true)));
     r.settle(60);
     let px = r.frame("remove-last");
-    assert!(lit_in(&px, 0..W, 8..40) > 400, "the heading is not the larger one");
+    assert!(
+        lit_in(&px, 0..W, 8..40) > 400,
+        "the heading is not the larger one"
+    );
 }
 
 #[test]
@@ -314,7 +322,10 @@ fn moving_draws_the_move_heading() {
     assert_eq!(r.f.app().moving(), Some("Move".to_string()));
     assert_eq!(r.f.app().edit_heading(), Some(("Move".to_string(), true)));
     let px = r.frame("move");
-    assert!(lit_in(&px, W / 2 - 60..W / 2 + 60, 10..34) > 30, "no Move heading");
+    assert!(
+        lit_in(&px, W / 2 - 60..W / 2 + 60, 10..34) > 30,
+        "no Move heading"
+    );
 }
 
 #[test]
@@ -332,8 +343,14 @@ fn the_collection_row_names_sit_under_their_stacks() {
     let px = r.frame("move-collection");
     let left = lit_centre(&px, 0..W / 3, 368..392);
     let right = lit_centre(&px, 2 * W / 3..W, 368..392);
-    assert!((left - (W as f32 / 2.0 - 262.0)).abs() < 24.0, "left name at {left}");
-    assert!((right - (W as f32 / 2.0 + 262.0)).abs() < 24.0, "right name at {right}");
+    assert!(
+        (left - (W as f32 / 2.0 - 262.0)).abs() < 24.0,
+        "left name at {left}"
+    );
+    assert!(
+        (right - (W as f32 / 2.0 + 262.0)).abs() < 24.0,
+        "right name at {right}"
+    );
 }
 
 fn three_collections() -> Option<Rig> {
@@ -354,7 +371,10 @@ fn a_lifted_collection_does_not_jiggle() {
     let a = r.frame("still-a");
     r.run(110);
     let b = r.frame("still-b");
-    assert!(changed(&a, &b, 0..W, 40..380) < 50, "the held stack moved while idle");
+    assert!(
+        changed(&a, &b, 0..W, 40..380) < 50,
+        "the held stack moved while idle"
+    );
 }
 
 #[test]
@@ -445,8 +465,14 @@ fn transition_entry_mid_frame_has_neighbours_leaving() {
     let mid = r.frame("t-entry-mid");
     r.run(1000);
     let end = r.frame("t-entry-end");
-    assert!(changed(&shelf, &mid, 0..120, 100..340) > 1500, "neighbours never moved");
-    assert!(changed(&mid, &end, W / 2 - 100..W / 2 + 100, 40..340) > 1500, "the cart never finished moving");
+    assert!(
+        changed(&shelf, &mid, 0..120, 100..340) > 1500,
+        "neighbours never moved"
+    );
+    assert!(
+        changed(&mid, &end, W / 2 - 100..W / 2 + 100, 40..340) > 1500,
+        "the cart never finished moving"
+    );
 }
 
 #[test]
@@ -457,7 +483,10 @@ fn transition_the_hold_jiggles_the_cart() {
     let shelf = r.frame("t-still");
     r.press_for(Btn::Y, 330);
     let held = r.frame("t-jiggle");
-    assert!(changed(&shelf, &held, W / 2 - 180..W / 2 + 180, 60..380) > 300, "no jiggle");
+    assert!(
+        changed(&shelf, &held, W / 2 - 180..W / 2 + 180, 60..380) > 300,
+        "no jiggle"
+    );
     r.step(vec![RawEvent::Up(Btn::Y)], 16);
 }
 
@@ -478,8 +507,14 @@ fn transition_add_exit_grows_home_on_an_empty_shelf() {
     let growing = r.frame("t-add-growing");
     r.run(1500);
     let done = r.frame("t-add-done");
-    assert!(changed(&shelf, &growing, 0..110, 120..330) > 1500, "neighbours were already home");
-    assert!(changed(&shelf, &done, 0..W, 40..380) < 400, "did not end on the shelf");
+    assert!(
+        changed(&shelf, &growing, 0..110, 120..330) > 1500,
+        "neighbours were already home"
+    );
+    assert!(
+        changed(&shelf, &done, 0..W, 40..380) < 400,
+        "did not end on the shelf"
+    );
 }
 
 #[test]
@@ -496,7 +531,10 @@ fn transition_remove_rises_off_the_top() {
     let rising = r.frame("t-remove-rising");
     r.run(300);
     r.frame("t-remove-fan");
-    assert!(changed(&screen, &rising, W / 2 - 90..W / 2 + 90, 40..170) > 800, "the cart never rose");
+    assert!(
+        changed(&screen, &rising, W / 2 - 90..W / 2 + 90, 40..170) > 800,
+        "the cart never rose"
+    );
 }
 
 #[test]
@@ -515,8 +553,14 @@ fn transition_gather_frames_converge() {
     r.step(vec![RawEvent::Up(Btn::X)], 16);
     r.run(1000);
     let end = r.frame("t-gather-end");
-    assert!(changed(&shelf, &mid, 0..W, 60..380) > 2000, "nothing gathered");
-    assert!(changed(&mid, &end, 0..W, 60..380) > 2000, "the gather never finished");
+    assert!(
+        changed(&shelf, &mid, 0..W, 60..380) > 2000,
+        "nothing gathered"
+    );
+    assert!(
+        changed(&mid, &end, 0..W, 60..380) > 2000,
+        "the gather never finished"
+    );
 }
 
 #[test]
@@ -571,7 +615,11 @@ impl Rig {
                 kb.rows()
                     .iter()
                     .enumerate()
-                    .find_map(|(i, rw)| rw.iter().position(|cap| kb.label(*cap) == want).map(|c| (i, c)))
+                    .find_map(|(i, rw)| {
+                        rw.iter()
+                            .position(|cap| kb.label(*cap) == want)
+                            .map(|c| (i, c))
+                    })
                     .unwrap()
             };
             while self.f.app().keyboard().unwrap().row() != row {
@@ -638,7 +686,10 @@ fn a_bundle_of_game_boy_carts_stays_under_the_heading() {
     assert_eq!(r.f.app().picked_count(), Some(2));
     r.settle(60);
     let add = r.frame("add-gb-bundle");
-    assert!(lit_in(&add, W / 2 - 160..W / 2 + 160, 10..34) > 60, "no heading");
+    assert!(
+        lit_in(&add, W / 2 - 160..W / 2 + 160, 10..34) > 60,
+        "no heading"
+    );
     assert_eq!(
         bright_in(&add, W / 2..W, 35..40),
         0,

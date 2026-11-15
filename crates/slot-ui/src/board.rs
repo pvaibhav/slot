@@ -379,7 +379,10 @@ pub const GB_SEATS: Seats = Seats {
     chip_v: GB_FOOT_V,
     socket_size: (GB_CHIP_W as f32, GB_CHIP_H as f32),
     chip_size: (GB_CHIP_W as f32, GB_CHIP_H as f32),
-    shadow_uv: (GB_CHIP_W as f32 / 2.0 / GB_UNIT, GB_CHIP_H as f32 / GB_UNIT + 2.0),
+    shadow_uv: (
+        GB_CHIP_W as f32 / 2.0 / GB_UNIT,
+        GB_CHIP_H as f32 / GB_UNIT + 2.0,
+    ),
     units_w: GB_CART_W as f32 / GB_UNIT,
     units_h: GB_CART_H as f32 / GB_UNIT,
     bitmap_w: GB_CART_W as f32,

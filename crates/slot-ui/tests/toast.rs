@@ -35,7 +35,7 @@ fn a_cart_gpsp_cannot_link_says_there_is_no_link() {
 #[test]
 fn the_link_ending_says_who_ended_it() {
     assert_eq!(Toast::LinkEnded.text(), "Link ended");
-    assert_eq!(Toast::PeerEnded.text(), "Other player ended the link");
+    assert_eq!(Toast::PeerEnded.text(), "Your friend unplugged");
 }
 
 #[test]

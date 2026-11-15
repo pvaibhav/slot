@@ -36,7 +36,13 @@ fn bend(i: usize, flat: f32, remaining: f32, curl_deg: f32) -> f32 {
     curl_deg / remaining * (0.4 + 1.2 * j / remaining) * j.min(1.0)
 }
 
-pub fn strips(rect: [f32; 4], flat: f32, curl_deg: f32, pose: &Pose, focus: [f32; 2]) -> Vec<Strip> {
+pub fn strips(
+    rect: [f32; 4],
+    flat: f32,
+    curl_deg: f32,
+    pose: &Pose,
+    focus: [f32; 2],
+) -> Vec<Strip> {
     let [rx, ry, w, h] = rect;
     let n = (w / STRIP).ceil().max(1.0) as usize;
     let f = flat.clamp(0.0, 1.0) * n as f32;
@@ -52,11 +58,20 @@ pub fn strips(rect: [f32; 4], flat: f32, curl_deg: f32, pose: &Pose, focus: [f32
     let mut out = Vec::with_capacity(n);
     let (mut px, mut pz, mut theta) = (0.0f32, 0.0f32, 0.0f32);
     for i in 0..n {
-        let sw = if i + 1 == n { w - STRIP * (n - 1) as f32 } else { STRIP };
+        let sw = if i + 1 == n {
+            w - STRIP * (n - 1) as f32
+        } else {
+            STRIP
+        };
         theta += bend(i, f, remaining, curl_deg).to_radians();
         let (qx, qz) = (px + sw * theta.cos(), pz + sw * theta.sin());
         out.push(Strip {
-            corners: [place(px, 0.0, pz), place(qx, 0.0, qz), place(qx, h, qz), place(px, h, pz)],
+            corners: [
+                place(px, 0.0, pz),
+                place(qx, 0.0, qz),
+                place(qx, h, qz),
+                place(px, h, pz),
+            ],
             uv: [STRIP * i as f32 / w, 0.0, sw / w, 1.0],
             back: theta.cos() < 0.0,
             z: (pz + qz) / 2.0 * pose.scale + pose.z,

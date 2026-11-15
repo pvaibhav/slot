@@ -8,9 +8,9 @@ use slot_store::{Cart, Platform};
 
 use super::index::{ArtIndex, Entry, Look};
 use super::make::{self, Kind};
-use slot_ui::house_label::{glance, logo_tag, looks_same};
 use super::rom;
 use crate::update::{self, UpdateFail};
+use slot_ui::house_label::{glance, logo_tag, looks_same};
 
 pub const ART_BASE: &str = "https://art.slot-cfw.fyi/";
 const CACHE: &str = "Cache/art";
@@ -122,7 +122,10 @@ fn make_one(kind: Kind, bytes: &[u8], look: Option<&Look>, cart: &Cart) -> Optio
 }
 
 fn lost(e: &UpdateFail) -> bool {
-    matches!(e, UpdateFail::Offline | UpdateFail::Clock | UpdateFail::NoWifi)
+    matches!(
+        e,
+        UpdateFail::Offline | UpdateFail::Clock | UpdateFail::NoWifi
+    )
 }
 
 fn got(
@@ -330,7 +333,10 @@ fn one_box(
     index: &ArtIndex,
     fetch: &(dyn Fn(&str) -> Result<Vec<u8>, UpdateFail> + Sync),
 ) -> BoxOutcome {
-    let Some(entry) = rom::cached_crc(root, &cart.rom).ok().and_then(|crc| index.get(crc)) else {
+    let Some(entry) = rom::cached_crc(root, &cart.rom)
+        .ok()
+        .and_then(|crc| index.get(crc))
+    else {
         return BoxOutcome::Missed(cart.stem);
     };
     let (boxed, logo) = box_art_paths(root, &cart);
@@ -577,7 +583,10 @@ pub fn art_jobs(root: PathBuf) -> Box<dyn ArtJobs> {
             match work {
                 Work::Fetch(kind, flag) => {
                     if flag.load(Ordering::SeqCst) {
-                        let _ = tx.send(ArtEvent::Done { landed: 0, missed: Vec::new() });
+                        let _ = tx.send(ArtEvent::Done {
+                            landed: 0,
+                            missed: Vec::new(),
+                        });
                     } else {
                         run(&root, kind, &flag, &tx);
                     }
@@ -604,7 +613,10 @@ pub fn studio_save(root: &Path, cart: &Cart, ground: Option<[u8; 3]>, look: Opti
     let dir = root.join(make::STUDIO_CACHE);
     if let Ok(wheel) = std::fs::read(dir.join("wheel.png")) {
         let look = match ground {
-            Some(ground) => Some(Look { ground, band: look.and_then(|l| l.band) }),
+            Some(ground) => Some(Look {
+                ground,
+                band: look.and_then(|l| l.band),
+            }),
             None => look.cloned(),
         };
         if let Some(png) = make::logo_label(&wheel, look.as_ref(), &cart.stem, cart.platform) {
@@ -694,7 +706,9 @@ pub fn fetch_label(root: &Path, cart: &Cart) -> Result<bool, UpdateFail> {
     }
     let agent = update::agent(update::DOWNLOAD_TIMEOUT);
     let index = load_index(root, &mut get_index)?;
-    let made = label_for(root, cart, Kind::Real, &index, &mut |url| fetch_art(&agent, url))?;
+    let made = label_for(root, cart, Kind::Real, &index, &mut |url| {
+        fetch_art(&agent, url)
+    })?;
     let Some(png) = made else {
         return Ok(false);
     };

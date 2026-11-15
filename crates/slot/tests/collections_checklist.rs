@@ -127,7 +127,11 @@ fn find(a: &App, want: &str) -> Option<(usize, usize)> {
 
 fn key(a: &mut App, want: &str) {
     if find(a, want).is_none() {
-        let flip = if a.keyboard().unwrap().symbols() { "abc" } else { "#+=" };
+        let flip = if a.keyboard().unwrap().symbols() {
+            "abc"
+        } else {
+            "#+="
+        };
         key(a, flip);
     }
     let (r, c) = find(a, want).unwrap_or_else(|| panic!("no {want} key"));
@@ -381,7 +385,13 @@ fn the_tapped_game_move_is_dropped_when_the_hold_lifts_the_collection() {
     assert!(matches!(a.edit(), Some(Edit::MovingCollection { .. })));
     press(&mut a, Btn::B);
     assert!(a.edit().is_none());
-    assert_eq!(a.shelf_stems().iter().map(|s| s.to_string()).collect::<Vec<_>>(), stems);
+    assert_eq!(
+        a.shelf_stems()
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>(),
+        stems
+    );
     assert_eq!(read(d.path(), "Puzzlers.txt"), "gba/Apotris\ngb/Catrap\n");
     assert_eq!(read(d.path(), "order.txt"), "Puzzlers\nDozers\n");
 }

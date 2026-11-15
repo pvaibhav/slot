@@ -112,6 +112,21 @@ Make your bezel the same size as your screen. slot scales any other size to fill
 | 640×480 (4:3) | [SP Screen](../assets/bezels/640x480-gb-spscreen.png), [Integer](../assets/bezels/640x480-gb-integer.png), [Fit](../assets/bezels/640x480-gb-fit.png) | [Integer](../assets/bezels/640x480-gba-integer.png), [Fit](../assets/bezels/640x480-gba-fit.png) |
 | 720×480 (3:2) | [Integer](../assets/bezels/720x480-gb-integer.png), [Fit](../assets/bezels/720x480-gb-fit.png)                                                        | None                                                                                             |
 
+## Overlays
+
+An overlay is a translucent image drawn over the game, under the bezel. Use one for a pixel grid or a screen texture
+when a shader isn't quite what you want.
+
+Drop a `.png` into `Overlays/GBA/`, `Overlays/GBC/` or `Overlays/GB/` and pick it in the Overlay row of the
+`Settings → Screen` menu for the system. The row only shows up when the folder has an overlay that fits your screen.
+
+| Filename         | Does                                                                         |
+|------------------|------------------------------------------------------------------------------|
+| `name_tile.png`  | Repeats across the game from its top-left corner, one image pixel per screen pixel |
+| `name.png`       | Covers the whole screen. It must be exactly your screen's size               |
+
+A tile is never scaled, so make it for your device. e.g. at 3x, a 3×3 tile lines up with every game pixel.
+
 ## Boot logo
 
 !!! info "Skip the BMP homework"

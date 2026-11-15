@@ -35,18 +35,29 @@ fn corner(png_bytes: &[u8]) -> [u8; 3] {
 }
 
 fn near(a: [u8; 3], b: [u8; 3]) -> bool {
-    a.iter().zip(b.iter()).all(|(x, y)| (*x as i32 - *y as i32).abs() <= 2)
+    a.iter()
+        .zip(b.iter())
+        .all(|(x, y)| (*x as i32 - *y as i32).abs() <= 2)
 }
 
 #[test]
 fn no_look_uses_the_shelf_hue() {
-    let png = logo_label(&logo_png(), None, "Kirby's Pinball Land (USA, Europe)", Platform::Gb).unwrap();
+    let png = logo_label(
+        &logo_png(),
+        None,
+        "Kirby's Pinball Land (USA, Europe)",
+        Platform::Gb,
+    )
+    .unwrap();
     assert!(near(corner(&png), [0x15, 0x65, 0x4c]), "{:?}", corner(&png));
 }
 
 #[test]
 fn a_sure_look_sets_the_ground() {
-    let look = Look { ground: [0xf9, 0xca, 0x06], band: None };
+    let look = Look {
+        ground: [0xf9, 0xca, 0x06],
+        band: None,
+    };
     let png = logo_label(&logo_png(), Some(&look), "Anything", Platform::Gba).unwrap();
     assert!(near(corner(&png), [0xf9, 0xca, 0x06]), "{:?}", corner(&png));
 }
@@ -81,5 +92,8 @@ fn a_jpeg_scan_makes_a_real_label() {
     let jpeg = include_bytes!("fixtures/solid_scan.jpg");
     let png = real_label(jpeg, Platform::Gba).unwrap();
     let c = corner(&png);
-    assert!((c[0] as i32 - 200).abs() <= 6 && (c[1] as i32 - 40).abs() <= 6, "{c:?}");
+    assert!(
+        (c[0] as i32 - 200).abs() <= 6 && (c[1] as i32 - 40).abs() <= 6,
+        "{c:?}"
+    );
 }

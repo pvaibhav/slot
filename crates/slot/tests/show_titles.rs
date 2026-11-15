@@ -190,7 +190,10 @@ fn go_to(a: &mut App, shelf: &str) {
         a.set_shelf_platform_face(TexId::from_raw(RACK), 80);
         tick(a, 0.5);
     }
-    panic!("never reached the {shelf} shelf: {:?}", a.shelf_platform_name());
+    panic!(
+        "never reached the {shelf} shelf: {:?}",
+        a.shelf_platform_name()
+    );
 }
 
 fn hidden(alpha: Option<f32>) -> bool {
@@ -203,7 +206,10 @@ fn the_title_fades_out_behind_the_add_to_collection_screen() {
     go_to(&mut a, "Game Boy Advance");
     assert!(!hidden(title_alpha(&a)), "no title to fade on the shelf");
     common::hold(&mut a, Btn::Y, FAVORITE_HOLD_MS);
-    assert!(matches!(a.edit(), Some(slot::editing::Edit::Choosing { .. })));
+    assert!(matches!(
+        a.edit(),
+        Some(slot::editing::Edit::Choosing { .. })
+    ));
     tick(&mut a, 2.0);
     assert!(
         hidden(title_alpha(&a)),
@@ -220,9 +226,15 @@ fn the_title_fades_out_behind_the_remove_from_collection_screen() {
     assert_eq!(a.shelf_platform_name(), Some("Puzzlers"));
     a.set_shelf_platform_face(TexId::from_raw(RACK), 80);
     tick(&mut a, 4.0);
-    assert!(!hidden(title_alpha(&a)), "no title to fade on the collection");
+    assert!(
+        !hidden(title_alpha(&a)),
+        "no title to fade on the collection"
+    );
     common::hold(&mut a, Btn::Y, FAVORITE_HOLD_MS);
-    assert!(matches!(a.edit(), Some(slot::editing::Edit::Removing { .. })));
+    assert!(matches!(
+        a.edit(),
+        Some(slot::editing::Edit::Removing { .. })
+    ));
     tick(&mut a, 2.0);
     assert!(
         hidden(title_alpha(&a)),

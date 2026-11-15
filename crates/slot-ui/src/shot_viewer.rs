@@ -1,5 +1,5 @@
-use slot_gfx::{Canvas, Draw, TexId};
 use crate::battery::Gauge;
+use slot_gfx::{Canvas, Draw, TexId};
 use slot_store::ShotEntry;
 
 use crate::footer::Printed;

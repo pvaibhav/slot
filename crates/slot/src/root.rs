@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use slot_store::{Core, Platform};
+
 pub const DIRS: &[&str] = &[
     "BIOS",
     "Bezels",
@@ -106,6 +108,24 @@ pub fn has_real_bios(root: &Path) -> bool {
     }
     let mut first = [0u8; 1];
     std::io::Read::read_exact(&mut f, &mut first).is_ok() && first[0] == BIOS_FIRST_BYTE
+}
+
+const GB_BIOS: (&str, usize) = ("gb_bios.bin", 0x100);
+const GBC_BIOS: (&str, usize) = ("gbc_bios.bin", 0x900);
+
+pub fn bios_crc(root: &Path, platform: Platform, core: Core) -> u32 {
+    let (name, len) = match (platform.hardware(), core) {
+        (Platform::Gba, Core::Mgba | Core::Gpsp) if has_real_bios(root) => {
+            (BIOS_FILE, BIOS_BYTES as usize)
+        }
+        (Platform::Gb, Core::Mgba | Core::Gambatte) => GB_BIOS,
+        (Platform::Gbc, Core::Mgba | Core::Gambatte) => GBC_BIOS,
+        _ => return 0,
+    };
+    match std::fs::read(bios_dir(root).join(name)) {
+        Ok(bytes) if bytes.len() >= len => crc32fast::hash(&bytes[..len]),
+        _ => 0,
+    }
 }
 
 pub fn logs_dir(root: &Path) -> PathBuf {

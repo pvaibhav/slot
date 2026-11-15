@@ -6,7 +6,9 @@ const PAIR_GAP: f32 = 32.0;
 fn tex_rects(out: &[Draw]) -> Vec<(usize, [f32; 4])> {
     out.iter()
         .filter_map(|d| match d {
-            Draw::Tex { x, y, w, h, tex, .. } => Some((*tex, [*x, *y, *w, *h])),
+            Draw::Tex {
+                x, y, w, h, tex, ..
+            } => Some((*tex, [*x, *y, *w, *h])),
             _ => None,
         })
         .map(|(tex, r)| (tex_index(tex), r))
@@ -47,12 +49,18 @@ fn lines_without_a_qr_are_centred_on_the_canvas_both_ways() {
         let rects = tex_rects(&out);
         assert_eq!(rects.len(), 2);
         for (_, [x, _, w, _]) in &rects {
-            assert!((x + w / 2.0 - canvas.w / 2.0).abs() <= 0.5, "off centre at {x}");
+            assert!(
+                (x + w / 2.0 - canvas.w / 2.0).abs() <= 0.5,
+                "off centre at {x}"
+            );
         }
         let top = rects[0].1[1];
         let bottom = rects[1].1[1] + rects[1].1[3];
         let room = OUT_H as f32 - MOUTH_H;
-        assert!((top + bottom - room).abs() <= 1.0, "not centred above the footer");
+        assert!(
+            (top + bottom - room).abs() <= 1.0,
+            "not centred above the footer"
+        );
         assert_eq!(rects[1].1[1] - rects[0].1[1], 34.0);
     }
 }

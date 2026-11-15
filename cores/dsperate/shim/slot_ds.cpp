@@ -31,6 +31,7 @@ struct slot_ds {
   std::vector<uint32_t> screens = std::vector<uint32_t>(SLOT_DS_W * SLOT_DS_H, 0xFF000000u);
   std::vector<ds::u8> state;
   bool jit = false;
+  bool gpu3d = false;
   blip_t* left = blip_new(SLOT_DS_BLIP_SIZE);
   blip_t* right = blip_new(SLOT_DS_BLIP_SIZE);
   ds::s16 last[2] = {0, 0};
@@ -89,6 +90,16 @@ bool boot(slot_ds* ds) {
 #if DSPERATE_JIT
   if (!ds->jit) ds->jit = ds::jit::attach(ds->nds, true, true);
 #endif
+  if (ds->gpu3d) {
+    std::string why;
+    ds->nds.gpu3d.renderer().set_aa(false);
+    if (!ds->nds.gpu3d.renderer().set_gpu(true, &why)) {
+      std::fprintf(stderr, "slot_ds: gpu3d unavailable (%s), drawing on the CPU\n", why.c_str());
+      ds->gpu3d = false;
+    } else {
+      std::fprintf(stderr, "slot_ds: gpu3d on\n");
+    }
+  }
   return true;
 }
 
@@ -140,6 +151,7 @@ slot_ds* slot_ds_open(const char* bios_dir) {
   std::string dir = bios_dir ? bios_dir : "";
   std::string b9 = dir + "/bios9.bin", b7 = dir + "/bios7.bin", fw = dir + "/firmware.bin";
   const bool real = !dir.empty() && exists(b9) && exists(b7) && exists(fw);
+  ds->gpu3d = !dir.empty() && exists(dir + "/../System/ds-gpu3d.on");
   std::string err;
   if (!ds->nds.load_bios(real ? b9 : "", real ? b7 : "", real ? fw : "", {}, &err)) {
     std::fprintf(stderr, "slot_ds: bios: %s\n", err.c_str());

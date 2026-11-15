@@ -80,12 +80,18 @@ fn row(canvas: (u32, u32), picture: (u32, u32)) -> Vec<Option<[f32; 4]>> {
 
 #[test]
 fn gba_on_the_square_panel_is_3x_with_bars_above_and_below() {
-    assert_eq!(row((720, 720), GBA), vec![Some([0.0, 120.0, 720.0, 480.0]); 4]);
+    assert_eq!(
+        row((720, 720), GBA),
+        vec![Some([0.0, 120.0, 720.0, 480.0]); 4]
+    );
 }
 
 #[test]
 fn gba_on_the_ds_plus_is_4x_for_every_setting() {
-    assert_eq!(row((1024, 768), GBA), vec![Some([32.0, 64.0, 960.0, 640.0]); 4]);
+    assert_eq!(
+        row((1024, 768), GBA),
+        vec![Some([32.0, 64.0, 960.0, 640.0]); 4]
+    );
 }
 
 #[test]
@@ -118,7 +124,11 @@ fn game_boy_on_the_ds_plus_uses_the_chosen_values() {
 fn the_reference_panels_keep_their_own_path() {
     for canvas in [(720, 480), (640, 480)] {
         for picture in [GBA, GB] {
-            assert_eq!(row(canvas, picture), vec![None; 4], "{canvas:?} {picture:?}");
+            assert_eq!(
+                row(canvas, picture),
+                vec![None; 4],
+                "{canvas:?} {picture:?}"
+            );
         }
     }
 }

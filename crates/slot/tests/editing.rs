@@ -24,7 +24,10 @@ fn names(list: &[&str]) -> Vec<String> {
 
 #[test]
 fn a_collection_holding_the_game_is_not_offered() {
-    let all = [holding("Pokemon", &["Crystal"]), holding("Puzzlers", &["Tetris"])];
+    let all = [
+        holding("Pokemon", &["Crystal"]),
+        holding("Puzzlers", &["Tetris"]),
+    ];
     assert_eq!(
         choices(&all, &[gbc("Crystal")]),
         [Choice::Collection(1), Choice::New]
@@ -105,7 +108,12 @@ fn a_hidden_collection_at_the_front_stays_at_the_front() {
 
 #[test]
 fn the_remove_stack_is_the_carts_around_the_gap() {
-    let shelf = [gbc("Tetris"), gbc("Crystal"), gbc("Picross"), gbc("Metal Gear")];
+    let shelf = [
+        gbc("Tetris"),
+        gbc("Crystal"),
+        gbc("Picross"),
+        gbc("Metal Gear"),
+    ];
     assert_eq!(
         remove_stack(&shelf, 1),
         [gbc("Picross"), gbc("Tetris"), gbc("Metal Gear")]
@@ -123,8 +131,16 @@ fn the_remove_stack_is_the_carts_around_the_gap() {
 
 #[test]
 fn a_stack_is_the_first_three_games_on_the_card() {
-    let pokemon = holding("Pokemon", &["Gone", "Tetris", "Crystal", "Picross", "Metal Gear"]);
-    let shown = [gbc("Metal Gear"), gbc("Picross"), gbc("Crystal"), gbc("Tetris")];
+    let pokemon = holding(
+        "Pokemon",
+        &["Gone", "Tetris", "Crystal", "Picross", "Metal Gear"],
+    );
+    let shown = [
+        gbc("Metal Gear"),
+        gbc("Picross"),
+        gbc("Crystal"),
+        gbc("Tetris"),
+    ];
     assert_eq!(
         stack_games(&pokemon, &shown),
         [gbc("Tetris"), gbc("Crystal"), gbc("Picross")]
@@ -157,7 +173,9 @@ mod motion {
 
     #[test]
     fn motion_soft_jiggle_stays_within_1_6() {
-        let peak = (0..2000).map(|t| soft_jiggle(t, 0.0).abs()).fold(0.0, f32::max);
+        let peak = (0..2000)
+            .map(|t| soft_jiggle(t, 0.0).abs())
+            .fold(0.0, f32::max);
         assert!(peak > 1.59 && peak <= 1.6, "{peak}");
         assert_ne!(soft_jiggle(100, 0.0), soft_jiggle(100, 0.45));
     }
@@ -176,9 +194,17 @@ mod motion {
     #[test]
     fn motion_the_held_one_is_still_while_it_moves() {
         assert_eq!(move_still(None, 500), 1.0);
-        let held = Hold { down: 0, up: None, dir: 1 };
+        let held = Hold {
+            down: 0,
+            up: None,
+            dir: 1,
+        };
         assert_eq!(move_still(Some(&held), 500), 0.0);
-        let let_go = Hold { down: 0, up: Some(300), dir: 1 };
+        let let_go = Hold {
+            down: 0,
+            up: Some(300),
+            dir: 1,
+        };
         assert_eq!(move_still(Some(&let_go), 400), 0.0);
         assert_eq!(move_still(Some(&let_go), 3000), 1.0);
     }
@@ -199,16 +225,27 @@ mod motion {
 
     #[test]
     fn motion_a_tap_settles_on_exactly_one_spot() {
-        let tap = Hold { down: 0, up: Some(140), dir: 1 };
+        let tap = Hold {
+            down: 0,
+            up: Some(140),
+            dir: 1,
+        };
         assert!(travel(&tap, 100, 10) < 1.0);
         assert_eq!(travel(&tap, 2000, 10), 1.0);
     }
 
     #[test]
     fn motion_a_hold_never_hitches() {
-        let held = Hold { down: 0, up: None, dir: 1 };
+        let held = Hold {
+            down: 0,
+            up: None,
+            dir: 1,
+        };
         for t in (0..1000).step_by(10) {
-            assert!(travel(&held, t + 50, 99) > travel(&held, t, 99), "stalled at {t}");
+            assert!(
+                travel(&held, t + 50, 99) > travel(&held, t, 99),
+                "stalled at {t}"
+            );
         }
         let a = travel(&held, 600, 99);
         let b = travel(&held, 600 + SPOT_MS, 99);
@@ -217,7 +254,11 @@ mod motion {
 
     #[test]
     fn motion_travel_is_capped_by_room() {
-        let held = Hold { down: 0, up: None, dir: 1 };
+        let held = Hold {
+            down: 0,
+            up: None,
+            dir: 1,
+        };
         assert_eq!(travel(&held, 5000, 2), 2.0);
     }
 

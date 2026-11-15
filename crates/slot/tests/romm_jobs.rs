@@ -285,7 +285,10 @@ fn a_request_seen_again_is_not_started_twice() {
 fn a_second_request_waits_for_the_running_one() {
     let d = card();
     let api = fake();
-    api.claims(vec![Ok(vec![req("r1", 1)]), Ok(vec![req("r1", 1), req("r2", 2)])]);
+    api.claims(vec![
+        Ok(vec![req("r1", 1)]),
+        Ok(vec![req("r1", 1), req("r2", 2)]),
+    ]);
     let mut r = runner(d.path(), &api);
     let mut emit = |_: RommEvent| {};
     let _first = r.claim(&mut emit).expect("a task");
@@ -620,7 +623,13 @@ impl Line {
     }
 
     fn push(&self, push: Push) {
-        self.pushes.lock().unwrap().last().unwrap().send(push).unwrap();
+        self.pushes
+            .lock()
+            .unwrap()
+            .last()
+            .unwrap()
+            .send(push)
+            .unwrap();
     }
 
     fn dials(&self) -> usize {
@@ -717,8 +726,12 @@ fn while_the_socket_is_up_ticks_do_not_claim() {
 fn a_failed_enable_retries_on_a_tick_with_the_socket_up() {
     let d = card();
     let (api, line) = (fake(), Line::default());
-    api.0.lock().unwrap().enable =
-        vec![Err(ApiError::Offline), Err(ApiError::Offline), Err(ApiError::Offline)].into();
+    api.0.lock().unwrap().enable = vec![
+        Err(ApiError::Offline),
+        Err(ApiError::Offline),
+        Err(ApiError::Offline),
+    ]
+    .into();
     let mut jobs = linked(d.path(), &api, &line);
     until("enable did not retry on the claim", || {
         api.0.lock().unwrap().enabled == 2
@@ -858,7 +871,11 @@ fn a_download_stopped_by_the_gate_does_not_claim_again() {
 fn a_tick_during_the_stop_unwind_still_restarts_the_request() {
     let d = card();
     let (api, line) = (fake(), Line::default());
-    api.claims(vec![Ok(vec![req("r1", 1)]), Ok(vec![req("r1", 1)]), Ok(vec![req("r1", 1)])]);
+    api.claims(vec![
+        Ok(vec![req("r1", 1)]),
+        Ok(vec![req("r1", 1)]),
+        Ok(vec![req("r1", 1)]),
+    ]);
     api.0.lock().unwrap().hold = true;
     let mut jobs = worker(d.path(), &api, &line);
     jobs.ask(RommJob::Claim);

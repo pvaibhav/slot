@@ -1,6 +1,6 @@
 use slot::romm::api::{
-    content_path, device_name, parse_installs, parse_pending, parse_poll, parse_rom, parse_version, report_body,
-    status_error,
+    content_path, device_name, parse_installs, parse_pending, parse_poll, parse_rom, parse_version,
+    report_body, status_error,
 };
 use slot::romm::{http_api, version_ok, ApiError, Outcome, Poll, RomFile, RommConf};
 
@@ -214,8 +214,7 @@ mod loopback {
         let dir = tempfile::tempdir().unwrap();
         let cancel = Cancel::default();
         cancel.set();
-        let result =
-            http_api(&conf).download(1, "a.gba", &[], &dir.path().join("a.gba"), &cancel);
+        let result = http_api(&conf).download(1, "a.gba", &[], &dir.path().join("a.gba"), &cancel);
         assert_eq!(result, Err(ApiError::Cancelled));
         assert!(!dir.path().join("a.gba").exists());
     }

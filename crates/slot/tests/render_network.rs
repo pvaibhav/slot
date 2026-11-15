@@ -133,7 +133,12 @@ fn the_networks_list_renders() {
     let px = frame(&mut f, &mut c);
     dump(&px, "saved");
     let canvas = f.app().canvas();
-    let value = [canvas.w - 250.0, net_row_top(slot_ui::Canvas::FRAMED, 2, 0, 0) + 8.0, 210.0, 36.0];
+    let value = [
+        canvas.w - 250.0,
+        net_row_top(slot_ui::Canvas::FRAMED, 2, 0, 0) + 8.0,
+        210.0,
+        36.0,
+    ];
     assert!(
         count_in(&px, value, inked) > 50,
         "Home has no Connected value"
@@ -196,7 +201,10 @@ fn a_network_page_renders() {
     let px = frame(&mut f, &mut c);
     dump(&px, "page");
     let canvas = f.app().canvas();
-    assert!(pointer_at(&px, net_row_top(slot_ui::Canvas::FRAMED, count, 0, 0)));
+    assert!(pointer_at(
+        &px,
+        net_row_top(slot_ui::Canvas::FRAMED, count, 0, 0)
+    ));
     for i in [0, 1, 3] {
         let top = net_row_top(slot_ui::Canvas::FRAMED, count, 0, i);
         let value = [canvas.w - 250.0, top + 8.0, 210.0, 36.0];
@@ -581,7 +589,10 @@ mod romm_pages {
             let band = [0.0, 60.0, size.0 as f32, 300.0];
             assert!(region_ink(&px, size, band) > 500, "{panel:?} drew nothing");
             let right = [size.0 as f32 * 0.55, 60.0, size.0 as f32 * 0.45, 300.0];
-            assert!(region_ink(&px, size, right) > 100, "{panel:?} has no values");
+            assert!(
+                region_ink(&px, size, right) > 100,
+                "{panel:?} has no values"
+            );
         }
     }
 
@@ -628,7 +639,10 @@ mod romm_pages {
             let code = [372.0, 186.0, size.0 as f32 - 372.0, 52.0];
             assert!(region_ink(&px, size, code) > 200, "{panel:?} has no code");
             let legend = [0.0, 430.0, size.0 as f32 * 0.5, 50.0];
-            assert!(region_ink(&px, size, legend) > 100, "{panel:?} has no Cancel");
+            assert!(
+                region_ink(&px, size, legend) > 100,
+                "{panel:?} has no Cancel"
+            );
         }
     }
 
@@ -668,9 +682,15 @@ mod romm_pages {
             let above = (OUT_H as f32 - slot_ui::MOUTH_H) as u32;
             let [x0, y0, x1, y1] = ink_box(&px, size, above).expect("no text drawn");
             let mid_x = (x0 + x1) as f32 / 2.0;
-            assert!((mid_x - size.0 as f32 / 2.0).abs() <= 3.0, "{panel:?}: x {mid_x}");
+            assert!(
+                (mid_x - size.0 as f32 / 2.0).abs() <= 3.0,
+                "{panel:?}: x {mid_x}"
+            );
             let mid_y = (y0 + y1) as f32 / 2.0;
-            assert!((mid_y - above as f32 / 2.0).abs() <= 8.0, "{panel:?}: y {mid_y}");
+            assert!(
+                (mid_y - above as f32 / 2.0).abs() <= 8.0,
+                "{panel:?}: y {mid_y}"
+            );
         }
     }
 

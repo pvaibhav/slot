@@ -1,0 +1,14 @@
+name = "slot-badges"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+[triggers]
+crons = ["* * * * *"]
+
+[[r2_buckets]]
+binding = "BADGES"
+bucket_name = "slot-badges"
+
+[[routes]]
+pattern = "badges.slot-cfw.fyi"
+custom_domain = true

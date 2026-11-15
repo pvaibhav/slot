@@ -25,7 +25,12 @@ fn px(frame: &[u8], x: usize, y: usize) -> [u8; 3] {
 
 fn switcher_photo(p: &Polaroids) -> Vec<Draw> {
     let mut out = Vec::new();
-    p.draw(slot_ui::Gauge::default(), None, Printed::default(), &mut out);
+    p.draw(
+        slot_ui::Gauge::default(),
+        None,
+        Printed::default(),
+        &mut out,
+    );
     let photo = *out.first().expect("the switcher drew nothing");
     assert!(
         matches!(photo, Draw::Shot { .. }),

@@ -222,16 +222,6 @@ impl Compositor {
         self.game.set_effect(effect, &self.quad);
     }
 
-    pub fn set_frame_blend(&mut self, blend: crate::FrameBlend) {
-        self.game.set_blend(blend, &self.quad);
-    }
-
-    /// The game's picture jumped (another game, a state load, a reset): blend nothing of
-    /// what came before into the next frame.
-    pub fn cut_frame_blend(&mut self) {
-        self.game.cut();
-    }
-
     pub fn set_authentic_screen(&mut self, screen: crate::Screen) {
         self.game.set_screen(screen);
     }
@@ -240,6 +230,18 @@ impl Compositor {
     /// shade over the screen; both off when the bezel carries the glass.
     pub fn set_authentic_glass(&mut self, sheen: bool, shade: bool) {
         self.game.set_glass(sheen, shade);
+    }
+
+    pub fn set_frame_blend(&mut self, blend: crate::FrameBlend) {
+        self.game.set_blend(blend, &self.quad);
+    }
+
+    pub fn set_lcd(&mut self, lcd: crate::Lcd) {
+        self.game.set_lcd(lcd, &self.quad);
+    }
+
+    pub fn cut_frame_blend(&mut self) {
+        self.game.cut();
     }
 
     pub fn set_picture(&mut self, rect: [f32; 4]) {

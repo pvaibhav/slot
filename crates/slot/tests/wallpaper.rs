@@ -382,7 +382,10 @@ fn collection_pngs_are_preloaded() {
     let d = collection_card(&["duck.png"], &["Puzzlers.png"]);
     let a = on_collection(&d, "Dozers", WallpaperPick::File("duck.png".into()));
     let names = a.shelf_wallpapers();
-    assert!(names.contains(&"Collections/Puzzlers.png".to_string()), "{names:?}");
+    assert!(
+        names.contains(&"Collections/Puzzlers.png".to_string()),
+        "{names:?}"
+    );
     assert!(names.contains(&"duck.png".to_string()), "{names:?}");
 }
 

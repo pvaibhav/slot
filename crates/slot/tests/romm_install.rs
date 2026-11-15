@@ -121,7 +121,10 @@ fn failed_with(r: Result<slot::romm::install::Finished, Stopped>) -> String {
 }
 
 fn temps_empty(root: &Path) -> bool {
-    std::fs::read_dir(root.join(TEMP_DIR)).unwrap().next().is_none()
+    std::fs::read_dir(root.join(TEMP_DIR))
+        .unwrap()
+        .next()
+        .is_none()
 }
 
 #[test]
@@ -140,7 +143,10 @@ fn plain_rom_lands_in_its_folder() {
     let done = run(d.path(), &api).unwrap();
     assert_eq!(done.outcome, Outcome::Done);
     assert_eq!(done.stem.as_deref(), Some("Tetris"));
-    assert_eq!(std::fs::read(d.path().join("Games/GB/Tetris.gb")).unwrap(), b"rom");
+    assert_eq!(
+        std::fs::read(d.path().join("Games/GB/Tetris.gb")).unwrap(),
+        b"rom"
+    );
     assert!(temps_empty(d.path()));
 }
 
@@ -186,7 +192,10 @@ fn seven_z_fails() {
 #[test]
 fn other_platform_fails_with_reason() {
     let d = tempdir().unwrap();
-    let reason = failed_with(run(d.path(), &Fake::new("snes", "Mario.sfc", b"x".to_vec())));
+    let reason = failed_with(run(
+        d.path(),
+        &Fake::new("snes", "Mario.sfc", b"x".to_vec()),
+    ));
     assert_eq!(reason, "slot only plays GB, GBC and GBA");
 }
 
@@ -209,12 +218,18 @@ fn same_name_is_already_installed() {
     let api = Fake::new("gba", "Game.gba", b"theirs".to_vec());
     let done = run(d.path(), &api).unwrap();
     assert_eq!(done.outcome, Outcome::AlreadyInstalled);
-    assert_eq!(std::fs::read(d.path().join("Games/GBA/Game.gba")).unwrap(), b"mine");
+    assert_eq!(
+        std::fs::read(d.path().join("Games/GBA/Game.gba")).unwrap(),
+        b"mine"
+    );
 
     let z = zip_of(&[("Game.gba", b"theirs")]);
     let done = run(d.path(), &Fake::new("gba", "Pack.zip", z)).unwrap();
     assert_eq!(done.outcome, Outcome::AlreadyInstalled);
-    assert_eq!(std::fs::read(d.path().join("Games/GBA/Game.gba")).unwrap(), b"mine");
+    assert_eq!(
+        std::fs::read(d.path().join("Games/GBA/Game.gba")).unwrap(),
+        b"mine"
+    );
     assert!(temps_empty(d.path()));
 }
 
@@ -277,7 +292,10 @@ fn errors_map_to_stops() {
         (ApiError::Server(502), Stopped::Transient),
         (ApiError::Truncated, Stopped::Transient),
         (ApiError::NotFound, Stopped::Lost(ApiError::NotFound)),
-        (ApiError::Unauthorized, Stopped::Lost(ApiError::Unauthorized)),
+        (
+            ApiError::Unauthorized,
+            Stopped::Lost(ApiError::Unauthorized),
+        ),
     ] {
         let d = tempdir().unwrap();
         let mut api = Fake::new("gba", "Game.gba", b"x".to_vec());

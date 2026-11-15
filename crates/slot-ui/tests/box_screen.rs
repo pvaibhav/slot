@@ -86,7 +86,11 @@ fn over_the_game_a_dim_goes_down_first() {
         Some(&Draw::Rect { w, h, colour, .. }) => {
             assert_eq!((w, h), (CANVAS.w, CANVAS.h));
             assert_eq!(&colour[..3], &[0.0, 0.0, 0.0]);
-            assert!(colour[3] > 0.0 && colour[3] < 1.0, "not a dim: {}", colour[3]);
+            assert!(
+                colour[3] > 0.0 && colour[3] < 1.0,
+                "not a dim: {}",
+                colour[3]
+            );
         }
         other => panic!("no dim under the art: {other:?}"),
     }

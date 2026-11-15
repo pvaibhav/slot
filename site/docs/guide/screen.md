@@ -94,13 +94,11 @@ Bezels are hidden while a game is stretched.
 Some games flicker sprites on and off every other frame to fake see-through effects. The original screens were slow
 enough to blur that into a steady image. On a modern screen you see the flicker.
 
-| Frame Blending | Does                                                        |
-|----------------|-------------------------------------------------------------|
-| Off            | Shows every frame as it is (default)                        |
-| Mix            | Blends each frame with the one before                       |
-| Ghosting       | Leaves a fading trail, like the original screens. mGBA only |
-
-A game on gpSP set to Ghosting gets Mix.
+| Frame Blending | Does                                                                  |
+|----------------|-----------------------------------------------------------------------|
+| Off            | Shows every frame as it is (default)                                  |
+| Mix            | Blends each frame half and half with the one before                   |
+| Ghosting       | Fades each pixel slowly, the way the original screen did              |
 
 ## Bezels
 
@@ -114,6 +112,14 @@ A bezel is a frame drawn around the game.
 Bezels are hidden when the picture fills the screen.
 
 See [Customization](customizing.md) for details on how to make your own.
+
+## Overlays
+
+An overlay is a translucent image laid over the game, under the bezel. slot does not ship with any.
+
+The Overlay row only appears after you add one.
+
+See [Customization](customizing.md#overlays) for how to make and add them.
 
 ## Brightness and blue light
 

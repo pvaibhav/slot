@@ -20,6 +20,19 @@ To unlink, press <kbd>SELECT</kbd> + <kbd>MENU</kbd> again and pick End Link.
 
 Closing the lid, powering off or ejecting also ends a link session.
 
+## Linking with Kid Mode
+
+A device in Kid Mode can't open the link menu.
+
+When you host a game that's on the kid's card, an invite pops up on their screen with your nickname and the game. <kbd>A</kbd> joins and <kbd>B</kbd> is Not now.
+
+A few gotchas to be aware of:
+
+- Their device needs the same BIOS setup as yours.
+- If you're running a different emulator, theirs switches to match for this link session.
+- slot makes them a save state before the link starts. When the link ends, they're back in their own game.
+- A device in Kid Mode can only join a link session.
+
 ## Which games can link
 
 It depends on the game and the emulator.
@@ -48,14 +61,18 @@ If slot says "Please switch to gpSP", the game needs the wireless adapter. Chang
 - Fast-forward, rewind, loading states and opening the state switcher are all disabled.
 - A badge shows whether you're Hosting or Joined.
 - If the other device goes quiet for 2 seconds, the link ends.
+- If the other player ends the link, you'll see "Your friend unplugged".
 
-## If it doesn't connect
+## Link messages
 
 | Message | What happened |
 | --- | --- |
 | This device has no Wi-Fi | Wi-Fi hardware could not be detected. Ensure your device has Wi-Fi. |
-| The radio did not come up | Wi-Fi didn't start on this device. Try again. |
-| Nobody arrived | The host waited and nobody joined. |
-| The other player vanished | The two devices found each other, then lost each other. |
-
-Keep the two devices close and start Join after Host.
+| The radio did not come up, Check logs | Wi-Fi didn't start on this device. Try again. If it keeps happening, please file an issue on GitHub with `Logs/slot.log` attached. See [Troubleshooting](troubleshooting.md) for more steps. |
+| No one joined, try again | The host waited and nobody joined, or Join found no host. |
+| The cable came loose | A cable link connected, then dropped. |
+| Lost the connection | A wireless adapter link connected, then dropped. |
+| BIOS does not match | One device has a `gba_bios.bin` and the other doesn't. The link ends. |
+| Please switch to mGBA | The game is on Gambatte, which can't link. Change the emulator with <kbd>START</kbd> on the shelf. |
+| Please switch to gpSP | The game needs the wireless adapter, or only links on gpSP. |
+| No link support | This game can't link on the emulator it's on. |

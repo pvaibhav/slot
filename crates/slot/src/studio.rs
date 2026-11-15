@@ -23,7 +23,7 @@ pub enum LabelKind {
     Existing,
     Real,
     Logo,
-    Title,
+    Hand,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -56,6 +56,7 @@ pub enum Screen {
 pub enum Effect {
     Close,
     Fetch,
+    Write,
     Apply(LabelKind),
 }
 
@@ -66,6 +67,7 @@ pub enum Legend {
     Change,
     ChangeVertical,
     Apply,
+    Write,
     Move,
     Reset,
     Hex,
@@ -89,6 +91,9 @@ pub struct Studio {
     logo_worn: bool,
     text_worn: bool,
     wheel: bool,
+    writing: bool,
+    left_label: usize,
+    pub marker_below: bool,
 }
 
 fn finish_of(shell: Shell) -> ShellFinish {
@@ -114,16 +119,30 @@ fn rgb_of(d: [u8; 6]) -> [u8; 3] {
     [d[0] * 16 + d[1], d[2] * 16 + d[3], d[4] * 16 + d[5]]
 }
 
+fn writable(cart: &Cart) -> bool {
+    #[cfg(feature = "nds")]
+    if cart.platform == Platform::Nds {
+        return false;
+    }
+    let _ = cart;
+    true
+}
+
 impl Studio {
     pub fn new(cart: Cart, wifi: bool) -> Studio {
         let mut plain = cart.clone();
         plain.shell = None;
         let auto = shell_for(&plain);
-        let sheet = vec![LabelKind::Real, LabelKind::Logo];
-        let artless = cart.label.is_none();
-        let title = slot_ui::label_text(&cart);
+        let mut sheet = if wifi {
+            vec![LabelKind::Real, LabelKind::Logo]
+        } else {
+            Vec::new()
+        };
+        if cart.label.is_some() && writable(&cart) {
+            sheet.push(LabelKind::Hand);
+        }
         let cart_shell = cart.shell;
-        let mut studio = Studio {
+        Studio {
             shell: cart_shell,
             cart,
             screen: Screen::List { row: 0 },
@@ -139,23 +158,19 @@ impl Studio {
                 colour: auto.colour,
                 finish: finish_of(auto),
             },
+            left_label: 0,
+            marker_below: false,
             opened_ground: None,
             before_custom: (cart_shell, None),
             logo_worn: false,
             text_worn: false,
             wheel: false,
-        };
-        if artless {
-            studio.adopt_text(slot_ui::label_colour(&title));
+            writing: false,
         }
-        studio
     }
 
     pub fn rows(&self) -> Vec<Row> {
-        let mut rows = Vec::new();
-        if self.wifi {
-            rows.push(Row::Label);
-        }
+        let mut rows = vec![Row::Label];
         if self.wearing == LabelKind::Logo
             || self.wearing_text()
             || (self.wheel && self.wearing_old_logo())
@@ -174,7 +189,44 @@ impl Studio {
     }
 
     pub fn wearing_text(&self) -> bool {
-        self.wearing == LabelKind::Title || (self.text_worn && self.wearing == LabelKind::Existing)
+        self.text_worn && self.wearing == LabelKind::Existing
+    }
+
+    pub fn wearing_hand(&self) -> bool {
+        self.wearing == LabelKind::Hand
+            || (self.wearing == LabelKind::Existing && self.cart.label.is_none())
+    }
+
+    pub fn written(&mut self) -> Option<Effect> {
+        if !self.writing {
+            return None;
+        }
+        self.writing = false;
+        Some(Effect::Apply(LabelKind::Hand))
+    }
+
+    pub fn wifi(&self) -> bool {
+        self.wifi
+    }
+
+    pub fn writing(&self) -> bool {
+        self.writing
+    }
+
+    pub fn shaped(&self) -> Cart {
+        Cart {
+            shell: self.shell,
+            ..self.cart.clone()
+        }
+    }
+
+    pub fn label_unreadable(&mut self) {
+        self.cart.label = None;
+        self.sheet.retain(|k| *k != LabelKind::Hand);
+        if let Screen::Sheet { at } = self.screen {
+            let at = if at < self.sheet.len() { at } else { 0 };
+            self.screen = Screen::Sheet { at };
+        }
     }
 
     pub fn adopt_text(&mut self, ground: [u8; 3]) {
@@ -199,13 +251,24 @@ impl Studio {
     }
 
     pub fn applied(&mut self, kind: LabelKind) {
-        let other = self.sheet.iter().copied().find(|k| *k != kind);
-        self.sheet = std::iter::once(self.wearing).chain(other).collect();
+        let mut sheet = Vec::new();
+        if !self.wearing_hand() {
+            sheet.push(self.wearing);
+        }
+        for k in self.sheet.iter().copied() {
+            if k != kind && k != LabelKind::Hand && !sheet.contains(&k) {
+                sheet.push(k);
+            }
+        }
+        self.wearing = kind;
+        if !self.wearing_hand() && writable(&self.cart) {
+            sheet.push(LabelKind::Hand);
+        }
+        self.sheet = sheet;
         if matches!(self.screen, Screen::Sheet { .. }) {
             self.screen = Screen::Sheet { at: 0 };
         }
-        self.wearing = kind;
-        let fresh = matches!(kind, LabelKind::Logo | LabelKind::Title);
+        let fresh = matches!(kind, LabelKind::Logo | LabelKind::Hand);
         self.ground = if fresh { None } else { self.opened_ground };
         if fresh {
             self.opened_ground = None;
@@ -229,8 +292,6 @@ impl Studio {
             self.wearing
         } else if self.wearing_old_logo() {
             LabelKind::Logo
-        } else if self.wearing_text() {
-            LabelKind::Title
         } else {
             self.wearing
         }
@@ -247,9 +308,6 @@ impl Studio {
             LabelKind::Logo => logo,
             _ => true,
         });
-        if self.sheet.len() < 2 && self.cart.label.is_some() && !self.text_worn {
-            self.sheet.push(LabelKind::Title);
-        }
         if let Screen::Sheet { at } = self.screen {
             let at = at.min(self.sheet.len().saturating_sub(1));
             self.screen = Screen::Sheet { at };
@@ -361,7 +419,10 @@ impl Studio {
     fn step_shape(&mut self, forward: bool) {
         const ORDER: [Outline; 3] = [Outline::Auto, Outline::Notched, Outline::Rounded];
         let current = self.current_shell();
-        let at = ORDER.iter().position(|o| *o == current.outline).unwrap_or(0);
+        let at = ORDER
+            .iter()
+            .position(|o| *o == current.outline)
+            .unwrap_or(0);
         let next = if forward { at + 1 } else { at + 2 } % 3;
         self.shell = Some(ShellChoice {
             outline: ORDER[next],
@@ -392,12 +453,20 @@ impl Studio {
         let rows = self.rows();
         let count = rows.len();
         match (btn, rows.get(row).copied()?) {
-            (Btn::Up, _) => self.screen = Screen::List { row: (row + count - 1) % count },
-            (Btn::Down, _) => self.screen = Screen::List { row: (row + 1) % count },
+            (Btn::Up, _) => {
+                self.screen = Screen::List {
+                    row: (row + count - 1) % count,
+                }
+            }
+            (Btn::Down, _) => {
+                self.screen = Screen::List {
+                    row: (row + 1) % count,
+                }
+            }
             (Btn::B, _) => return Some(Effect::Close),
             (Btn::A, Row::Label) => {
                 self.screen = Screen::Sheet { at: 0 };
-                return Some(Effect::Fetch);
+                return self.wifi.then_some(Effect::Fetch);
             }
             (Btn::A, Row::Color) => {
                 self.screen = Screen::Chips {
@@ -419,16 +488,66 @@ impl Studio {
     }
 
     fn press_sheet(&mut self, at: usize, btn: Btn) -> Option<Effect> {
-        let last = self.sheet.len().saturating_sub(1);
+        if self.writing && btn != Btn::B {
+            return None;
+        }
+        let marker = self.sheet.iter().position(|k| *k == LabelKind::Hand);
+        let labels = marker.unwrap_or(self.sheet.len());
+        let on_marker = marker == Some(at);
         match btn {
-            Btn::Left | Btn::Up => self.screen = Screen::Sheet { at: at.saturating_sub(1) },
-            Btn::Right | Btn::Down => self.screen = Screen::Sheet { at: (at + 1).min(last) },
+            Btn::Up if !on_marker => {
+                self.screen = Screen::Sheet {
+                    at: at.saturating_sub(1),
+                }
+            }
+            Btn::Down if !on_marker => {
+                let bottom = at + 1 >= labels;
+                match marker {
+                    Some(m) if bottom && self.marker_below => {
+                        self.left_label = at;
+                        self.screen = Screen::Sheet { at: m };
+                    }
+                    _ => {
+                        self.screen = Screen::Sheet {
+                            at: (at + 1).min(labels.saturating_sub(1)),
+                        }
+                    }
+                }
+            }
+            Btn::Up if on_marker && self.marker_below && labels > 0 => {
+                self.screen = Screen::Sheet {
+                    at: self.left_label.min(labels - 1),
+                }
+            }
+            Btn::Left if !on_marker => {
+                if let Some(m) = marker {
+                    self.left_label = at;
+                    self.screen = Screen::Sheet { at: m };
+                }
+            }
+            Btn::Right if on_marker && labels > 0 => {
+                self.screen = Screen::Sheet {
+                    at: self.left_label.min(labels - 1),
+                }
+            }
             Btn::B => {
-                let row = self.rows().iter().position(|r| *r == Row::Label).unwrap_or(0);
+                self.writing = false;
+                let row = self
+                    .rows()
+                    .iter()
+                    .position(|r| *r == Row::Label)
+                    .unwrap_or(0);
                 self.screen = Screen::List { row };
             }
             Btn::A => {
                 let kind = *self.sheet.get(at)?;
+                if kind == LabelKind::Hand {
+                    if self.wearing_hand() {
+                        return None;
+                    }
+                    self.writing = true;
+                    return Some(Effect::Write);
+                }
                 let fetched = matches!(kind, LabelKind::Real | LabelKind::Logo);
                 if kind == self.wearing || (fetched && !self.art_ready) {
                     return None;
@@ -537,7 +656,11 @@ impl Studio {
                 start,
             } => match btn {
                 Btn::Left | Btn::Right => {
-                    let pos = if btn == Btn::Left { (pos + 5) % 6 } else { (pos + 1) % 6 };
+                    let pos = if btn == Btn::Left {
+                        (pos + 5) % 6
+                    } else {
+                        (pos + 1) % 6
+                    };
                     self.screen = Screen::Hex {
                         target,
                         digits,
@@ -585,7 +708,12 @@ impl Studio {
                 Some(Row::Finish | Row::Shape) => vec![Legend::Back, Legend::Change],
                 _ => vec![Legend::Back, Legend::Open],
             },
-            Screen::Sheet { .. } => vec![Legend::Back, Legend::Apply],
+            Screen::Sheet { at } => match self.sheet.get(at) {
+                Some(LabelKind::Hand) if self.writing || self.wearing_hand() => vec![Legend::Back],
+                Some(LabelKind::Hand) => vec![Legend::Back, Legend::Write],
+                Some(_) => vec![Legend::Back, Legend::Apply],
+                None => vec![Legend::Back],
+            },
             Screen::Chips { at, .. } => match Self::grid().get(at).map(|p| p.chip) {
                 Some(Chip::Custom) => vec![Legend::Back, Legend::Open],
                 _ => vec![Legend::Back],
@@ -642,6 +770,10 @@ pub struct ApplyScene {
 }
 
 const PRINT_MS: f64 = 300.0;
+pub const WRITE_MS: f64 = 2600.0;
+pub const PEEL_MS: f64 = 440.0;
+pub const MARKER_SLIDE_MS: f32 = 420.0;
+pub const UNCAP_MS: f32 = 320.0;
 pub const PRINT_LIGHT_HOLD_MS: f64 = 600.0;
 const CUT_MS: f64 = 70.0;
 const DROP_MS: f64 = 420.0;
@@ -694,7 +826,12 @@ pub fn tray_step(
         return;
     }
     let settled = |s: &Slip| s.y1;
-    for (i, kind) in sheet.iter().enumerate().rev() {
+    let printed: Vec<LabelKind> = sheet
+        .iter()
+        .copied()
+        .filter(|k| *k != LabelKind::Hand)
+        .collect();
+    for (i, kind) in printed.iter().enumerate().rev() {
         let target = if i == 1 { bottom } else { 0.0 };
         if let Some(slip) = slips.iter_mut().find(|s| s.kind == *kind) {
             if slip.y1 != target {

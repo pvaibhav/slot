@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+use crate::battery::Gauge;
 use fontdue::{Font, FontSettings, Metrics};
 use slot_gfx::{Canvas, Draw, TexId};
-use crate::battery::Gauge;
 use slot_store::GuideSpot;
 
 use crate::bitmaps::ButtonLegend;

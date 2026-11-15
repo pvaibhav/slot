@@ -12,6 +12,7 @@ mod draw;
 mod ds;
 mod fbdev;
 mod fbo;
+mod ghost;
 mod gl;
 mod grade;
 #[cfg(target_os = "macos")]
@@ -40,6 +41,7 @@ pub use ds::{
 };
 pub use fbdev::{egl_error, panel_mode, panel_size, FbdevSurface};
 pub use fbo::{canvas_size, Compositor, BACKDROP};
+pub use ghost::{FrameBlend, Lcd};
 pub use grade::{
     blue_light_gain, contrast_boost, dim_gain, saturation_boost, ColorGrade, BLUE_LIGHT_MAX,
     CONTRAST_MAX, SATURATION_MAX,
@@ -50,14 +52,15 @@ pub use headless::HeadlessSurface;
 pub use host::HostSurface;
 #[cfg(unix)]
 pub use kms::{
-    free_crtc, preferred_mode, retry_until, FlipQueue, FlipStep, KmsSurface, Panel, CONNECTOR_DSI, MODE_TYPE_PREFERRED,
+    free_crtc, preferred_mode, retry_until, FlipQueue, FlipStep, KmsSurface, Panel, CONNECTOR_DSI,
+    MODE_TYPE_PREFERRED,
 };
 #[cfg(unix)]
 pub use kms_atomic::{atomic_plan, primary_plane_for, AtomicIds, PlaneInfo, PLANE_TYPE_PRIMARY};
 pub use layout::{canvas_scale, fills, panel_pixels, Canvas};
 pub use lcd3x::{lcd3x_factors, lcd3x_mask, ScreenEffect};
 pub use overlay::{Overlay, OverlayPass};
-pub use pipeline::{FrameBlend, SCALE, SRC_H, SRC_W, WHOLE_TEXTURE};
+pub use pipeline::{SCALE, SRC_H, SRC_W, WHOLE_TEXTURE};
 pub use placement::{game_layout, table_placement, GameLayout, Sizing};
 pub use power::{screen_brightness, screen_rect_above, screen_scale, screen_width};
 pub use surface::{

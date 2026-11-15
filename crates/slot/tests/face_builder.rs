@@ -15,6 +15,7 @@ fn cart(stem: &str) -> Cart {
         code: String::new(),
         shell: None,
         sealed: false,
+        tags: Vec::new(),
     }
 }
 
@@ -118,6 +119,7 @@ fn the_selected_carts_lid_comes_from_the_label_cache() {
         code: "BPRE".into(),
         shell: None,
         sealed: false,
+        tags: Vec::new(),
     };
     label_art(d.path(), &cart).unwrap();
     let meta = std::fs::metadata(&label).unwrap();

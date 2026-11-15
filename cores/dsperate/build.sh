@@ -20,7 +20,7 @@ stamp() {
 	echo "commit=$1"
 	echo "source=https://github.com/beebono/DSperate/archive/$1.tar.gz"
 	echo "image=$image"
-	echo "recipe=cmake shim (DSPERATE_SDL=OFF DSPERATE_CHEEVOS=OFF DSPERATE_NET=OFF DSPERATE_TESTS=OFF DSPERATE_PGO=OFF)"
+	echo "recipe=cmake shim with Vulkan headers (DSPERATE_SDL=OFF DSPERATE_CHEEVOS=OFF DSPERATE_NET=OFF DSPERATE_TESTS=OFF DSPERATE_PGO=OFF)"
 	echo "device_tune=$device_tune"
 	for p in "$here"/patches/*.patch; do
 		[ -f "$p" ] || continue
@@ -35,9 +35,9 @@ build() {
 	commit="$1" tarball="$2" work="$3" out="$4"
 	src="$work/DSperate-$commit"
 
-	if ! command -v cmake >/dev/null 2>&1 || ! command -v ninja >/dev/null 2>&1 || ! command -v g++ >/dev/null 2>&1 || ! command -v patch >/dev/null 2>&1; then
+	if ! command -v cmake >/dev/null 2>&1 || ! command -v ninja >/dev/null 2>&1 || ! command -v g++ >/dev/null 2>&1 || ! command -v patch >/dev/null 2>&1 || [ ! -f /usr/include/vulkan/vulkan.h ]; then
 		apt-get update -qq
-		DEBIAN_FRONTEND=noninteractive apt-get install -y -qq cmake ninja-build g++ file patch >/dev/null
+		DEBIAN_FRONTEND=noninteractive apt-get install -y -qq cmake ninja-build g++ file patch libvulkan-dev >/dev/null
 	fi
 
 	rm -rf "$work"

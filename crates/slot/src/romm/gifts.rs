@@ -69,8 +69,11 @@ impl Gifts {
     pub fn retain_games(&mut self, root: &Path, carts: &[Cart]) {
         self.sync(root);
         let before = self.held.len();
-        self.held
-            .retain(|(dir, stem)| carts.iter().any(|c| c.platform.dir_name() == dir && c.stem == *stem));
+        self.held.retain(|(dir, stem)| {
+            carts
+                .iter()
+                .any(|c| c.platform.dir_name() == dir && c.stem == *stem)
+        });
         if self.held.len() != before {
             self.save(root);
         }

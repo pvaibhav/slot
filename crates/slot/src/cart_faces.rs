@@ -251,6 +251,7 @@ mod tests {
             code: String::new(),
             shell: None,
             sealed: false,
+            tags: Vec::new(),
         }
     }
 

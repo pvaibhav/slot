@@ -100,7 +100,13 @@ impl Pacer {
         self.record(work, blocked, Some(seen), Instant::now())
     }
 
-    fn record(&mut self, work: Duration, blocked: bool, seen: Option<Duration>, now: Instant) -> bool {
+    fn record(
+        &mut self,
+        work: Duration,
+        blocked: bool,
+        seen: Option<Duration>,
+        now: Instant,
+    ) -> bool {
         let mut missed = false;
         if let Some(seen) = seen {
             missed = seen > self.period.mul_f64(1.5);

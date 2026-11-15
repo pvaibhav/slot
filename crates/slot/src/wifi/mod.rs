@@ -1,7 +1,7 @@
 pub mod attempt;
 mod fake;
-mod worker;
 pub mod sp;
+mod worker;
 pub mod wpa;
 
 pub use fake::Fake;

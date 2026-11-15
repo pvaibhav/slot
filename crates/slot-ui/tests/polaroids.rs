@@ -119,9 +119,9 @@ fn the_gauge_stays_clear_of_the_title_on_the_left() {
     p.draw(
         Gauge {
             battery: Some(Battery {
-            percent: 68,
-            charge: Charge::Charging,
-        }),
+                percent: 68,
+                charge: Charge::Charging,
+            }),
             percent: Printed { face: None, w: 30 },
             ..Gauge::default()
         },

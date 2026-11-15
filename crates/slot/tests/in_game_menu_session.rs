@@ -23,7 +23,8 @@ fn session_playing_with(keys: &ShortcutKeys) -> (Session, TempDir, Millis) {
     let d = common::tmp_root_with_carts(&["Emerald", "Fusion"]);
     write_shortcuts(d.path(), keys).expect("write shortcuts");
     common::write_retail_header(&d, "Emerald", "POKEMON RUBY", "AXVE");
-    slot_store::write_selected_core(d.path(), slot_store::Platform::Gba, "Emerald", Core::Mgba).expect("write core");
+    slot_store::write_selected_core(d.path(), slot_store::Platform::Gba, "Emerald", Core::Mgba)
+        .expect("write core");
     write_slot_state(
         d.path(),
         &SlotState {

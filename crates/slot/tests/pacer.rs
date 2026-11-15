@@ -9,7 +9,11 @@ fn a_learning_pacer_follows_blocked_swaps() {
     for _ in 0..200 {
         p.swapped_after(Duration::from_millis(3), true, Duration::from_millis(20));
     }
-    assert!(p.period() > before + Duration::from_millis(2), "{:?}", p.period());
+    assert!(
+        p.period() > before + Duration::from_millis(2),
+        "{:?}",
+        p.period()
+    );
 }
 
 #[test]

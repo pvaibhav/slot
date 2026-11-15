@@ -230,8 +230,7 @@ fn unpack(
     cancel: &Cancel,
 ) -> Result<String, Result<Finished, Stopped>> {
     let file = File::open(part).map_err(|_| failed("Zip could not be read"))?;
-    let mut archive =
-        zip::ZipArchive::new(file).map_err(|_| failed("Zip could not be read"))?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|_| failed("Zip could not be read"))?;
     let mut found: Vec<(usize, String)> = Vec::new();
     for index in 0..archive.len() {
         let Ok(entry) = archive.by_index_raw(index) else {
