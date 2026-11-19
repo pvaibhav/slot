@@ -4,7 +4,7 @@ use common::{app_playing_in, tmp_root_with_carts};
 use slot::app::{App, Phase};
 use slot_gfx::FrameBlend;
 use slot_input::{Action, Btn};
-use slot_store::{Blending, Core, Platform, Shader, StateRing};
+use slot_store::{Core, Platform, Shader, StateRing};
 use slot_ui::{
     Draw, QuickMenuFaces, QuickRow, QuickValue, TexId, HINT_EDGE, MOUTH_H, OUT_H, OUT_W,
 };
@@ -164,21 +164,36 @@ fn colour_correction_toggles_the_running_platform_and_asks_the_core() {
 
 #[test]
 fn frame_blending_steps_the_running_platform_and_hands_it_to_the_gpu() {
-    let (_d, mut a) = playing();
-    go_to(&mut a, QuickRow::Blending);
-    assert_eq!(a.quick_value(QuickRow::Blending), Some(QuickValue::Off));
-    for (want, gpu) in [
-        (Blending::Mix, FrameBlend::Mix),
-        (Blending::Ghosting, FrameBlend::Ghosting),
-        (Blending::Off, FrameBlend::Off),
+    for (shader, initial) in [
+        (Shader::Grid, QuickValue::Off),
+        (Shader::Authentic, QuickValue::Ghosting),
     ] {
-        press(&mut a, Btn::Right);
-        assert_eq!(a.blending_for(Platform::Gba), want);
-        assert_eq!(a.frame_blend(), gpu);
-        assert_eq!(
-            a.quick_value(QuickRow::Blending),
-            a.quick_value(QuickRow::GbaBlending)
-        );
+        let (d, mut a) = playing();
+        for _ in 0..8 {
+            if a.screen_shader() == shader {
+                break;
+            }
+            a.apply(Action::ShaderNext);
+        }
+        assert_eq!(a.screen_shader(), shader);
+        go_to(&mut a, QuickRow::Blending);
+        assert_eq!(a.quick_value(QuickRow::Blending), Some(initial));
+        if shader == Shader::Authentic {
+            assert_eq!(a.frame_blend(), FrameBlend::Ghosting);
+            press(&mut a, Btn::Right);
+            assert_eq!(App::boot(d.path()).frame_blend(), FrameBlend::Off);
+        }
+        for (gpu, shown) in [
+            (FrameBlend::Mix, QuickValue::Mix),
+            (FrameBlend::Ghosting, QuickValue::Ghosting),
+            (FrameBlend::Off, QuickValue::Off),
+        ] {
+            press(&mut a, Btn::Right);
+            assert_eq!(a.frame_blend(), gpu);
+            assert_eq!(a.quick_value(QuickRow::Blending), Some(shown));
+            assert_eq!(a.quick_value(QuickRow::GbaBlending), Some(shown));
+            assert_eq!(App::boot(d.path()).frame_blend(), gpu);
+        }
     }
 }
 

@@ -223,10 +223,18 @@ impl GamePass {
     pub fn set_effect(&mut self, effect: ScreenEffect, quad: &Quad) {
         if effect != self.effect {
             self.effect = effect;
-            self.ghost.set_filter(match effect {
+            let filter = match effect {
                 ScreenEffect::Authentic => gl::LINEAR,
                 _ => gl::NEAREST,
-            });
+            };
+            unsafe {
+                for game in self.game {
+                    gl::BindTexture(gl::TEXTURE_2D, game);
+                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, filter as i32);
+                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, filter as i32);
+                }
+            }
+            self.ghost.set_filter(filter);
             self.reblend(quad);
         }
     }
@@ -249,7 +257,7 @@ impl GamePass {
     fn reblend(&mut self, quad: &Quad) {
         self.ghost.reset();
         let (game, last) = (self.game[self.at], self.game[1 - self.at]);
-        match (self.blend(), self.held) {
+        match (self.blend, self.held) {
             (_, 0) | (FrameBlend::Off, _) => {}
             // One frame since the last cut: it is all there is to blend the next one with.
             (_, 1) => self.ghost.respond(game, [0.0; 2], quad),
@@ -261,13 +269,6 @@ impl GamePass {
                 self.ghost.respond(last, [0.0; 2], quad);
                 self.ghost.respond(game, self.response(), quad);
             }
-        }
-    }
-
-    fn blend(&self) -> FrameBlend {
-        match self.effect {
-            ScreenEffect::Authentic => FrameBlend::Ghosting,
-            _ => self.blend,
         }
     }
 
@@ -335,7 +336,7 @@ impl GamePass {
                 xrgb8888.as_ptr() as *const std::ffi::c_void,
             );
         }
-        match self.blend() {
+        match self.blend {
             FrameBlend::Off => {}
             FrameBlend::Mix => self.ghost.mix(game, last, quad),
             FrameBlend::Ghosting => self.ghost.respond(game, self.response(), quad),
@@ -350,7 +351,7 @@ impl GamePass {
             _ => self.src,
         };
         let game = self.game[self.at];
-        let shown = match self.blend() {
+        let shown = match self.blend {
             FrameBlend::Off => game,
             FrameBlend::Mix | FrameBlend::Ghosting => self.ghost.texture().unwrap_or(game),
         };

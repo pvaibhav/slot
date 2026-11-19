@@ -512,40 +512,44 @@ fn screen_opens_a_page_of_its_own_and_b_comes_back_to_it() {
 }
 
 #[test]
-fn each_systems_frame_blending_steps_off_mix_lcd_ghosting_wraps_and_saves_alone() {
-    let saved = |d: &TempDir| {
-        let s = read_slot_state(d.path());
-        (s.blending_gba, s.blending_gb, s.blending_gbc)
-    };
-    for row in [
+fn each_systems_authentic_frame_blending_defaults_to_ghosting_and_saves_alone() {
+    let rows = [
         QuickRow::GbaBlending,
         QuickRow::GbBlending,
         QuickRow::GbcBlending,
-    ] {
-        let (d, mut a, _) = on_carousel();
+    ];
+    for row in rows {
+        let (d, mut a, _) = on_carousel_with(SlotState {
+            shader_gba: Shader::Authentic,
+            shader_gb: Shader::Authentic,
+            shader_gbc: Shader::Authentic,
+            ..SlotState::default()
+        });
         open_at(&mut a, row);
-        assert_eq!(
-            a.quick_value(row),
-            Some(QuickValue::Off),
-            "{row:?} did not open on the default, which is off"
-        );
-        for (btn, want, shown) in [
-            (Btn::Right, Blending::Mix, QuickValue::Mix),
-            (Btn::Right, Blending::Ghosting, QuickValue::Ghosting),
-            (Btn::Right, Blending::Off, QuickValue::Off),
-            (Btn::Left, Blending::Ghosting, QuickValue::Ghosting),
-            (Btn::Left, Blending::Mix, QuickValue::Mix),
+        assert_eq!(a.quick_value(row), Some(QuickValue::Ghosting));
+        for (btn, shown) in [
+            (Btn::Right, QuickValue::Off),
+            (Btn::Right, QuickValue::Mix),
+            (Btn::Right, QuickValue::Ghosting),
+            (Btn::Left, QuickValue::Mix),
+            (Btn::Left, QuickValue::Off),
         ] {
             press(&mut a, btn);
-            let off = Blending::Off;
-            let alone = match row {
-                QuickRow::GbaBlending => (want, off, off),
-                QuickRow::GbBlending => (off, want, off),
-                _ => (off, off, want),
-            };
-            assert_eq!(saved(&d), alone, "{row:?} {btn:?}");
             assert_eq!(a.quick_value(row), Some(shown), "{row:?} {btn:?}");
+            let reopened = App::boot(d.path());
+            for other in rows {
+                let expected = if other == row {
+                    shown
+                } else {
+                    QuickValue::Ghosting
+                };
+                assert_eq!(reopened.quick_value(other), Some(expected), "{other:?}");
+            }
         }
+        let saved = read_slot_state(d.path());
+        assert_eq!(saved.blending_gba, Blending::Off);
+        assert_eq!(saved.blending_gb, Blending::Off);
+        assert_eq!(saved.blending_gbc, Blending::Off);
     }
 }
 
