@@ -1362,7 +1362,15 @@ impl Frontend {
         sync_wallpaper(self.session.app_mut(), compositor, &mut self.wallpaper);
         sync_picking(self.session.app_mut(), compositor, &mut self.picking_faces);
         sync_game_bezel(self.session.app_mut(), compositor, &mut self.game_bezel);
-        compositor.set_game_bezel(self.session.app().shown_game_bezel());
+        let app = self.session.app();
+        let bezel = app.shown_game_bezel();
+        compositor.set_game_bezel(bezel);
+        let bezel_glass = bezel.is_some()
+            && self.game_bezel.image.as_ref().is_some_and(|image| {
+                image.1 == BezelPick::Default && image.2.is_some_and(BezelArt::authentic)
+            });
+        let reflection = app.reflection(app.playing_platform());
+        compositor.set_authentic_glass(!bezel_glass && reflection, !bezel_glass);
         sync_overlay(
             self.session.app_mut(),
             compositor,
