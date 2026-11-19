@@ -191,11 +191,11 @@ fn lists_for(platform: Platform, tag: &str, file: &str) -> Vec<String> {
 }
 
 #[test]
-fn a_gb_game_lists_mgba_and_gambatte_only() {
-    assert_eq!(lists_for(Platform::Gb, "GB", "Alpha.gb"), ["mgba", "gambatte"]);
+fn a_gb_game_lists_mgba_gambatte_and_armgba_only() {
+    assert_eq!(lists_for(Platform::Gb, "GB", "Alpha.gb"), ["mgba", "gambatte", "armgba"]);
 }
 
 #[test]
-fn a_gba_game_lists_mgba_and_gpsp_only() {
-    assert_eq!(lists_for(Platform::Gba, "GBA", "Alpha.gba"), ["mgba", "gpsp"]);
+fn a_gba_game_lists_mgba_gpsp_and_armgba_only() {
+    assert_eq!(lists_for(Platform::Gba, "GBA", "Alpha.gba"), ["mgba", "gpsp", "armgba"]);
 }

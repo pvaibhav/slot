@@ -155,6 +155,7 @@ fn release_zip(extra: &[(&str, &[u8])]) -> Vec<u8> {
         ("slot-v1.12.0/System/mgba_libretro.so", b"mgba"),
         ("slot-v1.12.0/System/gpsp_libretro.so", b"gpsp"),
         ("slot-v1.12.0/System/gambatte_libretro.so", b"gambatte"),
+        ("slot-v1.12.0/System/armgba_libretro.so", b"armgba"),
     ];
     entries.extend_from_slice(extra);
     zip_of(&entries)
@@ -273,6 +274,7 @@ fn stage_unpacks_only_system_and_writes_the_manifest_last() {
     assert_eq!(
         listed,
         [
+            "armgba_libretro.so",
             "bezels/640x480.png",
             "gambatte_libretro.so",
             "gpsp_libretro.so",
@@ -317,6 +319,22 @@ fn ota_bundle_carries_gambatte() {
     stage(d.path(), &release_zip(&[])).unwrap();
     let listed = std::fs::read_to_string(d.path().join("System.new/.manifest")).unwrap();
     assert!(listed.lines().any(|l| l == "gambatte_libretro.so"));
+}
+
+#[test]
+fn ota_bundle_carries_armgba() {
+    let d = tempfile::tempdir().unwrap();
+    let zip = zip_of(&[
+        ("slot-v1.12.0/System/slot", b"bin"),
+        ("slot-v1.12.0/System/launch_frontend.sh", b"sh"),
+        ("slot-v1.12.0/System/mgba_libretro.so", b"mgba"),
+        ("slot-v1.12.0/System/gpsp_libretro.so", b"gpsp"),
+        ("slot-v1.12.0/System/gambatte_libretro.so", b"gambatte"),
+    ]);
+    assert_eq!(stage(d.path(), &zip), Err(UpdateFail::Bad));
+    stage(d.path(), &release_zip(&[])).unwrap();
+    let listed = std::fs::read_to_string(d.path().join("System.new/.manifest")).unwrap();
+    assert!(listed.lines().any(|l| l == "armgba_libretro.so"));
 }
 
 #[test]

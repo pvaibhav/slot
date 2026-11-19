@@ -1565,6 +1565,28 @@ fn the_link_overlay_on_gambatte_says_to_switch_to_mgba() {
 }
 
 #[test]
+fn armgba_has_no_link_and_names_the_core_that_does() {
+    let d = common::tmp_root_with_gb_carts(&["Pokemon Red", "Zzz"]);
+    let mut app = seated_on_platform(&d, Core::Armgba, Platform::Gb);
+    app.apply(Action::GameMenu);
+    assert!(!app.game_menu_open(), "armGBA opened the link overlay");
+    assert_eq!(app.toast(), Some(Toast::NeedsMgba));
+
+    for (stem, title, code, needs) in [
+        ("Kirby", "AGB KIRBY AM", "B8KE", Toast::NeedsMgba),
+        ("Emerald", "POKEMON EMER", "BPEE", Toast::NeedsGpsp),
+    ] {
+        let d = common::tmp_root_with_carts(&[stem, "Zzz"]);
+        common::write_retail_header(&d, stem, title, code);
+        let mut app = seated_on(&d, Core::Armgba);
+        app.apply(Action::GameMenu);
+        assert!(!app.game_menu_open(), "armGBA opened the link overlay for {code}");
+        assert_eq!(app.toast(), Some(needs), "{code}");
+        assert!(!app.link_active(), "armGBA started a link session for {code}");
+    }
+}
+
+#[test]
 fn a_game_boy_cart_links_on_mgba_and_is_refused_on_gpsp() {
     for (core, open) in [(Core::Mgba, true), (Core::Gpsp, false)] {
         let d = common::tmp_root_with_gb_carts(&["Pokemon Red", "Zzz"]);

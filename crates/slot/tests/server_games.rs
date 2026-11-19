@@ -645,18 +645,18 @@ fn resume_names(platform: Platform, tag: &str, file: &str) -> serde_json::Value 
 }
 
 #[test]
-fn a_gb_game_lists_mgba_and_gambatte_only() {
+fn a_gb_game_lists_mgba_gambatte_and_armgba_only() {
     assert_eq!(
         resume_names(Platform::Gb, "GB", "Alpha.gb"),
-        serde_json::json!(["mGBA", "Gambatte"])
+        serde_json::json!(["mGBA", "Gambatte", "armGBA"])
     );
 }
 
 #[test]
-fn a_gba_game_lists_mgba_and_gpsp_only() {
+fn a_gba_game_lists_mgba_gpsp_and_armgba_only() {
     assert_eq!(
         resume_names(Platform::Gba, "GBA", "Alpha.gba"),
-        serde_json::json!(["mGBA", "gpSP"])
+        serde_json::json!(["mGBA", "gpSP", "armGBA"])
     );
 }
 

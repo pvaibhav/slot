@@ -173,6 +173,23 @@ fn only_a_real_bios_image_turns_the_boot_splash_on() {
 }
 
 #[test]
+fn a_game_boy_boot_rom_under_any_name_armgba_reads_turns_its_boot_logo_on() {
+    let d = common::tmp_root_with_gb_carts(&["Tetris"]);
+    assert!(!slot::root::has_gb_boot_rom(d.path()));
+    std::fs::write(d.path().join("BIOS/gba_bios.bin"), [0x18u8]).unwrap();
+    assert!(
+        !slot::root::has_gb_boot_rom(d.path()),
+        "the GBA BIOS counted as a Game Boy boot ROM"
+    );
+    for name in ["gb_bios.bin", "cgb_boot.bin", "agb_boot.bin"] {
+        let path = d.path().join("BIOS").join(name);
+        std::fs::write(&path, [0u8; 0x100]).unwrap();
+        assert!(slot::root::has_gb_boot_rom(d.path()), "{name} was missed");
+        std::fs::remove_file(&path).unwrap();
+    }
+}
+
+#[test]
 fn a_missing_bios_folder_turns_the_boot_splash_off() {
     let d = common::tmp_root_with_carts(&["Emerald"]);
     std::fs::remove_dir_all(d.path().join("BIOS")).unwrap();

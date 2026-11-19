@@ -60,6 +60,14 @@ fn the_sun_moves_with_the_clock_while_the_game_runs() {
 }
 
 #[test]
+fn an_armgba_game_sees_the_sun_too_but_not_on_a_game_boy_shelf() {
+    let (_d, a, _) = seated_at("2026-07-04_16-00-00", Core::Armgba, Platform::Gba);
+    assert_eq!(a.sunlight(), Some(8));
+    let (_d, a, _) = seated_at("2026-07-04_16-00-00", Core::Armgba, Platform::Gbc);
+    assert_eq!(a.sunlight(), None);
+}
+
+#[test]
 fn gpsp_and_game_boy_games_get_no_sun() {
     let (_d, a, _) = seated_at("2026-07-04_16-00-00", Core::Gpsp, Platform::Gba);
     assert_eq!(a.sunlight(), None);

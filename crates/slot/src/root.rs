@@ -108,6 +108,23 @@ pub fn has_real_bios(root: &Path) -> bool {
     std::io::Read::read_exact(&mut f, &mut first).is_ok() && first[0] == BIOS_FIRST_BYTE
 }
 
+/// The names armGBA looks for a Game Boy, Pocket, Color or Advance boot ROM under.
+const GB_BOOT_FILES: [&str; 8] = [
+    "gb_bios.bin",
+    "dmg_boot.bin",
+    "mgb_boot.bin",
+    "gbc_bios.bin",
+    "cgb_boot.bin",
+    "cgb_agb_boot.bin",
+    "cgb_agb0_boot.bin",
+    "agb_boot.bin",
+];
+
+pub fn has_gb_boot_rom(root: &Path) -> bool {
+    let dir = bios_dir(root);
+    GB_BOOT_FILES.iter().any(|name| dir.join(name).is_file())
+}
+
 pub fn logs_dir(root: &Path) -> PathBuf {
     root.join("Logs")
 }

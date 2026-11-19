@@ -5108,7 +5108,7 @@ impl App {
     }
 
     pub fn sunlight(&self) -> Option<u8> {
-        if self.core != Core::Mgba
+        if crate::core::sunlight_option(self.core).is_none()
             || self.seated_cart().is_none()
             || self.playing_platform() != Platform::Gba
         {
@@ -10350,22 +10350,36 @@ impl App {
             self.hud.toast(Toast::NoWifi, self.now());
             return;
         }
-        if self.core == Core::Gambatte {
-            self.hud.toast(Toast::NeedsMgba, self.now());
-            return;
-        }
-        if self.core == Core::Mgba {
-            let wireless = self
-                .seated()
-                .is_some_and(|stem| self.link_mode(stem).0 == LinkKind::Wireless);
-            if wireless {
-                self.hud.toast(Toast::NeedsGpsp, self.now());
+        let wireless = || {
+            self.seated()
+                .is_some_and(|stem| self.link_mode(stem).0 == LinkKind::Wireless)
+        };
+        match self.core {
+            Core::Gambatte => {
+                self.hud.toast(Toast::NeedsMgba, self.now());
                 return;
             }
-            self.link_hardware = LinkKind::Cable;
-            self.radio.ask(RadioJob::Warm);
-            self.game_menu = Some(GameMenu::Pick(self.last_role));
-            return;
+            Core::Armgba => {
+                let needs = match wireless() {
+                    true => Toast::NeedsGpsp,
+                    false => Toast::NeedsMgba,
+                };
+                self.hud.toast(needs, self.now());
+                return;
+            }
+            Core::Mgba => {
+                if wireless() {
+                    self.hud.toast(Toast::NeedsGpsp, self.now());
+                    return;
+                }
+                self.link_hardware = LinkKind::Cable;
+                self.radio.ask(RadioJob::Warm);
+                self.game_menu = Some(GameMenu::Pick(self.last_role));
+                return;
+            }
+            Core::Gpsp => {}
+            #[cfg(feature = "nds")]
+            Core::Dsperate => {}
         }
         if self.platform != Platform::Gba {
             self.hud.toast(Toast::NoLink, self.now());

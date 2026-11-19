@@ -432,9 +432,10 @@ impl Session {
                 emu.set_cheats(codes);
             }
         }
-        if let (Some(level), Some(emu)) = (self.app.sunlight(), &self.emu) {
+        let sunlight = crate::core::sunlight_option(self.app.core()).zip(self.app.sunlight());
+        if let (Some((key, level)), Some(emu)) = (sunlight, &self.emu) {
             if self.sunlight_sent != Some(level) {
-                emu.set_option(crate::core::SUNLIGHT_OPTION, &level.to_string());
+                emu.set_option(key, &level.to_string());
                 self.sunlight_sent = Some(level);
             }
         }
@@ -681,7 +682,7 @@ impl Session {
                 // gpSP turns down the database's encrypted codes and holds 20 at most. Gambatte's
                 // cheats are not wired up yet.
                 let cheats = match core {
-                    Core::Mgba => crate::cheats::load(&root, platform, &stem, &rom),
+                    Core::Mgba | Core::Armgba => crate::cheats::load(&root, platform, &stem, &rom),
                     Core::Gpsp | Core::Gambatte => Vec::new(),
                     #[cfg(feature = "nds")]
                     Core::Dsperate => Vec::new(),
@@ -817,10 +818,12 @@ fn launch(step: &str) {
 }
 
 fn governor_for(core: Core, platform: Platform, running: bool) -> slot_power::CpuGovernor {
-    if running && core == Core::Mgba && platform.hardware() == Platform::Gba {
-        slot_power::CpuGovernor::Performance
-    } else {
-        slot_power::CpuGovernor::Schedutil
+    use slot_power::CpuGovernor::{Performance, Schedutil};
+    match core {
+        Core::Mgba if running && platform.hardware() == Platform::Gba => Performance,
+        Core::Mgba | Core::Gpsp | Core::Gambatte | Core::Armgba => Schedutil,
+        #[cfg(feature = "nds")]
+        Core::Dsperate => Schedutil,
     }
 }
 
@@ -837,6 +840,10 @@ mod governor_tests {
             (Core::Mgba, Platform::Gb, Schedutil),
             (Core::Mgba, Platform::Gbc, Schedutil),
             (Core::Gpsp, Platform::Gba, Schedutil),
+            (Core::Armgba, Platform::Gba, Schedutil),
+            (Core::Armgba, Platform::Gbav, Schedutil),
+            (Core::Armgba, Platform::Gb, Schedutil),
+            (Core::Armgba, Platform::Gbc, Schedutil),
         ] {
             assert_eq!(governor_for(core, platform, true), expected);
             assert_eq!(governor_for(core, platform, false), Schedutil);

@@ -226,6 +226,26 @@ fn gambatte_round_trips() {
 }
 
 #[test]
+fn armgba_round_trips_and_runs_every_game_boy_and_advance_game() {
+    let d = root_with(None);
+    write_selected_core(d.path(), Platform::Gba, "Emerald", Core::Armgba).unwrap();
+    assert_eq!(
+        read_selected_cores(d.path()).get("GBA/Emerald"),
+        Some(&Core::Armgba)
+    );
+    assert_eq!(
+        core_for_platform(d.path(), "Emerald", Platform::Gba, Core::Gambatte),
+        Core::Armgba
+    );
+    assert_eq!(Core::parse("armGBA"), Some(Core::Armgba));
+    assert_eq!(Core::Armgba.as_str(), "armgba");
+    assert_eq!(Core::Armgba.text(), "armGBA");
+    for platform in [Platform::Gba, Platform::Gbav, Platform::Gb, Platform::Gbc] {
+        assert!(Core::Armgba.runs(platform), "{platform:?}");
+    }
+}
+
+#[test]
 fn pairs_by_platform() {
     assert_eq!(Core::pair(Platform::Gba), [Core::Mgba, Core::Gpsp]);
     assert_eq!(Core::pair(Platform::Gbav), [Core::Mgba, Core::Gpsp]);
@@ -304,8 +324,11 @@ fn writing_a_core_moves_a_line_without_a_system_onto_one_with() {
 
 #[cfg(not(feature = "nds"))]
 #[test]
-fn the_core_list_has_three_entries() {
-    assert_eq!(Core::ALL.len(), 3);
+fn the_core_list_has_four_entries() {
+    assert_eq!(
+        Core::ALL,
+        [Core::Mgba, Core::Gpsp, Core::Gambatte, Core::Armgba]
+    );
 }
 
 #[cfg(feature = "nds")]
