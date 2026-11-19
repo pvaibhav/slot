@@ -19,7 +19,7 @@ use slot_ui::{
     ClockFaces, ClockPicker, ClockRow, ClockScreen, Draw, FfState, GbShell, Guide, Hud, HudKind,
     Icon, LinkBadge, Millis, Placed, Polaroids, PowerChoice, QuickMenu, QuickMenuFaces, QuickRow,
     QuickValue, Refusal, Seats, Shelf, ShotMode, ShotViewer, SlotChrome, TexId, Toast, CART_W,
-    GBA_SEATS, HINT_EDGE, HOP_LIFT, MOUTH_H, REPEAT_DELAY_MS, SHADOW_H, SHADOW_W, TURN_PAD,
+    HINT_EDGE, HOP_LIFT, MOUTH_H, REPEAT_DELAY_MS, SHADOW_H, SHADOW_W, TURN_PAD, UPDATE_SEATS,
 };
 
 use crate::art::jobs::{no_art_jobs, ArtEvent, ArtJob, ArtJobs};
@@ -13896,7 +13896,7 @@ impl App {
         if let Some(picker) = &self.update_picker {
             self.draw_board_chip(
                 board,
-                GBA_SEATS,
+                UPDATE_SEATS,
                 picker.row(),
                 &self.update_sockets,
                 picker.chip(self.now()),

@@ -247,10 +247,12 @@ fn armgba_round_trips_and_runs_every_game_boy_and_advance_game() {
 
 #[test]
 fn rows_by_platform() {
-    assert_eq!(Core::row(Platform::Gba), [Core::Mgba, Core::Gpsp]);
-    assert_eq!(Core::row(Platform::Gbav), [Core::Mgba, Core::Gpsp]);
-    assert_eq!(Core::row(Platform::Gb), [Core::Mgba, Core::Gambatte]);
-    assert_eq!(Core::row(Platform::Gbc), [Core::Mgba, Core::Gambatte]);
+    let gba = [Core::Mgba, Core::Armgba, Core::Gpsp];
+    let gb = [Core::Mgba, Core::Armgba, Core::Gambatte];
+    assert_eq!(Core::row(Platform::Gba), gba);
+    assert_eq!(Core::row(Platform::Gbav), gba);
+    assert_eq!(Core::row(Platform::Gb), gb);
+    assert_eq!(Core::row(Platform::Gbc), gb);
 }
 
 #[test]

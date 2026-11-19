@@ -294,21 +294,24 @@ fn render_core_picker_gb() {
             app.apply(Action::GbaDown(Btn::Start));
             let_it_hop(&mut app);
             let_it_hop(&mut app);
-            let name = format!("picker-{shell}-{}", panel.0);
-            let gambatte = shot(&app, &mut c, &format!("{name}-gambatte"));
+            let name = format!("picker3-{shell}-{}", panel.0);
             assert_eq!(app.core_picker_chip().unwrap().seated, Some(Core::Gambatte));
-            app.apply(Action::GbaDown(Btn::Left));
-            let_it_hop(&mut app);
-            let mgba = shot(&app, &mut c, &format!("{name}-mgba"));
-            assert_eq!(
-                app.core_picker_chip().unwrap().seated,
-                Some(Core::Mgba),
-                "the chip did not land in the mGBA socket"
-            );
-            assert!(
-                mgba != gambatte,
-                "the chip moved and the panel did not change"
-            );
+            let mut seen = vec![shot(&app, &mut c, &format!("{name}-gambatte"))];
+            for core in [Core::Armgba, Core::Mgba] {
+                app.apply(Action::GbaDown(Btn::Left));
+                let_it_hop(&mut app);
+                assert_eq!(
+                    app.core_picker_chip().unwrap().seated,
+                    Some(core),
+                    "the chip did not land in the {core:?} socket"
+                );
+                let px = shot(&app, &mut c, &format!("{name}-{}", core.as_str()));
+                assert!(
+                    !seen.contains(&px),
+                    "the chip moved to {core:?} and the panel did not change"
+                );
+                seen.push(px);
+            }
         }
     }
 }

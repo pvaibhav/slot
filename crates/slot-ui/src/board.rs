@@ -1,7 +1,7 @@
 use slot_gfx::Canvas;
-use slot_store::{Cart, Core};
+use slot_store::{Cart, Core, Platform};
 
-use crate::bitmaps::{self, GB_CHIP_H, GB_CHIP_W};
+use crate::bitmaps::{self, GB_CHIP_H, GB_CHIP_W, GB_SOCKET_H, GB_SOCKET_W};
 use crate::cart::{
     clean_label, gb_backing, gb_shell_of, CartFace, CART_H, CART_W, GB_CART_H, GB_CART_W,
 };
@@ -13,8 +13,8 @@ use crate::text;
 pub const BOARD_W: u32 = CART_W;
 pub const BOARD_H: u32 = CART_H;
 
-/// The black ROM chip on `assets/board.png`: x 61..132, y 48..138.
-pub const ROM_X: u32 = 61;
+/// The black ROM chip on `assets/board.png`: x 47..118, y 48..138.
+pub const ROM_X: u32 = 47;
 pub const ROM_Y: u32 = 48;
 pub const ROM_W: u32 = 71;
 pub const ROM_H: u32 = 90;
@@ -119,27 +119,6 @@ fn ink_band(
     }
 }
 
-fn ink_turned(face: &mut CartFace, layout: &text::Layout, ink: [u8; 3], strength: f32) {
-    let band = face.w;
-    let cov = text::coverage(face.h, band, layout);
-    for (i, a) in cov.into_iter().enumerate() {
-        let a = (a as f32 * strength).round() as u8;
-        if a == 0 {
-            continue;
-        }
-        let (along, across) = (i as u32 % face.h, i as u32 / face.h);
-        let at = (((face.h - 1 - along) * face.w + across) * 4) as usize;
-        let (a, d_a) = (a as f32 / 255.0, face.rgba[at + 3] as f32 / 255.0);
-        let out_a = a + d_a * (1.0 - a);
-        for (k, &c) in ink.iter().enumerate() {
-            let d_rgb = face.rgba[at + k] as f32 / 255.0;
-            let out_rgb = (c as f32 / 255.0 * a + d_rgb * d_a * (1.0 - a)) / out_a;
-            face.rgba[at + k] = (out_rgb * 255.0).round() as u8;
-        }
-        face.rgba[at + 3] = (out_a * 255.0).round() as u8;
-    }
-}
-
 fn over(dst: &mut CartFace, src: &CartFace, x: u32, y: u32) {
     for row in 0..src.h {
         for col in 0..src.w {
@@ -227,13 +206,14 @@ pub const FINGERS: [(f32, f32); 32] = [
 pub const FINGER_Y: f32 = 167.0;
 pub const FINGER_H: f32 = 28.0;
 
-pub const SOCKET_U: [f32; 2] = [99.5, 171.5];
-pub const SOCKET_V: f32 = 59.1;
+/// The sockets on `assets/board.png`: x 127, 194 and 261, y 94.
+pub const SOCKET_U: [f32; 3] = [127.0 / 1.5, 194.0 / 1.5, 261.0 / 1.5];
+pub const SOCKET_V: f32 = 94.0 * UNITS_H / BOARD_H as f32;
 pub const SOCKET_W: u32 = 64;
 pub const SOCKET_H: u32 = 46;
 
-pub const CHIP_U: [f32; 2] = [101.0, 173.0];
-pub const CHIP_V: f32 = 60.6;
+pub const CHIP_U: [f32; 3] = [SOCKET_U[0] + 1.5, SOCKET_U[1] + 1.5, SOCKET_U[2] + 1.5];
+pub const CHIP_V: f32 = SOCKET_V + 1.5;
 pub const CHIP_W: u32 = 59;
 pub const CHIP_H: u32 = 41;
 
@@ -367,17 +347,31 @@ pub const GBA_SEATS: Seats = Seats {
     bitmap_w: BOARD_W as f32,
 };
 
+/// The update scene's two sockets, the running version's and the new one's.
+pub const UPDATE_SEATS: Seats = Seats {
+    socket_u: &[99.5, 171.5],
+    chip_u: &[101.0, 173.0],
+    ..GBA_SEATS
+};
+
 const GB_UNIT: f32 = BOARD_W as f32 / UNITS_W;
 
-const GB_FOOT_U: [f32; 2] = [70.0 / GB_UNIT, 189.0 / GB_UNIT];
-const GB_FOOT_V: f32 = 169.0 / GB_UNIT;
+/// The sockets on `assets/gb_board_empty.png`: x 31, 116 and 201, y 163, each chip 2 px in.
+const GB_SOCKET_U: [f32; 3] = [31.0 / GB_UNIT, 116.0 / GB_UNIT, 201.0 / GB_UNIT];
+const GB_SOCKET_V: f32 = 163.0 / GB_UNIT;
+const GB_CHIP_IN: f32 = 2.0 / GB_UNIT;
+const GB_CHIP_U: [f32; 3] = [
+    GB_SOCKET_U[0] + GB_CHIP_IN,
+    GB_SOCKET_U[1] + GB_CHIP_IN,
+    GB_SOCKET_U[2] + GB_CHIP_IN,
+];
 
 pub const GB_SEATS: Seats = Seats {
-    socket_u: &GB_FOOT_U,
-    socket_v: GB_FOOT_V,
-    chip_u: &GB_FOOT_U,
-    chip_v: GB_FOOT_V,
-    socket_size: (GB_CHIP_W as f32, GB_CHIP_H as f32),
+    socket_u: &GB_SOCKET_U,
+    socket_v: GB_SOCKET_V,
+    chip_u: &GB_CHIP_U,
+    chip_v: GB_SOCKET_V + GB_CHIP_IN,
+    socket_size: (GB_SOCKET_W as f32, GB_SOCKET_H as f32),
     chip_size: (GB_CHIP_W as f32, GB_CHIP_H as f32),
     shadow_uv: (GB_CHIP_W as f32 / 2.0 / GB_UNIT, GB_CHIP_H as f32 / GB_UNIT + 2.0),
     units_w: GB_CART_W as f32 / GB_UNIT,
@@ -492,48 +486,45 @@ pub fn padded(face: &CartFace, pad: u32) -> CartFace {
 }
 
 pub fn socket_face(core: Core) -> CartFace {
-    socket_face_text(core.text())
+    let socket = bitmap_face(bitmaps::socket(), SOCKET_W, SOCKET_H);
+    named_socket(socket, name_at(core.text(), gba_px(core)))
 }
 
 pub fn socket_face_text(name: &str) -> CartFace {
-    let mut face = bitmap_face(bitmaps::socket(), SOCKET_W, SOCKET_H);
-    if let Some(layout) = name_layout(name, (SOCKET_W - 12) as f32) {
+    let socket = bitmap_face(bitmaps::socket(), SOCKET_W, SOCKET_H);
+    named_socket(socket, name_fitted(name, (SOCKET_W - 12) as f32))
+}
+
+pub fn chip_face(core: Option<Core>) -> CartFace {
+    let chip = bitmap_face(bitmaps::chip(), CHIP_W, CHIP_H);
+    named_chip(chip, core.and_then(|c| name_at(c.text(), gba_px(c))))
+}
+
+pub fn chip_face_text(name: &str) -> CartFace {
+    let chip = bitmap_face(bitmaps::chip(), CHIP_W, CHIP_H);
+    named_chip(chip, name_fitted(name, (CHIP_W - 8) as f32))
+}
+
+pub fn gb_socket_face(core: Core) -> CartFace {
+    let socket = bitmap_face(bitmaps::gb_socket(), GB_SOCKET_W, GB_SOCKET_H);
+    named_socket(socket, name_at(core.text(), gb_px(core)))
+}
+
+pub fn gb_chip_face(core: Option<Core>) -> CartFace {
+    let chip = bitmap_face(bitmaps::gb_chip(), GB_CHIP_W, GB_CHIP_H);
+    named_chip(chip, core.and_then(|c| name_at(c.text(), gb_px(c))))
+}
+
+fn named_socket(mut face: CartFace, name: Option<text::Layout>) -> CartFace {
+    if let Some(layout) = name {
         ink_band(&mut face, 4, 37, &layout, SOCKET_INK, 0.5);
     }
     face
 }
 
-pub fn chip_face(core: Option<Core>) -> CartFace {
-    match core {
-        Some(core) => chip_face_text(core.text()),
-        None => padded(&bitmap_face(bitmaps::chip(), CHIP_W, CHIP_H), TURN_PAD),
-    }
-}
-
-pub fn chip_face_text(name: &str) -> CartFace {
-    let mut face = bitmap_face(bitmaps::chip(), CHIP_W, CHIP_H);
-    if let Some(layout) = name_layout(name, (CHIP_W - 8) as f32) {
+fn named_chip(mut face: CartFace, name: Option<text::Layout>) -> CartFace {
+    if let Some(layout) = name {
         ink_band(&mut face, 4, 34, &layout, CHIP_INK, 1.0);
-    }
-    padded(&face, TURN_PAD)
-}
-
-pub fn gb_socket_face(core: Core) -> CartFace {
-    let mut face = CartFace {
-        rgba: vec![0; (GB_CHIP_W * GB_CHIP_H * 4) as usize],
-        w: GB_CHIP_W,
-        h: GB_CHIP_H,
-    };
-    if let Some(layout) = name_layout(core.text(), (GB_CHIP_H - 12) as f32) {
-        ink_turned(&mut face, &layout, SOCKET_INK, 0.5);
-    }
-    face
-}
-
-pub fn gb_chip_face(core: Option<Core>) -> CartFace {
-    let mut face = bitmap_face(bitmaps::gb_chip(), GB_CHIP_W, GB_CHIP_H);
-    if let Some(layout) = core.and_then(|c| name_layout(c.text(), (GB_CHIP_H - 12) as f32)) {
-        ink_turned(&mut face, &layout, CHIP_INK, 1.0);
     }
     padded(&face, TURN_PAD)
 }
@@ -552,16 +543,49 @@ pub fn chip_shadow_face() -> CartFace {
     CartFace { rgba, w, h }
 }
 
-fn name_layout(name: &str, max_w: f32) -> Option<text::Layout> {
-    let font = text::label_font()?;
-    let tracking = |px: f32| (px * 0.10).round();
+fn gba_px(core: Core) -> f32 {
+    row_px(core, Core::row(Platform::Gba), CHIP_W)
+}
+
+fn gb_px(core: Core) -> f32 {
+    row_px(core, Core::row(Platform::Gb), GB_CHIP_W)
+}
+
+/// One size for every name in the row a board shows `core` in: the largest at which the widest
+/// fits across the board's chip.
+fn row_px(core: Core, row: &[Core], chip_w: u32) -> f32 {
+    let names: Vec<&str> = match row.contains(&core) {
+        true => row.iter().map(|c| c.text()).collect(),
+        false => vec![core.text()],
+    };
+    fitted_px(&names, (chip_w - 4) as f32)
+}
+
+fn fitted_px(names: &[&str], max_w: f32) -> f32 {
+    let Some(font) = text::label_font() else {
+        return NAME_PX;
+    };
+    let fits = |px: f32| {
+        names
+            .iter()
+            .all(|name| text::line_width(font, name, px, text::tracking_for(px)) <= max_w)
+    };
     let mut px = NAME_PX;
-    while px > NAME_MIN_PX && text::line_width(font, name, px, tracking(px)) > max_w {
+    while px > NAME_MIN_PX && !fits(px) {
         px -= 1.0;
     }
+    px
+}
+
+fn name_fitted(name: &str, max_w: f32) -> Option<text::Layout> {
+    name_at(name, fitted_px(&[name], max_w))
+}
+
+fn name_at(name: &str, px: f32) -> Option<text::Layout> {
+    text::label_font()?;
     Some(text::Layout {
         lines: vec![name.to_string()],
         px,
-        tracking: tracking(px),
+        tracking: text::tracking_for(px),
     })
 }

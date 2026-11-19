@@ -812,6 +812,9 @@ fn choosing_mgba_on_a_game_boy_cart_writes_it() {
     );
     let_it_hop(&mut app);
     app.apply(Action::GbaDown(Btn::Left));
+    assert_eq!(app.core_picker(), Some(Core::Armgba));
+    let_it_hop(&mut app);
+    app.apply(Action::GbaDown(Btn::Left));
     assert_eq!(app.core_picker(), Some(Core::Mgba));
     app.apply(Action::GbaDown(Btn::A));
     assert_eq!(
@@ -861,7 +864,7 @@ fn choosing_a_core_writes_it_and_closes() {
 
     assert_eq!(
         slot_store::core_for_platform(d.path(), "Emerald", Platform::Gba, Core::Mgba),
-        Core::Gpsp
+        Core::Armgba
     );
     assert_eq!(
         slot_store::core_for_platform(d.path(), "Zzz", Platform::Gba, Core::Mgba),
@@ -917,6 +920,9 @@ fn the_chip_goes_where_the_arrow_points_and_does_not_wrap() {
     );
 
     app.apply(Action::GbaDown(Btn::Right));
+    assert_eq!(app.core_picker(), Some(Core::Armgba));
+    let_it_hop(&mut app);
+    app.apply(Action::GbaDown(Btn::Right));
     assert_eq!(app.core_picker(), Some(Core::Gpsp));
     let_it_hop(&mut app);
     app.apply(Action::GbaDown(Btn::Right));
@@ -940,7 +946,7 @@ fn a_shelf_refusal_does_not_shake_once_the_picker_takes_over() {
 }
 
 #[test]
-fn back_mid_hop_turns_round_and_onward_does_nothing() {
+fn onward_mid_hop_hops_on_and_back_takes_it_back_a_press_at_a_time() {
     let (_d, mut app) = on_shelf(&["Emerald", "Zzz"]);
     fake_picker_faces(&mut app);
     app.apply(Action::GbaDown(Btn::Start));
@@ -955,6 +961,12 @@ fn back_mid_hop_turns_round_and_onward_does_nothing() {
         "onward mid-hop was refused"
     );
 
+    app.apply(Action::GbaDown(Btn::Left));
+    assert_eq!(
+        app.core_picker(),
+        Some(Core::Armgba),
+        "back mid-hop did not drop the hop it had queued"
+    );
     app.apply(Action::GbaDown(Btn::Left));
     assert_eq!(
         app.core_picker(),
@@ -973,7 +985,7 @@ fn a_mid_hop_writes_where_the_chip_is_heading() {
     app.apply(Action::GbaDown(Btn::A));
     assert_eq!(
         slot_store::core_for_platform(d.path(), "Emerald", Platform::Gba, Core::Mgba),
-        Core::Gpsp
+        Core::Armgba
     );
 }
 
@@ -1096,11 +1108,21 @@ fn select_on_the_shelf_leaves_the_picker_shut_so_it_can_still_chord() {
 struct PickerFaces {
     board: TexId,
     lid: TexId,
-    sockets: [TexId; 2],
-    chips: [TexId; 2],
+    sockets: Vec<TexId>,
+    chips: Vec<TexId>,
     blank: TexId,
     shadow: TexId,
     legend: [(TexId, u32); 3],
+}
+
+impl PickerFaces {
+    fn socket(&self, core: Core) -> TexId {
+        self.sockets[core.index()]
+    }
+
+    fn chip(&self, core: Core) -> TexId {
+        self.chips[core.index()]
+    }
 }
 
 fn fake_boot_faces(app: &mut App) -> PickerFaces {
@@ -1108,13 +1130,13 @@ fn fake_boot_faces(app: &mut App) -> PickerFaces {
     let f = PickerFaces {
         board: id(900),
         lid: id(901),
-        sockets: [id(902), id(903)],
-        chips: [id(904), id(905)],
+        sockets: Core::ALL.iter().map(|c| id(960 + c.index())).collect(),
+        chips: Core::ALL.iter().map(|c| id(970 + c.index())).collect(),
         blank: id(906),
         shadow: id(907),
         legend: [(id(908), 60), (id(909), 90), (id(910), 80)],
     };
-    app.set_core_part_faces(f.sockets.to_vec(), f.chips.to_vec(), f.blank, f.shadow);
+    app.set_core_part_faces(f.sockets.clone(), f.chips.clone(), f.blank, f.shadow);
     app.set_core_legend_faces(f.legend.to_vec(), f.legend.to_vec());
     f
 }
@@ -1191,9 +1213,10 @@ fn alpha_of(out: &[Draw], want: TexId) -> Option<f32> {
 
 fn assert_parts_on_board(out: &[Draw], f: &PickerFaces, board: Placed, when: &str) {
     let zoom = board.w / BOARD_W as f32;
-    for (i, socket) in f.sockets.iter().enumerate() {
+    for (i, core) in Core::row(Platform::Gba).iter().enumerate() {
         let (x, y) = on_board(board, SOCKET_U[i], SOCKET_V);
-        let (_, at) = tex_at(out, *socket).unwrap_or_else(|| panic!("a socket is missing {when}"));
+        let (_, at) =
+            tex_at(out, f.socket(*core)).unwrap_or_else(|| panic!("a socket is missing {when}"));
         assert!(
             near(
                 at,
@@ -1218,7 +1241,7 @@ fn assert_parts_on_board(out: &[Draw], f: &PickerFaces, board: Placed, when: &st
         TURN_PAD as f32 * zoom,
     );
     let (_, chip, _) =
-        turned_at(out, f.chips[0]).unwrap_or_else(|| panic!("no seated chip {when}"));
+        turned_at(out, f.chip(Core::Mgba)).unwrap_or_else(|| panic!("no seated chip {when}"));
     assert!(
         near(
             chip,
@@ -1248,19 +1271,16 @@ fn assert_plain_shelf(out: &[Draw], f: &PickerFaces, when: &str) {
         !out.iter().any(|d| matches!(d, Draw::Turned { .. })),
         "a turned face is drawn {when}"
     );
-    let picker = [
+    let mut picker = vec![
         f.board,
         f.lid,
-        f.sockets[0],
-        f.sockets[1],
-        f.chips[0],
-        f.chips[1],
         f.blank,
         f.shadow,
         f.legend[0].0,
         f.legend[1].0,
         f.legend[2].0,
     ];
+    picker.extend(f.sockets.iter().chain(&f.chips));
     let drawn: Vec<TexId> = out
         .iter()
         .filter_map(|d| match *d {
@@ -1300,9 +1320,9 @@ fn the_open_cart_rests_over_the_shelf_with_its_lid_turned() {
         .expect("no slot on the shelf");
     assert!(board_i > mouth, "the board is drawn under the shelf");
 
-    for (i, socket) in f.sockets.iter().enumerate() {
+    for (i, core) in Core::row(Platform::Gba).iter().enumerate() {
         let (x, y) = on_board(rest, SOCKET_U[i], SOCKET_V);
-        let (_, at) = tex_at(&out, *socket).expect("a socket is missing");
+        let (_, at) = tex_at(&out, f.socket(*core)).expect("a socket is missing");
         assert!(
             near(at, [x.round(), y.round(), SOCKET_W as f32, SOCKET_H as f32]),
             "socket {i} at {at:?}"
@@ -1310,7 +1330,7 @@ fn the_open_cart_rests_over_the_shelf_with_its_lid_turned() {
     }
 
     let (chip_i, chip, chip_turn) =
-        turned_at(&out, f.chips[0]).expect("the chip is not seated in mGBA");
+        turned_at(&out, f.chip(Core::Mgba)).expect("the chip is not seated in mGBA");
     assert_eq!(chip_turn, 0.0, "a seated chip is tipped");
     let (cx, cy) = on_board(rest, CHIP_U[0], CHIP_V);
     let want_chip = grown(
@@ -1406,18 +1426,29 @@ fn a_game_boy_cart_seats_the_pak_chip_in_the_pak_footprints() {
     let (_d, mut app) = on_shelf_gb(&["Tetris", "Zzz"]);
     let f = fake_picker_faces(&mut app);
     let id = TexId::from_raw;
-    let (gb_sockets, gb_chips) = ([id(920), id(921), id(922)], [id(923), id(924), id(925)]);
-    app.set_core_gb_part_faces(gb_sockets.to_vec(), gb_chips.to_vec(), id(926));
+    let gb_sockets: Vec<TexId> = Core::ALL.iter().map(|c| id(940 + c.index())).collect();
+    let gb_chips: Vec<TexId> = Core::ALL.iter().map(|c| id(980 + c.index())).collect();
+    app.set_core_gb_part_faces(gb_sockets.clone(), gb_chips.clone(), id(926));
     app.apply(Action::GbaDown(Btn::Start));
     let_it_open(&mut app);
     let out = frame(&app);
 
     let gambatte = Core::Gambatte.index();
-    let mgba = Core::Mgba.index();
     let (_, chip, _) = turned_at(&out, gb_chips[gambatte]).expect("the pak chip is not seated");
-    let (_, right) = tex_at(&out, gb_sockets[gambatte]).expect("the Gambatte footprint is missing");
-    let (_, left) = tex_at(&out, gb_sockets[mgba]).expect("the mGBA footprint is missing");
-    assert!(left[0] < right[0], "mGBA must keep the left footprint");
+    let socket = |core: Core| {
+        tex_at(&out, gb_sockets[core.index()])
+            .unwrap_or_else(|| panic!("the {core:?} socket is missing"))
+            .1
+    };
+    let (left, middle, right) = (
+        socket(Core::Mgba),
+        socket(Core::Armgba),
+        socket(Core::Gambatte),
+    );
+    assert!(
+        left[0] < middle[0] && middle[0] < right[0],
+        "the pak sockets are not mGBA, armGBA, Gambatte from the left"
+    );
     assert!(
         (chip[0] - right[0]).abs() < 4.0 && (chip[1] - right[1]).abs() < 4.0,
         "the chip at {chip:?} is not over the Gambatte footprint at {right:?}"
@@ -1439,11 +1470,14 @@ fn the_sockets_and_the_seated_chip_rest_on_whole_pixels() {
     let out = frame(&app);
 
     let whole = |r: [f32; 4]| r[0].fract() == 0.0 && r[1].fract() == 0.0;
-    for (i, socket) in f.sockets.iter().enumerate() {
-        let (_, at) = tex_at(&out, *socket).expect("a socket is missing");
-        assert!(whole(at), "socket {i} is off the pixel grid at {at:?}");
+    for core in Core::row(Platform::Gba) {
+        let (_, at) = tex_at(&out, f.socket(*core)).expect("a socket is missing");
+        assert!(
+            whole(at),
+            "{core:?}'s socket is off the pixel grid at {at:?}"
+        );
     }
-    let (_, chip, _) = turned_at(&out, f.chips[0]).expect("the chip is not seated in mGBA");
+    let (_, chip, _) = turned_at(&out, f.chip(Core::Mgba)).expect("the chip is not seated in mGBA");
     assert!(
         whole(chip),
         "the seated chip is off the pixel grid at {chip:?}"
@@ -1493,14 +1527,15 @@ fn the_seated_chip_moves_to_the_socket_it_hopped_to() {
         },
         TURN_PAD as f32,
     );
-    let (_, chip, _) = turned_at(&out, f.chips[1]).expect("the chip did not land in gpSP");
+    let (_, chip, _) =
+        turned_at(&out, f.chip(Core::Armgba)).expect("the chip did not land in armGBA");
     assert!(
         near(chip, [want.x.round(), want.y.round(), want.w, want.h]),
-        "the gpSP chip is not in gpSP's socket: {chip:?}"
+        "the armGBA chip is not in armGBA's socket: {chip:?}"
     );
     assert!(
-        turned_at(&out, f.chips[0]).is_none(),
-        "mGBA's chip is still drawn once the hop lands in gpSP"
+        turned_at(&out, f.chip(Core::Mgba)).is_none(),
+        "mGBA's chip is still drawn once the hop lands in armGBA"
     );
 }
 
@@ -1618,7 +1653,7 @@ fn mid_hop_the_chip_is_blank_tipped_and_off_the_board() {
     let f = fake_picker_faces(&mut app);
     app.apply(Action::GbaDown(Btn::Start));
     let_it_open(&mut app);
-    let (_, seated, _) = turned_at(&frame(&app), f.chips[0]).expect("no seated chip");
+    let (_, seated, _) = turned_at(&frame(&app), f.chip(Core::Mgba)).expect("no seated chip");
 
     app.apply(Action::GbaDown(Btn::Right));
     app.update(0.09);
@@ -1643,8 +1678,11 @@ fn mid_hop_the_chip_is_blank_tipped_and_off_the_board() {
         f.chips.iter().all(|c| turned_at(&out, *c).is_none()),
         "a named chip is drawn mid-hop"
     );
-    for socket in f.sockets {
-        assert!(tex_at(&out, socket).is_some(), "a socket is hidden mid-hop");
+    for core in Core::row(Platform::Gba) {
+        assert!(
+            tex_at(&out, f.socket(*core)).is_some(),
+            "{core:?}'s socket is hidden mid-hop"
+        );
     }
 }
 
@@ -1658,12 +1696,13 @@ fn the_chip_alone_shakes_when_refused() {
     app.apply(Action::GbaDown(Btn::Left));
     let after = frame(&app);
 
-    let (_, still, _) = turned_at(&before, f.chips[0]).unwrap();
-    let (_, shaken, _) = turned_at(&after, f.chips[0]).unwrap();
+    let mgba = f.chip(Core::Mgba);
+    let (_, still, _) = turned_at(&before, mgba).unwrap();
+    let (_, shaken, _) = turned_at(&after, mgba).unwrap();
     assert_ne!(still[0], shaken[0], "the chip did not move");
     let rest = |out: &[Draw]| -> Vec<Draw> {
         out.iter()
-            .filter(|d| !matches!(d, Draw::Turned { tex, .. } if *tex == f.chips[0]))
+            .filter(|d| !matches!(d, Draw::Turned { tex, .. } if *tex == mgba))
             .copied()
             .collect()
     };
@@ -1813,7 +1852,7 @@ fn the_open_starts_anyway_when_the_faces_never_come() {
         turned_at(&out, f.lid).is_none(),
         "the fallback open drew the other cart's lid"
     );
-    for tex in [f.sockets[0], f.sockets[1], f.chips[0], f.chips[1], f.blank] {
+    for &tex in f.sockets.iter().chain(&f.chips).chain([&f.blank]) {
         assert!(
             tex_at(&out, tex).is_none() && turned_at(&out, tex).is_none(),
             "the fallback open drew a socket or chip quad"
@@ -1880,12 +1919,12 @@ fn arrows_pressed_while_the_cart_waits_move_nothing() {
     let_it_open(&mut app);
     let out = frame(&app);
     assert!(
-        turned_at(&out, f.chips[0]).is_some(),
+        turned_at(&out, f.chip(Core::Mgba)).is_some(),
         "the chip is not seated in mGBA once the cart is open"
     );
     assert!(
-        turned_at(&out, f.chips[1]).is_none(),
-        "the chip opened in gpSP"
+        turned_at(&out, f.chip(Core::Armgba)).is_none(),
+        "the chip opened in armGBA"
     );
 }
 

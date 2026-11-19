@@ -81,8 +81,8 @@ impl Core {
     /// The cores the picker offers for a platform's games, left to right.
     pub fn row(platform: Platform) -> &'static [Core] {
         match platform {
-            Platform::Gba | Platform::Gbav => &[Core::Mgba, Core::Gpsp],
-            Platform::Gb | Platform::Gbc => &[Core::Mgba, Core::Gambatte],
+            Platform::Gba | Platform::Gbav => &[Core::Mgba, Core::Armgba, Core::Gpsp],
+            Platform::Gb | Platform::Gbc => &[Core::Mgba, Core::Armgba, Core::Gambatte],
             #[cfg(feature = "nds")]
             Platform::Nds => &[Core::Dsperate],
         }

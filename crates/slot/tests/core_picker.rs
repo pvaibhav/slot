@@ -3,7 +3,7 @@ use slot_store::{Core, Platform};
 use slot_ui::Millis;
 
 const PAIR: &[Core] = &[Core::Mgba, Core::Gpsp];
-const GB: &[Core] = &[Core::Mgba, Core::Gambatte];
+const GB_PAIR: &[Core] = &[Core::Mgba, Core::Gambatte];
 const THREE: &[Core] = &[Core::Mgba, Core::Armgba, Core::Gpsp];
 
 fn opened(seat: Core, at: Millis) -> CorePicker {
@@ -206,24 +206,28 @@ fn the_arrows_do_nothing_while_the_picker_waits() {
 }
 
 #[test]
-fn a_game_boy_pair_hops_right_to_gambatte() {
+fn a_game_boy_row_hops_right_through_armgba_to_gambatte() {
     let mut p = opened_on(Core::row(Platform::Gb), Core::Mgba, 0);
     assert_eq!(p.press(Press::Right, 400), Outcome::Nothing);
-    assert_eq!(p.seat(), Core::Gambatte);
+    assert_eq!(p.seat(), Core::Armgba);
     let mid = p.chip(400 + HOP_MS / 2);
     assert_eq!(mid.seated, None);
     assert!(mid.tip > 0.0, "a chip moving right should lean right");
     let landed = p.chip(400 + HOP_MS);
-    assert_eq!(landed.seated, Some(Core::Gambatte));
+    assert_eq!(landed.seated, Some(Core::Armgba));
     assert_eq!((landed.across, landed.lift), (1.0, 0.0));
+    assert_eq!(p.press(Press::Right, 400 + HOP_MS), Outcome::Nothing);
+    let landed = p.chip(400 + 2 * HOP_MS);
+    assert_eq!(landed.seated, Some(Core::Gambatte));
+    assert_eq!((landed.across, landed.lift), (2.0, 0.0));
     assert_eq!(
-        p.press(Press::Keep, 400 + HOP_MS),
+        p.press(Press::Keep, 400 + 2 * HOP_MS),
         Outcome::Write(Core::Gambatte)
     );
 }
 
 #[test]
-fn a_game_boy_pair_refuses_left_from_mgba() {
+fn a_game_boy_row_refuses_left_from_mgba() {
     let mut p = opened_on(Core::row(Platform::Gbc), Core::Mgba, 0);
     assert_eq!(p.press(Press::Left, 400), Outcome::Refused);
     assert_eq!(p.seat(), Core::Mgba);
@@ -231,29 +235,30 @@ fn a_game_boy_pair_refuses_left_from_mgba() {
 }
 
 #[test]
-fn a_gba_pair_never_seats_gambatte() {
+fn a_gba_row_never_seats_gambatte() {
     let mut p = opened_on(Core::row(Platform::Gba), Core::Mgba, 0);
     p.press(Press::Right, 400);
+    assert_eq!(p.seat(), Core::Armgba);
+    p.press(Press::Right, 400 + HOP_MS);
     assert_eq!(p.seat(), Core::Gpsp);
-    p.press(Press::Left, 400 + HOP_MS);
-    assert_eq!(p.seat(), Core::Mgba);
-    p.press(Press::Right, 400 + 2 * HOP_MS);
-    assert_eq!(p.seat(), Core::Gpsp);
-    assert_eq!(p.chip(400 + 3 * HOP_MS).seated, Some(Core::Gpsp));
+    assert_eq!(p.press(Press::Right, 400 + 2 * HOP_MS), Outcome::Refused);
+    p.press(Press::Left, 400 + 3 * HOP_MS);
+    assert_eq!(p.seat(), Core::Armgba);
+    assert_eq!(p.chip(400 + 4 * HOP_MS).seated, Some(Core::Armgba));
 }
 
 #[test]
 fn the_chip_rests_by_place_in_the_row() {
-    let gambatte = opened_on(GB, Core::Gambatte, 0).chip(0);
+    let gambatte = opened_on(GB_PAIR, Core::Gambatte, 0).chip(0);
     assert_eq!(gambatte.seated, Some(Core::Gambatte));
     assert_eq!(gambatte.across, 1.0);
-    assert_eq!(opened_on(GB, Core::Mgba, 0).chip(0).across, 0.0);
+    assert_eq!(opened_on(GB_PAIR, Core::Mgba, 0).chip(0).across, 0.0);
     assert_eq!(opened_on(PAIR, Core::Gpsp, 0).chip(0).across, 1.0);
 }
 
 #[test]
 fn back_mid_hop_on_a_game_boy_pair_turns_back_to_mgba() {
-    let mut p = opened_on(GB, Core::Gambatte, 0);
+    let mut p = opened_on(GB_PAIR, Core::Gambatte, 0);
     p.press(Press::Left, 400);
     let mid = p.chip(400 + HOP_MS / 2);
     assert!(mid.tip < 0.0, "a chip moving left should lean left");
