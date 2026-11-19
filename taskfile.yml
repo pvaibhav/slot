@@ -8,6 +8,7 @@ vars:
   GPSP_COMMIT: 7b2dd37394e2822110cacef321e9bb291a305b77
   CHEATS_DB_COMMIT: 25da22340889d04bd6e3a8c116d2750af4157d4f
   GAMBATTE_COMMIT: 77f2567d718b8973d02caa2daa8dce4953faf811
+  ARMGBA_COMMIT: df6b2631291f249d54a00dd14f49bc893e438feb
   DSPERATE_COMMIT: 99618eb956c66083618395dbae9bb5cbf0241d16
   EXFATPROGS_VERSION: 1.4.3
   EXFATPROGS_SHA256: 4b5052cba6ff9f6dcb1c63eeeac328620472c5b0b3caf3d38e4ada50e75469d3
@@ -511,6 +512,43 @@ tasks:
         vendor/gambatte-src.sha vendor/gambatte-src.meta
       - task: core:gambatte
 
+  core:armgba:
+    desc: >-
+      Build the aarch64 linux armGBA core from its pinned source archive, which ships beside it
+      as its GPL-2.0 section 3(a) corresponding source
+    status:
+      - test -f vendor/armgba_libretro.so
+      - test -f vendor/armgba-src.tar.gz
+      - test "$(cat vendor/armgba-src.sha 2>/dev/null)" = "{{.ARMGBA_COMMIT}}"
+      - test "$(cat vendor/armgba_libretro.so.meta 2>/dev/null)" = "$(sh cores/armgba/build.sh stamp {{.ARMGBA_COMMIT}})"
+      - test "$(cat vendor/armgba-src.meta 2>/dev/null)" = "$(sh cores/armgba/build.sh stamp {{.ARMGBA_COMMIT}})"
+    cmds:
+      - |
+        set -euo pipefail
+        mkdir -p vendor
+        rm -f vendor/armgba_libretro.so vendor/armgba_libretro.so.meta \
+              vendor/armgba-src.tar.gz vendor/armgba-src.sha vendor/armgba-src.meta
+        curl -fsSL -o vendor/armgba-src.tar.gz \
+          "https://github.com/MagnominusGit/armGBA/archive/{{.ARMGBA_COMMIT}}.tar.gz"
+        tar -tzf vendor/armgba-src.tar.gz | grep "^armGBA-{{.ARMGBA_COMMIT}}/CMakeLists.txt$" > /dev/null
+      - task: device:sh
+        vars:
+          CMD: >-
+            sh cores/armgba/build.sh build {{.ARMGBA_COMMIT}} vendor/armgba-src.tar.gz
+            target-device/armgba vendor/armgba_libretro.so
+      - file vendor/armgba_libretro.so | grep -q aarch64
+      - echo "{{.ARMGBA_COMMIT}}" > vendor/armgba-src.sha
+      - cp vendor/armgba_libretro.so.meta vendor/armgba-src.meta
+      - 'echo "built vendor/armgba_libretro.so from vendor/armgba-src.tar.gz @ {{.ARMGBA_COMMIT}}"'
+
+  core:armgba:update:
+    desc: Refetch armGBA's source archive and rebuild the core from it, even if the set is current
+    cmds:
+      - >-
+        rm -f vendor/armgba_libretro.so vendor/armgba_libretro.so.meta vendor/armgba-src.tar.gz
+        vendor/armgba-src.sha vendor/armgba-src.meta
+      - task: core:armgba
+
   core:gpsp:test:
     desc: Prove gpSP's Advance Wars session-flip patch still fixes what it was written for
     deps: [ core:gpsp ]
@@ -601,7 +639,7 @@ tasks:
 
   dist:device:
     desc: Build the SD2 tree for an H700 device, OUT defaults to ./dist-device
-    deps: [ core:device, core:gpsp, core:gambatte, fsck:exfat, build:device, web ]
+    deps: [ core:device, core:gpsp, core:gambatte, core:armgba, fsck:exfat, build:device, web ]
     vars:
       OUT: '{{.OUT | default "dist-device"}}'
     cmds:
@@ -617,9 +655,11 @@ tasks:
       - file vendor/mgba_libretro.so | grep -q aarch64
       - file vendor/gpsp_libretro.so | grep -q aarch64
       - file vendor/gambatte_libretro.so | grep -q aarch64
+      - file vendor/armgba_libretro.so | grep -q aarch64
       - cp vendor/mgba_libretro.so {{.OUT}}/System/
       - cp vendor/gpsp_libretro.so {{.OUT}}/System/
       - cp vendor/gambatte_libretro.so {{.OUT}}/System/
+      - cp vendor/armgba_libretro.so {{.OUT}}/System/
       - cp vendor/fsck.exfat {{.OUT}}/System/
       - cp -r licenses {{.OUT}}/System/licenses
       - cp vendor/exfatprogs-{{.EXFATPROGS_VERSION}}.tar.gz {{.OUT}}/System/licenses/
@@ -641,6 +681,11 @@ tasks:
         done
       - |
         set -euo pipefail
+        sha="$(cat vendor/armgba-src.sha)"
+        cp vendor/armgba-src.tar.gz "{{.OUT}}/System/licenses/armgba-${sha}.tar.gz"
+        cp vendor/armgba-src.meta "{{.OUT}}/System/licenses/armgba-${sha}.meta"
+      - |
+        set -euo pipefail
         commit="$(grep '^commit=' vendor/mgba_libretro.so.meta | cut -d= -f2)"
         cp vendor/mgba_libretro.so.meta "{{.OUT}}/System/licenses/mgba-${commit}.meta"
         for p in cores/mgba/*.patch; do
@@ -650,7 +695,7 @@ tasks:
 
   dist:device:ds:
     desc: Build the SD2 tree for the RG DS+, OUT defaults to ./dist-device-ds
-    deps: [ core:device, core:gpsp, core:gambatte, core:dsperate, fsck:exfat, build:device:ds, web ]
+    deps: [ core:device, core:gpsp, core:gambatte, core:armgba, core:dsperate, fsck:exfat, build:device:ds, web ]
     vars:
       OUT: '{{.OUT | default "dist-device-ds"}}'
     cmds:
@@ -665,9 +710,11 @@ tasks:
       - file vendor/mgba_libretro.so | grep -q aarch64
       - file vendor/gpsp_libretro.so | grep -q aarch64
       - file vendor/gambatte_libretro.so | grep -q aarch64
+      - file vendor/armgba_libretro.so | grep -q aarch64
       - cp vendor/mgba_libretro.so {{.OUT}}/System/
       - cp vendor/gpsp_libretro.so {{.OUT}}/System/
       - cp vendor/gambatte_libretro.so {{.OUT}}/System/
+      - cp vendor/armgba_libretro.so {{.OUT}}/System/
       - file vendor/slot_ds.so | grep -q aarch64
       - cp vendor/slot_ds.so {{.OUT}}/System/
       - cp vendor/fsck.exfat {{.OUT}}/System/
@@ -691,6 +738,11 @@ tasks:
         done
       - |
         set -euo pipefail
+        sha="$(cat vendor/armgba-src.sha)"
+        cp vendor/armgba-src.tar.gz "{{.OUT}}/System/licenses/armgba-${sha}.tar.gz"
+        cp vendor/armgba-src.meta "{{.OUT}}/System/licenses/armgba-${sha}.meta"
+      - |
+        set -euo pipefail
         commit="$(grep '^commit=' vendor/mgba_libretro.so.meta | cut -d= -f2)"
         cp vendor/mgba_libretro.so.meta "{{.OUT}}/System/licenses/mgba-${commit}.meta"
         for p in cores/mgba/*.patch; do
@@ -706,14 +758,14 @@ tasks:
 
   deploy:device:
     desc: Build and push onto a device over adb, then restart it. SD defaults to /mnt/sdcard
-    deps: [ core:device, core:gpsp, core:gambatte, fsck:exfat, build:device ]
+    deps: [ core:device, core:gpsp, core:gambatte, core:armgba, fsck:exfat, build:device ]
     cmds:
       - task: deploy:push
         vars: { SD: '{{.SD}}' }
 
   deploy:all:
     desc: Build and push onto every attached adb device, then restart each. SD defaults to /mnt/sdcard
-    deps: [ core:device, core:gpsp, core:gambatte, fsck:exfat, build:device ]
+    deps: [ core:device, core:gpsp, core:gambatte, core:armgba, fsck:exfat, build:device ]
     vars:
       SERIALS:
         sh: adb devices | awk 'NR > 1 && $2 == "device" {print $1}'
@@ -735,11 +787,13 @@ tasks:
       - file vendor/mgba_libretro.so | grep -q aarch64
       - file vendor/gpsp_libretro.so | grep -q aarch64
       - file vendor/gambatte_libretro.so | grep -q aarch64
+      - file vendor/armgba_libretro.so | grep -q aarch64
       - "{{.ADB}} push target-device/device/slot '{{.SD}}/System/slot'"
       - for f in card/System/*; do {{.ADB}} push "$f" '{{.SD}}/System/'; done
       - "{{.ADB}} push vendor/mgba_libretro.so '{{.SD}}/System/mgba_libretro.so'"
       - "{{.ADB}} push vendor/gpsp_libretro.so '{{.SD}}/System/gpsp_libretro.so'"
       - "{{.ADB}} push vendor/gambatte_libretro.so '{{.SD}}/System/gambatte_libretro.so'"
+      - "{{.ADB}} push vendor/armgba_libretro.so '{{.SD}}/System/armgba_libretro.so'"
       - "{{.ADB}} push vendor/fsck.exfat '{{.SD}}/System/fsck.exfat'"
       - "{{.ADB}} push licenses '{{.SD}}/System/'"
       - "{{.ADB}} push vendor/exfatprogs-{{.EXFATPROGS_VERSION}}.tar.gz '{{.SD}}/System/licenses/'"
@@ -760,6 +814,11 @@ tasks:
         for p in cores/gambatte/*.patch; do
           {{.ADB}} push "$p" "{{.SD}}/System/licenses/gambatte-$(basename "$p")"
         done
+      - |
+        set -euo pipefail
+        sha="$(cat vendor/armgba-src.sha)"
+        {{.ADB}} push vendor/armgba-src.tar.gz "{{.SD}}/System/licenses/armgba-${sha}.tar.gz"
+        {{.ADB}} push vendor/armgba-src.meta "{{.SD}}/System/licenses/armgba-${sha}.meta"
       - |
         set -euo pipefail
         commit="$(grep '^commit=' vendor/mgba_libretro.so.meta | cut -d= -f2)"
