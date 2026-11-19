@@ -522,7 +522,12 @@ fn each_systems_frame_blending_steps_off_mix_lcd_ghosting_wraps_and_saves_alone(
         QuickRow::GbBlending,
         QuickRow::GbcBlending,
     ] {
-        let (d, mut a, _) = on_carousel();
+        let (d, mut a, _) = on_carousel_with(SlotState {
+            shader_gba: Shader::Authentic,
+            shader_gb: Shader::Authentic,
+            shader_gbc: Shader::Authentic,
+            ..SlotState::default()
+        });
         open_at(&mut a, row);
         assert_eq!(
             a.quick_value(row),

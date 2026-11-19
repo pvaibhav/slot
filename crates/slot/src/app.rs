@@ -2720,14 +2720,9 @@ impl App {
         if !self.palette_live {
             hidden.push(QuickRow::Palette);
         }
-        // Authentic draws the chosen model's colours and ghosting, which these would fight.
         let platform = self.playing_platform();
         if self.authentic(platform) {
-            hidden.extend([
-                QuickRow::ColourCorrection,
-                QuickRow::Blending,
-                QuickRow::Palette,
-            ]);
+            hidden.extend([QuickRow::ColourCorrection, QuickRow::Palette]);
         }
         if !(self.authentic(platform) && platform == Platform::Gb) {
             hidden.push(QuickRow::Model);
@@ -3821,21 +3816,11 @@ impl App {
             hidden.push(QuickRow::GbaBezel);
         }
         for (platform, rows) in [
-            (
-                Platform::Gba,
-                &[QuickRow::GbaColourCorrection, QuickRow::GbaBlending][..],
-            ),
-            (
-                Platform::Gbc,
-                &[QuickRow::GbcColourCorrection, QuickRow::GbcBlending][..],
-            ),
+            (Platform::Gba, &[QuickRow::GbaColourCorrection][..]),
+            (Platform::Gbc, &[QuickRow::GbcColourCorrection][..]),
             (
                 Platform::Gb,
-                &[
-                    QuickRow::GbColourCorrection,
-                    QuickRow::GbBlending,
-                    QuickRow::GbPalette,
-                ][..],
+                &[QuickRow::GbColourCorrection, QuickRow::GbPalette][..],
             ),
         ] {
             if self.authentic(platform) {
@@ -5209,8 +5194,6 @@ impl App {
         self.blending_for(self.playing_platform())
     }
 
-    /// The GPU's frame blending for the game in play. Authentic draws its LCD's response
-    /// whatever this says.
     pub fn frame_blend(&self) -> slot_gfx::FrameBlend {
         match self.blending_in_play() {
             Blending::Off => slot_gfx::FrameBlend::Off,

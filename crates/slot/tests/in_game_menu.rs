@@ -164,21 +164,33 @@ fn colour_correction_toggles_the_running_platform_and_asks_the_core() {
 
 #[test]
 fn frame_blending_steps_the_running_platform_and_hands_it_to_the_gpu() {
-    let (_d, mut a) = playing();
-    go_to(&mut a, QuickRow::Blending);
-    assert_eq!(a.quick_value(QuickRow::Blending), Some(QuickValue::Off));
-    for (want, gpu) in [
-        (Blending::Mix, FrameBlend::Mix),
-        (Blending::Ghosting, FrameBlend::Ghosting),
-        (Blending::Off, FrameBlend::Off),
-    ] {
-        press(&mut a, Btn::Right);
-        assert_eq!(a.blending_for(Platform::Gba), want);
-        assert_eq!(a.frame_blend(), gpu);
-        assert_eq!(
-            a.quick_value(QuickRow::Blending),
-            a.quick_value(QuickRow::GbaBlending)
-        );
+    for shader in [Shader::Grid, Shader::Authentic] {
+        let (d, mut a) = playing();
+        for _ in 0..8 {
+            if a.screen_shader() == shader {
+                break;
+            }
+            a.apply(Action::ShaderNext);
+        }
+        assert_eq!(a.screen_shader(), shader);
+        go_to(&mut a, QuickRow::Blending);
+        assert_eq!(a.quick_value(QuickRow::Blending), Some(QuickValue::Off));
+        for (want, gpu, shown) in [
+            (Blending::Mix, FrameBlend::Mix, QuickValue::Mix),
+            (
+                Blending::Ghosting,
+                FrameBlend::Ghosting,
+                QuickValue::Ghosting,
+            ),
+            (Blending::Off, FrameBlend::Off, QuickValue::Off),
+        ] {
+            press(&mut a, Btn::Right);
+            assert_eq!(a.blending_for(Platform::Gba), want);
+            assert_eq!(a.frame_blend(), gpu);
+            assert_eq!(a.quick_value(QuickRow::Blending), Some(shown));
+            assert_eq!(a.quick_value(QuickRow::GbaBlending), Some(shown));
+            assert_eq!(slot_store::read_slot_state(d.path()).blending_gba, want);
+        }
     }
 }
 
