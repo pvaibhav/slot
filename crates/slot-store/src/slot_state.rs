@@ -526,6 +526,9 @@ pub struct SlotState {
     pub blending_gb: Blending,
     pub gb_model: GbModel,
     pub blending_gbc: Blending,
+    pub authentic_blending_gba: Blending,
+    pub authentic_blending_gb: Blending,
+    pub authentic_blending_gbc: Blending,
     pub recents: Vec<Recent>,
     pub favorites: Vec<Recent>,
     pub shelf: Option<String>,
@@ -733,6 +736,9 @@ impl Default for SlotState {
             blending_gb: Blending::Off,
             gb_model: GbModel::Pocket,
             blending_gbc: Blending::Off,
+            authentic_blending_gba: Blending::Ghosting,
+            authentic_blending_gb: Blending::Ghosting,
+            authentic_blending_gbc: Blending::Ghosting,
             recents: Vec::new(),
             favorites: Vec::new(),
             shelf: None,
@@ -887,6 +893,12 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
     text.push_str(&format!("blending_gb={}\n", s.blending_gb.key()));
     text.push_str(&format!("gb_model={}\n", s.gb_model.key()));
     text.push_str(&format!("blending_gbc={}\n", s.blending_gbc.key()));
+    text.push_str(&format!(
+        "authentic_blending_gba={}\nauthentic_blending_gb={}\nauthentic_blending_gbc={}\n",
+        s.authentic_blending_gba.key(),
+        s.authentic_blending_gb.key(),
+        s.authentic_blending_gbc.key(),
+    ));
     text.push_str(&format!("shelf={}\n", s.shelf.as_deref().unwrap_or("")));
     text.push_str(&format!(
         "shelf_cart={}\n",
@@ -987,6 +999,9 @@ fn parse(text: &str) -> Option<SlotState> {
     let mut blending_gb = None;
     let mut gb_model = None;
     let mut blending_gbc = None;
+    let mut authentic_blending_gba = None;
+    let mut authentic_blending_gb = None;
+    let mut authentic_blending_gbc = None;
     let mut shelf = None;
     let mut shelf_cart = None;
     let mut shelf_mode = None;
@@ -1065,6 +1080,9 @@ fn parse(text: &str) -> Option<SlotState> {
             "blending_gb" => blending_gb = Some(Blending::parse(value).unwrap_or_default()),
             "gb_model" => gb_model = GbModel::parse(value),
             "blending_gbc" => blending_gbc = Some(Blending::parse(value).unwrap_or_default()),
+            "authentic_blending_gba" => authentic_blending_gba = Blending::parse(value),
+            "authentic_blending_gb" => authentic_blending_gb = Blending::parse(value),
+            "authentic_blending_gbc" => authentic_blending_gbc = Blending::parse(value),
             "shelf" => shelf = Some(value.to_string()).filter(|v| !v.is_empty()),
             "shelf_cart" => shelf_cart = recent_value(value),
             "shelf_mode" => shelf_mode = ShelfMode::parse(value),
@@ -1163,6 +1181,9 @@ fn parse(text: &str) -> Option<SlotState> {
         blending_gbc: blending_gbc
             .or_else(|| legacy_blending(ghosting_gbc))
             .unwrap_or(fallback.blending_gbc),
+        authentic_blending_gba: authentic_blending_gba.unwrap_or(fallback.authentic_blending_gba),
+        authentic_blending_gb: authentic_blending_gb.unwrap_or(fallback.authentic_blending_gb),
+        authentic_blending_gbc: authentic_blending_gbc.unwrap_or(fallback.authentic_blending_gbc),
         recents: Vec::new(),
         favorites: Vec::new(),
         shelf,

@@ -2915,9 +2915,9 @@ impl App {
             QuickRow::GbcScale => Some(scale_value(self.resolved_scale(Platform::Gbc))),
             QuickRow::GbStretch => Some(stretch_value(self.resolved_stretch(Platform::Gb))),
             QuickRow::GbcStretch => Some(stretch_value(self.resolved_stretch(Platform::Gbc))),
-            QuickRow::GbaBlending => Some(blending_value(self.state.blending_gba)),
-            QuickRow::GbcBlending => Some(blending_value(self.state.blending_gbc)),
-            QuickRow::GbBlending => Some(blending_value(self.state.blending_gb)),
+            QuickRow::GbaBlending => Some(blending_value(self.blending_for(Platform::Gba))),
+            QuickRow::GbcBlending => Some(blending_value(self.blending_for(Platform::Gbc))),
+            QuickRow::GbBlending => Some(blending_value(self.blending_for(Platform::Gb))),
             QuickRow::Blending => Some(blending_value(self.blending_in_play())),
             QuickRow::Brightness => Some(QuickValue::level(self.brightness_level())),
             QuickRow::BlueLight => Some(match self.state.blue_light {
@@ -5181,13 +5181,34 @@ impl App {
     }
 
     pub fn blending_for(&self, platform: Platform) -> Blending {
-        match platform {
-            Platform::Gba | Platform::Gbav => self.state.blending_gba,
+        let s = &self.state;
+        match (platform, self.authentic(platform)) {
+            (Platform::Gba | Platform::Gbav, true) => s.authentic_blending_gba,
+            (Platform::Gb, true) => s.authentic_blending_gb,
+            (Platform::Gbc, true) => s.authentic_blending_gbc,
+            (Platform::Gba | Platform::Gbav, false) => s.blending_gba,
+            (Platform::Gb, false) => s.blending_gb,
+            (Platform::Gbc, false) => s.blending_gbc,
             #[cfg(feature = "nds")]
-            Platform::Nds => Blending::Off,
-            Platform::Gb => self.state.blending_gb,
-            Platform::Gbc => self.state.blending_gbc,
+            (Platform::Nds, _) => Blending::Off,
         }
+    }
+
+    fn step_blending(&mut self, platform: Platform, choices: &[Blending], right: bool) {
+        let authentic = self.authentic(platform);
+        let s = &mut self.state;
+        let blending = match (platform, authentic) {
+            (Platform::Gba | Platform::Gbav, true) => &mut s.authentic_blending_gba,
+            (Platform::Gb, true) => &mut s.authentic_blending_gb,
+            (Platform::Gbc, true) => &mut s.authentic_blending_gbc,
+            (Platform::Gba | Platform::Gbav, false) => &mut s.blending_gba,
+            (Platform::Gb, false) => &mut s.blending_gb,
+            (Platform::Gbc, false) => &mut s.blending_gbc,
+            #[cfg(feature = "nds")]
+            (Platform::Nds, _) => return,
+        };
+        *blending = blending.step(choices, right);
+        self.persist();
     }
 
     pub fn blending_in_play(&self) -> Blending {
@@ -6950,22 +6971,24 @@ impl App {
                 self.romm.self_signed = !self.romm.self_signed;
                 return self.save_romm();
             }
+            QuickRow::Blending => {
+                return self.step_blending(
+                    self.playing_platform(),
+                    Blending::choices(self.core),
+                    right,
+                );
+            }
+            QuickRow::GbaBlending => {
+                return self.step_blending(Platform::Gba, &Blending::ALL, right)
+            }
+            QuickRow::GbBlending => return self.step_blending(Platform::Gb, &Blending::ALL, right),
+            QuickRow::GbcBlending => {
+                return self.step_blending(Platform::Gbc, &Blending::ALL, right)
+            }
             _ => {}
         }
         if row == QuickRow::WifiPower {
             return self.set_wifi_off(!self.state.wifi_off);
-        }
-        if row == QuickRow::Blending {
-            let to = self
-                .blending_in_play()
-                .step(Blending::choices(self.core), right);
-            match self.playing_platform().hardware() {
-                Platform::Gb => self.state.blending_gb = to,
-                Platform::Gbc => self.state.blending_gbc = to,
-                _ => self.state.blending_gba = to,
-            }
-            self.persist();
-            return;
         }
         if row == QuickRow::Overlay {
             self.cycle_overlay(self.playing_platform(), right);
@@ -7152,15 +7175,6 @@ impl App {
             QuickRow::ResumeInsert => s.resume_insert = !s.resume_insert,
             QuickRow::ResumePowerOn => s.resume_power_on = !s.resume_power_on,
             QuickRow::Rewind => s.rewind = !s.rewind,
-            QuickRow::GbaBlending => {
-                s.blending_gba = s.blending_gba.step(&Blending::ALL, right);
-            }
-            QuickRow::GbcBlending => {
-                s.blending_gbc = s.blending_gbc.step(&Blending::ALL, right);
-            }
-            QuickRow::GbBlending => {
-                s.blending_gb = s.blending_gb.step(&Blending::ALL, right);
-            }
             QuickRow::Theme => s.appearance = s.appearance.toggle(),
             QuickRow::BatteryDisplay => s.battery_display = s.battery_display.step(right),
             QuickRow::WallpaperTint => s.wallpaper_tint = s.wallpaper_tint.step(right),
@@ -7217,6 +7231,9 @@ impl App {
             | QuickRow::GbcScale
             | QuickRow::GbStretch
             | QuickRow::GbcStretch
+            | QuickRow::GbaBlending
+            | QuickRow::GbBlending
+            | QuickRow::GbcBlending
             | QuickRow::Blending
             | QuickRow::Scale
             | QuickRow::Stretch

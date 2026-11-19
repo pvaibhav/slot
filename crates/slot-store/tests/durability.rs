@@ -48,6 +48,14 @@ fn older_fork_cards_keep_mix_and_upstream_cards_keep_off() {
             (state.blending_gba, state.blending_gb, state.blending_gbc),
             (want, want, want)
         );
+        assert_eq!(
+            (
+                state.authentic_blending_gba,
+                state.authentic_blending_gb,
+                state.authentic_blending_gbc,
+            ),
+            (Blending::Ghosting, Blending::Ghosting, Blending::Ghosting)
+        );
     }
 }
 
@@ -392,6 +400,8 @@ fn the_quick_menu_settings_round_trip_as_their_own_lines() {
         reflection_gb: false,
         blending_gba: Blending::Ghosting,
         blending_gb: Blending::Mix,
+        authentic_blending_gba: Blending::Off,
+        authentic_blending_gb: Blending::Mix,
         shelf: Some("gba".into()),
         shelf_cart: Some(Recent {
             platform: Platform::Gba,
@@ -430,6 +440,9 @@ fn the_quick_menu_settings_round_trip_as_their_own_lines() {
         "blending_gba=ghosting",
         "blending_gb=mix",
         "blending_gbc=off",
+        "authentic_blending_gba=off",
+        "authentic_blending_gb=mix",
+        "authentic_blending_gbc=ghosting",
         "shelf=gba",
         "shelf_cart=gba/Drill Dozer",
     ] {
