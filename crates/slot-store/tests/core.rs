@@ -18,7 +18,7 @@ fn root_with(ini: Option<&str>) -> tempfile::TempDir {
 fn absent_file_means_everything_defaults() {
     let d = root_with(None);
     assert!(read_selected_cores(d.path()).is_empty());
-    assert_eq!(core_for(d.path(), "Emerald"), Core::Mgba);
+    assert_eq!(core_for(d.path(), "Emerald"), Core::Armgba);
 }
 
 #[test]
@@ -31,9 +31,9 @@ fn a_listed_stem_gets_its_core() {
 }
 
 #[test]
-fn an_unlisted_stem_defaults_to_mgba() {
+fn an_unlisted_stem_defaults_to_armgba() {
     let d = root_with(Some("Emerald = gpsp\n"));
-    assert_eq!(core_for(d.path(), "Metroid Fusion"), Core::Mgba);
+    assert_eq!(core_for(d.path(), "Metroid Fusion"), Core::Armgba);
 }
 
 #[test]
@@ -60,7 +60,7 @@ fn malformed_lines_are_ignored_rather_than_fatal() {
         None,
         "an unknown core name must not be stored"
     );
-    assert_eq!(core_for(d.path(), "Emerald"), Core::Mgba);
+    assert_eq!(core_for(d.path(), "Emerald"), Core::Armgba);
     assert_eq!(map.len(), 1, "only the one good line should survive");
 }
 
@@ -75,7 +75,7 @@ fn the_last_line_for_a_cart_wins_even_when_it_is_the_typo() {
     let d = root_with(Some("Emerald = gpsp\nEmerald = notacore\n"));
     assert_eq!(
         core_for(d.path(), "Emerald"),
-        Core::Mgba,
+        Core::Armgba,
         "a line the later one superseded is still in force"
     );
     assert_eq!(
@@ -176,15 +176,25 @@ fn an_unlisted_gb_stem_takes_the_card_default() {
 }
 
 #[test]
-fn an_unlisted_gba_stem_stays_mgba() {
+fn an_unlisted_gba_stem_runs_armgba_and_a_gba_video_stays_mgba() {
     let d = tempdir().unwrap();
     assert_eq!(
         core_for_platform(d.path(), "Emerald", Platform::Gba, Core::Gambatte),
-        Core::Mgba
+        Core::Armgba
     );
     assert_eq!(
         core_for_platform(d.path(), "Emerald", Platform::Gbav, Core::Gambatte),
         Core::Mgba
+    );
+}
+
+#[test]
+fn a_gba_stem_listed_mgba_keeps_mgba() {
+    let d = root_with(Some("GBA/Emerald = mgba\nGBAV/Pokemon Video = armgba\n"));
+    assert_eq!(core_for(d.path(), "Emerald"), Core::Mgba);
+    assert_eq!(
+        core_for_platform(d.path(), "Pokemon Video", Platform::Gbav, Core::Gambatte),
+        Core::Armgba
     );
 }
 

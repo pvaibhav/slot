@@ -105,10 +105,12 @@ pub fn core_for_platform(root: &Path, stem: &str, platform: Platform, gb_core: C
         .and_then(Core::parse)
         .filter(|core| core.runs(platform))
         .unwrap_or_else(|| match platform {
+            Platform::Gba => Core::Armgba,
+            Platform::Gbav => Core::Mgba,
             Platform::Gb | Platform::Gbc if gb_core.runs(platform) => gb_core,
+            Platform::Gb | Platform::Gbc => Core::Mgba,
             #[cfg(feature = "nds")]
             Platform::Nds => Core::Dsperate,
-            _ => Core::Mgba,
         })
 }
 

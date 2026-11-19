@@ -13,7 +13,7 @@ use slot_store::{write_slot_state, Core, Platform, SlotState, StateRing};
 #[test]
 fn a_tap_resumes_and_a_hold_starts_clean() {
     let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
-    StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
+    StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
         .write_resume(&[7u8; 64])
         .unwrap();
 
@@ -37,7 +37,7 @@ fn a_tap_resumes_and_a_hold_starts_clean() {
 fn resume_on_insert_alone_decides_whether_a_tap_resumes() {
     for (resume_insert, resume_power_on) in [(true, true), (true, false), (false, true), (false, false)] {
         let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
-        StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
+        StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
             .write_resume(&[7u8; 64])
             .unwrap();
         let s = SlotState {
@@ -61,7 +61,7 @@ fn resume_on_insert_alone_decides_whether_a_tap_resumes() {
 #[test]
 fn a_clean_start_leaves_the_state_on_disk() {
     let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
-    let r = StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald");
+    let r = StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald");
     r.write_resume(&[7u8; 64]).unwrap();
     let mut a = boot(d.path());
     a.apply_at(Action::GbaDown(Btn::A), 0);
@@ -113,7 +113,7 @@ fn counter_after(root: &Path, hold: bool) -> u64 {
     }
     s.app_mut().tick_ms(300_000);
     s.app_mut().settle_saves();
-    let state = persist::read_resume(root, Platform::Gba, Core::Mgba, "Emerald")
+    let state = persist::read_resume(root, Platform::Gba, Core::Armgba, "Emerald")
         .unwrap()
         .expect("nothing was flushed");
     u64::from_le_bytes(state.try_into().expect("the mock's state is 8 bytes"))
@@ -127,7 +127,7 @@ fn a_hold_hands_the_core_no_state_and_a_tap_hands_it_the_resume() {
         persist::flush(
             d.path(),
             Platform::Gba,
-            Core::Mgba,
+            Core::Armgba,
             "Emerald",
             Some(&500_000u64.to_le_bytes()),
             None,

@@ -79,7 +79,7 @@ impl Pass {
     }
 
     fn ring(&self, stem: &str) -> StateRing {
-        StateRing::new(&self.root, Platform::Gba, Core::Mgba, stem)
+        StateRing::new(&self.root, Platform::Gba, Core::Armgba, stem)
     }
 }
 
