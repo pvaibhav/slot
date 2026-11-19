@@ -246,11 +246,11 @@ fn armgba_round_trips_and_runs_every_game_boy_and_advance_game() {
 }
 
 #[test]
-fn pairs_by_platform() {
-    assert_eq!(Core::pair(Platform::Gba), [Core::Mgba, Core::Gpsp]);
-    assert_eq!(Core::pair(Platform::Gbav), [Core::Mgba, Core::Gpsp]);
-    assert_eq!(Core::pair(Platform::Gb), [Core::Mgba, Core::Gambatte]);
-    assert_eq!(Core::pair(Platform::Gbc), [Core::Mgba, Core::Gambatte]);
+fn rows_by_platform() {
+    assert_eq!(Core::row(Platform::Gba), [Core::Mgba, Core::Gpsp]);
+    assert_eq!(Core::row(Platform::Gbav), [Core::Mgba, Core::Gpsp]);
+    assert_eq!(Core::row(Platform::Gb), [Core::Mgba, Core::Gambatte]);
+    assert_eq!(Core::row(Platform::Gbc), [Core::Mgba, Core::Gambatte]);
 }
 
 #[test]
@@ -347,4 +347,5 @@ fn nds_games_always_run_dsperate() {
     assert!(!Core::Dsperate.runs(Platform::Gba));
     assert!(!Core::Mgba.runs(Platform::Nds));
     assert_eq!(Core::parse("dsperate"), Some(Core::Dsperate));
+    assert_eq!(Core::row(Platform::Nds), [Core::Dsperate]);
 }

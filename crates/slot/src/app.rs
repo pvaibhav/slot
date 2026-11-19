@@ -9729,7 +9729,7 @@ impl App {
         &self,
         board: Placed,
         seats: Seats,
-        pair: [Core; 2],
+        row: &[Core],
         sockets: &[TexId],
         chip: Chip,
         faces: &[TexId],
@@ -9738,11 +9738,13 @@ impl App {
         out: &mut Vec<Draw>,
     ) {
         let zoom = seats.zoom(board);
-        for (place, core) in pair.into_iter().enumerate() {
+        // A row shorter than the board's sockets sits in the middle ones.
+        let first = seats.socket_u.len().saturating_sub(row.len()) / 2;
+        for (place, core) in row.iter().enumerate() {
             let Some(tex) = sockets.get(core.index()).copied() else {
                 continue;
             };
-            let (x, y) = seats.at(board, seats.socket_u[place], seats.socket_v);
+            let (x, y) = seats.at(board, seats.socket_u[first + place], seats.socket_v);
             out.push(Draw::Tex {
                 x: x.round(),
                 y: y.round(),
@@ -9752,7 +9754,7 @@ impl App {
                 alpha: 1.0,
             });
         }
-        let u = seats.chip_u[0] + (seats.chip_u[1] - seats.chip_u[0]) * chip.across;
+        let u = seats.chip_u_at(first as f32 + chip.across);
         if chip.lift > 0.0 {
             if let Some(tex) = self.core_chip_shadow_face {
                 let (du, dv) = seats.shadow_uv;
@@ -9839,7 +9841,7 @@ impl App {
             self.draw_board_chip(
                 board,
                 seats(shell),
-                picker.pair(),
+                picker.row(),
                 sockets,
                 picker.chip(now),
                 chips,
@@ -10304,7 +10306,7 @@ impl App {
         let seat =
             slot_store::core_for_platform(&root, &cart.stem, cart.platform, self.state.gb_core);
         let now = self.now();
-        let mut picker = CorePicker::open(Core::pair(cart.platform), seat, now);
+        let mut picker = CorePicker::open(Core::row(cart.platform), seat, now);
         if self.core_faces_ready() {
             picker.start(now);
         }
@@ -13565,7 +13567,7 @@ impl App {
         self.hold_wifi();
         self.update_jobs.ask(UpdateJob::Install(r.clone()));
         self.update_busy = true;
-        let mut picker = CorePicker::open(Core::pair(Platform::Gba), Core::Mgba, self.now());
+        let mut picker = CorePicker::open(&[Core::Mgba, Core::Gpsp], Core::Mgba, self.now());
         picker.start(self.now());
         self.update_picker = Some(picker);
         self.update_seat_at = None;
@@ -13895,7 +13897,7 @@ impl App {
             self.draw_board_chip(
                 board,
                 GBA_SEATS,
-                picker.pair(),
+                picker.row(),
                 &self.update_sockets,
                 picker.chip(self.now()),
                 &self.update_chips,

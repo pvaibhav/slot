@@ -342,9 +342,9 @@ pub fn lid_from_shaped(
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Seats {
-    pub socket_u: [f32; 2],
+    pub socket_u: &'static [f32],
     pub socket_v: f32,
-    pub chip_u: [f32; 2],
+    pub chip_u: &'static [f32],
     pub chip_v: f32,
     pub socket_size: (f32, f32),
     pub chip_size: (f32, f32),
@@ -355,9 +355,9 @@ pub struct Seats {
 }
 
 pub const GBA_SEATS: Seats = Seats {
-    socket_u: SOCKET_U,
+    socket_u: &SOCKET_U,
     socket_v: SOCKET_V,
-    chip_u: CHIP_U,
+    chip_u: &CHIP_U,
     chip_v: CHIP_V,
     socket_size: (SOCKET_W as f32, SOCKET_H as f32),
     chip_size: (CHIP_W as f32, CHIP_H as f32),
@@ -373,9 +373,9 @@ const GB_FOOT_U: [f32; 2] = [70.0 / GB_UNIT, 189.0 / GB_UNIT];
 const GB_FOOT_V: f32 = 169.0 / GB_UNIT;
 
 pub const GB_SEATS: Seats = Seats {
-    socket_u: GB_FOOT_U,
+    socket_u: &GB_FOOT_U,
     socket_v: GB_FOOT_V,
-    chip_u: GB_FOOT_U,
+    chip_u: &GB_FOOT_U,
     chip_v: GB_FOOT_V,
     socket_size: (GB_CHIP_W as f32, GB_CHIP_H as f32),
     chip_size: (GB_CHIP_W as f32, GB_CHIP_H as f32),
@@ -402,6 +402,15 @@ impl Seats {
 
     pub fn zoom(&self, board: Placed) -> f32 {
         board.w / self.bitmap_w
+    }
+
+    /// The chip's u at a place along the seats, between the chip u of the seats either side.
+    pub fn chip_u_at(&self, seat: f32) -> f32 {
+        let last = self.chip_u.len() - 1;
+        let left = (seat.max(0.0) as usize).min(last.saturating_sub(1));
+        let right = (left + 1).min(last);
+        let (a, b) = (self.chip_u[left], self.chip_u[right]);
+        a + (b - a) * (seat - left as f32)
     }
 }
 
