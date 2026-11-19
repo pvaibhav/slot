@@ -114,6 +114,16 @@ mod tests {
     }
 
     #[test]
+    fn armgbas_clock_passes_between_cores_as_it_is() {
+        // armGBA's 80 bytes open with Gambatte's 8 and hold mGBA's latched registers and time at
+        // mGBA's offsets, and armGBA reads either core's tail itself.
+        const ARMGBA: usize = 80;
+        assert_eq!(convert(&[0; ARMGBA], GAMBATTE, 0), None);
+        assert_eq!(convert(&[0; MGBA], ARMGBA, 0), None);
+        assert_eq!(convert(&[0; GAMBATTE], ARMGBA, 0), None);
+    }
+
+    #[test]
     fn other_sizes_are_left_alone() {
         assert_eq!(convert(&[0; MGBA], MGBA, 0), None);
         assert_eq!(convert(&[0; GAMBATTE], GAMBATTE, 0), None);
