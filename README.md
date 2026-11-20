@@ -32,8 +32,15 @@ Each feature links to a [wiki](https://github.com/pvaibhav/slot/wiki) page with 
 
 - **[Lower input lag with automatic 120 Hz](https://github.com/pvaibhav/slot/wiki/120-Hz-and-run-ahead)** on supported RG SP, RG34XX SP, and RG34XX
   panels. Other panel revisions keep their existing refresh rate.
-- **[Automatic CPU scaling](https://github.com/pvaibhav/slot/wiki/CPU-speed-and-battery)** with `schedutil` for GB, GBC, gpSP, and paused play.
+- **[Automatic CPU scaling](https://github.com/pvaibhav/slot/wiki/CPU-speed-and-battery)** with `schedutil` for GB, GBC, armGBA, gpSP, and paused play.
   Running GBA games on mGBA use `performance` to keep frames on time.
+- **armGBA is the default GBA core.** It keeps GBA games at full speed under `schedutil`, where mGBA
+  needs `performance`. Press Start on a cart to move it to mGBA or gpSP, or back. Save states belong
+  to the core that made them, so a game's mGBA states are there again when you switch back; battery
+  saves work on every core. GB and GBC games can use armGBA too, and Gambatte stays their default.
+  Two devices that both use armGBA can link GBA games over the cable. That link is new and has
+  only been tested between two simulated devices so far. GB, GBC and Wireless Adapter links still
+  need mGBA or gpSP.
 - **[Authentic LCD shaders](https://github.com/pvaibhav/slot/wiki/Authentic-shader)** recreate the reflective screens' colours, pixel grid, ghosting,
   and glass, with shadows from the dots and bezel. Game Boy offers Game Boy, Pocket, and
   Light models. The default bezel is cut from Harlequin's dmg-3x art, with its glass and
@@ -70,7 +77,7 @@ Each feature links to a [wiki](https://github.com/pvaibhav/slot/wiki) page with 
 - **[Cheats.](https://github.com/pvaibhav/slot/wiki/Cheats)** Put `Cheats.pack` from the release page in `Cheats/`, and a game's cheats from the
   libretro database appear under **Cheats** in its in-game menu, each with an On/Off switch.
   slot remembers which are on for each game. To use your own, add a RetroArch `.cht` file named
-  after the ROM to `Cheats/GBA`, `Cheats/GB` or `Cheats/GBC`. Cheats need the mGBA core.
+  after the ROM to `Cheats/GBA`, `Cheats/GB` or `Cheats/GBC`. Cheats need the mGBA or armGBA core.
   Gambatte, the default Game Boy core on new cards since v1.14.0, has no cheats yet.
 - ~~**Network time from BaseOS and `slot.local` beside the device's own name.**~~ Included
   upstream since **v1.15.0**. **Set Automatically** uses BaseOS's network time, and Gamebit
@@ -123,7 +130,7 @@ frames at 720×480 with this release's shaders and bezels.
 
 <p align="center">
 <img src=".github/resources/screenshots/carousel.gif" width="48%" alt="Scrolling the cart carousel across the Game Boy Advance, Game Boy and Game Boy Color shelves">
-<img src=".github/resources/screenshots/core-picker.gif" width="48%" alt="Flipping a cart to its circuit board to choose mGBA or gpSP">
+<img src=".github/resources/screenshots/core-picker.gif" width="48%" alt="Flipping a cart to its circuit board to choose mGBA, armGBA or gpSP">
 </p>
 
 <p align="center">
