@@ -844,6 +844,15 @@ impl RetroCore for LibretroCore {
         self.host.net.clone()
     }
 
+    fn link_protocol(&self) -> Option<String> {
+        let version = self.host.netpacket.as_ref()?.protocol_version;
+        if version.is_null() {
+            return None;
+        }
+        let name = unsafe { std::ffi::CStr::from_ptr(version) };
+        Some(name.to_string_lossy().into_owned())
+    }
+
     fn start_link(&mut self, client_id: u16) {
         self.state_size = None;
         let _a = Active::bind(&mut self.host);
