@@ -544,33 +544,3 @@ fn only_armgba_carries_its_link_packets_as_they_are_sent() {
         .collect();
     assert_eq!(live, [Core::Armgba]);
 }
-
-#[test]
-fn armgba_offers_slot_its_cable_once_a_game_loads_with_slots_options() {
-    let _g = common::core_lock();
-    let path = dylib_for(Core::Armgba);
-    if !path.exists() {
-        eprintln!("no armgba dylib on this host, skipping");
-        return;
-    }
-    let rom = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("armgba-link-offer.gba");
-    std::fs::write(&rom, common::gba_rom()).expect("write rom");
-    for (options, offered) in [
-        (
-            slot::core::armgba_options(Platform::Gba, false, false),
-            Some("armGBA link 3"),
-        ),
-        (Vec::new(), None),
-    ] {
-        let mut core = LibretroCore::open(&path).expect("open armgba");
-        for (key, value) in &options {
-            core.set_option(key, value);
-        }
-        slot_retro::RetroCore::load(&mut core, &rom).expect("load");
-        assert_eq!(
-            slot_retro::RetroCore::link_protocol(&core).as_deref(),
-            offered,
-            "after loading with {options:?}"
-        );
-    }
-}

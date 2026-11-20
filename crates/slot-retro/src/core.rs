@@ -125,10 +125,6 @@ pub trait RetroCore: Send {
     fn net(&self) -> Link {
         Link::default()
     }
-    /// The protocol the core's netpacket link speaks, as it names it, or None without one.
-    fn link_protocol(&self) -> Option<String> {
-        None
-    }
     fn start_link(&mut self, _client_id: u16) {}
     fn pump_link(&mut self) {}
     fn stop_link(&mut self) {}

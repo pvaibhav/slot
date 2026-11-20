@@ -1387,7 +1387,6 @@ fn state_loads_resets_and_refreshes_each_cut_the_picture_and_frames_carry_their_
 /// armGBA's cable does: it sends "ask" and polls for the answer, for up to two seconds.
 struct Waiter {
     inner: MockCore,
-    protocol: Option<&'static str>,
     net: slot_retro::Link,
     waits: bool,
     linked: bool,
@@ -1397,10 +1396,9 @@ struct Waiter {
 }
 
 impl Waiter {
-    fn new(protocol: Option<&'static str>, waits: bool) -> Waiter {
+    fn new(waits: bool) -> Waiter {
         Waiter {
             inner: MockCore::new(),
-            protocol,
             net: slot_retro::Link::default(),
             waits,
             linked: false,
@@ -1454,9 +1452,6 @@ impl RetroCore for Waiter {
     fn net(&self) -> slot_retro::Link {
         self.net.clone()
     }
-    fn link_protocol(&self) -> Option<String> {
-        self.protocol.map(str::to_string)
-    }
     fn start_link(&mut self, client_id: u16) {
         self.linked = true;
         self.started.lock().unwrap().push(client_id);
@@ -1467,53 +1462,40 @@ impl RetroCore for Waiter {
     }
 }
 
-const HELLO: &[u8] = b"slot hello waiter link 1";
-
 #[test]
-fn a_live_link_starts_the_cores_link_only_once_the_other_device_says_the_same_hello() {
-    let core = Waiter::new(Some("waiter link 1"), false);
+fn a_live_link_starts_the_cores_link_at_once_and_carries_its_packets_both_ways() {
+    let core = Waiter::new(false);
     let started = core.started.clone();
     let emu = spawn_with_core(Box::new(core));
     let (mut here, there) = paired_links();
 
     emu.begin_live_link(1, Box::new(there));
-    let hello = wait_for_packet(|| here.try_recv());
-    assert_eq!(
-        hello.as_deref(),
-        Some(HELLO),
-        "the hello names the core's link protocol"
-    );
-    std::thread::sleep(Duration::from_millis(100));
-    assert!(
-        started.lock().unwrap().is_empty(),
-        "the core linked before the other device spoke"
-    );
-    assert!(!emu.net().is_active());
-
-    here.send(NETPACKET_RELIABLE, HELLO);
-    here.send(NETPACKET_RELIABLE, b"the core's first packet");
     assert!(
         wait_for(|| emu.net().is_active()),
-        "the same hello never started the link"
+        "the core's link never started"
     );
     assert_eq!(*started.lock().unwrap(), [1]);
+    here.send(NETPACKET_RELIABLE, b"the core's first packet");
     assert_eq!(
         wait_for_packet(|| emu.net().take_inbound()).as_deref(),
         Some(&b"the core's first packet"[..]),
-        "the packet behind the hello did not reach the core"
+        "the other device's packet did not reach the core"
     );
-    assert!(!emu.core_mismatch());
+    emu.net().push_outbound(b"its reply".to_vec());
+    assert_eq!(
+        wait_for_packet(|| here.try_recv()).as_deref(),
+        Some(&b"its reply"[..]),
+        "the core's packet did not reach the wire"
+    );
 }
 
 #[test]
 fn a_core_that_waits_inside_a_frame_hears_its_answer_inside_that_frame() {
-    let core = Waiter::new(Some("waiter link 1"), true);
+    let core = Waiter::new(true);
     let answers = core.answers.clone();
     let emu = spawn_with_core(Box::new(core));
     let (mut here, there) = paired_links();
     emu.begin_live_link(0, Box::new(there));
-    assert_eq!(wait_for_packet(|| here.try_recv()).as_deref(), Some(HELLO));
-    here.send(NETPACKET_RELIABLE, HELLO);
 
     let peer = std::thread::spawn(move || {
         let until = Instant::now() + Duration::from_secs(3);
@@ -1545,79 +1527,6 @@ fn a_core_that_waits_inside_a_frame_hears_its_answer_inside_that_frame() {
 }
 
 #[test]
-fn a_live_link_to_another_protocol_never_starts_the_cores_link() {
-    let core = Waiter::new(Some("waiter link 1"), true);
-    let started = core.started.clone();
-    let emu = spawn_with_core(Box::new(core));
-    let (mut here, there) = paired_links();
-    emu.begin_live_link(0, Box::new(there));
-    assert_eq!(wait_for_packet(|| here.try_recv()).as_deref(), Some(HELLO));
-
-    here.send(NETPACKET_RELIABLE, b"slot hello waiter link 2");
-    assert!(
-        wait_for(|| emu.core_mismatch()),
-        "another protocol's hello was taken"
-    );
-    here.send(NETPACKET_RELIABLE, b"and its traffic");
-    std::thread::sleep(Duration::from_millis(200));
-
-    assert!(
-        started.lock().unwrap().is_empty(),
-        "the core linked to another protocol"
-    );
-    assert!(!emu.net().is_active());
-    assert_eq!(
-        here.try_recv(),
-        None,
-        "the core's packets went to the other device"
-    );
-    assert_eq!(
-        emu.net().take_inbound(),
-        None,
-        "the other device's traffic reached the core"
-    );
-}
-
-#[test]
-fn a_live_link_to_a_device_that_says_nothing_is_refused_after_five_seconds() {
-    let emu = spawn_with_core(Box::new(Waiter::new(Some("waiter link 1"), false)));
-    let (_here, there) = paired_links();
-    let began = Instant::now();
-    emu.begin_live_link(0, Box::new(there));
-
-    let deadline = Instant::now() + Duration::from_secs(8);
-    while !emu.core_mismatch() {
-        assert!(
-            Instant::now() < deadline,
-            "a silent device was waited on for ever"
-        );
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    let waited = began.elapsed();
-    assert!(
-        waited >= Duration::from_millis(4900),
-        "refused after only {waited:?}"
-    );
-}
-
-#[test]
-fn a_core_with_no_link_protocol_is_refused_without_a_word() {
-    let core = Waiter::new(None, false);
-    let started = core.started.clone();
-    let emu = spawn_with_core(Box::new(core));
-    let (mut here, there) = paired_links();
-    emu.begin_live_link(0, Box::new(there));
-
-    assert!(
-        wait_for(|| emu.core_mismatch()),
-        "a core with no link was offered one"
-    );
-    std::thread::sleep(Duration::from_millis(100));
-    assert_eq!(here.try_recv(), None, "a hello went out for no protocol");
-    assert!(started.lock().unwrap().is_empty());
-}
-
-#[test]
 fn the_other_device_ending_takes_the_cores_link_down_before_the_app_does() {
     struct Ends {
         inner: PairedLink,
@@ -1635,7 +1544,7 @@ fn the_other_device_ending_takes_the_cores_link_down_before_the_app_does() {
         }
     }
 
-    let core = Waiter::new(Some("waiter link 1"), false);
+    let core = Waiter::new(false);
     let stops = core.stops.clone();
     let emu = spawn_with_core(Box::new(core));
     let (mut here, there) = paired_links();
@@ -1647,8 +1556,6 @@ fn the_other_device_ending_takes_the_cores_link_down_before_the_app_does() {
             ended: ended.clone(),
         }),
     );
-    assert_eq!(wait_for_packet(|| here.try_recv()).as_deref(), Some(HELLO));
-    here.send(NETPACKET_RELIABLE, HELLO);
     assert!(wait_for(|| emu.net().is_active()));
     assert_eq!(stops.load(Ordering::Relaxed), 0);
 
@@ -1680,7 +1587,7 @@ fn a_framed_link_is_left_to_the_app_when_its_peer_ends() {
         }
     }
 
-    let core = Waiter::new(Some("waiter link 1"), false);
+    let core = Waiter::new(false);
     let stops = core.stops.clone();
     let emu = spawn_with_core(Box::new(core));
     let ended = Arc::new(AtomicBool::new(false));

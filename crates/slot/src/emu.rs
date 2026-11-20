@@ -39,15 +39,6 @@ const ANSWER_WAIT: Duration = Duration::from_secs(2);
 
 const STOP_WAIT: Duration = Duration::from_secs(10);
 
-/// How long a live link waits for the other device's hello. A device on another core never
-/// sends one, and gpSP's link may say nothing at all until its game links.
-const HELLO_WAIT: Duration = Duration::from_secs(5);
-
-/// Starts every live link's hello, before the core's link protocol. Its first byte is none of the
-/// packet kinds mGBA's cable reads (0 to 3), and gpSP drops it for want of its own headers, so a
-/// device on either core ignores it.
-const HELLO: &[u8] = b"slot hello ";
-
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Speed {
     Paused,
@@ -121,7 +112,6 @@ struct Shared {
     linked: AtomicU64,
     peer_ended: AtomicBool,
     bios_mismatch: AtomicBool,
-    core_mismatch: AtomicBool,
     driven: AtomicBool,
     locked: AtomicBool,
     native_ns: AtomicU64,
@@ -201,7 +191,6 @@ impl EmuHandle {
             linked: AtomicU64::new(0),
             peer_ended: AtomicBool::new(false),
             bios_mismatch: AtomicBool::new(false),
-            core_mismatch: AtomicBool::new(false),
             driven: AtomicBool::new(false),
             locked: AtomicBool::new(false),
             native_ns: AtomicU64::new(PRESENT.as_nanos() as u64),
@@ -260,10 +249,6 @@ impl EmuHandle {
         self.shared.bios_mismatch.load(Ordering::Relaxed)
     }
 
-    pub fn core_mismatch(&self) -> bool {
-        self.shared.core_mismatch.load(Ordering::Relaxed)
-    }
-
     pub fn begin_link(&self, client_id: u16, transport: Box<dyn LinkChannel>) {
         request(
             &self.cmds,
@@ -273,8 +258,7 @@ impl EmuHandle {
     }
 
     /// A link for a core that waits inside a frame for the other device: its packets cross as
-    /// it sends and polls them. Both devices first trade a hello naming the core's link
-    /// protocol, and the core's link starts only once they match.
+    /// it sends and polls them.
     pub fn begin_live_link(&self, client_id: u16, transport: Box<dyn LinkChannel>) {
         request(
             &self.cmds,
@@ -735,12 +719,7 @@ impl Worker {
                             }
                         }
                     }
-                    None => match &mut live {
-                        Some(Live::Greeting(g)) => {
-                            if let Some(linked) = self.greet(g, core.as_mut(), &link) {
-                                live = Some(linked);
-                            }
-                        }
+                    None => match &live {
                         Some(Live::Closed) => while t.try_recv().is_some() {},
                         Some(Live::Linked) | None => {
                             drain_transport(t.as_mut(), &link, MAX_LINK_PACKETS_PER_PRESENT)
@@ -1184,23 +1163,11 @@ impl Worker {
             Cmd::BeginLiveLink(client_id, t) => {
                 self.clear_link_flags();
                 link.clear();
-                let mut wire = Wire(Arc::new(Mutex::new(t)));
-                *live = Some(match core.link_protocol() {
-                    Some(protocol) => {
-                        let hello = [HELLO, protocol.as_bytes()].concat();
-                        wire.send(NETPACKET_RELIABLE, &hello);
-                        Live::Greeting(Greeting {
-                            client_id,
-                            hello,
-                            until: Instant::now() + HELLO_WAIT,
-                            wire: wire.clone(),
-                        })
-                    }
-                    None => {
-                        self.shared.core_mismatch.store(true, Ordering::Relaxed);
-                        Live::Closed
-                    }
-                });
+                let wire = Wire(Arc::new(Mutex::new(t)));
+                link.plug(Box::new(wire.clone()));
+                core.start_link(client_id);
+                link.set_active(true);
+                *live = Some(Live::Linked);
                 *transport = Some(Box::new(wire));
             }
             Cmd::BeginCable(player, t) => {
@@ -1250,27 +1217,6 @@ impl Worker {
         self.shared.link_lost.store(false, Ordering::Relaxed);
         self.shared.peer_ended.store(false, Ordering::Relaxed);
         self.shared.bios_mismatch.store(false, Ordering::Relaxed);
-        self.shared.core_mismatch.store(false, Ordering::Relaxed);
-    }
-
-    /// Waits on a live link for the other device's hello. The same hello starts the core's
-    /// link; anything else, or nothing in time, refuses it and keeps the core's packets off
-    /// the wire until the session ends. Returns the link's next state once it has one.
-    fn greet(&self, g: &mut Greeting, core: &mut dyn RetroCore, link: &Link) -> Option<Live> {
-        let matched = match g.wire.try_recv() {
-            Some(heard) => heard == g.hello,
-            None if Instant::now() < g.until => return None,
-            None => false,
-        };
-        if !matched {
-            eprintln!("slot: link: the other device runs another link protocol");
-            self.shared.core_mismatch.store(true, Ordering::Relaxed);
-            return Some(Live::Closed);
-        }
-        link.plug(Box::new(g.wire.clone()));
-        core.start_link(g.client_id);
-        link.set_active(true);
-        Some(Live::Linked)
     }
 
     fn frame_done(&self, served: u64) {
@@ -1389,19 +1335,11 @@ impl LinkChannel for Wire {
     }
 }
 
-/// A live link: waiting for the other device's hello, carrying the core's packets, or closed
-/// (refused, or the other device gone) until the session ends.
+/// A live link: carrying the core's packets, or closed once the other device is gone, until the
+/// session ends.
 enum Live {
-    Greeting(Greeting),
     Linked,
     Closed,
-}
-
-struct Greeting {
-    client_id: u16,
-    hello: Vec<u8>,
-    until: Instant,
-    wire: Wire,
 }
 
 fn flush_outbound(transport: &mut Option<Box<dyn LinkChannel>>, link: &Link) {

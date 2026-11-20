@@ -610,7 +610,7 @@ fn a_started_link_reaches_the_emulator_thread_with_its_transport() {
 }
 
 #[test]
-fn an_armgba_session_whose_core_offers_no_link_is_turned_down_on_both_ends() {
+fn an_armgba_session_plugs_its_core_into_the_link_at_once() {
     let (mut s, _d, mut now) = session_playing_on(Core::Armgba);
     let port = common::free_port();
     let far = std::thread::spawn(move || TcpLink::host("127.0.0.1", port).expect("host"));
@@ -620,30 +620,17 @@ fn an_armgba_session_whose_core_offers_no_link_is_turned_down_on_both_ends() {
         1,
     );
     let deadline = Instant::now() + BAIL;
-    while s.app().toast() != Some(Toast::CoreMismatch) {
-        assert!(
-            Instant::now() < deadline,
-            "the refusal never reached the app"
-        );
+    while !s.emu().is_some_and(|e| e.net().is_active()) {
+        assert!(Instant::now() < deadline, "the core's link never started");
         step(&mut s, &mut now, &[]);
         std::thread::sleep(Duration::from_millis(1));
     }
-    let mut far = far.join().expect("host thread");
-    assert!(!s.app().link_active(), "the session outlived the refusal");
-    let deadline = Instant::now() + BAIL;
-    while !far.peer_ended() {
-        assert!(
-            Instant::now() < deadline,
-            "the far end was never told the link was over"
-        );
+    let far = far.join().expect("host thread");
+    for _ in 0..30 {
         step(&mut s, &mut now, &[]);
-        std::thread::sleep(Duration::from_millis(2));
     }
-    assert_eq!(
-        far.try_recv(),
-        None,
-        "a core with no link protocol said hello anyway"
-    );
+    assert!(s.app().link_active(), "the session did not last");
+    assert!(!far.peer_ended(), "the far end was turned down");
 }
 
 #[test]
@@ -1856,26 +1843,6 @@ fn a_on_armgba_starts_the_link_without_loading_the_game_again() {
     assert!(reaches_waiting(&mut app), "A started no link");
     app.apply(Action::GbaDown(Btn::B));
     settle(&mut app);
-}
-
-#[test]
-fn a_device_on_another_core_ends_the_session_and_unplugs_saying_why() {
-    let (mut app, _d) = playing_on(Core::Armgba);
-    app.begin_link(1);
-    app.core_mismatch();
-    assert!(!app.link_active(), "the session outlived the refusal");
-    assert_eq!(app.toast(), Some(Toast::CoreMismatch));
-    assert!(
-        matches!(
-            app.game_menu(),
-            Some(GameMenu::Unplug {
-                role: LinkRow::Join,
-                ..
-            })
-        ),
-        "{:?}",
-        app.game_menu()
-    );
 }
 
 #[test]

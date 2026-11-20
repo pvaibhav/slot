@@ -42,7 +42,7 @@ fn the_link_ending_says_who_ended_it() {
 fn the_banner_says_what_happened_and_never_what_is_on_screen() {
     let all = Toast::all();
     assert_eq!(
-        all[..37],
+        all[..36],
         [
             Toast::StateSaved,
             Toast::StateLoaded,
@@ -56,7 +56,6 @@ fn the_banner_says_what_happened_and_never_what_is_on_screen() {
             Toast::LinkEnded,
             Toast::PeerEnded,
             Toast::BiosMismatch,
-            Toast::CoreMismatch,
             Toast::ColourOn,
             Toast::ColourOff,
             Toast::ShaderOff,
@@ -87,12 +86,12 @@ fn the_banner_says_what_happened_and_never_what_is_on_screen() {
     let palettes = GbColors::all().count();
     assert_eq!(palettes, 49);
     assert_eq!(
-        all[37..37 + palettes],
+        all[36..36 + palettes],
         GbColors::all().map(Toast::Palette).collect::<Vec<_>>()[..],
         "the palette banners do not follow the fixed ones in palette order"
     );
     assert_eq!(
-        all[37 + palettes..],
+        all[36 + palettes..],
         QuickRow::ALL
             .into_iter()
             .filter(|r| r.binds())

@@ -32,9 +32,9 @@ Each feature links to a [wiki](https://github.com/pvaibhav/slot/wiki) page with 
   needs `performance`. Press Start on a cart to move it to mGBA or gpSP, or back. Save states belong
   to the core that made them, so a game's mGBA states are there again when you switch back; battery
   saves work on every core. GB and GBC games can use armGBA too, and Gambatte stays their default.
-  Two devices that both use armGBA can link GBA games over the cable. That link is new and has
-  only been tested between two simulated devices so far. GB, GBC and Wireless Adapter links still
-  need mGBA or gpSP.
+  armGBA can link GBA games over the cable, and a friend who joins from mGBA or gpSP switches to
+  armGBA for the link. That link is new and has only been tested between two simulated devices so
+  far. GB, GBC and Wireless Adapter links still need mGBA or gpSP.
 - **[Authentic LCD shaders](https://github.com/pvaibhav/slot/wiki/Authentic-shader)** recreate the reflective screens' colours, pixel grid, ghosting,
   and glass, with shadows from the dots and bezel. Game Boy offers Game Boy, Pocket, and
   Light models. The default bezel is cut from Harlequin's dmg-3x art, with its glass and

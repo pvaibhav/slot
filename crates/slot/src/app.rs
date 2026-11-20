@@ -4959,10 +4959,6 @@ impl App {
         self.end_link_saying(Toast::BiosMismatch);
     }
 
-    pub fn core_mismatch(&mut self) {
-        self.end_link_saying(Toast::CoreMismatch);
-    }
-
     pub fn peer_ended(&mut self) {
         self.end_link_saying(Toast::PeerEnded);
     }

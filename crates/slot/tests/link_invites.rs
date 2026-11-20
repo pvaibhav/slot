@@ -159,6 +159,18 @@ fn hosting_advertises_once_the_hotspot_is_up() {
 }
 
 #[test]
+fn hosting_on_armgba_advertises_armgba() {
+    let (mut app, _d, ble, _roles) = playing_on(Core::Armgba);
+    host(&mut app, &ble);
+    let Some(BleWant::Advertise { advert, .. }) = last_want(&ble) else {
+        unreachable!();
+    };
+    let advert = decode(&advert).expect("the advert does not decode");
+    assert_eq!(advert.core, Core::Armgba);
+    cancel(&mut app);
+}
+
+#[test]
 fn hosting_stops_advertising_when_cancelled() {
     let (mut app, _d, ble, _roles) = playing_on(Core::Gpsp);
     host(&mut app, &ble);
@@ -182,6 +194,42 @@ fn join_listens_then_joins_the_matching_host() {
     assert_eq!(app.join_target(), Some(AP));
     assert_eq!(last_want(&ble), Some(BleWant::Off));
     cancel(&mut app);
+}
+
+#[test]
+fn an_armgba_joiner_joins_an_armgba_host_without_reloading() {
+    let (mut app, d, ble, roles) = playing_on(Core::Armgba);
+    join(&mut app);
+    assert!(waiting(&app), "Join did not wait: {:?}", app.game_menu());
+    let mut heard = common::heard_host(&d, "Emerald", 7, AP, -60);
+    heard.advert.core = Core::Armgba;
+    ble.hear(heard);
+    assert!(
+        pump(&mut app, |_| !roles.lock().unwrap().is_empty()),
+        "the armGBA host was never joined"
+    );
+    assert_eq!(*roles.lock().unwrap(), vec![RadioRole::Join(AP)]);
+    assert_eq!(app.take_link_reload(), None, "armGBA reloaded its own game");
+    cancel(&mut app);
+}
+
+#[test]
+fn an_armgba_joiner_reloads_on_a_gpsp_hosts_core_before_joining() {
+    let (mut app, d, ble, roles) = playing_on(Core::Armgba);
+    join(&mut app);
+    ble.hear(common::heard_host(&d, "Emerald", 7, AP, -60));
+    assert!(
+        pump(&mut app, |a| a.link_core() == Some(Core::Gpsp)),
+        "the gpSP host was never taken up"
+    );
+    assert!(
+        app.take_link_reload().is_some(),
+        "the joiner never reloaded onto gpSP"
+    );
+    assert!(
+        roles.lock().unwrap().is_empty(),
+        "armGBA joined a gpSP host without switching"
+    );
 }
 
 #[test]
@@ -733,6 +781,28 @@ fn accepting_switches_to_the_hosts_core() {
     kid.until("the join never started", |k| !k.joined().is_empty());
     assert_eq!(kid.joined(), vec![RadioRole::Join(AP)]);
     assert_eq!(kid.s.app().join_target(), Some(AP));
+}
+
+#[test]
+fn accepting_switches_to_and_from_armgba() {
+    for (own, host) in [
+        (Core::Gpsp, Core::Armgba),
+        (Core::Mgba, Core::Armgba),
+        (Core::Armgba, Core::Mgba),
+        (Core::Armgba, Core::Gpsp),
+    ] {
+        let mut kid = emerald_on(own, Far::Waits);
+        kid.card_for(emerald_from(host));
+        kid.press(Btn::A);
+        kid.ready_on(host);
+        assert_eq!(kid.s.app().link_core(), Some(host));
+        kid.until("the join never started", |k| !k.joined().is_empty());
+        assert_eq!(
+            kid.joined(),
+            vec![RadioRole::Join(AP)],
+            "{own:?} joining {host:?}"
+        );
+    }
 }
 
 #[test]

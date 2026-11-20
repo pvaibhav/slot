@@ -452,8 +452,6 @@ impl Session {
         if self.app.link_active() {
             if self.emu.as_ref().is_some_and(EmuHandle::bios_mismatch) {
                 self.bridge_link(|app| app.bios_mismatch());
-            } else if self.emu.as_ref().is_some_and(EmuHandle::core_mismatch) {
-                self.bridge_link(|app| app.core_mismatch());
             } else if self.emu.as_ref().is_some_and(EmuHandle::peer_ended) {
                 self.bridge_link(|app| app.peer_ended());
             } else if self.emu.as_ref().is_some_and(EmuHandle::link_lost) {

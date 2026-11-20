@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 use arm::{Asm, Cond};
 use slot::app::Phase;
 use slot::audio::{AudioSink, StubSink};
-use slot::emu::{CoreState, EmuHandle, Speed};
+use slot::emu::EmuHandle;
 use slot::link_net::TcpLink;
 use slot::link_radio::{HostAp, LinkRole, RadioRole};
 use slot::link_start::LinkStarter;
@@ -368,63 +368,28 @@ fn painted(picture: &[u8], at: usize) -> u16 {
     u16::from(pixel[2] >> 3) | u16::from(pixel[1] >> 3) << 5 | u16::from(pixel[0] >> 3) << 10
 }
 
-// The device: one slot session, or for mGBA's cable the emulator thread as a session runs it.
+// The device: one slot session.
 
-enum Rig {
-    Session {
-        session: Box<Session>,
-        _root: tempfile::TempDir,
-        held: Vec<RawEvent>,
-        now: Millis,
-    },
-    Cable {
-        emu: EmuHandle,
-        player: u8,
-        _root: tempfile::TempDir,
-        connecting: Option<Receiver<TcpLink>>,
-        linked: bool,
-    },
+struct Rig {
+    session: Box<Session>,
+    _root: tempfile::TempDir,
+    held: Vec<RawEvent>,
+    now: Millis,
 }
 
 impl Rig {
     fn emu(&self) -> Option<&EmuHandle> {
-        match self {
-            Rig::Session { session, .. } => session.emu(),
-            Rig::Cable { emu, .. } => Some(emu),
-        }
+        self.session.emu()
     }
 
     fn tick(&mut self, began: Instant) {
-        let (session, held, now) = match self {
-            Rig::Session {
-                session, held, now, ..
-            } => (session, held, now),
-            Rig::Cable {
-                emu,
-                player,
-                connecting,
-                linked,
-                ..
-            } => {
-                if let Some(link) = connecting.as_ref().and_then(|rx| rx.try_recv().ok()) {
-                    emu.begin_cable(*player, Box::new(link));
-                    *connecting = None;
-                    *linked = true;
-                }
-                if *linked && (emu.peer_ended() || emu.link_lost()) {
-                    emu.end_link();
-                    *linked = false;
-                }
-                return;
-            }
-        };
         let wall = began.elapsed().as_millis() as Millis;
-        if wall < *now + 16 {
+        if wall < self.now + 16 {
             return;
         }
-        *now = wall;
-        session.feed(std::mem::take(held), *now);
-        session.update(1.0 / 60.0);
+        self.now = wall;
+        self.session.feed(std::mem::take(&mut self.held), self.now);
+        self.session.update(1.0 / 60.0);
     }
 
     /// Takes the newest frame, if one came since, into `seen`: rows 0 to 2 of the screen.
@@ -487,7 +452,7 @@ fn boot(core: Core, rom: &Path, began: Instant) -> Rig {
         root.path().to_path_buf(),
         Box::new(sink),
     ));
-    let mut rig = Rig::Session {
+    let mut rig = Rig {
         session,
         _root: root,
         held: Vec::new(),
@@ -496,54 +461,12 @@ fn boot(core: Core, rom: &Path, began: Instant) -> Rig {
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
         rig.tick(began);
-        let Rig::Session { session, .. } = &rig else {
-            unreachable!()
-        };
-        let playing = matches!(session.app().phase(), Phase::Playing { .. });
-        if playing && session.emu().is_some_and(|e| e.published_count() > 30) {
+        let playing = matches!(rig.session.app().phase(), Phase::Playing { .. });
+        if playing && rig.emu().is_some_and(|e| e.published_count() > 30) {
             return rig;
         }
         assert!(Instant::now() < deadline, "the game never started");
         std::thread::sleep(Duration::from_millis(2));
-    }
-}
-
-/// mGBA's side of a cable as slot's session drives it: the core in link mode for this player, on
-/// the emulator thread that carries the cable.
-fn boot_cable(rom: &Path, player: u8) -> Rig {
-    let root = root_with("Linked", rom, Core::Mgba);
-    let opened = slot::core::open_core(
-        root.path(),
-        Core::Mgba,
-        Platform::Gba,
-        "auto",
-        false,
-        None,
-        Some(player),
-    );
-    assert!(opened.named, "mGBA did not open");
-    let mut sink = StubSink::draining();
-    sink.open(32_768).expect("open the stub sink");
-    let emu = EmuHandle::spawn_linked(
-        opened.core,
-        rom.to_path_buf(),
-        sink.ring(),
-        None,
-        None,
-        player,
-    );
-    emu.set_speed(Speed::Normal);
-    let deadline = Instant::now() + Duration::from_secs(20);
-    while emu.state() == CoreState::Loading || emu.published_count() < 30 {
-        assert!(Instant::now() < deadline, "mGBA never started");
-        std::thread::sleep(Duration::from_millis(2));
-    }
-    Rig::Cable {
-        emu,
-        player,
-        _root: root,
-        connecting: None,
-        linked: false,
     }
 }
 
@@ -678,16 +601,8 @@ fn serve() {
         let words: Vec<&str> = line.split_whitespace().collect();
         match words.as_slice() {
             ["boot", core, rom] => {
-                let core = match *core {
-                    "armgba" => Core::Armgba,
-                    "gpsp" => Core::Gpsp,
-                    other => panic!("no core {other}"),
-                };
+                let core = Core::parse(core).expect("a core");
                 rig = Some(boot(core, Path::new(rom), began));
-                say("ready".into());
-            }
-            ["cable", rom, player] => {
-                rig = Some(boot_cable(Path::new(rom), player.parse().expect("player")));
                 say("ready".into());
             }
             ["link", role, port] => {
@@ -696,67 +611,35 @@ fn serve() {
                     _ => LinkRole::Join,
                 };
                 let port: u16 = port.parse().expect("port");
-                match rig.as_mut().expect("booted") {
-                    Rig::Session { session, .. } => {
-                        let client_id = match role {
-                            LinkRole::Host => 0,
-                            LinkRole::Join => 1,
-                        };
-                        session.app_mut().start_link(starter(role, port), client_id);
-                    }
-                    Rig::Cable { connecting, .. } => {
-                        let (tx, rx) = channel();
-                        let cancel = slot::link_net::Cancel::new();
-                        let bound = Duration::from_secs(30);
-                        std::thread::spawn(move || {
-                            let link = match role {
-                                LinkRole::Host => {
-                                    TcpLink::host_until("127.0.0.1", port, bound, &cancel)
-                                }
-                                LinkRole::Join => {
-                                    TcpLink::join_until("127.0.0.1", port, bound, &cancel)
-                                }
-                            };
-                            let _ = tx.send(link.expect("connect the cable"));
-                        });
-                        *connecting = Some(rx);
-                    }
-                }
+                let client_id = match role {
+                    LinkRole::Host => 0,
+                    LinkRole::Join => 1,
+                };
+                let session = &mut rig.as_mut().expect("booted").session;
+                session.app_mut().start_link(starter(role, port), client_id);
                 say("linking".into());
             }
             ["status"] => {
                 let r = rig.as_ref().expect("booted");
                 let emu = r.emu().expect("a running core");
-                let (linked, toast, rules) = match r {
-                    Rig::Session { session, .. } => {
-                        let app = session.app();
-                        (
-                            app.link_active(),
-                            format!("{:?}", app.toast()).replace(' ', ""),
-                            format!(
-                                "rewind={} ff={} load={}",
-                                u8::from(app.may_rewind()),
-                                u8::from(app.may_fast_forward()),
-                                u8::from(app.may_load_state()),
-                            ),
-                        )
-                    }
-                    Rig::Cable { linked, .. } => (*linked, "None".into(), String::new()),
-                };
+                let app = r.session.app();
                 say(format!(
-                    "linked={} live={} lost={} ended={} mismatch={} toast={toast} speed={:?} {rules}",
-                    u8::from(linked),
+                    "linked={} live={} lost={} ended={} toast={} speed={:?} rewind={} ff={} load={}",
+                    u8::from(app.link_active()),
                     u8::from(emu.net().is_active()),
                     u8::from(emu.link_lost()),
                     u8::from(emu.peer_ended()),
-                    u8::from(emu.core_mismatch()),
+                    format!("{:?}", app.toast()).replace(' ', ""),
                     emu.observed_speed(),
+                    u8::from(app.may_rewind()),
+                    u8::from(app.may_fast_forward()),
+                    u8::from(app.may_load_state()),
                 ));
             }
             ["press", name] | ["release", name] => {
                 let btn = button(name);
-                if let Some(Rig::Session { held, .. }) = rig.as_mut() {
-                    held.push(match words[0] {
+                if let Some(r) = rig.as_mut() {
+                    r.held.push(match words[0] {
                         "press" => RawEvent::Down(btn),
                         _ => RawEvent::Up(btn),
                     });
@@ -772,9 +655,7 @@ fn serve() {
                     vec![RawEvent::Up(Btn::A)],
                 ];
                 for events in steps {
-                    if let Rig::Session { held, .. } = r {
-                        held.extend(events);
-                    }
+                    r.held.extend(events);
                     let until = Instant::now() + Duration::from_millis(50);
                     while Instant::now() < until {
                         r.tick(began);
@@ -1537,78 +1418,6 @@ fn a_session_outlives_its_peer_leaving_cleanly_or_not_and_links_again() {
 
 fn save_of(d: &mut Device) -> String {
     d.ask("sav")
-}
-
-/// A device on another core: armGBA turns it down, and both play on alone with their saves.
-fn refused_by_armgba(armgba_hosts: bool, other: impl FnOnce(&Path) -> Device) {
-    let game = rom("multiplayer", "SLOT MULTI", multiplayer(1, 0));
-    let mut a = Device::booted("armgba", "armgba", &game);
-    let mut o = other(&game);
-    let saves = (save_of(&mut a), save_of(&mut o));
-    let port = common::free_port();
-    let began = Instant::now();
-    match armgba_hosts {
-        true => {
-            a.ask(&format!("link host {port}"));
-            o.ask(&format!("link join {port}"));
-        }
-        false => {
-            o.ask(&format!("link host {port}"));
-            a.ask(&format!("link join {port}"));
-        }
-    }
-    let refused = a.wait_for("the refusal", Duration::from_secs(15), |s| {
-        s.text("toast") == "Some(CoreMismatch)"
-    });
-    eprintln!("armGBA refused after {} ms", began.elapsed().as_millis());
-    assert!(!refused.on("linked") && !refused.on("live"), "{refused:?}");
-    o.wait_for("the other end ending it", Duration::from_secs(15), |s| {
-        !s.on("linked") && !s.on("live")
-    });
-    watch_both(&mut a, &mut o, 1000);
-    let (aw, ow) = watch_both(&mut a, &mut o, 2000);
-    assert!(per_second(&aw, "frames") >= 55.0, "armGBA stopped: {aw:?}");
-    assert!(
-        per_second(&ow, "frames") >= 55.0,
-        "the other core stopped: {ow:?}"
-    );
-    assert_eq!(
-        aw.num("transfers"),
-        0,
-        "armGBA linked to another core: {aw:?}"
-    );
-    assert_eq!(aw.num("errors"), 0, "{aw:?}");
-    assert_eq!((save_of(&mut a), save_of(&mut o)), saves, "a save changed");
-}
-
-#[test]
-fn armgba_turns_down_a_gpsp_device_and_both_play_on() {
-    let _g = common::core_lock();
-    if !armgba() || vendored(Core::Gpsp).is_none() {
-        return;
-    }
-    for armgba_hosts in [true, false] {
-        refused_by_armgba(armgba_hosts, |game| Device::booted("gpsp", "gpsp", game));
-    }
-}
-
-#[test]
-fn armgba_turns_down_an_mgba_cable_and_both_play_on() {
-    let _g = common::core_lock();
-    if !armgba() || vendored(Core::Mgba).is_none() {
-        return;
-    }
-    for armgba_hosts in [true, false] {
-        let player = if armgba_hosts { 1 } else { 0 };
-        refused_by_armgba(armgba_hosts, |game| {
-            let mut d = Device::spawn("mgba");
-            assert_eq!(
-                d.ask(&format!("cable {} {player}", game.display())),
-                "ready"
-            );
-            d
-        });
-    }
 }
 
 #[test]
