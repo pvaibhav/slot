@@ -10362,11 +10362,21 @@ impl App {
                 return;
             }
             Core::Armgba => {
-                let needs = match wireless() {
-                    true => Toast::NeedsGpsp,
-                    false => Toast::NeedsMgba,
+                let refused = match self.platform {
+                    Platform::Gba if self.wireless_only() => Some(Toast::NeedsGpsp),
+                    Platform::Gba => None,
+                    Platform::Gb | Platform::Gbc => Some(Toast::NeedsMgba),
+                    Platform::Gbav => Some(Toast::NoLink),
+                    #[cfg(feature = "nds")]
+                    Platform::Nds => Some(Toast::NoLink),
                 };
-                self.hud.toast(needs, self.now());
+                if let Some(toast) = refused {
+                    self.hud.toast(toast, self.now());
+                    return;
+                }
+                self.link_hardware = LinkKind::Cable;
+                self.radio.ask(RadioJob::Warm);
+                self.game_menu = Some(GameMenu::Pick(self.last_role));
                 return;
             }
             Core::Mgba => {
@@ -10405,6 +10415,15 @@ impl App {
         self.link_hardware = hardware;
         self.radio.ask(RadioJob::Warm);
         self.game_menu = Some(GameMenu::Pick(self.last_role));
+    }
+
+    /// Whether the seated game links only over the Wireless Adapter, which only gpSP carries.
+    fn wireless_only(&self) -> bool {
+        self.seated()
+            .and_then(|stem| self.auto_link(stem))
+            .is_some_and(|(cart, auto)| {
+                auto == LinkKind::Wireless && !link_dual(&cart.code, &cart.title)
+            })
     }
 
     fn game_menu_shortcut(&mut self) {
@@ -14113,33 +14132,44 @@ impl App {
             return;
         };
         let loaded = self.link_loaded.unwrap_or("auto");
-        if self.core == Core::Mgba {
-            let player = role.client_id() as u8;
-            if self.link_player == Some(player) {
+        match self.core {
+            Core::Armgba => {
                 return self.start_link(
                     LinkStarter::spawn(role.role(), link_port()),
                     role.client_id(),
                 );
             }
-            if self.snapshot.as_ref().is_some_and(|s| !s.resume_trusted()) {
-                return self.refuse();
+            Core::Mgba => {
+                let player = role.client_id() as u8;
+                if self.link_player == Some(player) {
+                    return self.start_link(
+                        LinkStarter::spawn(role.role(), link_port()),
+                        role.client_id(),
+                    );
+                }
+                if self.snapshot.as_ref().is_some_and(|s| !s.resume_trusted()) {
+                    return self.refuse();
+                }
+                self.link_player = Some(player);
+                self.link_reload = Some((stem.clone(), loaded));
+                self.reload = Some(Reload {
+                    stem,
+                    role,
+                    cancelled: false,
+                    from: self.link_hardware,
+                    from_serial: loaded,
+                    fallback: false,
+                });
+                self.game_menu = Some(GameMenu::Working {
+                    role,
+                    step: LinkStep::Radio,
+                    since: self.now(),
+                });
+                return;
             }
-            self.link_player = Some(player);
-            self.link_reload = Some((stem.clone(), loaded));
-            self.reload = Some(Reload {
-                stem,
-                role,
-                cancelled: false,
-                from: self.link_hardware,
-                from_serial: loaded,
-                fallback: false,
-            });
-            self.game_menu = Some(GameMenu::Working {
-                role,
-                step: LinkStep::Radio,
-                since: self.now(),
-            });
-            return;
+            Core::Gpsp | Core::Gambatte => {}
+            #[cfg(feature = "nds")]
+            Core::Dsperate => {}
         }
         let (_, serial) = self.link_mode(&stem);
         if serial == loaded {
