@@ -15734,8 +15734,25 @@ impl App {
         ) else {
             return;
         };
+        let was =
+            slot_store::core_for_platform(&root, &cart.stem, cart.platform, self.state.gb_core);
         if let Err(e) = slot_store::write_selected_core(&root, cart.platform, &cart.stem, core) {
             eprintln!("slot: core: could not write selected_core.txt: {e}");
+            return;
+        }
+        if was == core {
+            return;
+        }
+        let stamp = format_stamp(self.wall_secs());
+        match persist::retire_resume_older_than_sav(&root, cart.platform, core, &cart.stem, &stamp)
+        {
+            Ok(Some(to)) => eprintln!(
+                "slot: core: the save is newer than the {} resume, moved it to {}",
+                core.as_str(),
+                to.display()
+            ),
+            Ok(None) => {}
+            Err(e) => eprintln!("slot: core: could not move the resume aside: {e}"),
         }
     }
 

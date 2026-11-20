@@ -98,6 +98,12 @@ impl StateRing {
         self.path(RESUME, STATE_EXT).is_file()
     }
 
+    pub fn resume_modified(&self) -> Option<std::time::SystemTime> {
+        std::fs::metadata(self.path(RESUME, STATE_EXT))
+            .and_then(|m| m.modified())
+            .ok()
+    }
+
     pub fn retire_resume(&self, stamp: &str) -> std::io::Result<Option<PathBuf>> {
         let from = self.path(RESUME, STATE_EXT);
         if !from.exists() {

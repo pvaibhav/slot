@@ -2560,3 +2560,47 @@ fn authentic_trades_the_game_boys_colour_and_palette_rows_for_a_model() {
         Some(slot_ui::BezelArt::AuthenticGb { pocket: true })
     );
 }
+
+fn move_emerald_to_mgba(sav_after_resume: Duration) -> (tempfile::TempDir, slot_store::StateRing) {
+    let (d, mut app) = on_shelf(&["Emerald", "Zzz"]);
+    fake_picker_faces(&mut app);
+    let ring = slot_store::StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald");
+    ring.write_resume(b"an mgba resume").unwrap();
+    let sav = d.path().join("Saves/GBA/Emerald.sav");
+    std::fs::create_dir_all(sav.parent().unwrap()).unwrap();
+    std::fs::write(&sav, b"a save").unwrap();
+    let resumed = ring.resume_modified().unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&sav)
+        .unwrap()
+        .set_modified(resumed + sav_after_resume)
+        .unwrap();
+    app.apply(Action::GbaDown(Btn::Start));
+    app.apply(Action::GbaDown(Btn::Left));
+    app.apply(Action::GbaDown(Btn::A));
+    assert_eq!(
+        slot_store::core_for_platform(d.path(), "Emerald", Platform::Gba, Core::Mgba),
+        Core::Mgba
+    );
+    (d, ring)
+}
+
+#[test]
+fn moving_a_game_to_a_core_sets_aside_its_resume_from_before_the_save() {
+    let (_d, ring) = move_emerald_to_mgba(Duration::from_secs(3600));
+    assert_eq!(
+        ring.read_resume().unwrap(),
+        None,
+        "a resume older than the save would load that save's old contents over it"
+    );
+}
+
+#[test]
+fn moving_a_game_to_a_core_keeps_a_resume_flushed_with_the_save() {
+    let (_d, ring) = move_emerald_to_mgba(Duration::from_secs(1));
+    assert_eq!(
+        ring.read_resume().unwrap().as_deref(),
+        Some(&b"an mgba resume"[..])
+    );
+}
