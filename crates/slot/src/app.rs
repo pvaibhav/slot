@@ -5715,7 +5715,7 @@ impl App {
             game_crc: *crc,
             core: self.core,
             bios_crc: bios_of(bios, self.core),
-            kind: self.link_mode(&cart.stem).0,
+            kind: self.link_hardware,
             freq_mhz: ap.freq_mhz,
             bssid: ap.bssid,
             platform: cart.platform.hardware(),

@@ -31,8 +31,14 @@ fn ap(last: u8) -> HostAp {
 type Roles = Arc<Mutex<Vec<RadioRole>>>;
 
 fn playing_on(core: Core) -> (App, TempDir, FakeBleRemote, Roles) {
+    playing_cart_on(core, |d| {
+        common::write_hack_header(d, "Emerald", "POKEMON EMER", "BPEE")
+    })
+}
+
+fn playing_cart_on(core: Core, header: impl Fn(&TempDir)) -> (App, TempDir, FakeBleRemote, Roles) {
     let d = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
-    common::write_hack_header(&d, "Emerald", "POKEMON EMER", "BPEE");
+    header(&d);
     let mut app = common::boot(d.path());
     app.apply(Action::Insert);
     app.set_core(core);
@@ -159,14 +165,21 @@ fn hosting_advertises_once_the_hotspot_is_up() {
 }
 
 #[test]
-fn hosting_on_armgba_advertises_armgba() {
-    let (mut app, _d, ble, _roles) = playing_on(Core::Armgba);
+fn hosting_on_armgba_advertises_armgba_and_its_cable() {
+    let (mut app, _d, ble, _roles) = playing_cart_on(Core::Armgba, |d| {
+        common::write_retail_header(d, "Emerald", "POKEMON EMER", "BPEE")
+    });
     host(&mut app, &ble);
     let Some(BleWant::Advertise { advert, .. }) = last_want(&ble) else {
         unreachable!();
     };
     let advert = decode(&advert).expect("the advert does not decode");
     assert_eq!(advert.core, Core::Armgba);
+    assert_eq!(
+        advert.kind,
+        slot::link_kind::LinkKind::Cable,
+        "armGBA advertised a link it has no adapter for"
+    );
     cancel(&mut app);
 }
 
