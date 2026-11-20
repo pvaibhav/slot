@@ -1,5 +1,5 @@
 use slot_store::{Cart, Outline, Platform, ShellChoice, ShellFinish};
-use slot_ui::{bare_face, cart_face};
+use slot_ui::bare_face;
 
 fn gba(finish: ShellFinish) -> Cart {
     Cart {
@@ -15,6 +15,7 @@ fn gba(finish: ShellFinish) -> Cart {
         }),
         title: "PROBE".into(),
         sealed: false,
+        tags: Vec::new(),
     }
 }
 
@@ -27,7 +28,8 @@ fn overlay(base: u8, color: u8) -> i32 {
 }
 
 fn neutral_at(x: u32, y: u32) -> [u8; 3] {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/gba_neutral.png");
+    let path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/gba_neutral.png");
     let mut dec = png::Decoder::new(std::io::BufReader::new(std::fs::File::open(path).unwrap()));
     dec.set_transformations(png::Transformations::normalize_to_color8());
     let mut reader = dec.read_info().unwrap();
@@ -40,7 +42,12 @@ fn neutral_at(x: u32, y: u32) -> [u8; 3] {
 
 fn at(face: &slot_ui::CartFace, x: u32, y: u32) -> [u8; 4] {
     let i = ((y * face.w + x) * 4) as usize;
-    [face.rgba[i], face.rgba[i + 1], face.rgba[i + 2], face.rgba[i + 3]]
+    [
+        face.rgba[i],
+        face.rgba[i + 1],
+        face.rgba[i + 2],
+        face.rgba[i + 3],
+    ]
 }
 
 #[test]
@@ -63,8 +70,16 @@ fn bare_well_on_a_clear_shell_is_see_through() {
 
 #[test]
 fn labelled_faces_keep_the_label() {
-    let face = cart_face(&gba(ShellFinish::Solid));
-    let bare = bare_face(&gba(ShellFinish::Solid));
+    let cart = gba(ShellFinish::Solid);
+    let face = slot_ui::cart_face_with(&cart, Some(sheet(&cart, [250, 250, 250])));
+    let bare = bare_face(&cart);
     assert_ne!(at(&face, 180, 118), at(&bare, 180, 118));
     assert_eq!(at(&face, 10, 100), at(&bare, 10, 100));
+}
+
+fn sheet(cart: &slot_store::Cart, rgb: [u8; 3]) -> Vec<u8> {
+    let (w, h) = slot_ui::label_size(cart);
+    (0..w * h)
+        .flat_map(|_| [rgb[0], rgb[1], rgb[2], 255])
+        .collect()
 }

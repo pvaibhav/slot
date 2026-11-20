@@ -1,8 +1,8 @@
 #![cfg(target_os = "macos")]
 
 use slot::print_scene::{
-    print_art, print_draws, stage_art, PaperJob, PrintArtState, PrintArtWorker, PrintFrame, PrintScene,
-    PrintTextures,
+    print_art, print_draws, stage_art, PaperJob, PrintArtState, PrintArtWorker, PrintFrame,
+    PrintScene, PrintTextures,
 };
 use slot::server::qr_modules;
 use slot_gfx::{paper_bounds, Canvas, Compositor, Draw, HeadlessSurface, OUT_H, OUT_W};
@@ -495,9 +495,13 @@ fn the_slide_carries_the_whole_scene_up() {
     };
     let whole = r.shot(&still);
     let slid = r.shot(&half);
-    let row = |px: &[u8], y: usize| px[y * OUT_W as usize * 4..(y + 1) * OUT_W as usize * 4].to_vec();
+    let row =
+        |px: &[u8], y: usize| px[y * OUT_W as usize * 4..(y + 1) * OUT_W as usize * 4].to_vec();
     assert_eq!(row(&slid, 0), row(&whole, OUT_H as usize / 2));
-    assert_ne!(row(&slid, OUT_H as usize - 1), row(&whole, OUT_H as usize - 1));
+    assert_ne!(
+        row(&slid, OUT_H as usize - 1),
+        row(&whole, OUT_H as usize - 1)
+    );
 }
 
 #[test]

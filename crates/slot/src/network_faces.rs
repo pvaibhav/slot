@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use slot_gfx::{Compositor, TexId};
 use slot_ui::{
     footer_ink, keyboard_cap_faces, keyboard_faces, keyboard_text_face, menu_detail_face,
-    menu_face, net_bars_face, net_lock_face, prompt_legends, quick_value_face, toast_face_text,
-    pair_face, pair_text_width, Keyboard, NetFace, NetIcons, NetLine, Toast, UndoFace,
+    menu_face, net_bars_face, net_lock_face, pair_face, pair_text_width, prompt_legends,
+    quick_value_face, toast_face_text, Keyboard, NetFace, NetIcons, NetLine, Toast, UndoFace,
 };
 
 use crate::app::{App, NetLegends, PairFaces, PairView};
@@ -206,7 +206,13 @@ impl NetworkSync {
             .url
             .as_deref()
             .and_then(|url| crate::romm::qr::qr_rgba(url, slot_ui::PAIR_QR))
-            .map(|(rgba, side)| up(&UndoFace { rgba, w: side, h: side }));
+            .map(|(rgba, side)| {
+                up(&UndoFace {
+                    rgba,
+                    w: side,
+                    h: side,
+                })
+            });
         let max_w = pair_text_width(app.canvas());
         let lines = now
             .lines

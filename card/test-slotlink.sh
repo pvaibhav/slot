@@ -26,7 +26,7 @@ make_fake() {
 }
 
 reset() {
-	rm -rf "$TMP/net" "$TMP/run" "$TMP/ctrl" "$TMP"/*.log "$TMP/bin"
+	rm -rf "$TMP/bt" "$TMP/net" "$TMP/run" "$TMP/ctrl" "$TMP"/*.log "$TMP/bin"
 	mkdir -p "$TMP/net/wlan0" "$TMP/net/wlan1" "$TMP/run" "$TMP/ctrl" "$TMP/modules" "$TMP/bin"
 	: > "$TMP/modules/8821cs.ko"
 	if [ "$1" = yes ]; then
@@ -41,6 +41,10 @@ reset() {
 	make_fake insmod "$TMP/mod.log"
 	make_fake legacy "$TMP/legacy.log"
 	make_fake udhcpc "$TMP/dhcp.log"
+	make_fake rtk_hciattach "$TMP/hciattach.log"
+	make_fake hciconfig "$TMP/hciconfig.log"
+	echo 02:11:22:33:44:55 > "$TMP/net/wlan1/address"
+	mkdir -p "$TMP/bt/hci0"
 	printf 'network={\n\tssid="Home"\n\tpsk="hunter22"\n}\n' > "$TMP/wifi.conf"
 }
 
@@ -51,7 +55,8 @@ run() {
 		AGS_CTRL_DIR="$TMP/ctrl" AGS_PROC_MODULES="$TMP/proc-modules" \
 		AGS_WPA_SUPPLICANT="$TMP/bin/wpa_supplicant" AGS_WPA_CLI="$TMP/bin/wpa_cli" \
 		AGS_IP="$TMP/bin/ip" AGS_INSMOD="$TMP/bin/insmod" AGS_UDHCPC="$TMP/bin/udhcpc" \
-		AGS_RFKILL="$TMP/bin/rfkill" AGS_LINK_TRACE="$TMP/trace.log" \
+		AGS_RFKILL="$TMP/bin/rfkill" AGS_RTK_HCIATTACH="$TMP/bin/rtk_hciattach" \
+		AGS_HCICONFIG="$TMP/bin/hciconfig" AGS_BT_SYS="$TMP/bt" AGS_LINK_TRACE="$TMP/trace.log" \
 		AGS_LINK_WAIT_S="${WAIT_S:-1}" AGS_LINK_PIN_WAIT_S="${WAIT_S:-1}" \
 		sh "$SCRIPT" "$@"
 }
@@ -60,7 +65,10 @@ reset yes
 run absent link host && rc=0 || rc=$?
 [ "$rc" = 0 ] || fail "host exited $rc"
 grep -q 'ap_scan=2' "$TMP/run/slotlink-ap.conf" || fail "host AP scans before starting"
-grep -q 'frequency=5745' "$TMP/run/slotlink-ap.conf" || fail "host AP not on 5745"
+grep -E -q '^(5180|5200|5220|5240|5745|5765|5785|5805|5825) ..:..:..:..:..:..$' "$TMP/run/slotlink.ap" || fail "host wrote no channel and BSSID"
+ap_freq=$(cut -d' ' -f1 "$TMP/run/slotlink.ap")
+grep -q "frequency=$ap_freq\$" "$TMP/run/slotlink-ap.conf" || fail "host AP not on the published channel"
+grep -q ' 02:11:22:33:44:55$' "$TMP/run/slotlink.ap" || fail "host published the wrong BSSID"
 grep -q 'mode=2' "$TMP/run/slotlink-ap.conf" || fail "host config is not an AP"
 grep -q 'addr add 10.42.0.1/24 dev wlan1' "$TMP/ip.log" || fail "host not addressed"
 [ -f "$TMP/run/slotlink.session" ] || fail "host left no session mark"
@@ -99,28 +107,35 @@ grep -q 'the first attempt' "$TMP/trace.log" && fail "a sixth link kept the olde
 
 reset yes
 rm -rf "$TMP/net/wlan0"
-run absent link join && rc=0 || rc=$?
+run absent link join 5180 02:11:22:33:44:55 && rc=0 || rc=$?
 [ "$rc" = 1 ] || fail "join with no wlan0 exited $rc, want 1"
 grep -q 'join: no wlan0' "$TMP/trace.log" || fail "a missing wlan0 left no reason in the trace"
 
 reset yes
-run absent link join && rc=0 || rc=$?
+run absent link join 5180 02:11:22:33:44:55 && rc=0 || rc=$?
 [ "$rc" = 0 ] || fail "join exited $rc"
-grep -q 'scan_freq=5745' "$TMP/run/slotlink-sta.conf" || fail "join not pinned"
+grep -q 'bssid=02:11:22:33:44:55' "$TMP/run/slotlink-sta.conf" || fail "join not pinned to the BSSID"
+grep -q 'scan_freq=5180' "$TMP/run/slotlink-sta.conf" || fail "join not pinned to the channel"
+grep -q 'freq_list=5180' "$TMP/run/slotlink-sta.conf" || fail "join has no freq_list"
 grep -q 'addr add 10.42.0.2/24 dev wlan0' "$TMP/ip.log" || fail "join not addressed"
 
 reset yes
 export FAKE_STATE=SCANNING
-run absent link join && rc=0 || rc=$?
+run absent link join 5180 02:11:22:33:44:55 && rc=0 || rc=$?
 unset FAKE_STATE
 [ "$rc" = 3 ] || fail "join with no host exited $rc, want 3"
-[ "$(grep -c -- '-i wlan0' "$TMP/sup.log")" = 2 ] || fail "join did not make two attempts"
+[ "$(grep -c -- '-i wlan0' "$TMP/sup.log")" = 1 ] || fail "join did not make exactly one attempt"
 
 reset yes
-run absent link join >/dev/null
+run absent link join && rc=0 || rc=$?
+[ "$rc" = 2 ] || fail "join with no arguments exited $rc, want 2"
+
+reset yes
+run absent link join 5180 02:11:22:33:44:55 >/dev/null
+run absent link host >/dev/null
 run absent link down && rc=0 || rc=$?
 [ "$rc" = 0 ] || fail "down exited $rc"
-for f in slotlink-ap.conf slotlink-sta.conf slotlink.session; do
+for f in slotlink.ap slotlink-ap.conf slotlink-sta.conf slotlink.session; do
 	[ -e "$TMP/run/$f" ] && fail "down left $f"
 done
 
@@ -136,7 +151,7 @@ run absent link warm >/dev/null || true
 reset yes
 make_fake wpa_cli "$TMP/cli.log" 'sleep 0.3' 'echo "wpa_state=SCANNING"'
 t0=$(date +%s)
-run absent link join >/dev/null && rc=0 || rc=$?
+run absent link join 5180 02:11:22:33:44:55 >/dev/null && rc=0 || rc=$?
 t1=$(date +%s)
 [ "$rc" = 3 ] || fail "slow join exited $rc, want 3"
 [ $((t1 - t0)) -le 4 ] || fail "a 2 s join took $((t1 - t0)) s with a slow wpa_cli"
@@ -150,7 +165,7 @@ grep -q terminate "$TMP/cli.log" || fail "a link left the wifi supplicant on wla
 
 reset yes
 run absent wifi start "$TMP/wifi.conf" >/dev/null
-run absent link join >/dev/null
+run absent link join 5180 02:11:22:33:44:55 >/dev/null
 : > "$TMP/cli.log"
 : > "$TMP/ip.log"
 run absent wifi stop && rc=0 || rc=$?
@@ -196,6 +211,19 @@ run absent wifi off && rc=0 || rc=$?
 grep -q terminate "$TMP/cli.log" || fail "wifi off left the supplicant running"
 grep -q 'link set wlan0 down' "$TMP/ip.log" || fail "wifi off left wlan0 up"
 grep -q 'block wifi' "$TMP/rfkill.log" || fail "wifi off did not block wifi"
+
+reset yes
+run absent bt up && rc=0 || rc=$?
+[ "$rc" = 0 ] || fail "bt up exited $rc"
+grep -q 'unblock bluetooth' "$TMP/rfkill.log" || fail "bt up did not unblock bluetooth"
+grep -q 'hci0 up' "$TMP/hciconfig.log" || fail "bt up did not raise hci0"
+grep -q 'ttyS1 rtk_h5' "$TMP/hciattach.log" || fail "bt up did not attach the controller"
+
+reset yes
+run absent bt down && rc=0 || rc=$?
+[ "$rc" = 0 ] || fail "bt down exited $rc"
+grep -q 'hci0 down' "$TMP/hciconfig.log" || fail "bt down did not lower hci0"
+grep -q 'block bluetooth' "$TMP/rfkill.log" || fail "bt down did not block bluetooth"
 
 reset yes
 run absent link sideways 2>/dev/null && rc=0 || rc=$?

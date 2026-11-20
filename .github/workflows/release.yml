@@ -9,8 +9,25 @@ permissions:
   contents: read
 
 jobs:
+  checked:
+    name: tag made by task tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Refuse a tag whose commit did not pass task tag
+        if: github.ref_type == 'tag'
+        run: |
+          set -eu
+          git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+          if ! git cat-file tag "refs/tags/${GITHUB_REF_NAME}" | grep -qx "Checked: ${GITHUB_SHA}"; then
+            echo "::error::${GITHUB_REF_NAME} was not made by task tag, so its checks never ran on ${GITHUB_SHA}"
+            exit 1
+          fi
+
   build:
     name: card tree
+    needs: checked
     runs-on: ubuntu-24.04-arm
     container: rust:1-bullseye
     outputs:

@@ -1,4 +1,4 @@
-use slot::studio::{Row, Screen, Studio, Target};
+use slot::studio::{LabelKind, Row, Screen, Studio, Target};
 use slot::studio_view::{layout, view, Align, Item, Style};
 use slot_input::Btn;
 use slot_store::{Cart, Platform};
@@ -13,6 +13,7 @@ fn cart(platform: Platform) -> Cart {
         code: String::new(),
         shell: None,
         sealed: false,
+        tags: Vec::new(),
     }
 }
 
@@ -40,7 +41,11 @@ fn right_edge(items: &[Item]) -> f32 {
     items
         .iter()
         .filter_map(|i| match i {
-            Item::Text { x, align: Align::Right, .. } => Some(*x),
+            Item::Text {
+                x,
+                align: Align::Right,
+                ..
+            } => Some(*x),
             Item::Chip { x, .. } => Some(*x + 48.0),
             Item::Rect { x, w, .. } if *w > 4.0 => Some(*x + *w),
             _ => None,
@@ -73,7 +78,12 @@ fn margins_match_on_both_screens() {
 fn the_cart_is_centered_above_the_footer() {
     let v = view(&gba(), 720.0);
     let l = layout(720.0, Platform::Gba);
-    assert!(((2.0 * l.cart_y + l.cart_h) - 422.0).abs() <= 1.0, "{} {}", l.cart_y, l.cart_h);
+    assert!(
+        ((2.0 * l.cart_y + l.cart_h) - 422.0).abs() <= 1.0,
+        "{} {}",
+        l.cart_y,
+        l.cart_h
+    );
     assert!(v.items.iter().any(|i| matches!(i, Item::Cart)));
 }
 
@@ -113,13 +123,31 @@ fn hex_has_six_digits_and_a_hash_with_no_arrows() {
     let t = texts(&v.items);
     assert!(t.contains(&"Shell Hex".to_string()));
     assert!(t.contains(&"#".to_string()));
-    let digits = v.items.iter().filter(|i| matches!(i, Item::Text { style: Style::Digit | Style::DigitOn, .. })).count();
+    let digits = v
+        .items
+        .iter()
+        .filter(|i| {
+            matches!(
+                i,
+                Item::Text {
+                    style: Style::Digit | Style::DigitOn,
+                    ..
+                }
+            )
+        })
+        .count();
     assert_eq!(digits, 6);
 }
 
 #[test]
 fn an_empty_sheet_says_why() {
-    let mut s = Studio::new(Cart { label: None, ..cart(Platform::Gba) }, true);
+    let mut s = Studio::new(
+        Cart {
+            label: None,
+            ..cart(Platform::Gba)
+        },
+        true,
+    );
     s.press(Btn::A);
     s.art_arrived(false, false);
     assert!(texts(&view(&s, 720.0).items).contains(&"No Art Found".to_string()));
@@ -136,12 +164,21 @@ fn chips_scroll_to_keep_the_highlight_on_screen() {
     for at in [0, last] {
         s.chips_jump(at);
         let items = view(&s, 720.0).items;
-        let chips: Vec<_> = items.iter().filter_map(|i| match i {
-            Item::Chip { y, selected, .. } => Some((*y, *selected)),
-            _ => None,
-        }).collect();
-        assert!(chips.iter().any(|c| c.1), "selected chip {at} is off screen");
-        assert!(chips.iter().all(|c| c.0 >= 60.0 && c.0 + 48.0 <= 422.0), "{chips:?}");
+        let chips: Vec<_> = items
+            .iter()
+            .filter_map(|i| match i {
+                Item::Chip { y, selected, .. } => Some((*y, *selected)),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            chips.iter().any(|c| c.1),
+            "selected chip {at} is off screen"
+        );
+        assert!(
+            chips.iter().all(|c| c.0 >= 60.0 && c.0 + 48.0 <= 422.0),
+            "{chips:?}"
+        );
     }
 }
 
@@ -185,7 +222,11 @@ fn the_tilted_cart_art_sits_on_the_margin() {
                     }
                 }
             }
-            assert!((seen - l.margin).abs() <= 5.0, "{platform:?} {w}: {seen} vs {}", l.margin);
+            assert!(
+                (seen - l.margin).abs() <= 5.0,
+                "{platform:?} {w}: {seen} vs {}",
+                l.margin
+            );
         }
     }
 }
@@ -194,8 +235,14 @@ fn the_tilted_cart_art_sits_on_the_margin() {
 fn turning_keeps_the_pivot_and_the_size() {
     use slot::studio_view::turned;
     let c = turned([0.0, 0.0, 100.0, 50.0], [50.0, 25.0], 90.0);
-    assert!((c[0][0] - 75.0).abs() < 0.01 && (c[0][1] + 25.0).abs() < 0.01, "{c:?}");
-    assert!((c[2][0] - 25.0).abs() < 0.01 && (c[2][1] - 75.0).abs() < 0.01, "{c:?}");
+    assert!(
+        (c[0][0] - 75.0).abs() < 0.01 && (c[0][1] + 25.0).abs() < 0.01,
+        "{c:?}"
+    );
+    assert!(
+        (c[2][0] - 25.0).abs() < 0.01 && (c[2][1] - 75.0).abs() < 0.01,
+        "{c:?}"
+    );
 }
 
 #[test]
@@ -210,15 +257,15 @@ fn an_empty_sheet_of_duplicates_says_so() {
 }
 
 #[test]
-fn a_worn_label_with_nothing_new_shows_the_text_sticker() {
+fn a_worn_label_with_nothing_new_says_so_beside_the_marker() {
     let mut s = gba();
     to_row(&mut s, Row::Label);
     s.press(Btn::A);
     s.duplicates = true;
     s.art_arrived(false, false);
     let items = view(&s, 720.0).items;
-    assert!(!texts(&items).contains(&"No New Labels".to_string()));
-    assert!(items.iter().any(|i| matches!(i, Item::Sheet)));
+    assert!(texts(&items).contains(&"No New Labels".to_string()));
+    assert_eq!(s.sheet, vec![LabelKind::Hand]);
 }
 
 #[test]
@@ -238,11 +285,20 @@ fn the_hex_row_clears_the_tilted_cart() {
         let mut s = gba();
         to_row(&mut s, Row::Color);
         s.press(Btn::A);
-        s.screen = Screen::Hex { target: Target::Shell, digits: [0; 6], pos: 0, start: [0; 3] };
-        let rects: Vec<f32> = view(&s, w).items.into_iter().filter_map(|i| match i {
-            Item::Rect { x, .. } => Some(x),
-            _ => None,
-        }).collect();
+        s.screen = Screen::Hex {
+            target: Target::Shell,
+            digits: [0; 6],
+            pos: 0,
+            start: [0; 3],
+        };
+        let rects: Vec<f32> = view(&s, w)
+            .items
+            .into_iter()
+            .filter_map(|i| match i {
+                Item::Rect { x, .. } => Some(x),
+                _ => None,
+            })
+            .collect();
         let left = rects[0] - (rects[1] - rects[0]);
         assert!(left >= l.edge, "{w}: {left} vs {}", l.edge);
     }
@@ -255,7 +311,11 @@ fn gb_spacing_is_even_around_the_stickers() {
             let l = layout(w, platform);
             let t = slot::studio_view::tray(w, &cart(platform));
             let gap = t.printer_x - l.edge;
-            assert!((gap - l.margin).abs() <= 3.0, "{w} {platform:?}: {gap} vs {}", l.margin);
+            assert!(
+                (gap - l.margin).abs() <= 3.0,
+                "{w} {platform:?}: {gap} vs {}",
+                l.margin
+            );
             assert!(l.margin > 20.0, "{w} {platform:?}");
         }
     }
@@ -266,11 +326,21 @@ fn open_rows_are_names_and_inline_rows_carry_a_value_and_dots() {
     let s = Studio::new(cart(Platform::Gb), true);
     let items = view(&s, 720.0).items;
     let t = texts(&items);
-    for name in ["Label Printer", "Shell Color", "Finish", "Shape", "Solid", "Automatic"] {
+    for name in [
+        "Label Printer",
+        "Shell Color",
+        "Finish",
+        "Shape",
+        "Solid",
+        "Automatic",
+    ] {
         assert!(t.contains(&name.to_string()), "{name}: {t:?}");
     }
     assert_eq!(t.len(), 6, "{t:?}");
-    let dots = items.iter().filter(|i| matches!(i, Item::Dot { .. })).count();
+    let dots = items
+        .iter()
+        .filter(|i| matches!(i, Item::Dot { .. }))
+        .count();
     assert_eq!(dots, 6);
 }
 
@@ -293,10 +363,13 @@ fn the_list_centers_beside_the_cart() {
         }
     }
     assert!(((top + low) / 2.0 - 211.0).abs() <= 10.0, "{top} {low}");
-    let dots: Vec<f32> = items.iter().filter_map(|i| match i {
-        Item::Dot { x, size, .. } => Some(x + size / 2.0),
-        _ => None,
-    }).collect();
+    let dots: Vec<f32> = items
+        .iter()
+        .filter_map(|i| match i {
+            Item::Dot { x, size, .. } => Some(x + size / 2.0),
+            _ => None,
+        })
+        .collect();
     assert!((dots[1] - mid).abs() < 0.5, "{dots:?}");
 }
 
@@ -306,10 +379,13 @@ fn the_picked_row_is_marked_by_bright_text_alone() {
     s.press(Btn::Down);
     let items = view(&s, 720.0).items;
     assert!(!items.iter().any(|i| matches!(i, Item::Rect { .. })));
-    let lit: Vec<&str> = items.iter().filter_map(|i| match i {
-        Item::Text { text, alpha, .. } if *alpha == 1.0 => Some(text.as_str()),
-        _ => None,
-    }).collect();
+    let lit: Vec<&str> = items
+        .iter()
+        .filter_map(|i| match i {
+            Item::Text { text, alpha, .. } if *alpha == 1.0 => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
     assert_eq!(lit.len(), 1, "{lit:?}");
 }
 
@@ -320,12 +396,19 @@ fn the_longest_name_fits_the_column() {
             let s = Studio::new(cart(platform), true);
             let items = view(&s, w).items;
             let band = w - layout(w, platform).edge - 16.0;
-            let scale = items.iter().find_map(|i| match i {
-                Item::Text { text, scale, .. } if text == "Label Printer" => Some(*scale),
-                _ => None,
-            }).unwrap();
+            let scale = items
+                .iter()
+                .find_map(|i| match i {
+                    Item::Text { text, scale, .. } if text == "Label Printer" => Some(*scale),
+                    _ => None,
+                })
+                .unwrap();
             let face = slot_ui::heading_face("Label Printer");
-            assert!(face.w as f32 * scale <= band - 8.0, "{w} {platform:?}: {} in {band}", face.w as f32 * scale);
+            assert!(
+                face.w as f32 * scale <= band - 8.0,
+                "{w} {platform:?}: {} in {band}",
+                face.w as f32 * scale
+            );
         }
     }
 }
@@ -336,17 +419,28 @@ fn the_color_screen_has_a_scrollbar_that_tracks_the_chip() {
         let mut s = gba();
         to_row(&mut s, Row::Color);
         s.press(Btn::A);
-        s.screen = Screen::Chips { target: Target::Shell, at };
-        let rects: Vec<(f32, f32, f32)> = view(&s, 720.0).items.into_iter().filter_map(|i| match i {
-            Item::Rect { x, y, h, .. } if x >= 700.0 => Some((x, y, h)),
-            _ => None,
-        }).collect();
+        s.screen = Screen::Chips {
+            target: Target::Shell,
+            at,
+        };
+        let rects: Vec<(f32, f32, f32)> = view(&s, 720.0)
+            .items
+            .into_iter()
+            .filter_map(|i| match i {
+                Item::Rect { x, y, h, .. } if x >= 700.0 => Some((x, y, h)),
+                _ => None,
+            })
+            .collect();
         assert_eq!(rects.len(), 2, "track and thumb");
         assert_eq!(rects[0].0, 708.0);
-        let chips = view(&s, 720.0).items.iter().filter_map(|i| match i {
-            Item::Chip { x, .. } => Some(*x + 48.0),
-            _ => None,
-        }).fold(0.0, f32::max);
+        let chips = view(&s, 720.0)
+            .items
+            .iter()
+            .filter_map(|i| match i {
+                Item::Chip { x, .. } => Some(*x + 48.0),
+                _ => None,
+            })
+            .fold(0.0, f32::max);
         assert!(rects[0].0 - chips >= 12.0, "{chips}");
         (rects[0], rects[1])
     };
@@ -355,7 +449,10 @@ fn the_color_screen_has_a_scrollbar_that_tracks_the_chip() {
     assert!(top.2 < track.2);
     let last = slot_ui::palette::chip_grid(0.0, 0.0).len() - 1;
     let (track, end) = bar(last);
-    assert!((end.1 + end.2 - (track.1 + track.2)).abs() < 0.5, "{end:?} {track:?}");
+    assert!(
+        (end.1 + end.2 - (track.1 + track.2)).abs() < 0.5,
+        "{end:?} {track:?}"
+    );
 }
 
 #[test]
@@ -364,12 +461,23 @@ fn the_chips_clear_the_tilted_cart() {
         for platform in [Platform::Gba, Platform::Gb] {
             let l = layout(w, platform);
             let mut s = Studio::new(cart(platform), true);
-            s.screen = Screen::Chips { target: Target::Shell, at: 0 };
-            let left = view(&s, w).items.iter().filter_map(|i| match i {
-                Item::Chip { x, .. } => Some(*x),
-                _ => None,
-            }).fold(f32::MAX, f32::min);
-            assert!(left - l.edge >= 19.0, "{w} {platform:?}: {left} vs {}", l.edge);
+            s.screen = Screen::Chips {
+                target: Target::Shell,
+                at: 0,
+            };
+            let left = view(&s, w)
+                .items
+                .iter()
+                .filter_map(|i| match i {
+                    Item::Chip { x, .. } => Some(*x),
+                    _ => None,
+                })
+                .fold(f32::MAX, f32::min);
+            assert!(
+                left - l.edge >= 19.0,
+                "{w} {platform:?}: {left} vs {}",
+                l.edge
+            );
         }
     }
 }
@@ -378,7 +486,12 @@ fn the_chips_clear_the_tilted_cart() {
 fn gba_stickers_get_room_between_them() {
     for w in [720.0, 640.0] {
         let t = slot::studio_view::tray(w, &cart(Platform::Gba));
-        assert!(t.bottom - t.slip_h >= 24.0, "{w}: {} {}", t.bottom, t.slip_h);
+        assert!(
+            t.bottom - t.slip_h >= 24.0,
+            "{w}: {} {}",
+            t.bottom,
+            t.slip_h
+        );
         assert!(slot::studio_view::TRAY_TOP + t.bottom + t.slip_h <= 414.0);
     }
 }
@@ -389,7 +502,12 @@ fn custom_stays_between_the_cart_and_the_right_margin() {
         for platform in [Platform::Gba, Platform::Gb] {
             let l = layout(w, platform);
             let mut s = Studio::new(cart(platform), true);
-            s.screen = Screen::Custom { target: Target::Shell, rgb: [255, 0, 128], channel: 0, start: [255, 0, 128] };
+            s.screen = Screen::Custom {
+                target: Target::Shell,
+                rgb: [255, 0, 128],
+                channel: 0,
+                start: [255, 0, 128],
+            };
             let items = view(&s, w).items;
             let mut low = f32::MAX;
             let mut high = f32::MIN;
@@ -399,13 +517,28 @@ fn custom_stays_between_the_cart_and_the_right_margin() {
                         low = low.min(*x);
                         high = high.max(*x + *width);
                     }
-                    Item::Text { align: Align::Left, x, .. } => low = low.min(*x),
-                    Item::Text { align: Align::Right, x, .. } => high = high.max(*x),
+                    Item::Text {
+                        align: Align::Left,
+                        x,
+                        ..
+                    } => low = low.min(*x),
+                    Item::Text {
+                        align: Align::Right,
+                        x,
+                        ..
+                    } => high = high.max(*x),
                     _ => {}
                 }
             }
-            assert!(low - l.edge >= 19.0, "{w} {platform:?}: {low} vs {}", l.edge);
-            assert!((high - (w - l.margin)).abs() < 0.01, "{w} {platform:?}: {high}");
+            assert!(
+                low - l.edge >= 19.0,
+                "{w} {platform:?}: {low} vs {}",
+                l.edge
+            );
+            assert!(
+                (high - (w - l.margin)).abs() < 0.01,
+                "{w} {platform:?}: {high}"
+            );
         }
     }
 }
@@ -416,12 +549,24 @@ fn hex_ends_on_the_right_margin() {
         for platform in [Platform::Gba, Platform::Gb] {
             let l = layout(w, platform);
             let mut s = Studio::new(cart(platform), true);
-            s.screen = Screen::Hex { target: Target::Shell, digits: [0; 6], pos: 0, start: [0; 3] };
-            let high = view(&s, w).items.iter().filter_map(|i| match i {
-                Item::Rect { x, w, .. } => Some(*x + *w),
-                _ => None,
-            }).fold(f32::MIN, f32::max);
-            assert!((high - (w - l.margin)).abs() < 0.01, "{w} {platform:?}: {high}");
+            s.screen = Screen::Hex {
+                target: Target::Shell,
+                digits: [0; 6],
+                pos: 0,
+                start: [0; 3],
+            };
+            let high = view(&s, w)
+                .items
+                .iter()
+                .filter_map(|i| match i {
+                    Item::Rect { x, w, .. } => Some(*x + *w),
+                    _ => None,
+                })
+                .fold(f32::MIN, f32::max);
+            assert!(
+                (high - (w - l.margin)).abs() < 0.01,
+                "{w} {platform:?}: {high}"
+            );
         }
     }
 }
@@ -429,9 +574,16 @@ fn hex_ends_on_the_right_margin() {
 #[test]
 fn the_current_label_chip_names_the_color_it_opened_with() {
     let mut s = gba();
-    let (name, red) = slot_ui::shell_presets().into_iter().next().map(|(n, p)| (n, p.colour)).unwrap();
+    let (name, red) = slot_ui::shell_presets()
+        .into_iter()
+        .next()
+        .map(|(n, p)| (n, p.colour))
+        .unwrap();
     s.adopt_logo(red);
-    s.screen = Screen::Chips { target: Target::Label, at: 0 };
+    s.screen = Screen::Chips {
+        target: Target::Label,
+        at: 0,
+    };
     assert!(texts(&view(&s, 720.0).items).contains(&name.to_string()));
 }
 
@@ -440,13 +592,135 @@ fn the_color_name_clears_the_footer_on_every_layout() {
     for w in [720.0f32, 640.0] {
         for platform in [Platform::Gba, Platform::Gb] {
             let mut s = Studio::new(cart(platform), true);
-            s.screen = Screen::Chips { target: Target::Shell, at: 1 };
+            s.screen = Screen::Chips {
+                target: Target::Shell,
+                at: 1,
+            };
             let items = view(&s, w).items;
-            let (y, scale) = items.iter().find_map(|i| match i {
-                Item::Text { text, y, scale, .. } if text == "Automatic" => Some((*y, *scale)),
-                _ => None,
-            }).unwrap();
+            let (y, scale) = items
+                .iter()
+                .find_map(|i| match i {
+                    Item::Text { text, y, scale, .. } if text == "Automatic" => Some((*y, *scale)),
+                    _ => None,
+                })
+                .unwrap();
             assert!(y + 24.0 * scale <= 422.0, "{w} {platform:?}: {y} {scale}");
         }
     }
+}
+
+fn apart(a: &[[f32; 2]; 4], b: &[[f32; 2]; 4]) -> bool {
+    [a, b].iter().any(|quad| {
+        (0..4).any(|i| {
+            let [p, q] = [quad[i], quad[(i + 1) % 4]];
+            let axis = [q[1] - p[1], p[0] - q[0]];
+            let span = |pts: &[[f32; 2]; 4]| {
+                let d: Vec<f32> = pts
+                    .iter()
+                    .map(|v| v[0] * axis[0] + v[1] * axis[1])
+                    .collect();
+                let lo = d.iter().cloned().fold(f32::MAX, f32::min);
+                let hi = d.iter().cloned().fold(f32::MIN, f32::max);
+                (lo, hi)
+            };
+            let (a_lo, a_hi) = span(a);
+            let (b_lo, b_hi) = span(b);
+            a_hi <= b_lo || b_hi <= a_lo
+        })
+    })
+}
+
+#[test]
+fn the_resting_marker_and_cap_touch_nothing() {
+    use slot::studio_view::{layout, marker_rest, tray, turned, CART_TILT};
+    let units = slot_ui::hand::MARKER_H as f32;
+    let [cap_top, cap_end] = slot_ui::hand::MARKER_CAP;
+    for platform in [Platform::Gba, Platform::Gb, Platform::Gbc] {
+        for w in [720.0, 640.0] {
+            let c = cart(platform);
+            let l = layout(w, platform);
+            let t = tray(w, &c);
+            let rest = marker_rest(w, &c);
+            let thick = rest.len * slot_ui::hand::MARKER_W as f32 / units;
+            let unit = rest.len / units;
+            let body = turned(
+                [
+                    rest.at[0] - thick / 2.0,
+                    rest.at[1] - rest.len / 2.0,
+                    thick,
+                    rest.len,
+                ],
+                rest.at,
+                rest.deg,
+            );
+            let cap = turned(
+                [
+                    rest.cap[0] - thick / 2.0,
+                    rest.cap[1] - rest.len / 2.0 + cap_top * unit,
+                    thick,
+                    (cap_end - cap_top) * unit,
+                ],
+                rest.cap,
+                rest.cap_deg,
+            );
+            let centre = [l.cart_x + l.cart_w / 2.0, l.cart_y + l.cart_h / 2.0];
+            let shell = turned([l.cart_x, l.cart_y, l.cart_w, l.cart_h], centre, CART_TILT);
+            let column = [
+                [t.printer_x, 0.0],
+                [w, 0.0],
+                [w, 480.0],
+                [t.printer_x, 480.0],
+            ];
+            assert!(apart(&body, &cap), "{platform:?} {w}: body on cap");
+            for (name, quad) in [("body", &body), ("cap", &cap)] {
+                assert!(apart(quad, &shell), "{platform:?} {w}: {name} on the cart");
+                assert!(
+                    apart(quad, &column),
+                    "{platform:?} {w}: {name} on the labels"
+                );
+                for [x, y] in quad {
+                    assert!(
+                        *x >= 0.0 && *y >= 10.0 && *y <= 414.0,
+                        "{platform:?} {w}: {name} off the mat at {x},{y}"
+                    );
+                }
+            }
+            assert!(
+                rest.len > 150.0,
+                "{platform:?} {w}: marker only {}",
+                rest.len
+            );
+        }
+    }
+}
+
+#[test]
+fn the_empty_printer_note_sits_under_the_printer_clear_of_the_marker() {
+    for platform in [Platform::Gba, Platform::Gb] {
+        for w in [640.0, 720.0] {
+            let mut s = Studio::new(cart(platform), false);
+            s.press(Btn::A);
+            let t = slot::studio_view::tray(w, &s.cart);
+            let x = view(&s, w)
+                .items
+                .iter()
+                .find_map(|i| match i {
+                    Item::Text { text, x, .. } if text == "No Connection" => Some(*x),
+                    _ => None,
+                })
+                .expect("no note");
+            assert_eq!(x, t.printer_x + t.printer_w / 2.0, "{platform:?} at {w}");
+        }
+    }
+}
+
+#[test]
+fn a_worn_label_with_no_art_found_says_there_are_no_other_labels() {
+    let mut s = gba();
+    to_row(&mut s, Row::Label);
+    s.press(Btn::A);
+    s.art_arrived(false, false);
+    let texts = texts(&view(&s, 720.0).items);
+    assert!(texts.contains(&"No Other Labels".to_string()), "{texts:?}");
+    assert!(!texts.contains(&"No Art Found".to_string()));
 }

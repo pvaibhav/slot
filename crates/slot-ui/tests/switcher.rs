@@ -2,9 +2,7 @@ use std::path::Path;
 
 use slot_gfx::{Draw, OUT_H, OUT_W};
 use slot_store::{StateEntry, RING_MAX};
-use slot_ui::{
-    hint_face, hint_width, Gauge, Polaroids, Printed, DOT, HINT_H, LEGEND, PLATE_H,
-};
+use slot_ui::{hint_face, hint_width, Gauge, Polaroids, Printed, DOT, HINT_H, LEGEND, PLATE_H};
 
 fn entry(stamp: &str) -> StateEntry {
     StateEntry {
@@ -56,7 +54,11 @@ fn quads(out: &[Draw]) -> Vec<Quad> {
             Draw::Turned {
                 x, y, w, h, alpha, ..
             } => Quad { x, y, w, h, alpha },
-            Draw::Game | Draw::Shot { .. } | Draw::Capture | Draw::Quad { .. } | Draw::Paper { .. } => Quad {
+            Draw::Game
+            | Draw::Shot { .. }
+            | Draw::Capture
+            | Draw::Quad { .. }
+            | Draw::Paper { .. } => Quad {
                 x: 0.0,
                 y: 0.0,
                 w: OUT_W as f32,

@@ -1,5 +1,5 @@
-use slot_gfx::{Canvas, Draw, TexId};
 use crate::battery::Gauge;
+use slot_gfx::{Canvas, Draw, TexId};
 use slot_store::{parse_stamp, StateEntry};
 
 use crate::art;
@@ -130,13 +130,7 @@ impl Polaroids {
         self.index = (self.index + 1).min(self.entries.len().saturating_sub(1));
     }
 
-    pub fn draw(
-        &self,
-        gauge: Gauge,
-        bolt: Option<TexId>,
-        clock: Printed,
-        out: &mut Vec<Draw>,
-    ) {
+    pub fn draw(&self, gauge: Gauge, bolt: Option<TexId>, clock: Printed, out: &mut Vec<Draw>) {
         self.draw_photo(Canvas::FRAMED, out);
         self.draw_chrome(Canvas::FRAMED, gauge, bolt, clock, out);
     }

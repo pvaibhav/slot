@@ -15,6 +15,7 @@ fn app_playing(stem: &str) -> App {
         shell: None,
         title: stem.to_uppercase(),
         sealed: false,
+        tags: Vec::new(),
     }]);
     a.apply(Action::Insert);
     a.on_core_ready();

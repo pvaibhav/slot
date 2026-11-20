@@ -139,18 +139,27 @@ pub fn draw_wifi_icon(
 
 pub const KID_ICON_PX: f32 = 20.0;
 
+pub fn kid_icon_by_clock(canvas: Canvas) -> bool {
+    canvas.w * 3.0 <= canvas.h * 4.0 + 0.5
+}
+
 pub fn draw_kid_icon(
     canvas: Canvas,
     gauge: Gauge,
     wifi: Option<(TexId, u32, u32)>,
+    clock: Printed,
     face: Option<(TexId, u32, u32)>,
     out: &mut Vec<Draw>,
 ) {
     let Some((tex, w, h)) = face else {
         return;
     };
-    let after_wifi = wifi.map_or(0.0, |(_, ww, _)| ww as f32 + WIFI_GAP);
-    let x = FOOTER_MARGIN + gauge.row_w() + WIFI_GAP + after_wifi;
+    let x = if kid_icon_by_clock(canvas) {
+        canvas.w - FOOTER_MARGIN - clock.w as f32 - WIFI_GAP - w as f32
+    } else {
+        let after_wifi = wifi.map_or(0.0, |(_, ww, _)| ww as f32 + WIFI_GAP);
+        FOOTER_MARGIN + gauge.row_w() + WIFI_GAP + after_wifi
+    };
     let y = footer_y(canvas) + (HINT_H as f32 - h as f32) / 2.0;
     out.push(Draw::Tex {
         x: x.round(),

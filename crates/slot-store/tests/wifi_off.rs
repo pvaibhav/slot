@@ -20,3 +20,30 @@ fn wifi_off_round_trips_and_is_absent_by_default() {
         .any(|l| l == "wifi_off=1"));
     assert!(read_slot_state(d.path()).wifi_off);
 }
+
+#[test]
+fn a_nickname_round_trips() {
+    let d = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(d.path().join("Config")).unwrap();
+    let named = SlotState {
+        nickname: "Dad".into(),
+        ..SlotState::default()
+    };
+    write_slot_state(d.path(), &named).unwrap();
+    let path = d.path().join("Config/slot.state");
+    assert!(std::fs::read_to_string(&path)
+        .unwrap()
+        .lines()
+        .any(|l| l == "nickname=Dad"));
+    assert_eq!(read_slot_state(d.path()).nickname, "Dad");
+}
+
+#[test]
+fn an_empty_nickname_writes_no_line() {
+    let d = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(d.path().join("Config")).unwrap();
+    write_slot_state(d.path(), &SlotState::default()).unwrap();
+    let path = d.path().join("Config/slot.state");
+    assert!(!std::fs::read_to_string(&path).unwrap().contains("nickname"));
+    assert_eq!(read_slot_state(d.path()).nickname, "");
+}

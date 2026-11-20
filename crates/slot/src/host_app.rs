@@ -1,8 +1,8 @@
 use std::time::{Duration, Instant};
 
+use slot::app::BottomSource;
 use slot::frontend::Frontend;
 use slot::input::HostInput;
-use slot::app::BottomSource;
 use slot::screen::Screen;
 use slot_gfx::{ds_rect, Compositor, DsPass, DsScreen, HostSurface, Surface};
 use slot_power::SimPlatform;
@@ -50,7 +50,9 @@ impl ApplicationHandler for Slot {
             }
         };
         if surface.panel_count() > 1 {
-            self.ds = DsPass::new().map_err(|e| eprintln!("slot: ds pass: {e}")).ok();
+            self.ds = DsPass::new()
+                .map_err(|e| eprintln!("slot: ds pass: {e}"))
+                .ok();
             self.frontend.set_two_panels(self.ds.is_some());
         }
         self.frontend.upload_faces(&mut compositor);
@@ -72,7 +74,11 @@ impl ApplicationHandler for Slot {
                 self.pointer = Some((position.x, position.y));
             }
             WindowEvent::CursorLeft { .. } if on_bottom => self.pointer = None,
-            WindowEvent::MouseInput { state, button: winit::event::MouseButton::Left, .. } if on_bottom => {
+            WindowEvent::MouseInput {
+                state,
+                button: winit::event::MouseButton::Left,
+                ..
+            } if on_bottom => {
                 self.pressed = state.is_pressed();
             }
             WindowEvent::RedrawRequested if !on_bottom => {

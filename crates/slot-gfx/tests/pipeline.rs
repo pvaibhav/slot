@@ -1730,6 +1730,7 @@ fn an_authentic_game_boy_fades_like_its_lcd_and_clears_slower_than_it_darkens() 
     c.fit((OUT_W, OUT_H));
     c.set_screen_effect(ScreenEffect::Authentic);
     c.set_authentic_screen(Screen::Dmg);
+    c.set_frame_blend(FrameBlend::Ghosting);
     c.set_screen_power(1.0);
     let (white, black) = (flat_shot([0xff; 3]), flat_shot([0; 3]));
     // A game pixel's middle, away from the gaps between dots.
@@ -1760,6 +1761,48 @@ fn an_authentic_game_boy_fades_like_its_lcd_and_clears_slower_than_it_darkens() 
         lit - darkening,
         clearing - dark
     );
+}
+
+#[test]
+fn authentic_blends_frames_as_chosen_and_redraws_the_choice_while_paused() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    c.fit((OUT_W, OUT_H));
+    c.set_screen_effect(ScreenEffect::Authentic);
+    c.set_authentic_screen(Screen::Dmg);
+    c.set_screen_power(1.0);
+    let [black, gray, white] = [0, 128, 255].map(|level| flat_shot([level; 3]));
+    let draw = |c: &mut Compositor| {
+        c.begin_frame();
+        c.draw_game();
+        px(&c.read_frame(), 361, 241)[1]
+    };
+    let [dark, half, lit] = [&black, &gray, &white].map(|frame| {
+        c.upload_game(frame);
+        draw(&mut c)
+    });
+    let modes = [FrameBlend::Off, FrameBlend::Mix, FrameBlend::Ghosting];
+    let [off, mixed, ghosted] = modes.map(|blend| {
+        c.set_frame_blend(blend);
+        c.cut_frame_blend();
+        c.upload_game(&black);
+        c.upload_game(&white);
+        draw(&mut c)
+    });
+    assert_eq!(off, lit);
+    assert!(
+        mixed.abs_diff(half) <= 1,
+        "Mix drew {mixed}, half is {half}"
+    );
+    assert!(
+        dark < ghosted && ghosted < mixed && mixed < lit,
+        "expected the DMG to clear slowly: dark {dark}, Ghosting {ghosted}, Mix {mixed}, lit {lit}"
+    );
+    for (blend, expected) in modes.into_iter().zip([off, mixed, ghosted]) {
+        c.set_frame_blend(blend);
+        assert_eq!(draw(&mut c), expected, "paused {blend:?}");
+    }
 }
 
 #[test]
@@ -1809,6 +1852,11 @@ fn blended(blend: FrameBlend, screen: Screen, frames: &[[u8; 3]]) -> Option<Vec<
     c.set_game_source_rect(WHOLE);
     c.set_screen_effect(ScreenEffect::None);
     c.set_authentic_screen(screen);
+    c.set_lcd(match screen {
+        Screen::Gba => slot_gfx::Lcd::Gba,
+        Screen::Gbc => slot_gfx::Lcd::Gbc,
+        _ => slot_gfx::Lcd::Dmg,
+    });
     c.set_frame_blend(blend);
     c.set_screen_power(1.0);
     let shown = frames
@@ -1891,11 +1939,13 @@ fn blending_a_still_picture_leaves_it_as_sharp_as_no_blending() {
     };
     c.fit((OUT_W, OUT_H));
     c.set_game_source_rect(WHOLE);
-    c.set_screen_effect(ScreenEffect::None);
+    c.set_authentic_screen(Screen::Dmg);
     c.set_screen_power(1.0);
     let stripes = every_fourth_column_lit();
-    let mut drawn = |blend: FrameBlend| {
+    let mut drawn = |effect: ScreenEffect, blend: FrameBlend| {
+        c.set_screen_effect(effect);
         c.set_frame_blend(blend);
+        c.cut_frame_blend();
         for _ in 0..30 {
             c.begin_frame();
             c.upload_game(&stripes);
@@ -1903,12 +1953,18 @@ fn blending_a_still_picture_leaves_it_as_sharp_as_no_blending() {
         }
         c.read_window((OUT_W, OUT_H))
     };
-    let off = drawn(FrameBlend::Off);
-    for blend in [FrameBlend::Mix, FrameBlend::Ghosting] {
-        assert!(
-            drawn(blend) == off,
-            "{blend:?} drew a still picture differently"
-        );
+    let plain = drawn(ScreenEffect::None, FrameBlend::Off);
+    for effect in [ScreenEffect::Authentic, ScreenEffect::None] {
+        let off = drawn(effect, FrameBlend::Off);
+        if effect == ScreenEffect::None {
+            assert!(off == plain, "switching from Authentic changed the picture");
+        }
+        for blend in [FrameBlend::Mix, FrameBlend::Ghosting] {
+            assert!(
+                drawn(effect, blend) == off,
+                "{effect:?} with {blend:?} drew a still picture differently"
+            );
+        }
     }
 }
 

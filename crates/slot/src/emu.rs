@@ -105,7 +105,6 @@ struct Shared {
     state: AtomicU8,
     rewind: AtomicBool,
     rewind_fill: AtomicU8,
-    turbo: AtomicBool,
     recording: AtomicBool,
     stop: AtomicBool,
     volume: AtomicU8,
@@ -189,7 +188,6 @@ impl EmuHandle {
             state: AtomicU8::new(CoreState::Loading as u8),
             rewind: AtomicBool::new(false),
             rewind_fill: AtomicU8::new(0),
-            turbo: AtomicBool::new(true),
             recording: AtomicBool::new(true),
             stop: AtomicBool::new(false),
             volume: AtomicU8::new(100),
@@ -443,10 +441,6 @@ impl EmuHandle {
         if self.shared.rewind.swap(on, Ordering::Relaxed) != on {
             self.wake();
         }
-    }
-
-    pub fn set_turbo(&self, on: bool) {
-        self.shared.turbo.store(on, Ordering::Relaxed);
     }
 
     pub fn set_rewind_recording(&self, on: bool) {
@@ -858,11 +852,7 @@ impl Worker {
                     ran += 1;
                     let last = ran >= ceiling
                         || (speed == Speed::Fast && cost.last(began.elapsed(), budget));
-                    let input = match self.shared.turbo.load(Ordering::Relaxed) {
-                        true => mask_for(core.takes_xy(), input, turbo_frame),
-                        false if core.takes_xy() => input,
-                        false => input.without_turbo(),
-                    };
+                    let input = mask_for(core.takes_xy(), input, turbo_frame);
                     turbo_frame = turbo_frame.wrapping_add(1);
                     core.set_frame_skip(!last);
                     let frame_began = Instant::now();

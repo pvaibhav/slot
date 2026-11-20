@@ -119,9 +119,7 @@ pub fn step(grid: &[Placed], at: usize, dir: Dir) -> usize {
                     })
                 });
             row.and_then(|y| {
-                along(y).min_by(|a, b| {
-                    (a.1.x - here.x).abs().total_cmp(&(b.1.x - here.x).abs())
-                })
+                along(y).min_by(|a, b| (a.1.x - here.x).abs().total_cmp(&(b.1.x - here.x).abs()))
             })
             .map_or(at, |(i, _)| i)
         }

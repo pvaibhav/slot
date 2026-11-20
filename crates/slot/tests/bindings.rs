@@ -360,8 +360,12 @@ fn shortcuts_are_set_from_the_main_menu_and_saved_for_every_game_at_once() {
     step(&mut s, &mut now, &[RawEvent::Up(Btn::X)]);
     step(&mut s, &mut now, &[RawEvent::Up(Btn::Select)]);
     assert!(!s.app().capturing());
-    assert_eq!(s.app().quick_menu(), Some(QuickRow::ScSave));
-    tap(&mut s, &mut now, Btn::Down);
+    common::reach(
+        &mut s,
+        QuickRow::ScLoad,
+        |s| s.app().quick_menu(),
+        |s| tap(s, &mut now, Btn::Down),
+    );
     tap(&mut s, &mut now, Btn::A);
     step(&mut s, &mut now, &[RawEvent::Down(Btn::Select)]);
     step(&mut s, &mut now, &[RawEvent::Up(Btn::Select)]);
@@ -522,7 +526,11 @@ fn a_shelf_key_pair_switches_shelves_only_with_both_held() {
     let (mut s, mut now) = on_shelf(d.path());
     let before = s.app().shelf_platform_name().map(str::to_string);
     tap(&mut s, &mut now, Btn::R2);
-    assert_eq!(s.app().shelf_platform_name(), before.as_deref(), "R2 alone switched");
+    assert_eq!(
+        s.app().shelf_platform_name(),
+        before.as_deref(),
+        "R2 alone switched"
+    );
     step(&mut s, &mut now, &[RawEvent::Down(Btn::R2)]);
     step(&mut s, &mut now, &[RawEvent::Down(Btn::X)]);
     step(&mut s, &mut now, &[RawEvent::Up(Btn::X)]);
@@ -530,15 +538,18 @@ fn a_shelf_key_pair_switches_shelves_only_with_both_held() {
     for _ in 0..25 {
         step(&mut s, &mut now, &[]);
     }
-    assert_ne!(s.app().shelf_platform_name(), before.as_deref(), "R2+X did not switch");
+    assert_ne!(
+        s.app().shelf_platform_name(),
+        before.as_deref(),
+        "R2+X did not switch"
+    );
 }
 
 #[test]
 fn a_shortcut_pair_reaches_the_gestures_as_a_pair() {
     let mut keys = ShortcutKeys::default();
     keys.set(Shortcut::SaveState, Binding::pair(Device::R1, Device::L1));
-    let table =
-        slot::input::Table::new(&Controls::default(), &keys, &CarouselKeys::default(), true);
+    let table = slot::input::Table::new(&Controls::default(), &keys, &CarouselKeys::default());
     assert!(table.entries().iter().any(|e| e.chord
         == slot_input::Chord {
             modifier: Some(slot_input::Mod::Button(Btn::L1)),
@@ -582,8 +593,7 @@ fn a_start_pair_clashes_only_with_a_single_on_start() {
     );
     keys.set(Shortcut::FastForward, Binding::plain(Device::L2));
     keys.set(Shortcut::Rewind, Binding::plain(Device::R2));
-    let table =
-        slot::input::Table::new(&Controls::default(), &keys, &CarouselKeys::default(), true);
+    let table = slot::input::Table::new(&Controls::default(), &keys, &CarouselKeys::default());
     for row in [
         QuickRow::ScPaletteBack,
         QuickRow::ScPaletteNext,
@@ -597,8 +607,7 @@ fn a_start_pair_clashes_only_with_a_single_on_start() {
         );
     }
     keys.set(Shortcut::Rewind, Binding::plain(Device::Start));
-    let table =
-        slot::input::Table::new(&Controls::default(), &keys, &CarouselKeys::default(), true);
+    let table = slot::input::Table::new(&Controls::default(), &keys, &CarouselKeys::default());
     assert!(
         table.clash(QuickRow::ScRewind).is_some(),
         "START alone does block a START pair"
@@ -610,8 +619,7 @@ fn an_unordered_pair_still_clashes_with_a_single_on_either_button() {
     let mut keys = ShortcutKeys::default();
     keys.set(Shortcut::SaveState, Binding::pair(Device::L1, Device::R1));
     keys.set(Shortcut::Rewind, Binding::plain(Device::R1));
-    let table =
-        slot::input::Table::new(&Controls::default(), &keys, &CarouselKeys::default(), true);
+    let table = slot::input::Table::new(&Controls::default(), &keys, &CarouselKeys::default());
     assert_eq!(table.clash(QuickRow::ScSave), Some(QuickRow::ScRewind));
 }
 
@@ -663,8 +671,12 @@ fn a_shelf_key_is_only_checked_against_shelf_keys() {
     }
     tap(&mut s, &mut now, Btn::A);
     tap(&mut s, &mut now, Btn::A);
-    tap(&mut s, &mut now, Btn::Down);
-    assert_eq!(s.app().quick_menu(), Some(QuickRow::ShelfNext));
+    common::reach(
+        &mut s,
+        QuickRow::ShelfNext,
+        |s| s.app().quick_menu(),
+        |s| tap(s, &mut now, Btn::Down),
+    );
     tap(&mut s, &mut now, Btn::A);
     step(&mut s, &mut now, &[RawEvent::Down(Btn::B)]);
     step(&mut s, &mut now, &[RawEvent::Up(Btn::B)]);
@@ -688,8 +700,7 @@ fn a_shelf_key_led_by_start_needs_start_first() {
         CarouselAction::Favorite,
         Binding::pair(Device::Start, Device::A),
     );
-    let table =
-        slot::input::Table::new(&Controls::default(), &ShortcutKeys::default(), &keys, true);
+    let table = slot::input::Table::new(&Controls::default(), &ShortcutKeys::default(), &keys);
     let shelf = || {
         let mut g = slot_input::Gestures::new();
         g.set_entries(table.entries());
@@ -802,22 +813,66 @@ fn brightness_on_a_shelf_key_does_both_on_the_shelf_and_is_flagged() {
 }
 
 #[test]
-fn with_turbo_off_its_rows_are_hidden_and_never_flagged() {
+fn a_card_with_turbo_off_unbinds_both_turbo_buttons_once() {
     let mut keys = ShortcutKeys::default();
     keys.set(Shortcut::SaveState, Binding::plain(Device::X));
     let d = shelf_card();
     write_shortcuts(d.path(), &keys).expect("write shortcuts");
+    let state_file = d.path().join("Config/slot.state");
+    let text = std::fs::read_to_string(&state_file).expect("read slot.state");
+    let text: String = text
+        .lines()
+        .filter(|l| !l.starts_with("turbo="))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    std::fs::write(&state_file, format!("{text}turbo=0\n")).expect("write slot.state");
+
     let (s, _) = on_shelf(d.path());
-    assert_eq!(s.app().clash(QuickRow::ScSave), Some(QuickRow::GameTurboA));
-    let mut state = slot_store::read_slot_state(d.path());
-    state.turbo = false;
-    slot_store::write_slot_state(d.path(), &state).expect("write slot.state");
-    let (s, _) = on_shelf(d.path());
+    for g in [GameButton::TurboA, GameButton::TurboB] {
+        assert_eq!(
+            read_controls(d.path()).game(g),
+            None,
+            "{g:?} still bound on the card"
+        );
+    }
     for row in [QuickRow::GameTurboA, QuickRow::GameTurboB] {
-        assert!(s.app().hidden_rows().contains(&row), "{row:?} is shown");
+        assert!(!s.app().hidden_rows().contains(&row), "{row:?} is hidden");
         assert_eq!(s.app().clash(row), None);
     }
     assert_eq!(s.app().clash(QuickRow::ScSave), None);
+    let text = std::fs::read_to_string(&state_file).expect("read slot.state");
+    assert!(
+        !text.lines().any(|l| l.starts_with("turbo=")),
+        "the old switch is still on the card, so the next boot would unbind again"
+    );
+    drop(s);
+
+    let mut controls = read_controls(d.path());
+    controls.set_game(GameButton::TurboA, Binding::plain(Device::L2));
+    slot_store::write_controls(d.path(), &controls).expect("write controls");
+    let (_s, _) = on_shelf(d.path());
+    assert_eq!(
+        read_controls(d.path()).game(GameButton::TurboA),
+        Binding::plain(Device::L2),
+        "a later boot undid the player's own turbo binding"
+    );
+}
+
+#[test]
+fn a_card_with_turbo_on_keeps_turbo_on_x_and_y() {
+    let d = shelf_card();
+    let state_file = d.path().join("Config/slot.state");
+    let text = std::fs::read_to_string(&state_file).unwrap_or_default();
+    std::fs::write(&state_file, format!("{text}turbo=1\n")).expect("write slot.state");
+    let (_s, _) = on_shelf(d.path());
+    assert_eq!(
+        read_controls(d.path()).game(GameButton::TurboA),
+        Binding::plain(Device::X)
+    );
+    assert_eq!(
+        read_controls(d.path()).game(GameButton::TurboB),
+        Binding::plain(Device::Y)
+    );
 }
 
 #[test]
@@ -826,7 +881,6 @@ fn select_x_in_game_is_the_screenshot_action() {
         &Controls::default(),
         &ShortcutKeys::default(),
         &CarouselKeys::default(),
-        true,
     );
     assert!(table.entries().iter().any(|e| e.chord
         == slot_input::Chord {
@@ -885,8 +939,10 @@ fn collection_defaults_reach_the_shelf_as_actions() {
         }
     );
     assert_eq!(next.contexts, slot_input::Contexts::SHELF);
-    assert!(!entries.iter().any(|e| e.chord.modifier == Some(slot_input::Mod::Select)
-        && e.contexts == slot_input::Contexts::SHELF));
+    assert!(!entries
+        .iter()
+        .any(|e| e.chord.modifier == Some(slot_input::Mod::Select)
+            && e.contexts == slot_input::Contexts::SHELF));
     for row in QuickRow::COLLECTION_KEYS {
         assert_eq!(s.app().clash(row), None, "{row:?} clashes by default");
     }
@@ -905,7 +961,12 @@ fn reset_all_on_the_collections_page_leaves_the_shelf_page_alone() {
         tap(&mut s, &mut now, Btn::Down);
     }
     tap(&mut s, &mut now, Btn::A);
-    tap(&mut s, &mut now, Btn::Down);
+    common::reach(
+        &mut s,
+        QuickRow::ControlsCollections,
+        |s| s.app().quick_menu(),
+        |s| tap(s, &mut now, Btn::Down),
+    );
     tap(&mut s, &mut now, Btn::A);
     assert_eq!(s.app().quick_menu(), Some(QuickRow::CollPrev));
     tap(&mut s, &mut now, Btn::Y);

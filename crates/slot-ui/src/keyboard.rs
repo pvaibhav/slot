@@ -816,7 +816,12 @@ pub fn draw_keyboard(
         TITLE_Y + canvas.inset_y(),
     );
     if let Some(sub) = faces.subtitle {
-        place(out, sub, canvas.centred(sub.1 as f32), SUBTITLE_Y + canvas.inset_y());
+        place(
+            out,
+            sub,
+            canvas.centred(sub.1 as f32),
+            SUBTITLE_Y + canvas.inset_y(),
+        );
     }
     draw_field(canvas, faces, kb, out);
     for (r, row) in faces.caps.iter().enumerate() {

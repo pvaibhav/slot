@@ -1,0 +1,48 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,600,700,800&display=block">
+<link rel="stylesheet" href="assets/slot.css">
+<script>
+var r=document.documentElement.style;
+r.setProperty("--shell-light","#dbe9f2");r.setProperty("--shell-base","#a8c4d8");r.setProperty("--shell-shade","#6d8ba1");
+r.setProperty("--btn","#d0dae3");r.setProperty("--btn-hi","#edf3f8");r.setProperty("--etch","rgba(0,0,0,.44)");
+</script>
+<style>
+html,body{margin:0;background:transparent}
+.hx{position:relative;overflow:hidden;border-radius:20px 20px 0 0;background:var(--page);width:960px;height:600px;font-family:"Open Sans",sans-serif}
+.glow{position:absolute;inset:0;background:radial-gradient(38% 55% at 74% 46%,rgba(255,255,255,.09),transparent 70%)}
+.copy{position:absolute;left:114.6px;top:180.67px;z-index:6}
+.wm{font-size:136px;font-weight:700;letter-spacing:-.045em;color:var(--ink);line-height:.82;margin:0}
+.tag{font-size:22px;color:var(--ink);line-height:1.4;margin-top:26px}
+.dvbox{position:absolute;--dw:234px;width:234px;right:138.4px;top:49.67px;z-index:2}
+.bar{position:absolute;left:0;right:0;bottom:0;height:38.67px;z-index:3;
+  background:linear-gradient(to bottom,rgba(255,255,255,.3),rgba(255,255,255,0) 8.67px) left top/100% 8.67px no-repeat,var(--recess) url(assets/footer-plastic.png) repeat}
+.bar::after{content:"";position:absolute;left:var(--cx);top:0;width:190.67px;height:38.67px;transform:translateX(-50%);background:url(assets/footer-slot.png) center top/100% 100% no-repeat}
+.seat{position:absolute;bottom:-55.56px;left:var(--cx);transform:translateX(-50%);width:160.00px;z-index:4}
+.seat img{display:block;width:100%}
+.bar-front{position:absolute;bottom:0;left:var(--cx);width:190.67px;height:38.67px;transform:translateX(-50%);background:url(assets/footer-slot-front.png) center top/100% 100% no-repeat;z-index:5}
+.hx{--cx:480px}
+.pose-hero .dv-lid{animation:none}
+</style></head><body>
+@@SVG@@
+<div class="hx"><div class="glow"></div>
+  <div class="copy"><h1 class="wm">slot.</h1><div class="tag">A bespoke, Game Boy-centric<br>frontend for the Anbernic RG SP.</div></div>
+  <div class="dvbox">
+    <div class="device pose-hero">
+      <div class="dv-lid">
+        <div class="dv-front">
+          <svg viewBox="0 0 820 725"><use href="#lidArt"/></svg>
+          <img class="screen-box" src="heroframes/001.png" style="object-fit:fill">
+        </div>
+        <div class="dv-back"><svg viewBox="0 0 820 725" preserveAspectRatio="none"><use href="#lidBackArt"/></svg></div>
+      </div>
+      <div class="dv-deck">
+        <svg viewBox="0 725 820 830"><use href="#deckArt"/></svg>
+        <span class="dv-ao"></span>
+      </div>
+    </div>
+  </div>
+  <div class="bar"></div><div class="seat"><img src="assets/doc-cart.png"></div><div class="bar-front"></div>
+</div>
+<script>@@JS@@</script>
+</body></html>

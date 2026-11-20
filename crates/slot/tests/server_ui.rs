@@ -117,7 +117,11 @@ fn server_row_is_hidden_in_game() {
     let d = tmp_root_with_carts(&["Emerald"]);
     let a = app_playing_in(d.path(), "Emerald");
     assert!(a.hidden_rows().contains(&QuickRow::Server));
-    for page in [&QuickRow::PLAY[..], &QuickRow::SETTINGS, &QuickRow::PLAY_SCREEN] {
+    for page in [
+        &QuickRow::PLAY[..],
+        &QuickRow::SETTINGS,
+        &QuickRow::PLAY_SCREEN,
+    ] {
         assert!(!page.contains(&QuickRow::Server));
     }
 }
@@ -183,7 +187,11 @@ fn stop_drops_a_removed_game_and_keeps_the_selection() {
     let picked = a.selected_stem().map(str::to_string);
     open(&mut a);
     paper(&mut a);
-    let gone = if picked.as_deref() == Some("Emerald") { "Fusion" } else { "Emerald" };
+    let gone = if picked.as_deref() == Some("Emerald") {
+        "Fusion"
+    } else {
+        "Emerald"
+    };
     std::fs::remove_file(d.path().join(format!("Games/GBA/{gone}.gba"))).unwrap();
     press(&mut a, Btn::B);
     until(&mut a, |a| !a.server_open());
@@ -494,7 +502,10 @@ fn stop_hands_new_and_replaced_labels_to_the_rebuild() {
     assert!(!slot::label_cache::fresh(d.path(), cart));
     let again = cart.clone();
     let stale = a.take_stale_labels();
-    assert_eq!(stale.iter().map(|c| c.stem.as_str()).collect::<Vec<_>>(), ["Emerald"]);
+    assert_eq!(
+        stale.iter().map(|c| c.stem.as_str()).collect::<Vec<_>>(),
+        ["Emerald"]
+    );
     let _ = slot::label_cache::label_art(d.path(), &stale[0]);
     let stamp = std::time::SystemTime::now() + Duration::from_secs(5);
     open_from_menu(&mut a);
@@ -542,7 +553,12 @@ fn stop_leaves_labels_that_were_stale_before_it_opened() {
 }
 
 fn open_from_menu(a: &mut App) {
-    if !matches!(a.phase(), Phase::QuickMenu { row: QuickRow::Server }) {
+    if !matches!(
+        a.phase(),
+        Phase::QuickMenu {
+            row: QuickRow::Server
+        }
+    ) {
         panic!("not on the Server row");
     }
     press(a, Btn::A);
@@ -613,9 +629,9 @@ fn hush_silences_a_clip_longer_than_the_ring() {
 mod screen {
     use super::*;
     use common::clocked;
+    use slot::audio::{AudioSink, StubSink};
     use slot::frontend::Frontend;
     use slot_gfx::{Compositor, HeadlessSurface, OUT_H, OUT_W};
-    use slot::audio::{AudioSink, StubSink};
     use slot_input::{InputSource, Millis, RawEvent};
     use slot_power::SimPlatform;
     use std::collections::VecDeque;
@@ -648,14 +664,24 @@ mod screen {
             let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
             clocked(d.path());
             let platform = Box::new(SimPlatform::at(d.path().to_path_buf()));
-            Rig::on(net, d, Frontend::boot_with(platform, Box::new(StubSink::draining())), (OUT_W, OUT_H))
+            Rig::on(
+                net,
+                d,
+                Frontend::boot_with(platform, Box::new(StubSink::draining())),
+                (OUT_W, OUT_H),
+            )
         }
 
         fn sized(net: ServerNet, window: (u32, u32)) -> Option<Rig> {
             let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
             clocked(d.path());
             let platform = Box::new(SimPlatform::at(d.path().to_path_buf()));
-            Rig::on(net, d, Frontend::boot_with(platform, Box::new(StubSink::draining())), window)
+            Rig::on(
+                net,
+                d,
+                Frontend::boot_with(platform, Box::new(StubSink::draining())),
+                window,
+            )
         }
 
         fn on(net: ServerNet, d: TempDir, mut f: Frontend, window: (u32, u32)) -> Option<Rig> {
@@ -786,7 +812,11 @@ mod screen {
         r.run(130);
         let fading = r.shot("fade");
         let split = |a: u8, b: u8| a.abs_diff(b) > 4;
-        let changed = fading.iter().zip(&r.menu).filter(|(a, b)| split(**a, **b)).count();
+        let changed = fading
+            .iter()
+            .zip(&r.menu)
+            .filter(|(a, b)| split(**a, **b))
+            .count();
         assert!(changed > 0);
         r.run(800);
         let risen = r.shot("rise");
@@ -807,7 +837,11 @@ mod screen {
                 row: QuickRow::Server
             }
         ));
-        let off = back.iter().zip(&r.menu).filter(|(a, b)| split(**a, **b)).count();
+        let off = back
+            .iter()
+            .zip(&r.menu)
+            .filter(|(a, b)| split(**a, **b))
+            .count();
         assert!(off < 2_000, "the menu came back different: {off}");
     }
 
@@ -865,7 +899,10 @@ mod screen {
             .count();
         assert!(lit > 20_000, "{lit}");
         for y in 60..440 {
-            assert!(!at(632, y).iter().all(|c| *c > 200), "paper past the edge at {y}");
+            assert!(
+                !at(632, y).iter().all(|c| *c > 200),
+                "paper past the edge at {y}"
+            );
         }
         let legend = (405..429)
             .flat_map(|y| (404..628).map(move |x| (x, y)))
@@ -998,7 +1035,11 @@ mod screen {
         let dir = r.d.path().join("Labels/GBA");
         std::fs::create_dir_all(&dir).unwrap();
         for i in 0..8 {
-            std::fs::write(r.d.path().join(format!("Games/GBA/L{i}.gba")), vec![0u8; 512]).unwrap();
+            std::fs::write(
+                r.d.path().join(format!("Games/GBA/L{i}.gba")),
+                vec![0u8; 512],
+            )
+            .unwrap();
             solid_png(&dir.join(format!("L{i}.png")), 640, 320, [200, 20, 20]);
         }
         r.input.0.push_back(vec![RawEvent::Down(Btn::B)]);
@@ -1027,7 +1068,11 @@ mod screen {
         let dir = r.d.path().join("Labels/GBA");
         std::fs::create_dir_all(&dir).unwrap();
         for i in 0..8 {
-            std::fs::write(r.d.path().join(format!("Games/GBA/Q{i}.gba")), vec![0u8; 512]).unwrap();
+            std::fs::write(
+                r.d.path().join(format!("Games/GBA/Q{i}.gba")),
+                vec![0u8; 512],
+            )
+            .unwrap();
             solid_png(&dir.join(format!("Q{i}.png")), 640, 320, [200, 20, 20]);
         }
         r.input.0.push_back(vec![RawEvent::Down(Btn::B)]);
@@ -1053,7 +1098,11 @@ mod screen {
         let dir = r.d.path().join("Labels/GBA");
         std::fs::create_dir_all(&dir).unwrap();
         for i in 0..8 {
-            std::fs::write(r.d.path().join(format!("Games/GBA/B{i}.gba")), vec![0u8; 512]).unwrap();
+            std::fs::write(
+                r.d.path().join(format!("Games/GBA/B{i}.gba")),
+                vec![0u8; 512],
+            )
+            .unwrap();
             solid_png(&dir.join(format!("B{i}.png")), 640, 320, [200, 20, 20]);
         }
         r.input.0.push_back(vec![RawEvent::Down(Btn::B)]);

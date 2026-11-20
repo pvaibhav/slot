@@ -106,6 +106,7 @@ fn scenes() -> Vec<Scene> {
 fn prepare(root: &Path, card: Card) {
     clocked(root);
     let mut s = read_slot_state(root);
+    s.wallpaper = slot_store::WallpaperPick::None;
     s.bezel_gba = BezelPick::Default;
     s.bezel_gb = BezelPick::Default;
     match card {

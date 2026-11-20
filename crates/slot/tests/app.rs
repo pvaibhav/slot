@@ -37,6 +37,7 @@ fn app_with_carts(stems: &[&str]) -> App {
                 shell: None,
                 title: stem.to_uppercase(),
                 sealed: false,
+                tags: Vec::new(),
             })
             .collect(),
     )
@@ -320,6 +321,7 @@ fn app_with_platforms(carts: &[(Platform, &str)]) -> App {
                 shell: None,
                 title: stem.to_uppercase(),
                 sealed: false,
+                tags: Vec::new(),
             })
             .collect(),
     )
@@ -2517,7 +2519,7 @@ fn buttons_during_shutdown_never_reach_the_game() {
 }
 
 #[test]
-fn authentic_trades_the_game_boys_colour_ghosting_and_palette_rows_for_a_model() {
+fn authentic_trades_the_game_boys_colour_and_palette_rows_for_a_model() {
     use slot_store::{GbColors, GbPalette, Platform, Shader};
     use slot_ui::QuickRow;
     let d = common::tmp_root_with_gb_carts(&["Tetris", "Zelda"]);
@@ -2532,16 +2534,15 @@ fn authentic_trades_the_game_boys_colour_ghosting_and_palette_rows_for_a_model()
 
     let app = s.app();
     let in_game = app.in_game_hidden();
-    for row in [
-        QuickRow::ColourCorrection,
-        QuickRow::Blending,
-        QuickRow::Palette,
-    ] {
+    for row in [QuickRow::ColourCorrection, QuickRow::Palette] {
         assert!(in_game.contains(&row), "{row:?} still shows in the game");
     }
+    assert!(!in_game.contains(&QuickRow::Blending));
     assert!(!in_game.contains(&QuickRow::Model));
     let settings = app.hidden_rows();
+    assert!(settings.contains(&QuickRow::GbColourCorrection));
     assert!(settings.contains(&QuickRow::GbPalette));
+    assert!(!settings.contains(&QuickRow::GbBlending));
     assert!(!settings.contains(&QuickRow::GbModel));
     // The setting stays as chosen; only the core is told to leave the picture alone.
     assert!(app.colour_correction_for(Platform::Gb));

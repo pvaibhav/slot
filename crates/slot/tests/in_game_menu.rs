@@ -4,7 +4,7 @@ use common::{app_playing_in, tmp_root_with_carts};
 use slot::app::{App, Phase};
 use slot_gfx::FrameBlend;
 use slot_input::{Action, Btn};
-use slot_store::{Blending, Core, Platform, Shader, StateRing};
+use slot_store::{Core, Platform, Shader, StateRing};
 use slot_ui::{
     Draw, QuickMenuFaces, QuickRow, QuickValue, TexId, HINT_EDGE, MOUTH_H, OUT_H, OUT_W,
 };
@@ -164,21 +164,36 @@ fn colour_correction_toggles_the_running_platform_and_asks_the_core() {
 
 #[test]
 fn frame_blending_steps_the_running_platform_and_hands_it_to_the_gpu() {
-    let (_d, mut a) = playing();
-    go_to(&mut a, QuickRow::Blending);
-    assert_eq!(a.quick_value(QuickRow::Blending), Some(QuickValue::Off));
-    for (want, gpu) in [
-        (Blending::Mix, FrameBlend::Mix),
-        (Blending::Ghosting, FrameBlend::Ghosting),
-        (Blending::Off, FrameBlend::Off),
+    for (shader, initial) in [
+        (Shader::Grid, QuickValue::Off),
+        (Shader::Authentic, QuickValue::Ghosting),
     ] {
-        press(&mut a, Btn::Right);
-        assert_eq!(a.blending_for(Platform::Gba), want);
-        assert_eq!(a.frame_blend(), gpu);
-        assert_eq!(
-            a.quick_value(QuickRow::Blending),
-            a.quick_value(QuickRow::GbaBlending)
-        );
+        let (d, mut a) = playing();
+        for _ in 0..8 {
+            if a.screen_shader() == shader {
+                break;
+            }
+            a.apply(Action::ShaderNext);
+        }
+        assert_eq!(a.screen_shader(), shader);
+        go_to(&mut a, QuickRow::Blending);
+        assert_eq!(a.quick_value(QuickRow::Blending), Some(initial));
+        if shader == Shader::Authentic {
+            assert_eq!(a.frame_blend(), FrameBlend::Ghosting);
+            press(&mut a, Btn::Right);
+            assert_eq!(App::boot(d.path()).frame_blend(), FrameBlend::Off);
+        }
+        for (gpu, shown) in [
+            (FrameBlend::Mix, QuickValue::Mix),
+            (FrameBlend::Ghosting, QuickValue::Ghosting),
+            (FrameBlend::Off, QuickValue::Off),
+        ] {
+            press(&mut a, Btn::Right);
+            assert_eq!(a.frame_blend(), gpu);
+            assert_eq!(a.quick_value(QuickRow::Blending), Some(shown));
+            assert_eq!(a.quick_value(QuickRow::GbaBlending), Some(shown));
+            assert_eq!(App::boot(d.path()).frame_blend(), gpu);
+        }
     }
 }
 
@@ -948,4 +963,54 @@ fn reflection_shows_only_under_authentic_and_turns_off_the_running_consoles_glas
         "another console's glass changed"
     );
     assert!(!slot_store::read_slot_state(d.path()).reflection_gba);
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn turning_off_authentic_reflection_removes_the_sheen_but_keeps_the_shade() {
+    use slot::frontend::Frontend;
+    use slot_gfx::{Compositor, HeadlessSurface, SRC_H, SRC_W};
+    use slot_power::SimPlatform;
+    use slot_store::{write_slot_state, BezelPick, SlotState};
+
+    let d = tmp_root_with_carts(&["Emerald"]);
+    let state = SlotState {
+        cart: Some("Emerald".into()),
+        clock_set: true,
+        shader_gba: Shader::Authentic,
+        bezel_gba: BezelPick::None,
+        ..SlotState::default()
+    };
+    write_slot_state(d.path(), &state).unwrap();
+    let surface = HeadlessSurface::new().expect("headless OpenGL context");
+    let mut c = Compositor::new(&surface).unwrap();
+    let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+    f.app_mut().on_core_ready();
+    for _ in 0..120 {
+        f.app_mut().update(1.0 / 60.0);
+    }
+    f.app_mut().set_game_ready(true);
+    assert!(matches!(f.app().phase(), Phase::Playing { .. }));
+
+    f.compose(&mut c);
+    c.upload_game(&[40, 40, 40, 255].repeat((SRC_W * SRC_H) as usize));
+    f.compose(&mut c);
+    let on = c.read_frame();
+
+    go_to(f.app_mut(), QuickRow::Reflection);
+    press(f.app_mut(), Btn::Right);
+    f.app_mut().apply(Action::QuickMenu);
+    for _ in 0..30 {
+        f.app_mut().update(1.0 / 60.0);
+    }
+    f.compose(&mut c);
+    let off = c.read_frame();
+
+    let red = |frame: &[u8], x, y| frame[((y * OUT_W + x) * 4) as usize];
+    let (on_sheen, off_sheen) = (red(&on, 620, 80), red(&off, 620, 80));
+    assert!(
+        off_sheen < on_sheen,
+        "upper-right red with Reflection On {on_sheen}, Off {off_sheen}"
+    );
+    assert_eq!(red(&off, 620, 419), red(&on, 620, 419));
 }

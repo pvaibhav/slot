@@ -261,7 +261,10 @@ impl<T: Copy> FlipQueue<T> {
         match self.pending {
             None => {
                 self.pending = Some(frame);
-                FlipStep { flip: Some(frame), release: None }
+                FlipStep {
+                    flip: Some(frame),
+                    release: None,
+                }
             }
             Some(_) => FlipStep {
                 flip: None,
@@ -272,11 +275,17 @@ impl<T: Copy> FlipQueue<T> {
 
     pub fn retire(&mut self) -> FlipStep<T> {
         let Some(done) = self.pending.take() else {
-            return FlipStep { flip: None, release: None };
+            return FlipStep {
+                flip: None,
+                release: None,
+            };
         };
         let release = self.shown.replace(done);
         self.pending = self.waiting.take();
-        FlipStep { flip: self.pending, release }
+        FlipStep {
+            flip: self.pending,
+            release,
+        }
     }
 
     pub fn flip_failed(&mut self) -> Option<T> {
@@ -392,7 +401,10 @@ struct Flip {
 
 unsafe extern "C" fn flipped(_fd: i32, _seq: u32, sec: u32, usec: u32, data: *mut c_void) {
     let flip = &*(data as *const Flip);
-    flip.at_us.store(u64::from(sec) * 1_000_000 + u64::from(usec), Ordering::Release);
+    flip.at_us.store(
+        u64::from(sec) * 1_000_000 + u64::from(usec),
+        Ordering::Release,
+    );
     flip.busy.store(false, Ordering::Release);
 }
 
@@ -534,7 +546,9 @@ impl KmsSurface {
                     Some(a)
                 }
                 Err(e) => {
-                    eprintln!("slot: kms: atomic unavailable ({e}), flipping each panel on its own");
+                    eprintln!(
+                        "slot: kms: atomic unavailable ({e}), flipping each panel on its own"
+                    );
                     None
                 }
             };
@@ -816,7 +830,9 @@ impl KmsSurface {
         }
         if ready == 0 {
             return match block {
-                true => Err(GfxError::Context(format!("{CARD}: no flip completed in 1 s"))),
+                true => Err(GfxError::Context(format!(
+                    "{CARD}: no flip completed in 1 s"
+                ))),
                 false => Ok(()),
             };
         }
@@ -936,12 +952,19 @@ impl Surface for KmsSurface {
     }
 
     fn flip_times_us(&self) -> Option<[u64; 2]> {
-        let at = |i: usize| self.outputs.get(i).map(|o| o.flipping.at_us.load(Ordering::Acquire));
+        let at = |i: usize| {
+            self.outputs
+                .get(i)
+                .map(|o| o.flipping.at_us.load(Ordering::Acquire))
+        };
         Some([at(0)?, at(1)?]).filter(|t| t[0] > 0 && t[1] > 0)
     }
 
     fn last_vblank(&self) -> Option<std::time::Instant> {
-        let at = self.outputs[Panel::Top.index()].flipping.at_us.load(Ordering::Acquire);
+        let at = self.outputs[Panel::Top.index()]
+            .flipping
+            .at_us
+            .load(Ordering::Acquire);
         let mut ts = Timespec { sec: 0, nsec: 0 };
         if at == 0 || unsafe { clock_gettime(CLOCK_MONOTONIC, &mut ts) } != 0 {
             return None;

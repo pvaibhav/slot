@@ -207,7 +207,7 @@ impl RetroCore for Counted {
     fn run_frame(&mut self, input: ButtonMask) {
         let mut n = self.1.lock().unwrap();
         *n += 1;
-        let slow = (*n).is_multiple_of(5);
+        let slow = n.is_multiple_of(5);
         drop(n);
         std::thread::sleep(Duration::from_millis(if slow { 40 } else { 2 }));
         self.0.run_frame(input)

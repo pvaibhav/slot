@@ -278,15 +278,29 @@ fn the_controls_page_renders() {
     run_for(&mut f, &mut input, 4.0);
     tap(&mut f, &mut input, Btn::Menu);
     run_for(&mut f, &mut input, 0.5);
-    for btn in [Btn::Down, Btn::A, Btn::Down, Btn::Down, Btn::A] {
-        tap(&mut f, &mut input, btn);
-    }
+    common::reach(
+        &mut f,
+        QuickRow::Settings,
+        |f| f.app().in_game_menu(),
+        |f| tap(f, &mut input, Btn::Down),
+    );
+    tap(&mut f, &mut input, Btn::A);
+    common::reach(
+        &mut f,
+        QuickRow::PlayControls,
+        |f| f.app().in_game_menu(),
+        |f| tap(f, &mut input, Btn::Down),
+    );
+    tap(&mut f, &mut input, Btn::A);
     run_for(&mut f, &mut input, 0.3);
     assert_eq!(f.app().in_game_menu(), Some(QuickRow::GameUp));
     composed(&mut f, &mut c, "controls");
-    for _ in 0..7 {
-        tap(&mut f, &mut input, Btn::Down);
-    }
+    common::reach(
+        &mut f,
+        QuickRow::GameStart,
+        |f| f.app().in_game_menu(),
+        |f| tap(f, &mut input, Btn::Down),
+    );
     run_for(&mut f, &mut input, 0.2);
     assert_eq!(f.app().in_game_menu(), Some(QuickRow::GameStart));
     composed(&mut f, &mut c, "controls-scrolled");

@@ -226,7 +226,7 @@ fn a_shell_without_a_label_image_is_one_plastic() {
     let d = tmp_root();
     write_rom_with_code(&d, "Drill Dozer.gba", "DRILL DOZER", "V49E");
     let cart = &scan(d.path()).unwrap()[0];
-    let f = cart_face(cart);
+    let f = slot_ui::cart_face_with(cart, Some(sheet(cart, label_colour(&label_text(cart)))));
     let px = |x: u32, y: u32| {
         let i = ((y * f.w + x) * 4) as usize;
         [f.rgba[i], f.rgba[i + 1], f.rgba[i + 2]]
@@ -376,7 +376,10 @@ fn clear_plastic_is_eighty_percent_alpha_and_the_label_box_stays_opaque() {
     let (_d, clear) = chosen("GBA", 0, "BPEE", Some("auto d9dbd8 clear"));
     let (_d2, solid) = chosen("GBA", 0, "BPEE", Some("auto d9dbd8 solid"));
     let paper = label_colour(&label_text(&clear));
-    let (clear, solid) = (cart_face(&clear), cart_face(&solid));
+    let (clear, solid) = (
+        slot_ui::cart_face_with(&clear, Some(sheet(&clear, paper))),
+        slot_ui::cart_face_with(&solid, Some(sheet(&solid, paper))),
+    );
     let at = |f: &slot_ui::CartFace, x: u32, y: u32| {
         let i = ((y * f.w + x) * 4) as usize;
         [f.rgba[i], f.rgba[i + 1], f.rgba[i + 2], f.rgba[i + 3]]
@@ -457,7 +460,7 @@ fn each_table_plastic_is_the_neutral_shell_blended_with_its_colour() {
 fn any_colour_is_blended_onto_the_one_neutral_shell() {
     let (_d, cart) = chosen("GBA", 0, "BPEE", Some("auto 123456 solid"));
     assert_eq!(shell_for(&cart).colour, [0x12, 0x34, 0x56]);
-    let f = cart_face(&cart);
+    let f = slot_ui::cart_face_with(&cart, Some(sheet(&cart, label_colour(&label_text(&cart)))));
     let at = |x: u32, y: u32| {
         let i = ((y * f.w + x) * 4) as usize;
         [f.rgba[i], f.rgba[i + 1], f.rgba[i + 2]]
@@ -598,4 +601,11 @@ fn a_clear_gba_cart_has_a_game_coloured_interior_under_its_board() {
         differ > 10_000,
         "the pak's interior is not coloured: {differ} px"
     );
+}
+
+fn sheet(cart: &slot_store::Cart, rgb: [u8; 3]) -> Vec<u8> {
+    let (w, h) = slot_ui::label_size(cart);
+    (0..w * h)
+        .flat_map(|_| [rgb[0], rgb[1], rgb[2], 255])
+        .collect()
 }

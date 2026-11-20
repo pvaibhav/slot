@@ -405,7 +405,12 @@ fn brightest(face: &slot_ui::UndoFace) -> u8 {
 
 #[test]
 fn a_refusal_reads_brighter_and_larger_than_a_hint() {
-    let hint = slot_ui::Keyboard::new(slot_ui::Layout::General, "New Collection", Some("Name taken"), "");
+    let hint = slot_ui::Keyboard::new(
+        slot_ui::Layout::General,
+        "New Collection",
+        Some("Name taken"),
+        "",
+    );
     let alert = hint.clone().alerted();
     let canvas = slot_ui::Canvas::FRAMED;
     let a = slot_ui::keyboard_faces(&alert, canvas).subtitle.unwrap();

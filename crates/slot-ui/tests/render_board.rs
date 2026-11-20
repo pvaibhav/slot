@@ -15,6 +15,7 @@ fn render_board() {
         shell: None,
         title: "POKEMON EMER".into(),
         sealed: false,
+        tags: Vec::new(),
     });
     let f = std::fs::File::create(&out).unwrap();
     let mut e = png::Encoder::new(std::io::BufWriter::new(f), face.w, face.h);

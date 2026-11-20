@@ -1,4 +1,5 @@
 use slot_store::gb::Class;
+pub use slot_store::{clean_label, label_tags};
 use slot_store::{Cart, Outline, Platform};
 
 use crate::art;
@@ -350,8 +351,84 @@ pub fn text_label(cart: &Cart, colour: [u8; 3]) -> Vec<u8> {
     generated_label(&spec(shape_of(cart)), &label_text(cart), colour)
 }
 
+fn hand_parts(s: &Spec, cart: &Cart) -> Option<(CartFace, crate::hand::Written)> {
+    let font = crate::hand::hand_font()?;
+    let face = shell_face_of(s, &shell_for(cart), true);
+    let (lx, ly, lw, lh) = s.label;
+    let c = (((ly + lh / 2) * s.w + lx + lw / 2) * 4) as usize;
+    let recess = [face.rgba[c], face.rgba[c + 1], face.rgba[c + 2]];
+    let written = font.write(&label_text(cart), &cart.tags, &cart.stem, lw, lh, recess);
+    Some((face, written))
+}
+
+fn ink_rgba(colour: [u8; 3], coverage: &[u8]) -> Vec<u8> {
+    coverage
+        .iter()
+        .flat_map(|a| [colour[0], colour[1], colour[2], *a])
+        .collect()
+}
+
+fn handwritten(s: &Spec, cart: &Cart) -> Option<CartFace> {
+    #[cfg(feature = "nds")]
+    if cart.platform == Platform::Nds {
+        return None;
+    }
+    let (mut face, written) = hand_parts(s, cart)?;
+    paste_ink(s, &mut face, written.colour, &written.ink);
+    if cart.sealed {
+        crate::seal::paste_seal(&mut face, s.label);
+    }
+    clip_to_silhouette(s, &mut face);
+    Some(face)
+}
+
+pub fn writes_by_hand(cart: &Cart) -> bool {
+    #[cfg(feature = "nds")]
+    if cart.platform == Platform::Nds {
+        return false;
+    }
+    cart.label.is_none() && crate::hand::hand_font().is_some()
+}
+
+pub struct HandReveal {
+    pub blank: CartFace,
+    pub ink: [u8; 3],
+    pub frames: Vec<(Vec<u8>, [f32; 2])>,
+    pub w: u32,
+    pub h: u32,
+}
+
+pub fn hand_reveal(cart: &Cart, frames: u32) -> Option<HandReveal> {
+    let s = spec(shape_of(cart));
+    #[cfg(feature = "nds")]
+    if cart.platform == Platform::Nds {
+        return None;
+    }
+    let (mut blank, written) = hand_parts(&s, cart)?;
+    if cart.sealed {
+        crate::seal::paste_seal(&mut blank, s.label);
+    }
+    clip_to_silhouette(&s, &mut blank);
+    let frames = crate::hand::reveal(&written, frames)
+        .into_iter()
+        .map(|(cov, pen)| (ink_rgba(written.colour, &cov), pen))
+        .collect();
+    Some(HandReveal {
+        blank,
+        ink: written.colour,
+        frames,
+        w: written.w,
+        h: written.h,
+    })
+}
+
 pub fn cart_face_with(cart: &Cart, art: Option<Vec<u8>>) -> CartFace {
     let s = spec(shape_of(cart));
+    if art.is_none() {
+        if let Some(face) = handwritten(&s, cart) {
+            return face;
+        }
+    }
     let mut face = shell_face(&s, &shell_for(cart));
     let label = match art {
         Some(rgba) => rgba,
@@ -387,64 +464,6 @@ pub fn label_colour(title: &str) -> [u8; 3] {
 
 pub fn label_text(cart: &Cart) -> String {
     clean_label(&cart.stem)
-}
-
-pub fn clean_label(stem: &str) -> String {
-    let mut bare = String::with_capacity(stem.len());
-    let mut depth = 0u32;
-    for ch in stem.chars() {
-        match ch {
-            '(' | '[' => depth += 1,
-            ')' | ']' => depth = depth.saturating_sub(1),
-            _ if depth == 0 => bare.push(ch),
-            _ => {}
-        }
-    }
-
-    let mut out = String::with_capacity(bare.len());
-    for word in bare.split_whitespace().filter(|w| *w != "-") {
-        if !out.is_empty() {
-            out.push(' ');
-        }
-        out.push_str(word);
-    }
-    if out.is_empty() {
-        stem.to_string()
-    } else {
-        out
-    }
-}
-
-pub fn label_tags(stem: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut depth = 0u32;
-    let mut cur = String::new();
-    for ch in stem.chars() {
-        match ch {
-            '(' | '[' => {
-                depth += 1;
-                if depth == 1 {
-                    cur.clear();
-                    continue;
-                }
-            }
-            ')' | ']' => {
-                depth = depth.saturating_sub(1);
-                if depth == 0 {
-                    let t = cur.trim();
-                    if !t.is_empty() {
-                        out.push(t.to_string());
-                    }
-                    continue;
-                }
-            }
-            _ => {}
-        }
-        if depth >= 1 {
-            cur.push(ch);
-        }
-    }
-    out
 }
 
 fn luma(px: &[u8]) -> u32 {
@@ -783,6 +802,19 @@ fn ink(bg: [u8; 3]) -> [u8; 3] {
         [0x1a, 0x18, 0x16]
     } else {
         [0xf4, 0xf1, 0xea]
+    }
+}
+
+fn paste_ink(s: &Spec, face: &mut CartFace, colour: [u8; 3], coverage: &[u8]) {
+    paste_label(s, face, &ink_rgba(colour, coverage));
+    let (lx, ly, lw, lh) = s.label;
+    for y in 0..lh {
+        for x in 0..lw {
+            let a = coverage[(y * lw + x) as usize] as u32;
+            let d = (((y + ly) * s.w + x + lx) * 4 + 3) as usize;
+            let under = face.rgba[d] as u32;
+            face.rgba[d] = (a + under * (255 - a) / 255).min(255) as u8;
+        }
     }
 }
 

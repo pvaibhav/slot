@@ -22,8 +22,15 @@ fn send(port: u16, raw: &[u8], close_write: bool) -> (u16, String) {
     let mut out = Vec::new();
     let _ = s.read_to_end(&mut out);
     let text = String::from_utf8_lossy(&out).into_owned();
-    let status = text.split_whitespace().nth(1).and_then(|c| c.parse().ok()).unwrap_or(0);
-    let body = text.split_once("\r\n\r\n").map(|(_, b)| b.to_string()).unwrap_or_default();
+    let status = text
+        .split_whitespace()
+        .nth(1)
+        .and_then(|c| c.parse().ok())
+        .unwrap_or(0);
+    let body = text
+        .split_once("\r\n\r\n")
+        .map(|(_, b)| b.to_string())
+        .unwrap_or_default();
     (status, body)
 }
 
@@ -74,7 +81,10 @@ fn dotdot_is_refused() {
     assert!(resolve(d.path(), &s(&["Games", "a\\b"])).is_err());
     assert!(resolve(d.path(), &[]).is_err());
     let ok = resolve(d.path(), &s(&["Games", "a.gba"])).unwrap();
-    assert_eq!(ok, d.path().canonicalize().unwrap().join("Games").join("a.gba"));
+    assert_eq!(
+        ok,
+        d.path().canonicalize().unwrap().join("Games").join("a.gba")
+    );
 }
 
 #[test]
@@ -136,7 +146,12 @@ fn system_any_case_is_refused() {
     std::fs::create_dir(d.path().join("System")).unwrap();
     std::fs::write(d.path().join("System").join("slot"), b"bin").unwrap();
     let p = server.port();
-    for target in ["/api/fs/card/SYSTEM/slot", "/api/fs/card/system/slot", "/api/fs/card/cache", "/api/fs/card/CaChE"] {
+    for target in [
+        "/api/fs/card/SYSTEM/slot",
+        "/api/fs/card/system/slot",
+        "/api/fs/card/cache",
+        "/api/fs/card/CaChE",
+    ] {
         let (status, _) = call(p, "GET", target, b"");
         assert_eq!(status, 403, "{target}");
     }
@@ -163,7 +178,11 @@ fn symlink_out_of_the_card_is_refused() {
     let (d, server) = start();
     std::fs::create_dir(d.path().join("Games")).unwrap();
     std::os::unix::fs::symlink(outside.path(), d.path().join("Games").join("escape")).unwrap();
-    std::os::unix::fs::symlink(outside.path().join("secret.txt"), d.path().join("Games").join("leak.txt")).unwrap();
+    std::os::unix::fs::symlink(
+        outside.path().join("secret.txt"),
+        d.path().join("Games").join("leak.txt"),
+    )
+    .unwrap();
     let p = server.port();
     for target in [
         "/api/roms/escape",
@@ -194,7 +213,10 @@ fn upload_lands_in_folder() {
     let json: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(json["ok"], true);
     assert_eq!(json["files"][0], "Tetris.gb");
-    assert_eq!(std::fs::read(d.path().join("Games").join("GBA").join("Tetris.gb")).unwrap(), b"rom bytes");
+    assert_eq!(
+        std::fs::read(d.path().join("Games").join("GBA").join("Tetris.gb")).unwrap(),
+        b"rom bytes"
+    );
     let (_, body) = call(p, "GET", "/api/roms/GBA", b"");
     let json: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(json["path"], "Games/GBA");
@@ -227,7 +249,9 @@ fn trailing_space_before_extension_is_refused() {
     assert_eq!(status, 400, "{body}");
     assert!(body.contains("Tetris .gb"), "{body}");
     let games = d.path().join("Games").join("GB");
-    let leftovers: Vec<_> = std::fs::read_dir(&games).map(|r| r.collect()).unwrap_or_default();
+    let leftovers: Vec<_> = std::fs::read_dir(&games)
+        .map(|r| r.collect())
+        .unwrap_or_default();
     assert!(leftovers.is_empty(), "{leftovers:?}");
     server.stop();
 }
@@ -272,7 +296,12 @@ fn non_ascii_name_round_trips() {
     assert_eq!(status, 200, "{body}");
     assert!(!d.path().join("Games/GBA/Pokémon Ruby.gba").exists());
     assert!(d.path().join("Games/GBA/Pokémon Sapphire.gba").exists());
-    let (status, _) = call(p, "DELETE", "/api/roms/GBA/Pok%C3%A9mon%20Sapphire.gba", b"");
+    let (status, _) = call(
+        p,
+        "DELETE",
+        "/api/roms/GBA/Pok%C3%A9mon%20Sapphire.gba",
+        b"",
+    );
     assert_eq!(status, 200);
     assert!(!d.path().join("Games/GBA/Pokémon Sapphire.gba").exists());
     server.stop();
@@ -296,7 +325,10 @@ fn interrupted_upload_keeps_the_old_file() {
     let (status, _) = send(p, &raw, true);
     assert_ne!(status, 200);
     assert_eq!(std::fs::read(dir.join("Tetris.gb")).unwrap(), b"old bytes");
-    let names: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name()).collect();
+    let names: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
     assert_eq!(names.len(), 1, "{names:?}");
     server.stop();
 }
@@ -359,7 +391,9 @@ fn mkdir_and_volumes() {
 fn trailing_dot_and_space_aliases_are_refused() {
     let d = tempfile::tempdir().unwrap();
     std::fs::create_dir(d.path().join("System")).unwrap();
-    for name in ["System.", "cache..", "SYSTEM ", "System. ", "system", "Cache"] {
+    for name in [
+        "System.", "cache..", "SYSTEM ", "System. ", "system", "Cache",
+    ] {
         let err = resolve(d.path(), &s(&[name, "x"])).unwrap_err();
         assert_eq!(err.status, 403, "{name:?}");
     }
@@ -388,7 +422,8 @@ fn symlink_into_system_is_refused() {
     let d = tempfile::tempdir().unwrap();
     std::fs::create_dir(d.path().join("System")).unwrap();
     std::fs::create_dir(d.path().join("Games")).unwrap();
-    std::os::unix::fs::symlink(d.path().join("System"), d.path().join("Games").join("sys")).unwrap();
+    std::os::unix::fs::symlink(d.path().join("System"), d.path().join("Games").join("sys"))
+        .unwrap();
     let err = resolve(d.path(), &s(&["Games", "sys", "x"])).unwrap_err();
     assert_eq!(err.status, 403);
 }
@@ -412,7 +447,12 @@ fn case_only_rename_works() {
     let (d, server) = start();
     let p = server.port();
     upload(p, "/api/roms/GBA", "tetris.gb", b"t");
-    let (status, body) = call(p, "PATCH", "/api/roms/GBA/tetris.gb", br#"{"to":"GBA/Tetris.gb"}"#);
+    let (status, body) = call(
+        p,
+        "PATCH",
+        "/api/roms/GBA/tetris.gb",
+        br#"{"to":"GBA/Tetris.gb"}"#,
+    );
     assert_eq!(status, 200, "{body}");
     let names: Vec<String> = std::fs::read_dir(d.path().join("Games/GBA"))
         .unwrap()
@@ -420,7 +460,12 @@ fn case_only_rename_works() {
         .collect();
     assert_eq!(names, vec!["Tetris.gb"]);
     upload(p, "/api/roms/GBA", "Other.gb", b"o");
-    let (status, _) = call(p, "PATCH", "/api/roms/GBA/Other.gb", br#"{"to":"GBA/Tetris.gb"}"#);
+    let (status, _) = call(
+        p,
+        "PATCH",
+        "/api/roms/GBA/Other.gb",
+        br#"{"to":"GBA/Tetris.gb"}"#,
+    );
     assert_eq!(status, 409);
     server.stop();
 }
@@ -496,7 +541,12 @@ fn rename_via_temp_restores_the_original_when_the_second_step_fails() {
 
 fn names_in(body: &str) -> Vec<String> {
     let json: serde_json::Value = serde_json::from_str(body).unwrap();
-    json["entries"].as_array().unwrap().iter().map(|e| e["name"].as_str().unwrap().to_string()).collect()
+    json["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["name"].as_str().unwrap().to_string())
+        .collect()
 }
 
 #[test]
@@ -561,10 +611,20 @@ fn top_level_folders_cannot_be_renamed_or_moved() {
     let (status, _) = call(p, "PATCH", "/api/fs/card/Games", br#"{"to":"Saves/Games"}"#);
     assert_eq!(status, 403);
     assert!(d.path().join("Games/GBA").is_dir());
-    let (status, body) = call(p, "PATCH", "/api/fs/card/loose.txt", br#"{"to":"renamed.txt"}"#);
+    let (status, body) = call(
+        p,
+        "PATCH",
+        "/api/fs/card/loose.txt",
+        br#"{"to":"renamed.txt"}"#,
+    );
     assert_eq!(status, 200, "{body}");
     assert!(d.path().join("renamed.txt").exists());
-    let (status, body) = call(p, "PATCH", "/api/fs/card/Games/GBA", br#"{"to":"Games/Advance"}"#);
+    let (status, body) = call(
+        p,
+        "PATCH",
+        "/api/fs/card/Games/GBA",
+        br#"{"to":"Games/Advance"}"#,
+    );
     assert_eq!(status, 200, "{body}");
     assert!(d.path().join("Games/Advance").is_dir());
     server.stop();

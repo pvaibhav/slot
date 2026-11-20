@@ -425,6 +425,7 @@ mod tests {
         let carts: Vec<_> = ["Metroid Fusion", "Pokemon Emerald", "Golden Sun"]
             .iter()
             .map(|name| slot_store::Cart {
+                tags: Vec::new(),
                 platform: slot_store::Platform::Gba,
                 stem: (*name).into(),
                 title: (*name).into(),

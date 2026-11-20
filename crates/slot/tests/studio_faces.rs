@@ -13,6 +13,7 @@ fn cart(shell: Option<ShellChoice>) -> Cart {
         code: String::new(),
         shell,
         sealed: false,
+        tags: Vec::new(),
     }
 }
 
@@ -31,6 +32,7 @@ fn job(gen: u64, shell: Option<ShellChoice>) -> PreviewJob {
         cart: cart(shell),
         ground: None,
         text: false,
+        marker: true,
         real: None,
         logo: None,
         wheel: None,
@@ -50,9 +52,18 @@ fn a_preview_uses_the_edited_shell() {
     let plain = build(job(1, None), &mut cache);
     let tinted = build(job(2, red()), &mut cache);
     let title = |f: &slot::studio_faces::StudioFaces| {
-        f.faces.iter().find(|(k, _)| *k == LabelKind::Title).unwrap().1.rgba.clone()
+        f.faces
+            .iter()
+            .find(|(k, _)| *k == LabelKind::Hand)
+            .unwrap()
+            .1
+            .rgba
+            .clone()
     };
-    assert_ne!(px(&title(&plain), 360, 20, 100), px(&title(&tinted), 360, 20, 100));
+    assert_ne!(
+        px(&title(&plain), 360, 20, 100),
+        px(&title(&tinted), 360, 20, 100)
+    );
 }
 
 #[test]
@@ -89,18 +100,52 @@ fn chips_cover_every_preset() {
     assert_eq!(atlas.rgba[3], 0, "chips are round");
 }
 
+fn face_of(f: &slot::studio_faces::StudioFaces, kind: LabelKind) -> Vec<u8> {
+    f.faces
+        .iter()
+        .find(|(k, _)| *k == kind)
+        .unwrap()
+        .1
+        .rgba
+        .clone()
+}
+
 #[test]
-fn a_tinted_text_label_previews_its_color() {
+fn a_tinted_text_label_previews_its_color_on_the_worn_label() {
     let mut j = job(1, None);
     j.ground = Some([9, 99, 199]);
     j.text = true;
     let tinted = build(j.clone(), &mut Cache::default());
     j.text = false;
     let plain = build(j, &mut Cache::default());
-    let title = |f: &slot::studio_faces::StudioFaces| {
-        f.faces.iter().find(|(k, _)| *k == slot::studio::LabelKind::Title).unwrap().1.rgba.clone()
-    };
-    assert_ne!(title(&tinted), title(&plain));
+    assert_ne!(
+        face_of(&tinted, LabelKind::Existing),
+        face_of(&plain, LabelKind::Hand)
+    );
+}
+
+#[test]
+fn a_cart_wearing_a_text_label_can_still_be_written_on() {
+    let mut j = job(1, None);
+    j.ground = Some([9, 99, 199]);
+    j.text = true;
+    let text = build(j.clone(), &mut Cache::default());
+    j.text = false;
+    j.ground = None;
+    let plain = build(j, &mut Cache::default());
+    assert!(text.hand.is_some(), "no writing for a text-labelled cart");
+    assert_eq!(
+        face_of(&text, LabelKind::Hand),
+        face_of(&plain, LabelKind::Hand)
+    );
+}
+
+#[test]
+fn the_writing_is_only_built_while_the_marker_is_offered() {
+    let mut j = job(1, None);
+    assert!(build(j.clone(), &mut Cache::default()).hand.is_some());
+    j.marker = false;
+    assert!(build(j, &mut Cache::default()).hand.is_none());
 }
 
 #[test]
@@ -113,7 +158,10 @@ fn a_text_color_stays_off_the_logo_sticker() {
         let mut enc = png::Encoder::new(&mut out, w, h);
         enc.set_color(png::ColorType::Rgba);
         enc.set_depth(png::BitDepth::Eight);
-        enc.write_header().unwrap().write_image_data(&[200, 40, 40, 255].repeat((w * h) as usize)).unwrap();
+        enc.write_header()
+            .unwrap()
+            .write_image_data(&[200, 40, 40, 255].repeat((w * h) as usize))
+            .unwrap();
     }
     std::fs::write(&logo, out).unwrap();
     let mut j = job(1, None);
@@ -132,8 +180,14 @@ fn a_worn_logo_previews_automatic_from_the_wheel() {
     let mut j = job(1, None);
     j.wheel = Some(wheel);
     let faces = build(j.clone(), &mut Cache::default());
-    assert!(faces.faces.iter().any(|(k, _)| *k == LabelKind::Logo), "no Automatic preview");
+    assert!(
+        faces.faces.iter().any(|(k, _)| *k == LabelKind::Logo),
+        "no Automatic preview"
+    );
     j.ground = Some([9, 99, 199]);
     let faces = build(j, &mut Cache::default());
-    assert!(faces.faces.iter().any(|(k, _)| *k == LabelKind::Logo), "no JPEG wheel preview");
+    assert!(
+        faces.faces.iter().any(|(k, _)| *k == LabelKind::Logo),
+        "no JPEG wheel preview"
+    );
 }

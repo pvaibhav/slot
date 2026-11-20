@@ -21,7 +21,7 @@ use slot::app::Phase;
 use slot::audio::{AudioSink, StubSink};
 use slot::emu::{CoreState, EmuHandle, Speed};
 use slot::link_net::TcpLink;
-use slot::link_radio::LinkRole;
+use slot::link_radio::{HostAp, LinkRole, RadioRole};
 use slot::link_start::LinkStarter;
 use slot::persist::Snapshot;
 use slot::session::Session;
@@ -548,10 +548,17 @@ fn boot_cable(rom: &Path, player: u8) -> Rig {
 }
 
 fn starter(role: LinkRole, port: u16) -> LinkStarter {
+    let radio = match role {
+        LinkRole::Host => RadioRole::Host,
+        LinkRole::Join => RadioRole::Join(HostAp {
+            freq_mhz: 2412,
+            bssid: [0; 6],
+        }),
+    };
     LinkStarter::spawn_with(
-        Box::new(|_, _| Ok(())),
+        Box::new(|_, _| Ok(None)),
         Box::new(|| {}),
-        role,
+        radio,
         port,
         Box::new(move |port, cancel| match role {
             LinkRole::Host => {

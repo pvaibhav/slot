@@ -3,6 +3,7 @@ use slot_ui::{cart_face_with, label_panel, seal_rect, CartFace, GbShell, CART_H,
 
 fn cart(platform: Platform, shell: Option<ShellChoice>, sealed: bool) -> Cart {
     Cart {
+        tags: Vec::new(),
         platform,
         stem: "Seal Test".into(),
         rom: "Games/GBA/Seal Test.gba".into(),

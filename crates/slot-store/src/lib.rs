@@ -54,14 +54,17 @@ pub use nds_header::{read_banner, NdsBanner};
 pub use overlay::{overlay_entries, OverlayEntry, OverlayPart};
 pub use platform::Platform;
 pub use ring::{is_stamp, StateEntry, StateRing, RING_MAX};
-pub use scan::{initial, is_hidden, listing, scan, scan_platform, sort_key, Cart, StoreError};
+pub use scan::{
+    clean_label, initial, is_hidden, label_tags, listing, scan, scan_platform, sort_key, Cart,
+    StoreError,
+};
 pub use shots::{shot_stamp, ShotDir, ShotEntry, SCREENSHOTS_DIR};
 pub use slot_state::{
-    bezel_for_scale, bezel_scale, read_slot_state, write_slot_state, Appearance, BatteryDisplay,
-    BezelPick, Blending, GbModel, KidMode, Recent, Scale, Shader, ShelfMode, SlotState, Stretch,
-    WallpaperPick, WallpaperTint, BLUE_LIGHT_MAX, BRIGHTNESS_MAX, CONTRAST_MAX, DIM_MAX, FF_SPEEDS,
-    FF_SPEED_DEFAULT, KID_SHELF_ALL, LID_OFF_MIN, RECENTS_MAX, SATURATION_MAX, SUNLIGHT_MAX,
-    VOLUME_MAX,
+    bezel_for_scale, bezel_scale, legacy_turbo_off, read_slot_state, write_slot_state, Appearance,
+    BatteryDisplay, BezelPick, Blending, GbModel, KidMode, Recent, Scale, Shader, ShelfMode,
+    SlotState, Stretch, WallpaperPick, WallpaperTint, BLUE_LIGHT_MAX, BRIGHTNESS_MAX, CONTRAST_MAX,
+    DIM_MAX, FF_SPEEDS, FF_SPEED_DEFAULT, KID_SHELF_ALL, LID_OFF_MIN, RECENTS_MAX, SATURATION_MAX,
+    SUNLIGHT_MAX, VOLUME_MAX,
 };
 pub use stamp::{
     civil_from_days, days_from_civil, days_in_month, format_stamp, parse_stamp, stamp_now,

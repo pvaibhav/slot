@@ -112,7 +112,11 @@ fn a_on_an_opened_cart_inserts() {
     let (_d, mut a) = booted_with("GBA/Fusion\n");
     a.apply(Action::GbaDown(Btn::A));
     a.apply(Action::GbaUp(Btn::A));
-    assert!(matches!(a.phase(), Phase::Inserting { .. }), "{:?}", a.phase());
+    assert!(
+        matches!(a.phase(), Phase::Inserting { .. }),
+        "{:?}",
+        a.phase()
+    );
 }
 
 #[test]
@@ -188,7 +192,7 @@ fn an_installed_game_becomes_a_gift_and_a_gift_with_no_game_is_dropped_on_rescan
 }
 
 #[test]
-fn a_rescan_keeps_existing_boxes_and_asks_for_new_ones() {
+fn a_rescan_keeps_the_boxes_it_has_and_asks_for_new_ones() {
     let (d, mut a) = booted_with("GBA/Emerald\n");
     let script = Script::default();
     a.set_romm_jobs(Box::new(script.clone()));
@@ -204,17 +208,26 @@ fn a_rescan_keeps_existing_boxes_and_asks_for_new_ones() {
     });
     let now = a.now();
     a.tick_ms(now + 1);
-    let stems: Vec<String> = a.gift_wants().into_iter().map(|(_, (_, stem))| stem).collect();
+    let stems: Vec<String> = a
+        .gift_wants()
+        .into_iter()
+        .map(|(_, (_, stem))| stem)
+        .collect();
     assert_eq!(stems, ["Sent"]);
 }
 
 fn request(port: u16, head: &str) -> u16 {
-    let raw = format!("{head} HTTP/1.1\r\nHost: x\r\nAuthorization: Basic {AUTH}\r\nContent-Length: 0\r\n\r\n");
+    let raw = format!(
+        "{head} HTTP/1.1\r\nHost: x\r\nAuthorization: Basic {AUTH}\r\nContent-Length: 0\r\n\r\n"
+    );
     let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
     s.write_all(raw.as_bytes()).unwrap();
     let mut out = String::new();
     let _ = s.read_to_string(&mut out);
-    out.split_whitespace().nth(1).and_then(|c| c.parse().ok()).unwrap_or(0)
+    out.split_whitespace()
+        .nth(1)
+        .and_then(|c| c.parse().ok())
+        .unwrap_or(0)
 }
 
 fn gamebit(gifts: &str) -> (TempDir, Server) {
@@ -245,7 +258,10 @@ fn gamebit_delete_removes_the_gift() {
 #[test]
 fn gamebit_rename_moves_the_gift() {
     let (dir, server) = gamebit("GBA/Alpha\n");
-    assert_eq!(request(server.port(), "POST /api/games/GBA/0/rename?name=Omega.gba"), 200);
+    assert_eq!(
+        request(server.port(), "POST /api/games/GBA/0/rename?name=Omega.gba"),
+        200
+    );
     assert_eq!(read(dir.path()), "GBA/Omega\n");
     server.stop();
 }
@@ -253,7 +269,10 @@ fn gamebit_rename_moves_the_gift() {
 #[test]
 fn gamebit_rename_leaves_an_absent_gifts_file_absent() {
     let (dir, server) = gamebit("");
-    assert_eq!(request(server.port(), "POST /api/games/GBA/0/rename?name=Omega.gba"), 200);
+    assert_eq!(
+        request(server.port(), "POST /api/games/GBA/0/rename?name=Omega.gba"),
+        200
+    );
     assert!(!dir.path().join(GIFTS).exists());
     server.stop();
 }

@@ -39,6 +39,8 @@ To disable kid mode, hold <kbd>START + SELECT + L2 + R2</kbd> while turning the 
 is off until the next restart, so you can change settings or turn it off for good. Restart without the buttons and it
 locks again.
 
+A slot device in Kid Mode can still link up with other slot devices, see [Linking with Kid Mode](linking.md#linking-with-kid-mode).
+
 ## Gameplay
 
 | Setting | Choices | Default | Does |
@@ -46,7 +48,6 @@ locks again.
 | Fast Forward | Off, 1.5x, 2x, 3x, 4x, 6x | 6x | The top speed when fast-forwarding |
 | Fast Forward Sound | On, Off | Off | Sound while fast-forwarding |
 | Rewind | On, Off | On | Hold <kbd>L2</kbd> to go back |
-| Turbo Buttons | On, Off | On | Turbo A and Turbo B |
 | Rumble | On, Off | On | For games with a rumble pak |
 | Left Stick as D-Pad | On, Off | On | Only on devices with a left stick |
 | Resume on Insert | On, Off | On | Inserting a cart picks up where you left off |
@@ -74,14 +75,15 @@ Each system has its own page.
 | Setting | Choices | Default |
 | --- | --- | --- |
 | Shader | GBA: Off, LCD, Grid, Dot, Shimmerless (4:3 devices only). GB and GBC: Off, LCD, Grid, Simpletex, Shimmerless | Grid on GBA, Simpletex on GB and GBC |
+| Overlay | Off, your own. Only shows when you have one | Off |
 | Color Correction | On, Off | Off |
+| Frame Blending | Off, Mix, Ghosting | Off |
 | Palette | Game Boy only. Auto, then 48 palettes | Auto |
+| Bezel | None, Default, AGS-102, your own | AGS-102 on 640×480 devices, None elsewhere |
 | Scale | GBA: Fit, Integer, Full Screen. GB and GBC: SP Screen, Integer, Fit | Fit on GBA, SP Screen on GB and GBC |
 | Stretch | GB and GBC only. Classic, Full Screen | Classic |
-| Frame Blending | Off, Mix, Ghosting | Off |
-| Bezel | None, Default, AGS-102, your own | AGS-102 on 640×480 devices, None elsewhere |
 
-See [The Screen](screen.md) for what Scale, Stretch, Frame Blending, Saturation and Contrast do.
+See [The Screen](screen.md) for what Overlay, Scale, Stretch, Frame Blending, Saturation and Contrast do.
 
 ## Tools
 
@@ -99,6 +101,7 @@ All three need Wi-Fi.
 | --- | --- | --- | --- |
 | Wi-Fi | | | Turns Wi-Fi on or off and picks a network |
 | Date & Time | | | Sets the clock, your city and 12 or 24-hour time |
+| Nickname | Up to 29 letters | The device's name | The name other players see when you host a link |
 | Lid Power Off | 1, 3, 5, 10, 15, 30 min | 3 min | How long slot sleeps before powering off |
 | Battery Display | Both, Icon, Percentage | Both | Whether the battery shows as an icon, a percentage or both |
 | Check for Updates | | | Downloads and installs a new version of slot |

@@ -2,8 +2,9 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+use slot::ble::{Ble, BleWant, Heard};
 use slot::frontend::Frontend;
-use slot_gfx::{blue_light_gain, dim_gain, Compositor, HeadlessSurface, OUT_H, OUT_W};
+use slot_gfx::{blue_light_gain, dim_gain, Compositor, HeadlessSurface};
 use slot_input::{Btn, InputSource, Millis, RawEvent};
 use slot_power::SimPlatform;
 
@@ -28,10 +29,10 @@ struct Clip {
 }
 
 impl Clip {
-    fn start(path: String) -> Clip {
+    fn start(path: String, (w, h): (u32, u32)) -> Clip {
         let mut ffmpeg = Command::new("ffmpeg")
             .args(["-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgba"])
-            .args(["-s", &format!("{OUT_W}x{OUT_H}"), "-r", "60", "-i", "-"])
+            .args(["-s", &format!("{w}x{h}"), "-r", "60", "-i", "-"])
             .args(["-c:v", "libx264", "-preset", "slow", "-crf", "20"])
             .args(["-pix_fmt", "yuv420p", "-movflags", "+faststart", &path])
             .stdin(Stdio::piped())
@@ -151,6 +152,121 @@ fn connect(app: &mut slot::app::App) {
     assert!(app.wifi_up(), "the fake network did not connect");
 }
 
+struct UdpBle {
+    socket: std::net::UdpSocket,
+    want: std::sync::Arc<std::sync::Mutex<BleWant>>,
+}
+
+impl UdpBle {
+    fn start(port: u16) -> UdpBle {
+        let (socket, peer) = match std::net::UdpSocket::bind(("127.0.0.1", port)) {
+            Ok(socket) => (socket, port + 1),
+            Err(_) => (
+                std::net::UdpSocket::bind(("127.0.0.1", port + 1)).expect("fake BLE port"),
+                port,
+            ),
+        };
+        socket.set_nonblocking(true).expect("fake BLE socket");
+        eprintln!(
+            "record: fake BLE on {}, peer on {peer}",
+            socket.local_addr().unwrap()
+        );
+        let want = std::sync::Arc::new(std::sync::Mutex::new(BleWant::Off));
+        let air = socket.try_clone().expect("fake BLE socket");
+        let wanted = want.clone();
+        std::thread::spawn(move || loop {
+            let sent = match &*wanted.lock().unwrap() {
+                BleWant::Advertise { advert, scan } => Some([&advert[..], scan].concat()),
+                _ => None,
+            };
+            if let Some(bytes) = sent {
+                let _ = air.send_to(&bytes, ("127.0.0.1", peer));
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        });
+        UdpBle { socket, want }
+    }
+}
+
+impl Ble for UdpBle {
+    fn set(&mut self, want: BleWant) {
+        eprintln!("record: fake BLE wants {want:?}");
+        *self.want.lock().unwrap() = want;
+    }
+
+    fn heard(&mut self) -> Vec<Heard> {
+        let listening = *self.want.lock().unwrap() == BleWant::Listen;
+        let mut heard = Vec::new();
+        let mut buf = [0u8; 128];
+        while let Ok(n) = self.socket.recv(&mut buf) {
+            let data = &buf[..n];
+            if !listening || n < 31 {
+                continue;
+            }
+            if let Some(advert) = slot::invite::decode(&data[..31]) {
+                heard.push(Heard {
+                    advert,
+                    nickname: slot::invite::nickname_of(&data[31..]),
+                    rssi: -50,
+                    at: slot::ble::clock(),
+                });
+            }
+        }
+        heard
+    }
+}
+
+fn fake_radio(app: &mut slot::app::App) {
+    use slot::link_radio::{HostAp, RadioRole};
+    use slot::link_start::{LinkStarter, HOST_ADDR};
+    let Some(port) = std::env::var("SLOT_FAKE_BLE_PORT")
+        .ok()
+        .and_then(|p| p.trim().parse::<u16>().ok())
+    else {
+        return;
+    };
+    app.set_ble(Box::new(UdpBle::start(port)));
+    app.set_link_spawn(Box::new(|role, port, held| {
+        LinkStarter::spawn_held_with(
+            Box::new(|role, _| {
+                Ok(match role {
+                    RadioRole::Host => Some(HostAp {
+                        freq_mhz: 2437,
+                        bssid: [0x02, 0x51, 0x07, 0x00, 0x00, 0x01],
+                    }),
+                    RadioRole::Join(_) => None,
+                })
+            }),
+            Box::new(|| {}),
+            role,
+            port,
+            Box::new(move |port, cancel| match role {
+                RadioRole::Host => slot::link_net::TcpLink::host_until(
+                    HOST_ADDR,
+                    port,
+                    slot::link_net::HOST_BOUND,
+                    cancel,
+                ),
+                RadioRole::Join(_) => slot::link_net::TcpLink::join_until(
+                    HOST_ADDR,
+                    port,
+                    slot::link_net::HOST_BOUND,
+                    cancel,
+                ),
+            }),
+            held,
+        )
+    }));
+}
+
+fn panel_size(script: &str) -> Option<(u32, u32)> {
+    let size = script
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("# panel:"))?;
+    let (w, h) = size.trim().split_once('x')?;
+    Some((w.parse().ok()?, h.parse().ok()?))
+}
+
 #[derive(Default)]
 struct Scripted(Vec<RawEvent>);
 
@@ -173,20 +289,32 @@ fn main() {
     let mut compositor = Compositor::new(&surface).expect("compositor");
     let mut frontend = Frontend::boot(Box::new(SimPlatform::at(root.into()).stopped_at(CLOCK)));
     frontend.upload_faces(&mut compositor);
+    if let Some(panel) = panel_size(&script) {
+        frontend.upload_bezel(&mut compositor, panel);
+        compositor.fit(panel);
+    }
     frontend.drive_emulator();
+    fake_radio(frontend.app_mut());
+    let size = compositor.frame_size();
     if script.lines().any(|line| line.trim() == "# wifi") {
         connect(frontend.app_mut());
+    }
+    if script.lines().any(|line| line.trim() == "# offline") {
+        frontend
+            .app_mut()
+            .set_wifi(slot::wifi::Wifi::inline(Box::new(slot::wifi::Fake::demo())));
     }
 
     let mut input = Scripted::default();
     let lit = frontend.app().brightness().max(1);
+    let settle = !script.lines().any(|line| line.trim() == "# no settle");
     let mut frame = 0u64;
     let mut clip: Option<Clip> = None;
     let present = Duration::from_secs_f64(1.0 / FPS);
     let mut due = std::time::Instant::now();
     let mut run = |input: &mut Scripted, frame: &mut u64, clip: &mut Option<Clip>| {
         let loading = std::time::Instant::now();
-        while frontend.core_settling() && loading.elapsed() < Duration::from_secs(5) {
+        while settle && frontend.core_settling() && loading.elapsed() < Duration::from_secs(5) {
             std::thread::sleep(Duration::from_millis(5));
         }
         due += present;
@@ -223,7 +351,7 @@ fn main() {
                     Some(name) => format!("{out}/{name}.mp4"),
                     None => out.clone(),
                 };
-                clip = Some(Clip::start(path));
+                clip = Some(Clip::start(path, size));
             }
             Step::Cut => {
                 if let Some(done) = clip.take() {

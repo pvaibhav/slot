@@ -54,7 +54,13 @@ pub fn as_png(bytes: &[u8]) -> Option<Cow<'_, [u8]>> {
         jpeg_decoder::PixelFormat::L8 => png::ColorType::Grayscale,
         _ => return None,
     };
-    encoded(u32::from(info.width), u32::from(info.height), color, &pixels).map(Cow::Owned)
+    encoded(
+        u32::from(info.width),
+        u32::from(info.height),
+        color,
+        &pixels,
+    )
+    .map(Cow::Owned)
 }
 
 pub fn real_label(scan: &[u8], platform: Platform) -> Option<Vec<u8>> {

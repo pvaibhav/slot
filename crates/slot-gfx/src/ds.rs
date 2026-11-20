@@ -115,7 +115,10 @@ pub fn ds_rect(panel: (u32, u32)) -> [i32; 4] {
 pub fn ds_rect_powered(panel: (u32, u32), t: f32) -> [i32; 4] {
     let [x, y, w, h] = ds_rect(panel);
     let (sw, sh) = crate::power::screen_squash(w as f32, h as f32, t);
-    let (pw, ph) = ((w as f32 * sw).round() as i32, (h as f32 * sh).round() as i32);
+    let (pw, ph) = (
+        (w as f32 * sw).round() as i32,
+        (h as f32 * sh).round() as i32,
+    );
     [x + (w - pw) / 2, y + (h - ph) / 2, pw, ph]
 }
 

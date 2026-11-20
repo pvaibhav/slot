@@ -16,6 +16,7 @@ fn cart(stem: &str, code: &str) -> Cart {
         shell: None,
         title: stem.to_uppercase(),
         sealed: false,
+        tags: Vec::new(),
     }
 }
 
@@ -434,10 +435,20 @@ fn a_game_boy_cart_shows_its_own_board() {
     };
     let navy = |p: [u8; 3]| p[2] > p[1] && p[0] < 45;
     for (x, y) in [(70, 185), (155, 185), (240, 185)] {
-        assert!(navy(at(&backing, x, y)), "the pak board lost its chip at {x},{y}");
-        assert!(!navy(at(&face, x, y)), "a printed chip still fills the socket at {x},{y}");
+        assert!(
+            navy(at(&backing, x, y)),
+            "the pak board lost its chip at {x},{y}"
+        );
+        assert!(
+            !navy(at(&face, x, y)),
+            "a printed chip still fills the socket at {x},{y}"
+        );
     }
-    assert_eq!(at(&face, 140, 60), at(&backing, 140, 60), "the pak opened on another board");
+    assert_eq!(
+        at(&face, 140, 60),
+        at(&backing, 140, 60),
+        "the pak opened on another board"
+    );
 }
 
 #[test]

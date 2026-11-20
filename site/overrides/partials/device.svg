@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" class="device-defs" aria-hidden="true" focusable="false">
       <defs>
-        <path id="lid"  d="M60,0 H760 A60,60 0 0 1 820,60 V695 A30,30 0 0 1 790,725 H30 A30,30 0 0 1 0,695 V60 A60,60 0 0 1 60,0 Z"/>
+        <path id="lid"  d="M80,0 H740 A80,80 0 0 1 820,80 V700 A25,25 0 0 1 795,725 H25 A25,25 0 0 1 0,700 V80 A80,80 0 0 1 80,0 Z"/>
         <path id="deck" d="M25,725 H795 A25,25 0 0 1 820,750 V1475 A80,80 0 0 1 740,1555 H80 A80,80 0 0 1 0,1475 V750 A25,25 0 0 1 25,725 Z"/>
 
         <linearGradient id="shellGrad" x1=".08" y1="0" x2=".92" y2="1">
@@ -11,10 +11,21 @@
           <stop offset="0"   class="sb"/><stop offset=".24" class="sl"/>
           <stop offset=".58" class="sb"/><stop offset="1"   class="ss"/>
         </linearGradient>
-        <linearGradient id="barrelGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" class="ss"/><stop offset=".22" class="sl"/>
-          <stop offset=".55" class="sb"/><stop offset="1" class="ss"/>
+        <linearGradient id="sideGrad" x1=".26" y1="0" x2=".74" y2="1">
+          <stop offset="0" class="sl"/><stop offset=".45" class="sb"/><stop offset="1" class="ss"/>
         </linearGradient>
+        <linearGradient id="tubeGrad" gradientUnits="userSpaceOnUse" x1="0" y1="740" x2="0" y2="820">
+          <stop offset="0" class="ss"/><stop offset=".12" class="sb"/><stop offset=".3" class="sl"/>
+          <stop offset=".38" class="bh"/><stop offset=".5" class="sl"/><stop offset=".78" class="sb"/>
+          <stop offset="1" class="ss"/>
+        </linearGradient>
+        <linearGradient id="capTube" gradientUnits="userSpaceOnUse" x1="0" y1="740" x2="0" y2="820">
+          <stop offset="0" class="ss"/><stop offset=".14" class="sb"/><stop offset=".32" class="sl"/>
+          <stop offset=".55" class="sl"/><stop offset=".8" class="sb"/><stop offset="1" class="ss"/>
+        </linearGradient>
+        <radialGradient id="capGrad" cx=".42" cy=".38" r=".7">
+          <stop offset="0" class="sl"/><stop offset=".7" class="sb"/><stop offset="1" class="ss"/>
+        </radialGradient>
         <linearGradient id="specular" x1=".08" y1="0" x2=".92" y2="1">
           <stop offset="0"   stop-color="#fff" stop-opacity=".34"/>
           <stop offset=".07" stop-color="#fff" stop-opacity=".20"/>
@@ -38,7 +49,7 @@
         <linearGradient id="btnGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" class="bh"/><stop offset="1" class="bb"/>
         </linearGradient>
-        <clipPath id="lidClip"><path d="M60,0 H760 A60,60 0 0 1 820,60 V695 A30,30 0 0 1 790,725 H30 A30,30 0 0 1 0,695 V60 A60,60 0 0 1 60,0 Z"/></clipPath>
+        <clipPath id="lidClip"><path d="M80,0 H740 A80,80 0 0 1 820,80 V700 A25,25 0 0 1 795,725 H25 A25,25 0 0 1 0,700 V80 A80,80 0 0 1 80,0 Z"/></clipPath>
         <clipPath id="deckClip"><path d="M25,725 H795 A25,25 0 0 1 820,750 V1475 A80,80 0 0 1 740,1555 H80 A80,80 0 0 1 0,1475 V750 A25,25 0 0 1 25,725 Z"/></clipPath>
         <linearGradient id="bevel" x1=".26" y1="0" x2=".74" y2="1">
           <stop offset="0"   stop-color="#fff" stop-opacity=".95"/>
@@ -46,6 +57,12 @@
           <stop offset=".45" stop-color="#fff" stop-opacity=".05"/>
           <stop offset=".62" stop-color="#000" stop-opacity=".22"/>
           <stop offset="1"   stop-color="#000" stop-opacity=".62"/>
+        </linearGradient>
+        <linearGradient id="recess" x1=".2" y1="0" x2=".8" y2="1">
+          <stop offset="0" stop-color="#000" stop-opacity=".34"/>
+          <stop offset=".42" stop-color="#000" stop-opacity="0"/>
+          <stop offset=".8" stop-color="#fff" stop-opacity="0"/>
+          <stop offset="1" stop-color="#fff" stop-opacity=".22"/>
         </linearGradient>
         <radialGradient id="dome" cx="34%" cy="24%" r="88%">
           <stop offset="0"   stop-color="#fff" stop-opacity=".26"/>
@@ -95,7 +112,7 @@
       <rect x="774" y="939" width="42" height="9" rx="4.5" class="ledOff"/>
 
       <circle cx="411" cy="935" r="38" class="dish"/><circle cx="411" cy="935" r="33" class="dishIn"/>
-      <circle cx="411" cy="935" r="27" fill="url(#btnGrad)"/>
+      <circle cx="411" cy="935" r="27" fill="url(#btnGrad)"/><circle cx="411" cy="935" r="27" fill="url(#recess)"/>
       <text x="411" y="944" class="glyph" font-size="26">M</text>
 
       <circle cx="204" cy="1110" r="146" class="dish"/><circle cx="204" cy="1110" r="139" class="dishIn"/>
@@ -118,20 +135,15 @@
       </g>
 
       <g class="holes">
-        <circle cx="366" cy="1240" r="6"/><circle cx="397" cy="1240" r="6"/><circle cx="428" cy="1240" r="6"/><circle cx="459" cy="1240" r="6"/>
-        <circle cx="366" cy="1271" r="6"/><circle cx="397" cy="1271" r="6"/><circle cx="428" cy="1271" r="6"/><circle cx="459" cy="1271" r="6"/>
-        <circle cx="366" cy="1302" r="6"/><circle cx="397" cy="1302" r="6"/><circle cx="428" cy="1302" r="6"/><circle cx="459" cy="1302" r="6"/>
-        <circle cx="366" cy="1333" r="6"/><circle cx="397" cy="1333" r="6"/><circle cx="428" cy="1333" r="6"/><circle cx="459" cy="1333" r="6"/>
+        <circle cx="350" cy="1228" r="4.5"/><circle cx="390" cy="1228" r="4.5"/><circle cx="430" cy="1228" r="4.5"/><circle cx="470" cy="1228" r="4.5"/>
+        <circle cx="350" cy="1268" r="4.5"/><circle cx="390" cy="1268" r="4.5"/><circle cx="430" cy="1268" r="4.5"/><circle cx="470" cy="1268" r="4.5"/>
+        <circle cx="350" cy="1308" r="4.5"/><circle cx="390" cy="1308" r="4.5"/><circle cx="430" cy="1308" r="4.5"/><circle cx="470" cy="1308" r="4.5"/>
+        <circle cx="350" cy="1348" r="4.5"/><circle cx="390" cy="1348" r="4.5"/><circle cx="430" cy="1348" r="4.5"/><circle cx="470" cy="1348" r="4.5"/>
       </g>
 
-      <g class="micro"><text x="357" y="1437">SELECT</text><text x="462" y="1437">START</text></g>
-      <circle cx="357" cy="1474" r="27" class="dish"/><circle cx="357" cy="1474" r="22" fill="url(#btnGrad)"/>
-      <circle cx="462" cy="1476" r="27" class="dish"/><circle cx="462" cy="1476" r="22" fill="url(#btnGrad)"/>
+      <g class="micro"><text x="357" y="1420">SELECT</text><text x="462" y="1420">START</text></g>
+      <circle cx="357" cy="1474" r="27" class="dish"/><circle cx="357" cy="1474" r="22" fill="url(#btnGrad)"/><circle cx="357" cy="1474" r="22" fill="url(#recess)"/>
+      <circle cx="462" cy="1476" r="27" class="dish"/><circle cx="462" cy="1476" r="22" fill="url(#btnGrad)"/><circle cx="462" cy="1476" r="22" fill="url(#recess)"/>
 
-      <rect x="0" y="728" width="820" height="104" rx="19" fill="url(#barrelGrad)"/>
-      <rect x="0" y="725" width="48" height="110" rx="19" fill="url(#barrelGrad)"/>
-      <rect x="772" y="725" width="48" height="110" rx="19" fill="url(#barrelGrad)"/>
-      <g class="seam"><path d="M48,731 V829 M396,731 V829 M772,731 V829"/></g>
-      <rect x="0.75" y="728.75" width="818.5" height="102.5" rx="18.5" fill="none" class="rim"/>
       </g>
     </svg>

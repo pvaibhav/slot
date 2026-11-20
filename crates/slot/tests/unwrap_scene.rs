@@ -49,7 +49,12 @@ fn the_box_holds_still_until_the_cart_is_clear() {
     for p in PLATFORMS {
         for canvas in canvases() {
             let [_, y, _, h] = cart_rect(cart, p, canvas);
-            assert!(y + h < rim_y(slot_ui::Canvas::FRAMED, p), "{p:?}: bottom {} rim {}", y + h, rim_y(slot_ui::Canvas::FRAMED, p));
+            assert!(
+                y + h < rim_y(slot_ui::Canvas::FRAMED, p),
+                "{p:?}: bottom {} rim {}",
+                y + h,
+                rim_y(slot_ui::Canvas::FRAMED, p)
+            );
             assert!(y > 0.0, "{p:?}: top {y}");
         }
     }
@@ -77,7 +82,11 @@ fn the_cart_starts_narrower_than_the_box() {
             let [x, y, w, _] = cart_rect(start, p, canvas);
             assert!(w < body_width(p), "{p:?}: {w}");
             assert!((x + w / 2.0 - canvas.w / 2.0).abs() < 0.5);
-            assert!(y >= rim_y(slot_ui::Canvas::FRAMED, p), "{p:?}: top {y} above rim {}", rim_y(slot_ui::Canvas::FRAMED, p));
+            assert!(
+                y >= rim_y(slot_ui::Canvas::FRAMED, p),
+                "{p:?}: top {y} above rim {}",
+                rim_y(slot_ui::Canvas::FRAMED, p)
+            );
         }
     }
 }
@@ -101,5 +110,8 @@ fn a_box_face_is_the_same_each_build() {
     let a = box_face(&art, Platform::Gba, "Emerald");
     assert_eq!(a, box_face(&art, Platform::Gba, "Emerald"));
     let (w, h) = box_size(Platform::Gb);
-    assert_eq!(box_face(&art, Platform::Gb, "Tetris").len(), (w * h * 4) as usize);
+    assert_eq!(
+        box_face(&art, Platform::Gb, "Tetris").len(),
+        (w * h * 4) as usize
+    );
 }

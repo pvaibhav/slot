@@ -12,6 +12,7 @@ fn cart(platform: Platform, art: bool) -> Cart {
         code: String::new(),
         shell: None,
         sealed: false,
+        tags: Vec::new(),
     }
 }
 
@@ -33,34 +34,67 @@ fn rows_for_a_gba_cart() {
 #[test]
 fn shape_only_on_game_boy() {
     let s = Studio::new(cart(Platform::Gb, true), true);
-    assert_eq!(s.rows(), vec![Row::Label, Row::Color, Row::Finish, Row::Shape]);
+    assert_eq!(
+        s.rows(),
+        vec![Row::Label, Row::Color, Row::Finish, Row::Shape]
+    );
 }
 
 #[test]
-fn no_label_row_without_wifi() {
-    let s = Studio::new(cart(Platform::Gba, true), false);
-    assert_eq!(s.rows(), vec![Row::Color, Row::Finish]);
-}
-
-#[test]
-fn artless_sheet_is_two() {
+fn a_handwritten_cart_offers_no_marker() {
     let s = Studio::new(cart(Platform::Gba, false), true);
     assert_eq!(s.sheet, vec![LabelKind::Real, LabelKind::Logo]);
+    let s = Studio::new(cart(Platform::Gba, false), false);
+    assert!(s.sheet.is_empty());
 }
 
 #[test]
-fn a_sheet_always_has_two() {
-    let mut s = gba();
+fn a_label_that_cannot_be_read_counts_as_handwriting() {
+    let mut s = Studio::new(cart(Platform::Gba, true), true);
+    s.press(Btn::A);
+    s.press(Btn::Left);
+    s.label_unreadable();
+    assert!(s.wearing_hand());
     assert_eq!(s.sheet, vec![LabelKind::Real, LabelKind::Logo]);
+    assert_eq!(s.screen, Screen::Sheet { at: 0 });
+}
+
+#[test]
+fn the_marker_leaves_once_it_has_written_and_returns_with_a_label() {
+    let mut s = Studio::new(cart(Platform::Gba, true), false);
+    to_row(&mut s, Row::Label);
+    s.press(Btn::A);
+    assert_eq!(s.sheet, vec![LabelKind::Hand]);
+    assert_eq!(s.press(Btn::A), Some(Effect::Write));
+    assert_eq!(s.written(), Some(Effect::Apply(LabelKind::Hand)));
+    s.applied(LabelKind::Hand);
+    assert_eq!(s.sheet, vec![LabelKind::Existing]);
+    s.applied(LabelKind::Existing);
+    assert_eq!(s.sheet.last(), Some(&LabelKind::Hand));
+}
+
+#[test]
+fn a_sheet_always_has_two_and_the_marker() {
+    let mut s = gba();
+    assert_eq!(
+        s.sheet,
+        vec![LabelKind::Real, LabelKind::Logo, LabelKind::Hand]
+    );
     s.press(Btn::A);
     s.art_arrived(true, true);
     s.press(Btn::A);
     s.applied(LabelKind::Real);
-    assert_eq!(s.sheet, vec![LabelKind::Existing, LabelKind::Logo]);
-    s.press(Btn::Right);
+    assert_eq!(
+        s.sheet,
+        vec![LabelKind::Existing, LabelKind::Logo, LabelKind::Hand]
+    );
+    s.press(Btn::Down);
     s.press(Btn::A);
     s.applied(LabelKind::Logo);
-    assert_eq!(s.sheet, vec![LabelKind::Real, LabelKind::Existing]);
+    assert_eq!(
+        s.sheet,
+        vec![LabelKind::Real, LabelKind::Existing, LabelKind::Hand]
+    );
 }
 
 #[test]
@@ -75,14 +109,14 @@ fn apply_swaps_the_label_back() {
     let mut s = Studio::new(cart(Platform::Gba, false), true);
     s.press(Btn::A);
     s.art_arrived(true, true);
-    s.press(Btn::Right);
+    s.press(Btn::Down);
     assert_eq!(s.press(Btn::A), Some(Effect::Apply(LabelKind::Logo)));
     s.applied(LabelKind::Logo);
     assert_eq!(s.wearing, LabelKind::Logo);
-    assert_eq!(s.sheet, vec![LabelKind::Existing, LabelKind::Real]);
-    assert_eq!(s.press(Btn::A), Some(Effect::Apply(LabelKind::Existing)));
-    s.applied(LabelKind::Existing);
-    assert_eq!(s.sheet, vec![LabelKind::Logo, LabelKind::Real]);
+    assert_eq!(s.sheet, vec![LabelKind::Real, LabelKind::Hand]);
+    assert_eq!(s.press(Btn::A), Some(Effect::Apply(LabelKind::Real)));
+    s.applied(LabelKind::Real);
+    assert_eq!(s.sheet, vec![LabelKind::Logo, LabelKind::Hand]);
 }
 
 #[test]
@@ -91,7 +125,7 @@ fn label_color_only_on_logo() {
     assert!(!s.rows().contains(&Row::LabelColor));
     s.press(Btn::A);
     s.art_arrived(true, true);
-    s.press(Btn::Right);
+    s.press(Btn::Down);
     s.press(Btn::A);
     s.applied(LabelKind::Logo);
     assert!(s.rows().contains(&Row::LabelColor));
@@ -102,13 +136,17 @@ fn a_preset_sets_the_finish() {
     let mut s = gba();
     to_row(&mut s, Row::Color);
     s.press(Btn::A);
-    assert!(matches!(s.screen, Screen::Chips { target: Target::Shell, .. }));
+    assert!(matches!(
+        s.screen,
+        Screen::Chips {
+            target: Target::Shell,
+            ..
+        }
+    ));
     let clear = slot_ui::palette::chip_grid(0.0, 0.0)
         .iter()
         .position(|p| match p.chip {
-            slot_ui::palette::Chip::Preset(i) => {
-                slot_ui::shell_presets()[i].0 == "Kirby pink"
-            }
+            slot_ui::palette::Chip::Preset(i) => slot_ui::shell_presets()[i].0 == "Kirby pink",
             _ => false,
         })
         .unwrap();
@@ -153,11 +191,15 @@ fn custom_keeps_the_finish() {
 fn reset_returns_to_start() {
     let mut s = gba();
     custom(&mut s);
-    let Screen::Custom { start, .. } = s.screen else { panic!() };
+    let Screen::Custom { start, .. } = s.screen else {
+        panic!()
+    };
     s.press(Btn::Right);
     s.press(Btn::Right);
     s.press(Btn::X);
-    let Screen::Custom { rgb, .. } = s.screen else { panic!() };
+    let Screen::Custom { rgb, .. } = s.screen else {
+        panic!()
+    };
     assert_eq!(rgb, start);
 }
 
@@ -167,15 +209,24 @@ fn hex_rolls_and_wraps() {
     custom(&mut s);
     s.press(Btn::Y);
     assert!(matches!(s.screen, Screen::Hex { .. }));
-    let Screen::Hex { digits, .. } = s.screen else { panic!() };
+    let Screen::Hex { digits, .. } = s.screen else {
+        panic!()
+    };
     for _ in 0..16 {
         s.press(Btn::Up);
     }
-    let Screen::Hex { digits: after, .. } = s.screen else { panic!() };
+    let Screen::Hex { digits: after, .. } = s.screen else {
+        panic!()
+    };
     assert_eq!(digits, after);
     s.press(Btn::Right);
     s.press(Btn::Down);
-    let Screen::Hex { digits: down, pos, .. } = s.screen else { panic!() };
+    let Screen::Hex {
+        digits: down, pos, ..
+    } = s.screen
+    else {
+        panic!()
+    };
     assert_eq!(pos, 1);
     assert_eq!(down[1], (digits[1] + 15) % 16);
 }
@@ -186,9 +237,13 @@ fn hex_back_sets_the_sliders() {
     custom(&mut s);
     s.press(Btn::Y);
     s.press(Btn::Up);
-    let Screen::Hex { digits, .. } = s.screen else { panic!() };
+    let Screen::Hex { digits, .. } = s.screen else {
+        panic!()
+    };
     s.press(Btn::B);
-    let Screen::Custom { rgb, .. } = s.screen else { panic!() };
+    let Screen::Custom { rgb, .. } = s.screen else {
+        panic!()
+    };
     assert_eq!(rgb[0], digits[0] * 16 + digits[1]);
 }
 
@@ -237,13 +292,27 @@ fn legends_follow_the_screen() {
         .iter()
         .position(|p| p.chip == slot_ui::palette::Chip::Custom)
         .unwrap();
-    s.screen = Screen::Chips { target: Target::Shell, at: custom };
+    s.screen = Screen::Chips {
+        target: Target::Shell,
+        at: custom,
+    };
     assert_eq!(s.legends(), vec![Legend::Back, Legend::Open]);
     s.chips_jump(2);
     s.press(Btn::A);
-    assert_eq!(s.legends(), vec![Legend::Back, Legend::Change, Legend::Reset, Legend::Hex]);
+    assert_eq!(
+        s.legends(),
+        vec![Legend::Back, Legend::Change, Legend::Reset, Legend::Hex]
+    );
     s.press(Btn::Y);
-    assert_eq!(s.legends(), vec![Legend::Back, Legend::Move, Legend::ChangeVertical, Legend::Reset]);
+    assert_eq!(
+        s.legends(),
+        vec![
+            Legend::Back,
+            Legend::Move,
+            Legend::ChangeVertical,
+            Legend::Reset
+        ]
+    );
 }
 
 #[test]
@@ -265,7 +334,7 @@ fn fetched_labels_wait_for_the_art() {
 fn one_option_on_a_cart_with_art_adds_the_text_label() {
     let mut s = gba();
     s.art_arrived(false, true);
-    assert_eq!(s.sheet, vec![LabelKind::Logo, LabelKind::Title]);
+    assert_eq!(s.sheet, vec![LabelKind::Logo, LabelKind::Hand]);
 }
 
 #[test]
@@ -273,38 +342,41 @@ fn a_cart_wearing_its_only_art_keeps_the_text_label_on_offer() {
     let mut s = gba();
     s.duplicates = true;
     s.art_arrived(false, false);
-    assert_eq!(s.sheet, vec![LabelKind::Title]);
+    assert_eq!(s.sheet, vec![LabelKind::Hand]);
     s.press(Btn::A);
-    assert_eq!(s.press(Btn::A), Some(Effect::Apply(LabelKind::Title)));
+    assert_eq!(s.press(Btn::A), Some(Effect::Write));
 }
 
 #[test]
 fn no_art_at_all_still_offers_the_text_label() {
     let mut s = gba();
     s.art_arrived(false, false);
-    assert_eq!(s.sheet, vec![LabelKind::Title]);
+    assert_eq!(s.sheet, vec![LabelKind::Hand]);
 }
 
 #[test]
-fn the_text_label_is_not_offered_while_it_is_worn() {
+fn a_saved_text_label_still_gets_the_marker() {
     let mut s = gba();
     s.adopt_text([7, 8, 9]);
     s.art_arrived(false, false);
-    assert!(s.sheet.is_empty());
+    assert_eq!(s.sheet, vec![LabelKind::Hand]);
 }
 
 #[test]
-fn an_artless_cart_never_gets_the_text_label() {
+fn an_artless_cart_gets_no_marker_with_its_scan() {
     let mut s = Studio::new(cart(Platform::Gba, false), true);
     s.art_arrived(true, false);
     assert_eq!(s.sheet, vec![LabelKind::Real]);
 }
 
 #[test]
-fn two_options_stay_two() {
+fn two_options_stay_two_and_the_marker() {
     let mut s = gba();
     s.art_arrived(true, true);
-    assert_eq!(s.sheet, vec![LabelKind::Real, LabelKind::Logo]);
+    assert_eq!(
+        s.sheet,
+        vec![LabelKind::Real, LabelKind::Logo, LabelKind::Hand]
+    );
 }
 
 mod tray {
@@ -313,7 +385,11 @@ mod tray {
     const H: f32 = 183.0;
     const BOTTOM: f32 = 189.0;
 
-    fn settle(slips: &mut Vec<Slip>, sheet: &[LabelKind], ready: &dyn Fn(LabelKind) -> bool) -> usize {
+    fn settle(
+        slips: &mut Vec<Slip>,
+        sheet: &[LabelKind],
+        ready: &dyn Fn(LabelKind) -> bool,
+    ) -> usize {
         let mut now = 0.0;
         let mut prints = 0;
         for _ in 0..200 {
@@ -472,35 +548,14 @@ mod worn_logo {
 mod text_label {
     use super::*;
 
-    fn bare() -> Studio {
-        Studio::new(cart(Platform::Gba, false), true)
-    }
-
-    #[test]
-    fn an_artless_cart_gets_label_color_with_no_art() {
-        assert!(bare().rows().contains(&Row::LabelColor));
-    }
-
-    #[test]
-    fn it_needs_no_wifi() {
-        let s = Studio::new(cart(Platform::Gba, false), false);
-        assert!(s.rows().contains(&Row::LabelColor));
-    }
-
-    #[test]
-    fn it_starts_on_the_automatic_color_with_nothing_to_save() {
-        let s = bare();
-        assert!(s.ground.is_some());
-        assert!(!s.recolored());
-    }
-
     #[test]
     fn changing_it_shows_the_text_face_and_saves() {
-        let mut s = bare();
+        let mut s = gba();
+        s.adopt_text([7, 8, 9]);
         s.ground = Some([1, 2, 3]);
         assert!(s.recolored());
         assert!(s.wearing_text());
-        assert_eq!(s.shown_label(), LabelKind::Title);
+        assert_eq!(s.shown_label(), LabelKind::Existing);
     }
 
     #[test]
@@ -510,15 +565,16 @@ mod text_label {
         assert!(s.rows().contains(&Row::LabelColor));
         assert_eq!(s.ground, Some([7, 8, 9]));
         s.art_arrived(true, false);
-        assert_eq!(s.sheet, vec![LabelKind::Real]);
+        assert_eq!(s.sheet, vec![LabelKind::Real, LabelKind::Hand]);
     }
 
     #[test]
-    fn applying_the_text_sticker_gets_the_row() {
+    fn applying_the_marker_drops_the_color_row() {
         let mut s = gba();
-        s.applied(LabelKind::Title);
-        assert!(s.rows().contains(&Row::LabelColor));
-        assert!(s.wearing_text());
+        s.adopt_text([7, 8, 9]);
+        s.applied(LabelKind::Hand);
+        assert!(!s.rows().contains(&Row::LabelColor));
+        assert!(!s.wearing_text());
     }
 
     #[test]
@@ -539,7 +595,10 @@ fn the_mac_build_can_pretend_to_have_wifi() {
 #[test]
 fn signal_reads_the_driver_and_becomes_bars() {
     use slot::update::{parse_rssi, signal_bars};
-    assert_eq!(parse_rssi("rssi:-55\nsignal_strength:45\nsignal_qual:100\n"), Some(-55));
+    assert_eq!(
+        parse_rssi("rssi:-55\nsignal_strength:45\nsignal_qual:100\n"),
+        Some(-55)
+    );
     assert_eq!(parse_rssi("nothing here"), None);
     assert_eq!(signal_bars(-55), 3);
     assert_eq!(signal_bars(-60), 3);
@@ -551,7 +610,8 @@ fn signal_reads_the_driver_and_becomes_bars() {
 
 #[test]
 fn only_a_tinted_label_passes_its_color_to_the_previews() {
-    let mut s = Studio::new(cart(Platform::Gba, false), true);
+    let mut s = gba();
+    s.adopt_text([7, 8, 9]);
     assert!(s.preview_ground().is_some());
     s.applied(LabelKind::Real);
     assert_eq!(s.preview_ground(), None);
@@ -559,12 +619,12 @@ fn only_a_tinted_label_passes_its_color_to_the_previews() {
 
 #[test]
 fn the_cursor_stays_on_the_sheet_when_art_arrives() {
-    let mut s = Studio::new(cart(Platform::Gba, false), true);
+    let mut s = gba();
     s.press(Btn::A);
-    s.press(Btn::Right);
-    assert_eq!(s.screen, Screen::Sheet { at: 1 });
+    s.press(Btn::Left);
+    assert_eq!(s.screen, Screen::Sheet { at: 2 });
     s.art_arrived(true, false);
-    assert_eq!(s.screen, Screen::Sheet { at: 0 });
+    assert_eq!(s.screen, Screen::Sheet { at: 1 });
 }
 
 #[test]
@@ -576,7 +636,10 @@ fn browsing_past_auto_keeps_the_shape() {
         finish: ShellFinish::Glitter,
     });
     let mut s = Studio::new(c, true);
-    s.screen = Screen::Chips { target: Target::Shell, at: 0 };
+    s.screen = Screen::Chips {
+        target: Target::Shell,
+        at: 0,
+    };
     for _ in 0..3 {
         s.press(Btn::Right);
         assert_eq!(s.current_shell().outline, Outline::Rounded);
@@ -590,20 +653,33 @@ fn browsing_past_auto_keeps_the_shape() {
 #[test]
 fn the_print_light_outlasts_the_print() {
     use slot::studio::{Slip, PRINT_LIGHT_HOLD_MS};
-    let slip = Slip { kind: LabelKind::Real, y0: -100.0, y1: 0.0, t0: 1000.0, ms: 300.0 };
+    let slip = Slip {
+        kind: LabelKind::Real,
+        y0: -100.0,
+        y1: 0.0,
+        t0: 1000.0,
+        ms: 300.0,
+    };
     assert!(slip.lit(1100.0));
     assert!(!slip.printing(1350.0));
     assert!(slip.lit(1350.0));
     assert!(slip.lit(1300.0 + PRINT_LIGHT_HOLD_MS - 1.0));
     assert!(!slip.lit(1300.0 + PRINT_LIGHT_HOLD_MS));
-    let settled = Slip { y0: 40.0, y1: 0.0, ..slip };
+    let settled = Slip {
+        y0: 40.0,
+        y1: 0.0,
+        ..slip
+    };
     assert!(!settled.lit(1100.0));
 }
 
 #[test]
 fn reset_undoes_custom_without_saving_a_color() {
     let mut s = Studio::new(cart(Platform::Gb, true), true);
-    s.screen = Screen::Chips { target: Target::Shell, at: 1 };
+    s.screen = Screen::Chips {
+        target: Target::Shell,
+        at: 1,
+    };
     s.chips_jump(1);
     assert_eq!(s.shell, None);
     s.chips_jump(2);
@@ -622,7 +698,10 @@ fn reset_undoes_custom_without_saving_a_color() {
 #[test]
 fn reset_puts_an_automatic_label_color_back() {
     let mut s = gba();
-    s.screen = Screen::Chips { target: Target::Label, at: 2 };
+    s.screen = Screen::Chips {
+        target: Target::Label,
+        at: 2,
+    };
     s.press(Btn::A);
     s.nudge(5);
     assert!(s.ground.is_some());
@@ -657,7 +736,10 @@ fn the_shell_picker_starts_on_the_preset_the_cart_wears() {
     s.press(Btn::A);
     assert_eq!(
         s.screen,
-        Screen::Chips { target: Target::Shell, at: chip_at(Chip::Preset(7)) }
+        Screen::Chips {
+            target: Target::Shell,
+            at: chip_at(Chip::Preset(7))
+        }
     );
     assert_eq!(s.shell, before);
 }
@@ -667,7 +749,13 @@ fn the_shell_picker_starts_on_current_for_a_cart_on_auto_or_a_custom_color() {
     let mut s = gba();
     to_row(&mut s, Row::Color);
     s.press(Btn::A);
-    assert_eq!(s.screen, Screen::Chips { target: Target::Shell, at: 0 });
+    assert_eq!(
+        s.screen,
+        Screen::Chips {
+            target: Target::Shell,
+            at: 0
+        }
+    );
 
     let mut c = cart(Platform::Gba, true);
     c.shell = Some(ShellChoice {
@@ -678,7 +766,13 @@ fn the_shell_picker_starts_on_current_for_a_cart_on_auto_or_a_custom_color() {
     let mut s = Studio::new(c, true);
     to_row(&mut s, Row::Color);
     s.press(Btn::A);
-    assert_eq!(s.screen, Screen::Chips { target: Target::Shell, at: 0 });
+    assert_eq!(
+        s.screen,
+        Screen::Chips {
+            target: Target::Shell,
+            at: 0
+        }
+    );
 }
 
 #[test]
@@ -692,27 +786,167 @@ fn the_shell_picker_reopens_on_what_was_just_picked() {
     s.press(Btn::A);
     assert_eq!(
         s.screen,
-        Screen::Chips { target: Target::Shell, at: chip_at(Chip::Preset(3)) }
+        Screen::Chips {
+            target: Target::Shell,
+            at: chip_at(Chip::Preset(3))
+        }
     );
     s.chips_jump(chip_at(Chip::Auto));
     s.press(Btn::B);
     s.press(Btn::A);
     assert_eq!(
         s.screen,
-        Screen::Chips { target: Target::Shell, at: chip_at(Chip::Auto) }
+        Screen::Chips {
+            target: Target::Shell,
+            at: chip_at(Chip::Auto)
+        }
     );
 }
 
 #[test]
 fn the_label_picker_starts_on_the_preset_in_use() {
     use slot_ui::palette::Chip;
-    let mut s = Studio::new(cart(Platform::Gba, false), true);
-    s.screen = Screen::Chips { target: Target::Label, at: 0 };
+    let mut s = gba();
+    s.adopt_text([7, 8, 9]);
+    s.screen = Screen::Chips {
+        target: Target::Label,
+        at: 0,
+    };
     s.chips_jump(chip_at(Chip::Preset(3)));
     s.press(Btn::B);
     s.press(Btn::A);
     assert_eq!(
         s.screen,
-        Screen::Chips { target: Target::Label, at: chip_at(Chip::Preset(3)) }
+        Screen::Chips {
+            target: Target::Label,
+            at: chip_at(Chip::Preset(3))
+        }
     );
+}
+
+fn sheet_at(s: &mut Studio, kind: LabelKind) {
+    to_row(s, Row::Label);
+    s.press(Btn::A);
+    while s.sheet.get(match s.screen {
+        Screen::Sheet { at } => at,
+        _ => usize::MAX,
+    }) != Some(&kind)
+    {
+        s.press(if kind == LabelKind::Hand {
+            Btn::Left
+        } else {
+            Btn::Down
+        });
+    }
+}
+
+#[test]
+fn marker_is_always_last() {
+    let mut s = gba();
+    s.art_arrived(true, true);
+    assert_eq!(
+        s.sheet,
+        vec![LabelKind::Real, LabelKind::Logo, LabelKind::Hand]
+    );
+    let mut s = gba();
+    s.art_arrived(false, false);
+    assert_eq!(s.sheet, vec![LabelKind::Hand]);
+}
+
+#[test]
+fn offline_still_opens_the_printer() {
+    let mut s = Studio::new(cart(Platform::Gba, true), false);
+    assert!(s.rows().contains(&Row::Label));
+    to_row(&mut s, Row::Label);
+    assert_eq!(s.press(Btn::A), None);
+    assert_eq!(s.screen, Screen::Sheet { at: 0 });
+    assert_eq!(s.sheet, vec![LabelKind::Hand]);
+}
+
+#[test]
+fn a_on_the_marker_writes_then_applies() {
+    let mut s = gba();
+    s.art_arrived(true, true);
+    sheet_at(&mut s, LabelKind::Hand);
+    assert_eq!(s.press(Btn::A), Some(Effect::Write));
+    assert_eq!(s.written(), Some(Effect::Apply(LabelKind::Hand)));
+}
+
+#[test]
+fn no_label_color_for_hand() {
+    let s = Studio::new(cart(Platform::Gba, false), true);
+    assert!(!s.rows().contains(&Row::LabelColor));
+}
+
+#[test]
+fn leaving_mid_write_applies_nothing() {
+    let mut s = gba();
+    s.art_arrived(true, true);
+    sheet_at(&mut s, LabelKind::Hand);
+    assert_eq!(s.press(Btn::A), Some(Effect::Write));
+    s.press(Btn::B);
+    assert_eq!(s.written(), None);
+}
+
+#[test]
+fn the_marker_says_write_until_it_has_nothing_to_write() {
+    let mut s = gba();
+    s.art_arrived(true, true);
+    sheet_at(&mut s, LabelKind::Real);
+    assert_eq!(s.legends(), vec![Legend::Back, Legend::Apply]);
+    s.press(Btn::Left);
+    assert_eq!(s.sheet.last(), Some(&LabelKind::Hand));
+    assert_eq!(s.legends(), vec![Legend::Back, Legend::Write]);
+    assert_eq!(s.press(Btn::A), Some(Effect::Write));
+    assert_eq!(s.legends(), vec![Legend::Back]);
+}
+
+#[test]
+fn up_and_down_move_between_labels_and_never_reach_the_marker() {
+    let mut s = gba();
+    s.press(Btn::A);
+    s.art_arrived(true, true);
+    s.press(Btn::Down);
+    assert_eq!(s.screen, Screen::Sheet { at: 1 });
+    s.press(Btn::Down);
+    assert_eq!(s.screen, Screen::Sheet { at: 1 });
+    s.press(Btn::Up);
+    assert_eq!(s.screen, Screen::Sheet { at: 0 });
+}
+
+#[test]
+fn left_picks_the_marker_and_right_returns_to_the_label() {
+    let mut s = gba();
+    s.press(Btn::A);
+    s.art_arrived(true, true);
+    s.press(Btn::Down);
+    s.press(Btn::Right);
+    assert_eq!(s.screen, Screen::Sheet { at: 1 });
+    s.press(Btn::Left);
+    assert_eq!(s.screen, Screen::Sheet { at: 2 });
+    s.press(Btn::Left);
+    s.press(Btn::Up);
+    s.press(Btn::Down);
+    assert_eq!(s.screen, Screen::Sheet { at: 2 });
+    s.press(Btn::Right);
+    assert_eq!(s.screen, Screen::Sheet { at: 1 });
+}
+
+#[test]
+fn down_from_the_bottom_label_reaches_a_marker_lying_below() {
+    let mut s = gba();
+    s.marker_below = true;
+    s.press(Btn::A);
+    s.art_arrived(true, true);
+    s.press(Btn::Down);
+    s.press(Btn::Down);
+    assert_eq!(s.screen, Screen::Sheet { at: 2 });
+    s.press(Btn::Down);
+    assert_eq!(s.screen, Screen::Sheet { at: 2 });
+    s.press(Btn::Up);
+    assert_eq!(s.screen, Screen::Sheet { at: 1 });
+    s.press(Btn::Left);
+    assert_eq!(s.screen, Screen::Sheet { at: 2 });
+    s.press(Btn::Right);
+    assert_eq!(s.screen, Screen::Sheet { at: 1 });
 }

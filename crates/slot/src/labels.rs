@@ -80,6 +80,7 @@ mod tests {
         let rom = dir.join(format!("{name}.gba"));
         std::fs::write(&rom, []).unwrap();
         Cart {
+            tags: Vec::new(),
             platform: Platform::Gba,
             stem: name.into(),
             rom,

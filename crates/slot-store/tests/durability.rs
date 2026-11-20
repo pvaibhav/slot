@@ -2,8 +2,8 @@ mod common;
 
 use common::tmp_root;
 use slot_store::{
-    atomic_write, read_slot_state, sweep_temps, write_slot_state, Appearance, BezelPick,
-    Blending, Core, GbPalette, Platform, Recent, Scale, Shader, SlotState, Stretch, WallpaperPick,
+    atomic_write, read_slot_state, sweep_temps, write_slot_state, Appearance, BezelPick, Blending,
+    Core, GbPalette, Platform, Recent, Scale, Shader, SlotState, Stretch, WallpaperPick,
     WallpaperTint, Zone, FF_SPEEDS, FF_SPEED_DEFAULT,
 };
 use tempfile::tempdir;
@@ -47,6 +47,14 @@ fn older_fork_cards_keep_mix_and_upstream_cards_keep_off() {
         assert_eq!(
             (state.blending_gba, state.blending_gb, state.blending_gbc),
             (want, want, want)
+        );
+        assert_eq!(
+            (
+                state.authentic_blending_gba,
+                state.authentic_blending_gb,
+                state.authentic_blending_gbc,
+            ),
+            (Blending::Ghosting, Blending::Ghosting, Blending::Ghosting)
         );
     }
 }
@@ -324,7 +332,6 @@ fn a_card_from_before_the_settings_keeps_all_its_values() {
             shader_gbc: Shader::Simpletex,
             resume_insert: true,
             resume_power_on: true,
-            turbo: true,
             rewind: true,
             high_refresh: true,
             gb_palettes: false,
@@ -337,6 +344,7 @@ fn a_card_from_before_the_settings_keeps_all_its_values() {
             left_stick_dpad: true,
             lid_off_min: None,
             wifi_off: false,
+            nickname: String::new(),
             network_time: false,
             bezel_gba: BezelPick::Ags102,
             bezel_gb: BezelPick::Ags102,
@@ -377,7 +385,6 @@ fn the_quick_menu_settings_round_trip_as_their_own_lines() {
         shader_gb: Shader::Off,
         resume_insert: false,
         resume_power_on: true,
-        turbo: false,
         rewind: false,
         high_refresh: true,
         gb_palettes: true,
@@ -393,6 +400,8 @@ fn the_quick_menu_settings_round_trip_as_their_own_lines() {
         reflection_gb: false,
         blending_gba: Blending::Ghosting,
         blending_gb: Blending::Mix,
+        authentic_blending_gba: Blending::Off,
+        authentic_blending_gb: Blending::Mix,
         shelf: Some("gba".into()),
         shelf_cart: Some(Recent {
             platform: Platform::Gba,
@@ -413,7 +422,6 @@ fn the_quick_menu_settings_round_trip_as_their_own_lines() {
         "shader_gb=off",
         "resume_insert=0",
         "resume_power_on=1",
-        "turbo=0",
         "rewind=0",
         "high_refresh=1",
         "gb_palettes=1",
@@ -432,6 +440,9 @@ fn the_quick_menu_settings_round_trip_as_their_own_lines() {
         "blending_gba=ghosting",
         "blending_gb=mix",
         "blending_gbc=off",
+        "authentic_blending_gba=off",
+        "authentic_blending_gb=mix",
+        "authentic_blending_gbc=ghosting",
         "shelf=gba",
         "shelf_cart=gba/Drill Dozer",
     ] {
@@ -882,5 +893,27 @@ fn a_card_saved_with_the_test_builds_transparent_shader_keeps_it_as_authentic() 
     assert_eq!(
         slot_store::Shader::parse("authentic"),
         Some(slot_store::Shader::Authentic)
+    );
+}
+
+#[test]
+fn only_a_card_that_turned_turbo_off_reads_as_turbo_off() {
+    let d = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(d.path().join("Config")).unwrap();
+    assert!(!slot_store::legacy_turbo_off(d.path()));
+    for (text, off) in [
+        ("rewind=1\nturbo=0\n", true),
+        ("turbo=1\n", false),
+        ("rewind=0\n", false),
+        ("turbo=nope\n", false),
+    ] {
+        std::fs::write(d.path().join("Config/slot.state"), text).unwrap();
+        assert_eq!(slot_store::legacy_turbo_off(d.path()), off, "{text:?}");
+    }
+    write_slot_state(d.path(), &read_slot_state(d.path())).unwrap();
+    let text = std::fs::read_to_string(d.path().join("Config/slot.state")).unwrap();
+    assert!(
+        !text.contains("turbo="),
+        "slot.state still writes the turbo switch"
     );
 }

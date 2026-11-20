@@ -83,7 +83,10 @@ fn a_ds_game_draws_direct_and_shows_its_bottom_screen_under_the_menu() {
     run_for(&mut f, &mut input, 0.6);
     assert!(f.app().in_game_menu().is_some());
     assert!(!f.ds_direct());
-    assert!(f.ds_menu_below(), "the menu over a DS game is not on the bottom screen");
+    assert!(
+        f.ds_menu_below(),
+        "the menu over a DS game is not on the bottom screen"
+    );
     f.render_screen(&mut c, (1024, 768), slot::screen::Screen::Top);
     f.render_screen(&mut c, (1024, 768), slot::screen::Screen::Bottom);
     let (w, h) = c.frame_size();
@@ -129,8 +132,14 @@ fn a_ds_game_plays_its_top_screen_through_the_compositor_so_the_hud_lands_on_it(
     let px = c.read_frame();
     let (w, h) = (w as usize, h as usize);
     let (_, ghi) = span(&px, w, h, 1);
-    assert!(ghi > 20, "the top screen is not drawn: green only reached {ghi}");
-    assert!(ghi < 140, "green reached {ghi}: the bottom screen is drawn where the top belongs");
+    assert!(
+        ghi > 20,
+        "the top screen is not drawn: green only reached {ghi}"
+    );
+    assert!(
+        ghi < 140,
+        "green reached {ghi}: the bottom screen is drawn where the top belongs"
+    );
 }
 
 #[test]
@@ -152,16 +161,29 @@ fn a_ds_picture_keeps_its_shape_while_the_cart_ejects() {
     f.compose(&mut c);
     f.app_mut().apply(slot_input::Action::Eject);
     f.advance(&mut input);
-    assert!(matches!(f.app().phase(), slot::app::Phase::Ejecting { .. }), "{:?}", f.app().phase());
-    assert!(!f.ds_menu_below(), "the eject is drawn on the bottom screen as if the menu were open");
+    assert!(
+        matches!(f.app().phase(), slot::app::Phase::Ejecting { .. }),
+        "{:?}",
+        f.app().phase()
+    );
+    assert!(
+        !f.ds_menu_below(),
+        "the eject is drawn on the bottom screen as if the menu were open"
+    );
     f.compose(&mut c);
     let (w, h) = c.frame_size();
     let px = c.read_frame();
     let (w, h) = (w as usize, h as usize);
     let x = w / 2;
-    let reds: Vec<u8> = (h * 3 / 10..h * 6 / 10).step_by(h / 40).map(|y| px[(y * w + x) * 4]).collect();
+    let reds: Vec<u8> = (h * 3 / 10..h * 6 / 10)
+        .step_by(h / 40)
+        .map(|y| px[(y * w + x) * 4])
+        .collect();
     let (lo, hi) = (*reds.iter().min().unwrap(), *reds.iter().max().unwrap());
-    assert!(hi - lo <= 6, "red runs {lo}..{hi} down one column: the DS picture is sheared while ejecting");
+    assert!(
+        hi - lo <= 6,
+        "red runs {lo}..{hi} down one column: the DS picture is sheared while ejecting"
+    );
 }
 
 #[test]
@@ -209,5 +231,8 @@ fn a_ds_overlay_stays_on_the_top_screen_while_the_game_plays() {
         }
         std::thread::sleep(Duration::from_millis(10));
     }
-    assert!(green > 1000, "only {green} overlay pixels on the top screen while the DS game plays");
+    assert!(
+        green > 1000,
+        "only {green} overlay pixels on the top screen while the DS game plays"
+    );
 }

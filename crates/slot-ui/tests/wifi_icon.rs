@@ -19,7 +19,16 @@ fn ink(f: &UndoFace) -> Vec<[u8; 3]> {
 fn it_sits_right_of_the_percent() {
     let mut out = Vec::new();
     let face = (TexId::from_raw(2), 18, 14);
-    draw_wifi_icon(Canvas::FRAMED, Gauge { battery: None, percent: Printed::new(TexId::from_raw(1), 50), ..Gauge::default() }, Some(face), &mut out);
+    draw_wifi_icon(
+        Canvas::FRAMED,
+        Gauge {
+            battery: None,
+            percent: Printed::new(TexId::from_raw(1), 50),
+            ..Gauge::default()
+        },
+        Some(face),
+        &mut out,
+    );
     let (left, top, _, bottom) = tex(&out);
     assert!(left > 24.0 + 14.0 + 5.0 + 26.4 + 3.0 + 7.0 + 50.0, "{left}");
     assert!(top > 422.0 && bottom < 480.0, "{top}..{bottom}");

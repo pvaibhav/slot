@@ -13,7 +13,9 @@ use slot_ui::ReceiptText;
 
 use super::{generate_pin, qr_modules, qr_url, shown_address, wifi_ip, Responder, Server, PORTS};
 use crate::label_cache::fresh;
-use crate::print_scene::{Cue, PaperJob, PrintArtState, PrintArtWorker, PrintFrame, PrintScene, PrintTextures};
+use crate::print_scene::{
+    Cue, PaperJob, PrintArtState, PrintArtWorker, PrintFrame, PrintScene, PrintTextures,
+};
 
 pub const NO_WIFI: &str = "NO WI-FI";
 pub const SERVER_FAILED: &str = "GAMEBIT FAILED";
@@ -133,13 +135,23 @@ fn bring_up(root: PathBuf, net: ServerNet) -> Up {
         },
         job: PaperJob::Code {
             modules,
-            text: ReceiptText { host, ip: shown, pin },
+            text: ReceiptText {
+                host,
+                ip: shown,
+                pin,
+            },
         },
     }
 }
 
 fn renamed(paper: &mut ServerPaper, host: Option<String>) -> Option<ReceiptText> {
-    let ServerPaper::Code { host: shown, ip, pin, .. } = paper else {
+    let ServerPaper::Code {
+        host: shown,
+        ip,
+        pin,
+        ..
+    } = paper
+    else {
         return None;
     };
     if host.is_none() || host == *shown {
@@ -230,7 +242,11 @@ impl ServerSession {
             }
         }
         self.follow_rename();
-        if self.stop_asked && self.rising.is_none() && self.stopped.is_none() && self.stopping.is_none() {
+        if self.stop_asked
+            && self.rising.is_none()
+            && self.stopped.is_none()
+            && self.stopping.is_none()
+        {
             self.begin_stop();
         }
         if let Some(stopping) = &self.stopping {
@@ -337,7 +353,8 @@ impl ServerSession {
         self.art = None;
         if let Some(mut scene) = self.scene.take() {
             scene.stop(now);
-            self.owed.extend(scene.cues(now).into_iter().filter(|c| *c == Cue::BuzzOff));
+            self.owed
+                .extend(scene.cues(now).into_iter().filter(|c| *c == Cue::BuzzOff));
         }
     }
 
@@ -409,9 +426,15 @@ mod rename_tests {
         responder.rename("slot-2");
         let text = renamed(&mut paper, Some(responder.host())).unwrap();
         assert_eq!(text.host.as_deref(), Some("SLOT-2.LOCAL"));
-        assert_eq!((text.ip.as_str(), text.pin.as_str()), ("192.168.4.77", "1234"));
+        assert_eq!(
+            (text.ip.as_str(), text.pin.as_str()),
+            ("192.168.4.77", "1234")
+        );
         assert_eq!(paper, code("SLOT-2.LOCAL"));
-        assert!(renamed(&mut paper, Some(responder.host())).is_none(), "printed once");
+        assert!(
+            renamed(&mut paper, Some(responder.host())).is_none(),
+            "printed once"
+        );
     }
 
     #[test]

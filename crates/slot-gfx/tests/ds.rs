@@ -50,7 +50,13 @@ impl Target {
             let mut fbo = 0;
             gl::GenFramebuffers(1, &mut fbo);
             gl::BindFramebuffer(gl::FRAMEBUFFER, fbo);
-            gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::TEXTURE_2D, tex, 0);
+            gl::FramebufferTexture2D(
+                gl::FRAMEBUFFER,
+                gl::COLOR_ATTACHMENT0,
+                gl::TEXTURE_2D,
+                tex,
+                0,
+            );
             gl::ClearColor(1.0, 0.0, 1.0, 1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT);
             Target { fbo, tex, size }
@@ -62,7 +68,15 @@ impl Target {
         let mut px = vec![0u8; (w * h * 4) as usize];
         unsafe {
             gl::BindFramebuffer(gl::FRAMEBUFFER, self.fbo);
-            gl::ReadPixels(0, 0, w as i32, h as i32, gl::RGBA, gl::UNSIGNED_BYTE, px.as_mut_ptr() as *mut _);
+            gl::ReadPixels(
+                0,
+                0,
+                w as i32,
+                h as i32,
+                gl::RGBA,
+                gl::UNSIGNED_BYTE,
+                px.as_mut_ptr() as *mut _,
+            );
         }
         px
     }
@@ -194,11 +208,17 @@ fn both_ds_screens_take_the_compositors_blue_light() {
     ds.draw_screen(DsScreen::Top, (1024, 768));
     let px = t.read();
     let blue = t.at(&px, 4, 0);
-    assert!(blue[2] < 250, "the top screen's blue stayed {blue:?} under full blue light");
+    assert!(
+        blue[2] < 250,
+        "the top screen's blue stayed {blue:?} under full blue light"
+    );
     ds.draw_screen(DsScreen::Bottom, (1024, 768));
     let px = t.read();
     let green = t.at(&px, 512, 384);
-    assert!(green[1] < 230, "the bottom screen is untouched by blue light: {green:?}");
+    assert!(
+        green[1] < 230,
+        "the bottom screen is untouched by blue light: {green:?}"
+    );
 }
 
 fn column_black_tile(ds: &mut DsPass, n: u32, column: u32) -> (u32, u32, u32) {
@@ -218,7 +238,11 @@ fn solid(ds: &mut DsPass, w: u32, h: u32, px: [u8; 4]) -> u32 {
 fn a_ds_overlay_tile_lines_up_with_every_ds_pixel_at_4x() {
     let (_g, _s, _c, mut ds) = setup();
     let tile = column_black_tile(&mut ds, 4, 3);
-    ds.set_overlay(Some(DsOverlay { tile: Some(tile), top: None, bottom: None }));
+    ds.set_overlay(Some(DsOverlay {
+        tile: Some(tile),
+        top: None,
+        bottom: None,
+    }));
     let t = Target::new((1024, 768));
     ds.draw_screen(DsScreen::Top, (1024, 768));
     let px = t.read();
@@ -232,7 +256,11 @@ fn a_ds_overlay_tile_lines_up_with_every_ds_pixel_at_4x() {
 fn a_ds_overlay_tile_starts_at_the_screen_corner_on_a_smaller_panel() {
     let (_g, _s, _c, mut ds) = setup();
     let tile = column_black_tile(&mut ds, 3, 2);
-    ds.set_overlay(Some(DsOverlay { tile: Some(tile), top: None, bottom: None }));
+    ds.set_overlay(Some(DsOverlay {
+        tile: Some(tile),
+        top: None,
+        bottom: None,
+    }));
     let t = Target::new((640, 480));
     ds.draw_screen(DsScreen::Bottom, (640, 480));
     let px = t.read();
@@ -246,7 +274,11 @@ fn a_ds_overlay_tile_starts_at_the_screen_corner_on_a_smaller_panel() {
 fn a_top_only_ds_overlay_leaves_the_bottom_bare() {
     let (_g, _s, _c, mut ds) = setup();
     let top = solid(&mut ds, 1024, 768, [255, 0, 255, 255]);
-    ds.set_overlay(Some(DsOverlay { tile: None, top: Some(top), bottom: None }));
+    ds.set_overlay(Some(DsOverlay {
+        tile: None,
+        top: Some(top),
+        bottom: None,
+    }));
     let t = Target::new((1024, 768));
     ds.draw_screen(DsScreen::Top, (1024, 768));
     assert_eq!(t.at(&t.read(), 512, 384), [255, 0, 255]);
@@ -258,13 +290,21 @@ fn a_top_only_ds_overlay_leaves_the_bottom_bare() {
 fn no_ds_overlay_while_the_screen_powers_on() {
     let (_g, _s, _c, mut ds) = setup();
     let top = solid(&mut ds, 1024, 768, [255, 0, 255, 255]);
-    ds.set_overlay(Some(DsOverlay { tile: None, top: Some(top), bottom: Some(top) }));
+    ds.set_overlay(Some(DsOverlay {
+        tile: None,
+        top: Some(top),
+        bottom: Some(top),
+    }));
     let t = Target::new((1024, 768));
     ds.draw_screen_powered(DsScreen::Bottom, (1024, 768), 0.5);
     let px = t.read();
     for y in (0..768).step_by(11) {
         for x in (0..1024).step_by(13) {
-            assert_ne!(t.at(&px, x, y), [255, 0, 255], "overlay drawn mid power-on at {x},{y}");
+            assert_ne!(
+                t.at(&px, x, y),
+                [255, 0, 255],
+                "overlay drawn mid power-on at {x},{y}"
+            );
         }
     }
 }

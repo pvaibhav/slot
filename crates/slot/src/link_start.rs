@@ -1,7 +1,10 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
+use std::sync::Arc;
 
+use crate::link_kind::LinkKind;
 use crate::link_net::{Cancel, TcpLink, HOST_BOUND};
-use crate::link_radio::{self, LinkRole, RadioFail};
+use crate::link_radio::{self, HostAp, RadioFail, RadioRole};
 
 #[cfg(feature = "device")]
 pub const HOST_ADDR: &str = "10.42.0.1";
@@ -55,8 +58,8 @@ impl LinkStep {
 
     pub fn line(self) -> &'static str {
         match self {
-            LinkStep::Radio => "Bringing the radio up",
-            LinkStep::Waiting => "Looking for the other player",
+            LinkStep::Radio => "Waiting for a friend",
+            LinkStep::Waiting => "Waiting for a friend",
         }
     }
 
@@ -79,18 +82,27 @@ impl LinkFail {
         LinkFail::SHOWN.iter().position(|f| *f == self)
     }
 
-    pub fn line(self) -> &'static str {
+    pub fn line(self, kind: LinkKind) -> &'static str {
         match self {
             LinkFail::Radio => "The radio did not come up",
-            LinkFail::NobodyCame => "Nobody arrived",
-            LinkFail::PeerVanished => "The other player vanished",
+            LinkFail::NobodyCame => "No one joined, try again",
+            LinkFail::PeerVanished if kind == LinkKind::Wireless => "Lost the connection",
+            LinkFail::PeerVanished => "The cable came loose",
             LinkFail::Cancelled => "Cancelled",
+        }
+    }
+
+    pub fn hint(self) -> Option<&'static str> {
+        match self {
+            LinkFail::Radio => Some("Check logs"),
+            _ => None,
         }
     }
 }
 
 pub enum LinkProgress {
     At(LinkStep),
+    Hosting(HostAp),
     Ready(TcpLink),
     Failed(LinkFail),
 }
@@ -103,54 +115,93 @@ fn classify(e: &std::io::Error) -> LinkFail {
     }
 }
 
-type RadioUp = Box<dyn FnMut(LinkRole, &Cancel) -> Result<(), RadioFail> + Send>;
+type RadioUp = Box<dyn FnMut(RadioRole, &Cancel) -> Result<Option<HostAp>, RadioFail> + Send>;
 type RadioDown = Box<dyn FnMut() + Send>;
 type Socket = Box<dyn FnMut(u16, &Cancel) -> std::io::Result<TcpLink> + Send>;
 
 pub struct LinkStarter {
     rx: Receiver<LinkProgress>,
     cancel: Cancel,
+    go: Arc<AtomicBool>,
     done: bool,
 }
 
 impl LinkStarter {
-    pub fn spawn(role: LinkRole, port: u16) -> LinkStarter {
-        LinkStarter::spawn_with(
+    pub fn spawn(role: RadioRole, port: u16) -> LinkStarter {
+        LinkStarter::spawn_held(role, port, false)
+    }
+
+    pub fn spawn_held(role: RadioRole, port: u16, held: bool) -> LinkStarter {
+        LinkStarter::spawn_held_with(
             Box::new(link_radio::up),
             Box::new(link_radio::down),
             role,
             port,
             Box::new(move |port, cancel| match role {
-                LinkRole::Host => TcpLink::host_until(HOST_ADDR, port, HOST_BOUND, cancel),
-                LinkRole::Join => TcpLink::join_until(HOST_ADDR, port, HOST_BOUND, cancel),
+                RadioRole::Host => TcpLink::host_until(HOST_ADDR, port, HOST_BOUND, cancel),
+                RadioRole::Join(_) => TcpLink::join_until(HOST_ADDR, port, HOST_BOUND, cancel),
             }),
+            held,
         )
     }
 
     pub fn spawn_with(
+        radio_up: RadioUp,
+        radio_down: RadioDown,
+        role: RadioRole,
+        port: u16,
+        socket: Socket,
+    ) -> LinkStarter {
+        LinkStarter::spawn_held_with(radio_up, radio_down, role, port, socket, false)
+    }
+
+    pub fn spawn_held_with(
         mut radio_up: RadioUp,
         mut radio_down: RadioDown,
-        role: LinkRole,
+        role: RadioRole,
         port: u16,
         mut socket: Socket,
+        held: bool,
     ) -> LinkStarter {
         let (tx, rx) = channel();
         let cancel = Cancel::new();
         let flag = cancel.clone();
+        let go = Arc::new(AtomicBool::new(!held));
+        let gate = go.clone();
         std::thread::spawn(move || {
             let _ = tx.send(LinkProgress::At(LinkStep::Radio));
-            if let Err(e) = radio_up(role, &flag) {
-                let fail = match &e {
-                    RadioFail::NoHost => LinkFail::NobodyCame,
-                    RadioFail::Cancelled => LinkFail::Cancelled,
-                    RadioFail::Radio(why) => {
-                        eprintln!("slot: link: {role:?} could not bring the radio up: {why}");
-                        LinkFail::Radio
+            let hosted = match radio_up(role, &flag) {
+                Ok(hosted) => hosted,
+                Err(e) => {
+                    let fail = match &e {
+                        RadioFail::NoHost => LinkFail::NobodyCame,
+                        RadioFail::Cancelled => LinkFail::Cancelled,
+                        RadioFail::Radio(why) => {
+                            eprintln!("slot: link: {role:?} could not bring the radio up: {why}");
+                            LinkFail::Radio
+                        }
+                    };
+                    radio_down();
+                    let _ = tx.send(LinkProgress::Failed(fail));
+                    return;
+                }
+            };
+            if let Some(ap) = hosted {
+                let _ = tx.send(LinkProgress::Hosting(ap));
+            }
+            if !gate.load(Ordering::SeqCst) {
+                eprintln!(
+                    "slot: link: {role:?} radio up at {:.0} ms, held for go",
+                    crate::boot_time::ms()
+                );
+                while !gate.load(Ordering::SeqCst) {
+                    if flag.is_cancelled() {
+                        radio_down();
+                        let _ = tx.send(LinkProgress::Failed(LinkFail::Cancelled));
+                        return;
                     }
-                };
-                radio_down();
-                let _ = tx.send(LinkProgress::Failed(fail));
-                return;
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
             }
             let _ = tx.send(LinkProgress::At(LinkStep::Waiting));
             eprintln!("slot: link: {role:?} using {HOST_ADDR}:{port}");
@@ -175,8 +226,23 @@ impl LinkStarter {
         LinkStarter {
             rx,
             cancel,
+            go,
             done: false,
         }
+    }
+
+    pub fn go(&self) {
+        self.go.store(true, Ordering::SeqCst);
+    }
+
+    pub fn without_target() -> LinkStarter {
+        LinkStarter::spawn_with(
+            Box::new(|_, _| Err(RadioFail::NoHost)),
+            Box::new(|| {}),
+            RadioRole::Host,
+            0,
+            Box::new(|_, _| Err(std::io::Error::other("no target"))),
+        )
     }
 
     pub fn poll(&mut self) -> Option<LinkProgress> {
@@ -278,16 +344,39 @@ mod step_tests {
     #[test]
     fn a_warm_radio_captions_the_first_step_as_the_search() {
         assert_eq!(LinkStep::Radio.shown(true), LinkStep::Waiting);
-        assert_eq!(
-            LinkStep::Radio.shown(true).line(),
-            "Looking for the other player"
-        );
+        assert_eq!(LinkStep::Radio.shown(true).line(), "Waiting for a friend");
     }
 
     #[test]
-    fn a_cold_radio_still_says_it_is_bringing_the_radio_up() {
+    fn a_cold_radio_keeps_its_own_step_and_waits_for_a_friend_too() {
         assert_eq!(LinkStep::Radio.shown(false), LinkStep::Radio);
-        assert_eq!(LinkStep::Radio.shown(false).line(), "Bringing the radio up");
+        assert_eq!(LinkStep::Radio.shown(false).line(), "Waiting for a friend");
+    }
+
+    #[test]
+    fn a_dropped_link_names_the_hardware_it_ran_on() {
+        assert_eq!(
+            LinkFail::PeerVanished.line(LinkKind::Cable),
+            "The cable came loose"
+        );
+        assert_eq!(
+            LinkFail::PeerVanished.line(LinkKind::Wireless),
+            "Lost the connection"
+        );
+        for fail in [LinkFail::Radio, LinkFail::NobodyCame, LinkFail::Cancelled] {
+            assert_eq!(fail.line(LinkKind::Cable), fail.line(LinkKind::Wireless));
+        }
+    }
+
+    #[test]
+    fn only_a_radio_failure_points_at_the_logs() {
+        assert_eq!(
+            LinkFail::Radio.line(LinkKind::Cable),
+            "The radio did not come up"
+        );
+        assert_eq!(LinkFail::Radio.hint(), Some("Check logs"));
+        assert_eq!(LinkFail::NobodyCame.hint(), None);
+        assert_eq!(LinkFail::PeerVanished.hint(), None);
     }
 
     #[test]

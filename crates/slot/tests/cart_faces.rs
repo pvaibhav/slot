@@ -12,6 +12,7 @@ fn cart(platform: Platform, stem: &str) -> Cart {
         code: String::new(),
         shell: None,
         sealed: false,
+        tags: Vec::new(),
     }
 }
 

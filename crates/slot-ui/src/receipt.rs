@@ -94,7 +94,8 @@ fn fitted(font: &fontdue::Font, text: &str, px: f32, fit_w: f32, min_px: f32) ->
 }
 
 fn fits(line: &str) -> bool {
-    text::label_font().is_none_or(|font| text::line_width(font, &line.to_uppercase(), MIN_PX, 0.0) <= FIT_W)
+    text::label_font()
+        .is_none_or(|font| text::line_width(font, &line.to_uppercase(), MIN_PX, 0.0) <= FIT_W)
 }
 
 fn raster(lines: &[Line], top: usize, w: usize, h: usize, fit_w: f32, min_px: f32) -> Vec<f32> {
@@ -141,7 +142,14 @@ fn type_ink(lines: &[Line], top: usize) -> Vec<f32> {
             gap: l.gap / 2,
         })
         .collect();
-    let low = raster(&half, top / 2, PW / 2, CUT / 2 + 1, FIT_W / 2.0, MIN_PX / 2.0);
+    let low = raster(
+        &half,
+        top / 2,
+        PW / 2,
+        CUT / 2 + 1,
+        FIT_W / 2.0,
+        MIN_PX / 2.0,
+    );
     let lw = PW / 2;
     let mut out = vec![0.0f32; PW * PH];
     for (i, v) in smooth.iter().enumerate() {
@@ -198,7 +206,8 @@ fn print(ink: &[f32], type_ink: &[f32]) -> UndoFace {
     let mut rgba = vec![0u8; PW * PH * 4];
     for y in 0..PH {
         let v = y as f32 / (PH - 1) as f32;
-        let curl = 1.0 - 0.09 * (-(v / 0.055).powi(2)).exp() - 0.05 * (-((1.0 - v) / 0.045).powi(2)).exp();
+        let curl =
+            1.0 - 0.09 * (-(v / 0.055).powi(2)).exp() - 0.05 * (-((1.0 - v) / 0.045).powi(2)).exp();
         let band = 0.97 + 0.03 * (y as f32 / 3.7 + phase).sin().signum();
         for (x, head_n) in head_noise.iter().enumerate() {
             let at = y * PW + x;

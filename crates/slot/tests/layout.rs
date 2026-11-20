@@ -22,6 +22,7 @@ fn app_with_carts(stems: &[&str], panel: (u32, u32)) -> App {
                 shell: None,
                 title: stem.to_uppercase(),
                 sealed: false,
+                tags: Vec::new(),
             })
             .collect(),
     );

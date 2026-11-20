@@ -178,7 +178,10 @@ mod writes {
     }
 
     fn seen(d: &tempfile::TempDir) -> std::collections::HashMap<String, ShellChoice> {
-        layered(&read(d, "Config/cart_shell.txt"), &read(d, "Labels/cart_shell.txt"))
+        layered(
+            &read(d, "Config/cart_shell.txt"),
+            &read(d, "Labels/cart_shell.txt"),
+        )
     }
 
     #[test]
@@ -201,7 +204,11 @@ mod writes {
     #[test]
     fn other_lines_survive() {
         let d = card();
-        std::fs::write(d.path().join("Labels/cart_shell.txt"), "Other = auto 112233 solid\n").unwrap();
+        std::fs::write(
+            d.path().join("Labels/cart_shell.txt"),
+            "Other = auto 112233 solid\n",
+        )
+        .unwrap();
         write_choice(d.path(), "Kirby", Some(&PINK)).unwrap();
         assert!(seen(&d).contains_key("Other"));
         assert!(seen(&d).contains_key("Kirby"));
@@ -210,7 +217,11 @@ mod writes {
     #[test]
     fn auto_over_a_config_entry_writes_auto() {
         let d = card();
-        std::fs::write(d.path().join("Config/cart_shell.txt"), "Kirby = auto 112233 solid\n").unwrap();
+        std::fs::write(
+            d.path().join("Config/cart_shell.txt"),
+            "Kirby = auto 112233 solid\n",
+        )
+        .unwrap();
         write_choice(d.path(), "Kirby", None).unwrap();
         assert!(!seen(&d).contains_key("Kirby"));
         assert!(read(&d, "Labels/cart_shell.txt").contains("auto"));
@@ -227,9 +238,19 @@ mod writes {
     #[test]
     fn an_nfd_stem_is_replaced_not_doubled() {
         let d = card();
-        std::fs::write(d.path().join("Labels/cart_shell.txt"), "Poke\u{301}mon = auto 112233 solid\n").unwrap();
+        std::fs::write(
+            d.path().join("Labels/cart_shell.txt"),
+            "Poke\u{301}mon = auto 112233 solid\n",
+        )
+        .unwrap();
         write_choice(d.path(), "Pok\u{e9}mon", Some(&PINK)).unwrap();
-        assert_eq!(read(&d, "Labels/cart_shell.txt").lines().filter(|l| l.contains('=')).count(), 1);
+        assert_eq!(
+            read(&d, "Labels/cart_shell.txt")
+                .lines()
+                .filter(|l| l.contains('='))
+                .count(),
+            1
+        );
         assert_eq!(seen(&d).get("Pok\u{e9}mon"), Some(&PINK));
     }
 }

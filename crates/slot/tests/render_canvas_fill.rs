@@ -167,15 +167,13 @@ fn a_cart_face_is_drawn_texel_for_texel() {
     };
     let reference = shelf(&mut c, (720, 480), &[]);
     let at = label_crop(&reference, 360, 252);
-    {
-        let panel = (720, 720);
-        let shown = shelf(&mut c, panel, &[]);
-        let (dx, dy) = ((panel.0 as usize - 720) / 2, (panel.1 as usize - 480) / 2);
-        assert!(
-            label_crop(&shown, 360 + dx, 252 + dy) == at,
-            "{panel:?}: the selected cart's label is not the 720x480 one, moved to the middle"
-        );
-    }
+    let panel = (720, 720);
+    let shown = shelf(&mut c, panel, &[]);
+    let (dx, dy) = ((panel.0 as usize - 720) / 2, (panel.1 as usize - 480) / 2);
+    assert!(
+        label_crop(&shown, 360 + dx, 252 + dy) == at,
+        "{panel:?}: the selected cart's label is not the 720x480 one, moved to the middle"
+    );
 }
 
 #[test]
@@ -245,7 +243,15 @@ fn menu_text_is_the_same_size_on_every_panel() {
     let Some((_s, mut c)) = compositor() else {
         return;
     };
-    let taps = [Btn::Menu, Btn::Down, Btn::Down, Btn::A, Btn::Down, Btn::Down, Btn::A];
+    let taps = [
+        Btn::Menu,
+        Btn::Down,
+        Btn::Down,
+        Btn::A,
+        Btn::Down,
+        Btn::Down,
+        Btn::A,
+    ];
     let reference = shelf(&mut c, (720, 480), &taps);
     let square = shelf(&mut c, (720, 720), &taps);
     let low = text_lines(&lit_rows(&reference, 40..300, 50..422));
@@ -256,10 +262,14 @@ fn menu_text_is_the_same_size_on_every_panel() {
         low.len(),
         high.len()
     );
+    let size = |shown: &Shown, y: usize| {
+        let (x0, y0, x1, y1) = bounds(&ink(shown, 40, y - 3));
+        (x0, x1, y1 - y0)
+    };
     assert_eq!(
-        bounds(&ink(&square, 40, high[0].0 - 3)),
-        bounds(&ink(&reference, 40, low[0].0 - 3)),
-        "the first row's text changes size on the taller panel"
+        size(&square, high[0].0),
+        size(&reference, low[0].0),
+        "the first row's text is not the 720x480 text"
     );
 }
 
@@ -451,9 +461,19 @@ fn no_cart_shows_as_a_sliver_on_a_wide_panel() {
 
 fn label_run(shown: &Shown, y: usize) -> usize {
     let label = shown.at(shown.w / 2, y);
-    let near = |p: [u8; 4]| p[..3].iter().zip(&label[..3]).all(|(a, b)| a.abs_diff(*b) < 12);
-    let left = (0..shown.w / 2).rev().take_while(|x| near(shown.at(*x, y))).count();
-    let right = (shown.w / 2..shown.w).take_while(|x| near(shown.at(*x, y))).count();
+    let near = |p: [u8; 4]| {
+        p[..3]
+            .iter()
+            .zip(&label[..3])
+            .all(|(a, b)| a.abs_diff(*b) < 12)
+    };
+    let left = (0..shown.w / 2)
+        .rev()
+        .take_while(|x| near(shown.at(*x, y)))
+        .count();
+    let right = (shown.w / 2..shown.w)
+        .take_while(|x| near(shown.at(*x, y)))
+        .count();
     left + right
 }
 

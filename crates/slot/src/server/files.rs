@@ -23,7 +23,10 @@ const MAX_JSON: usize = 64 * 1024;
 const CHUNK: usize = 64 * 1024;
 
 pub fn folder(resource: &str) -> Option<&'static str> {
-    RESOURCES.iter().find(|(r, _)| *r == resource).map(|(_, f)| *f)
+    RESOURCES
+        .iter()
+        .find(|(r, _)| *r == resource)
+        .map(|(_, f)| *f)
 }
 
 struct Target {
@@ -37,8 +40,20 @@ pub fn resource(root: &Path, req: Request) -> Reply {
     let name = req.path[1].clone();
     let folder = folder(&name).unwrap_or_default().to_string();
     let sub: Vec<String> = req.path[2..].to_vec();
-    let display = std::iter::once(folder.clone()).chain(sub.iter().cloned()).collect::<Vec<_>>().join("/");
-    serve(root, req, Target { base: vec![folder], sub, display, same_top: true })
+    let display = std::iter::once(folder.clone())
+        .chain(sub.iter().cloned())
+        .collect::<Vec<_>>()
+        .join("/");
+    serve(
+        root,
+        req,
+        Target {
+            base: vec![folder],
+            sub,
+            display,
+            same_top: true,
+        },
+    )
 }
 
 pub fn fs(root: &Path, req: Request) -> Reply {
@@ -52,8 +67,20 @@ pub fn fs(root: &Path, req: Request) -> Reply {
         return Reply::error(404, "unknown volume");
     }
     let sub: Vec<String> = req.path[3..].to_vec();
-    let display = std::iter::once(VOLUME.to_string()).chain(sub.iter().cloned()).collect::<Vec<_>>().join("/");
-    serve(root, req, Target { base: Vec::new(), sub, display, same_top: false })
+    let display = std::iter::once(VOLUME.to_string())
+        .chain(sub.iter().cloned())
+        .collect::<Vec<_>>()
+        .join("/");
+    serve(
+        root,
+        req,
+        Target {
+            base: Vec::new(),
+            sub,
+            display,
+            same_top: false,
+        },
+    )
 }
 
 fn refused(r: Refused) -> Reply {
@@ -73,7 +100,9 @@ fn volumes(root: &Path) -> Reply {
 
 fn space(root: &Path) -> (u64, u64) {
     use std::os::unix::ffi::OsStrExt;
-    let Ok(path) = std::ffi::CString::new(root.as_os_str().as_bytes()) else { return (0, 0) };
+    let Ok(path) = std::ffi::CString::new(root.as_os_str().as_bytes()) else {
+        return (0, 0);
+    };
     let mut st: libc::statvfs = unsafe { std::mem::zeroed() };
     if unsafe { libc::statvfs(path.as_ptr(), &mut st) } != 0 {
         return (0, 0);
@@ -84,7 +113,8 @@ fn space(root: &Path) -> (u64, u64) {
 
 fn target_path(root: &Path, segs: &[String]) -> Result<PathBuf, Refused> {
     if segs.is_empty() {
-        root.canonicalize().map_err(|_| Refused::new(500, "card unavailable"))
+        root.canonicalize()
+            .map_err(|_| Refused::new(500, "card unavailable"))
     } else {
         resolve(root, segs)
     }
@@ -166,10 +196,17 @@ fn list(dir: &Path, display: &str, recursive: bool, hide_reserved: bool) -> Repl
                 if ft.is_symlink() {
                     continue;
                 }
-                let size = if ft.is_file() { e.metadata().map(|m| m.len()).unwrap_or(0) } else { 0 };
+                let size = if ft.is_file() {
+                    e.metadata().map(|m| m.len()).unwrap_or(0)
+                } else {
+                    0
+                };
                 entries.push((ft.is_dir(), name, size));
             }
-            entries.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| sort_key(&a.1).cmp(&sort_key(&b.1))));
+            entries.sort_by(|a, b| {
+                b.0.cmp(&a.0)
+                    .then_with(|| sort_key(&a.1).cmp(&sort_key(&b.1)))
+            });
         }
     }
     let list: Vec<_> = entries
@@ -193,7 +230,11 @@ fn walk(top: &Path, dir: &Path, hide_reserved: bool, out: &mut Vec<(bool, String
         if ft.is_dir() {
             walk(top, &e.path(), hide_reserved, out);
         } else if ft.is_file() {
-            let rel = e.path().strip_prefix(top).map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or(name);
+            let rel = e
+                .path()
+                .strip_prefix(top)
+                .map(|p| p.to_string_lossy().replace('\\', "/"))
+                .unwrap_or(name);
             out.push((false, rel, e.metadata().map(|m| m.len()).unwrap_or(0)));
         }
     }
@@ -230,7 +271,11 @@ fn delete(path: &Path) -> Reply {
     if !path.exists() {
         return Reply::error(404, "not found");
     }
-    let result = if path.is_dir() { fs::remove_dir_all(path) } else { fs::remove_file(path) };
+    let result = if path.is_dir() {
+        fs::remove_dir_all(path)
+    } else {
+        fs::remove_file(path)
+    };
     match result {
         Ok(()) => ok(),
         Err(_) => Reply::error(500, "delete failed"),
@@ -244,13 +289,18 @@ fn patch(root: &Path, t: &Target, src: &Path, body: Body) -> Reply {
         .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
         .and_then(|v| v.get("to").and_then(|s| s.as_str().map(str::to_string)))
         .unwrap_or_default();
-    let to_segs: Vec<String> = to.split('/').filter(|s| !s.is_empty()).map(str::to_string).collect();
+    let to_segs: Vec<String> = to
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect();
     if to_segs.is_empty() {
         return Reply::error(400, "missing 'to' field");
     }
     if t.same_top {
         let flat = t.sub.len() == 1 && to_segs.len() == 1;
-        let same = flat || t.sub.len() >= 2 && to_segs.len() >= 2 && t.sub[0].eq_ignore_ascii_case(&to_segs[0]);
+        let same = flat
+            || t.sub.len() >= 2 && to_segs.len() >= 2 && t.sub[0].eq_ignore_ascii_case(&to_segs[0]);
         if !same {
             return Reply::error(403, "moves must stay within the same subdirectory");
         }
@@ -296,7 +346,11 @@ pub fn move_path(src: &Path, dst: &Path) -> io::Result<()> {
     }
 }
 
-pub fn rename_via_temp(src: &Path, dst: &Path, rename: &dyn Fn(&Path, &Path) -> io::Result<()>) -> io::Result<()> {
+pub fn rename_via_temp(
+    src: &Path,
+    dst: &Path,
+    rename: &dyn Fn(&Path, &Path) -> io::Result<()>,
+) -> io::Result<()> {
     let parent = src.parent().unwrap_or_else(|| Path::new("."));
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -328,7 +382,11 @@ pub(super) fn same_inode(a: &Path, b: &Path) -> bool {
 
 fn post(req: &mut Request, root: &Path, dir: &[String]) -> Reply {
     let ctype = req.headers.get("content-type").cloned().unwrap_or_default();
-    if req.headers.get("transfer-encoding").is_some_and(|v| v.to_ascii_lowercase().contains("chunked")) {
+    if req
+        .headers
+        .get("transfer-encoding")
+        .is_some_and(|v| v.to_ascii_lowercase().contains("chunked"))
+    {
         return Reply::error(400, "chunked upload not supported");
     }
     let Some(boundary) = boundary(&ctype) else {
@@ -431,7 +489,9 @@ impl Parts<'_> {
 }
 
 fn filename_of(headers: &str) -> Option<String> {
-    let line = headers.lines().find(|l| l.to_ascii_lowercase().starts_with("content-disposition:"))?;
+    let line = headers
+        .lines()
+        .find(|l| l.to_ascii_lowercase().starts_with("content-disposition:"))?;
     let lower = line.to_ascii_lowercase();
     let idx = lower.find("filename=\"")? + "filename=\"".len();
     let end = line[idx..].find('"')?;
@@ -439,9 +499,17 @@ fn filename_of(headers: &str) -> Option<String> {
     Some(raw.rsplit(['/', '\\']).next().unwrap_or(raw).to_string())
 }
 
-fn upload(root: &Path, dir: &[String], body: &mut Body, boundary: &str) -> Result<Vec<String>, Failure> {
+fn upload(
+    root: &Path,
+    dir: &[String],
+    body: &mut Body,
+    boundary: &str,
+) -> Result<Vec<String>, Failure> {
     let delim = format!("\r\n--{boundary}").into_bytes();
-    let mut parts = Parts { body, buf: b"\r\n".to_vec() };
+    let mut parts = Parts {
+        body,
+        buf: b"\r\n".to_vec(),
+    };
     let mut written = Vec::new();
     let mut made_dir = false;
     loop {
@@ -474,12 +542,18 @@ fn upload(root: &Path, dir: &[String], body: &mut Body, boundary: &str) -> Resul
             fs::create_dir_all(&parent)?;
             made_dir = true;
         }
-        let mut part_name = dest.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+        let mut part_name = dest
+            .file_name()
+            .map(|n| n.to_os_string())
+            .unwrap_or_default();
         part_name.push(".part");
         let part = dest.with_file_name(part_name);
         let result = (|| -> io::Result<()> {
             let _ = fs::remove_file(&part);
-            let mut f = OpenOptions::new().write(true).create_new(true).open(&part)?;
+            let mut f = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&part)?;
             parts.until(&delim, Some(&mut f))?;
             f.sync_all()?;
             drop(f);

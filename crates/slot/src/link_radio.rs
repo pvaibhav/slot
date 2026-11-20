@@ -24,6 +24,56 @@ impl LinkRole {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HostAp {
+    pub freq_mhz: u16,
+    pub bssid: [u8; 6],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RadioRole {
+    Host,
+    Join(HostAp),
+}
+
+impl RadioRole {
+    pub fn arg(self) -> &'static str {
+        match self {
+            RadioRole::Host => "host",
+            RadioRole::Join(_) => "join",
+        }
+    }
+}
+
+pub fn bssid_text(b: &[u8; 6]) -> String {
+    format!(
+        "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+        b[0], b[1], b[2], b[3], b[4], b[5]
+    )
+}
+
+pub fn parse_ap(line: &str) -> Option<HostAp> {
+    let mut words = line.split_whitespace();
+    let freq_mhz = words.next()?.parse::<u16>().ok()?;
+    let text = words.next()?;
+    if words.next().is_some() {
+        return None;
+    }
+    let mut bssid = [0u8; 6];
+    let mut parts = text.split(':');
+    for byte in bssid.iter_mut() {
+        let part = parts.next()?;
+        if part.len() != 2 {
+            return None;
+        }
+        *byte = u8::from_str_radix(part, 16).ok()?;
+    }
+    if parts.next().is_some() {
+        return None;
+    }
+    Some(HostAp { freq_mhz, bssid })
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RadioFail {
     NoHost,
@@ -89,29 +139,43 @@ fn queue() -> &'static Sender<RadioJob> {
 }
 
 #[cfg(any(feature = "device", test))]
-fn link_command(root: &Path, verb: &str) -> Command {
+fn link_command(root: &Path, verb: &str, extra: &[String]) -> Command {
     let mut cmd = Command::new("/bin/sh");
     cmd.arg(root.join("System/slotlink.sh"))
         .arg("link")
         .arg(verb)
+        .args(extra)
         .env("AGS_LINK_TRACE", root.join("Logs/slotlink.log"));
     cmd
 }
 
 #[cfg(feature = "device")]
-fn link(verb: &str) -> Command {
+fn link(verb: &str, extra: &[String]) -> Command {
     let root = std::env::var_os("SLOT_ROOT").unwrap_or_else(|| "/mnt/sdcard".into());
-    link_command(Path::new(&root), verb)
+    link_command(Path::new(&root), verb, extra)
+}
+
+#[cfg(feature = "device")]
+fn read_ap() -> Result<HostAp, RadioFail> {
+    let run = std::env::var_os("RUN").unwrap_or_else(|| "/run".into());
+    let path = Path::new(&run).join("slotlink.ap");
+    let text = std::fs::read_to_string(&path)
+        .map_err(|e| RadioFail::Radio(format!("{} unreadable: {e}", path.display())))?;
+    parse_ap(&text).ok_or_else(|| RadioFail::Radio(format!("{} holds no address", path.display())))
 }
 
 #[cfg(feature = "device")]
 fn run(sub: &str) -> bool {
-    link(sub).status().is_ok_and(|status| status.success())
+    link(sub, &[]).status().is_ok_and(|status| status.success())
 }
 
 #[cfg(feature = "device")]
-pub fn up(role: LinkRole, cancel: &Cancel) -> Result<(), RadioFail> {
-    let mut child = link(role.arg())
+pub fn up(role: RadioRole, cancel: &Cancel) -> Result<Option<HostAp>, RadioFail> {
+    let extra = match role {
+        RadioRole::Host => Vec::new(),
+        RadioRole::Join(ap) => vec![ap.freq_mhz.to_string(), bssid_text(&ap.bssid)],
+    };
+    let mut child = link(role.arg(), &extra)
         .spawn()
         .map_err(|e| RadioFail::Radio(format!("link {} would not start: {e}", role.arg())))?;
     loop {
@@ -121,7 +185,12 @@ pub fn up(role: LinkRole, cancel: &Cancel) -> Result<(), RadioFail> {
             return Err(RadioFail::Cancelled);
         }
         match child.try_wait() {
-            Ok(Some(status)) if status.success() => return Ok(()),
+            Ok(Some(status)) if status.success() => {
+                return match role {
+                    RadioRole::Host => read_ap().map(Some),
+                    RadioRole::Join(_) => Ok(None),
+                }
+            }
             Ok(Some(status)) if status.code() == Some(3) => return Err(RadioFail::NoHost),
             Ok(Some(status)) => {
                 return Err(RadioFail::Radio(format!(
@@ -137,12 +206,12 @@ pub fn up(role: LinkRole, cancel: &Cancel) -> Result<(), RadioFail> {
 
 #[cfg(feature = "device")]
 pub fn down() {
-    let _ = link("down").status();
+    let _ = link("down", &[]).status();
 }
 
 #[cfg(not(feature = "device"))]
-pub fn up(_role: LinkRole, _cancel: &Cancel) -> Result<(), RadioFail> {
-    Ok(())
+pub fn up(_role: RadioRole, _cancel: &Cancel) -> Result<Option<HostAp>, RadioFail> {
+    Ok(None)
 }
 
 #[cfg(not(feature = "device"))]
@@ -187,15 +256,73 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let script = d.path().join("System/slotlink.sh");
         assert_eq!(
-            argv(&link_command(d.path(), "host")),
+            argv(&link_command(d.path(), "host", &[])),
             ["/bin/sh", script.to_str().unwrap(), "link", "host"]
+        );
+    }
+
+    #[test]
+    fn a_join_passes_the_frequency_and_bssid() {
+        let d = tempfile::tempdir().unwrap();
+        let script = d.path().join("System/slotlink.sh");
+        let ap = HostAp {
+            freq_mhz: 5180,
+            bssid: [2, 0x11, 0x22, 0x33, 0x44, 0x55],
+        };
+        let extra = [ap.freq_mhz.to_string(), bssid_text(&ap.bssid)];
+        assert_eq!(
+            argv(&link_command(d.path(), "join", &extra)),
+            [
+                "/bin/sh",
+                script.to_str().unwrap(),
+                "link",
+                "join",
+                "5180",
+                "02:11:22:33:44:55"
+            ]
+        );
+    }
+
+    #[test]
+    fn an_address_line_parses() {
+        assert_eq!(
+            parse_ap("5180 02:11:22:33:44:55\n"),
+            Some(HostAp {
+                freq_mhz: 5180,
+                bssid: [2, 0x11, 0x22, 0x33, 0x44, 0x55]
+            })
+        );
+    }
+
+    #[test]
+    fn a_line_that_is_not_an_address_does_not_parse() {
+        for bad in [
+            "junk",
+            "",
+            "5180",
+            "5180 02:11:22:33:44",
+            "5180 02:11:22:33:44:55:66",
+            "x 02:11:22:33:44:55",
+            "5180 zz:11:22:33:44:55",
+            "5180 02:11:22:33:44:55 extra",
+        ] {
+            assert_eq!(parse_ap(bad), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn a_bssid_round_trips() {
+        let b = [0xaa, 0xbb, 0x0c, 0, 1, 0xff];
+        assert_eq!(
+            parse_ap(&format!("2412 {}", bssid_text(&b))).unwrap().bssid,
+            b
         );
     }
 
     #[test]
     fn a_link_traces_into_the_cards_logs() {
         let d = tempfile::tempdir().unwrap();
-        let cmd = link_command(d.path(), "host");
+        let cmd = link_command(d.path(), "host", &[]);
         let trace = cmd
             .get_envs()
             .find(|(k, _)| *k == "AGS_LINK_TRACE")

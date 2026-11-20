@@ -43,9 +43,15 @@ pub enum PairFail {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum RommEvent {
-    PairShow { url: String, code: String },
+    PairShow {
+        url: String,
+        code: String,
+    },
     PairFailed(PairFail),
-    Paired { token: String, device_id: String },
+    Paired {
+        token: String,
+        device_id: String,
+    },
     Unpaired,
     Installed {
         carts: Vec<Cart>,
@@ -143,8 +149,8 @@ impl Task {
         let cart = carts
             .iter()
             .find(|c| c.platform == platform && c.stem == stem);
-        let labeled = !self.cancel.is_set()
-            && cart.is_some_and(|cart| (self.label)(&self.root, cart));
+        let labeled =
+            !self.cancel.is_set() && cart.is_some_and(|cart| (self.label)(&self.root, cart));
         if labeled {
             carts = scan(&self.root).unwrap_or(carts);
         }
@@ -556,9 +562,7 @@ fn fetch_label(root: &Path, cart: &Cart) -> bool {
 }
 
 pub fn romm_jobs(root: PathBuf, api: fn(&RommConf) -> Box<dyn Api>) -> Box<dyn RommJobs> {
-    spawn(
-        Runner::new(root, Box::new(move |conf| api(conf)), fetch_label).with_dial(Arc::new(dial)),
-    )
+    spawn(Runner::new(root, Box::new(move |conf| api(conf)), fetch_label).with_dial(Arc::new(dial)))
 }
 
 pub fn spawn(mut runner: Runner) -> Box<dyn RommJobs> {

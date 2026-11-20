@@ -85,5 +85,6 @@ pub fn blit_rect(window: (u32, u32), shake: f32) -> (i32, i32, i32, i32) {
 
 pub fn mode_period(clock_khz: u32, htotal: u16, vtotal: u16) -> Option<std::time::Duration> {
     let dots = htotal as u64 * vtotal as u64;
-    (clock_khz > 0 && dots > 0).then(|| std::time::Duration::from_nanos(dots * 1_000_000 / clock_khz as u64))
+    (clock_khz > 0 && dots > 0)
+        .then(|| std::time::Duration::from_nanos(dots * 1_000_000 / clock_khz as u64))
 }

@@ -63,7 +63,8 @@ impl RommConf {
             .iter()
             .find_map(|scheme| {
                 let head = typed.get(..scheme.len())?;
-                head.eq_ignore_ascii_case(scheme).then(|| &typed[scheme.len()..])
+                head.eq_ignore_ascii_case(scheme)
+                    .then(|| &typed[scheme.len()..])
             })
             .unwrap_or(typed);
         bare.split(['/', '?', '#']).next().unwrap_or("")

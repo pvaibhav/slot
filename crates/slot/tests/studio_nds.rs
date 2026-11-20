@@ -13,6 +13,7 @@ fn ds_cart() -> Cart {
         code: String::new(),
         shell: None,
         sealed: false,
+        tags: Vec::new(),
     }
 }
 
@@ -45,4 +46,17 @@ fn the_studio_prints_a_ds_label_at_the_ds_well() {
             slot_ui::DS_LABEL_H
         ]
     );
+}
+
+#[test]
+fn a_ds_card_never_offers_the_marker() {
+    use slot::studio::{LabelKind, Studio};
+    let mut cart = ds_cart();
+    cart.label = Some("Labels/NDS/Kart.png".into());
+    let mut s = Studio::new(cart.clone(), false);
+    assert!(s.sheet.is_empty());
+    s = Studio::new(cart, true);
+    assert_eq!(s.sheet, vec![LabelKind::Real, LabelKind::Logo]);
+    s.applied(LabelKind::Real);
+    assert!(!s.sheet.contains(&LabelKind::Hand));
 }

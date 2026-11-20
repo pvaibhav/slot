@@ -1,6 +1,6 @@
 mod common;
 
-use common::{tmp_root_with_gb_carts, app_booting_at, tmp_root_with_carts, CLOCK_IS_SET};
+use common::{app_booting_at, tmp_root_with_carts, tmp_root_with_gb_carts, CLOCK_IS_SET};
 use slot::app::{App, Phase};
 use slot_input::{Action, Btn};
 use slot_store::{write_slot_state, SlotState};
@@ -106,7 +106,6 @@ fn closing_writes_the_shell_and_updates_the_shelf() {
     a.apply(Action::SelectTap);
     press(&mut a, Btn::Down);
     press(&mut a, Btn::Down);
-    press(&mut a, Btn::Down);
     press(&mut a, Btn::Right);
     press(&mut a, Btn::B);
     let t = a.now();
@@ -152,7 +151,14 @@ mod radio {
     #[test]
     fn the_studio_waits_for_its_own_save() {
         let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
-        write_slot_state(d.path(), &SlotState { clock_set: true, ..SlotState::default() }).unwrap();
+        write_slot_state(
+            d.path(),
+            &SlotState {
+                clock_set: true,
+                ..SlotState::default()
+            },
+        )
+        .unwrap();
         std::fs::write(d.path().join("Config/wifi.conf"), b"network={}\n").unwrap();
         let (mut first, _clock) = app_booting_at(d.path(), CLOCK_IS_SET);
         common::connect(&mut first);
@@ -165,7 +171,10 @@ mod radio {
                 let mut enc = png::Encoder::new(&mut out, 8, 4);
                 enc.set_color(png::ColorType::Rgba);
                 enc.set_depth(png::BitDepth::Eight);
-                enc.write_header().unwrap().write_image_data(&[255; 8 * 4 * 4]).unwrap();
+                enc.write_header()
+                    .unwrap()
+                    .write_image_data(&[255; 8 * 4 * 4])
+                    .unwrap();
                 out
             },
             [60, 20, 90],
@@ -181,13 +190,21 @@ mod radio {
         let art = FakeArt::default();
         a.set_art_jobs(Box::new(art.clone()));
         a.apply(Action::SelectTap);
-        art.0.lock().unwrap().events.push_back(ArtEvent::StudioArt(StudioArt {
-            stem: cart.stem.clone(),
-            wheel: Some("w.png".into()),
-            ..StudioArt::default()
-        }));
+        art.0
+            .lock()
+            .unwrap()
+            .events
+            .push_back(ArtEvent::StudioArt(StudioArt {
+                stem: cart.stem.clone(),
+                wheel: Some("w.png".into()),
+                ..StudioArt::default()
+            }));
         a.tick_ms(a.now() + 400);
-        assert!(a.studio().unwrap().rows().contains(&slot::studio::Row::LabelColor));
+        assert!(a
+            .studio()
+            .unwrap()
+            .rows()
+            .contains(&slot::studio::Row::LabelColor));
         while a.studio().unwrap().row() != Some(slot::studio::Row::LabelColor) {
             press(&mut a, Btn::Down);
         }
@@ -198,7 +215,11 @@ mod radio {
         a.close_studio();
         a.apply(Action::SelectTap);
         assert!(a.studio().is_none(), "opened over an unfinished save");
-        art.0.lock().unwrap().events.push_back(ArtEvent::StudioSaved(cart.stem.clone()));
+        art.0
+            .lock()
+            .unwrap()
+            .events
+            .push_back(ArtEvent::StudioSaved(cart.stem.clone()));
         a.tick_ms(a.now() + 1);
         a.apply(Action::SelectTap);
         assert!(a.studio().is_some());
@@ -208,10 +229,24 @@ mod radio {
     fn the_studio_preloads_on_open() {
         let (_d, mut a, art) = with_art();
         a.apply(Action::SelectTap);
-        let n = art.0.lock().unwrap().asked.iter().filter(|j| matches!(j, ArtJob::StudioFetch(_))).count();
+        let n = art
+            .0
+            .lock()
+            .unwrap()
+            .asked
+            .iter()
+            .filter(|j| matches!(j, ArtJob::StudioFetch(_)))
+            .count();
         assert_eq!(n, 1);
         press(&mut a, Btn::A);
-        let n = art.0.lock().unwrap().asked.iter().filter(|j| matches!(j, ArtJob::StudioFetch(_))).count();
+        let n = art
+            .0
+            .lock()
+            .unwrap()
+            .asked
+            .iter()
+            .filter(|j| matches!(j, ArtJob::StudioFetch(_)))
+            .count();
         assert_eq!(n, 1);
     }
 }
@@ -225,7 +260,9 @@ mod opening {
         a.draw(&mut out);
         out.iter().rev().find_map(|d| match *d {
             Draw::Tex { x, w, tex: t, .. } if t == tex => Some((x, w)),
-            Draw::Quad { corners, tex: t, .. } if t == tex => {
+            Draw::Quad {
+                corners, tex: t, ..
+            } if t == tex => {
                 let w = (corners[1][0] - corners[0][0]).hypot(corners[1][1] - corners[0][1]);
                 Some(((corners[0][0] + corners[2][0] - w) / 2.0, w))
             }
@@ -288,7 +325,8 @@ mod opening {
         let mut out = Vec::new();
         a.draw(&mut out);
         let quad = |tex: TexId| {
-            out.iter().rposition(|d| matches!(*d, Draw::Quad { tex: t, .. } if t == tex))
+            out.iter()
+                .rposition(|d| matches!(*d, Draw::Quad { tex: t, .. } if t == tex))
         };
         let (under, over) = (quad(interior), quad(face));
         assert!(under.is_some(), "the board vanished");
@@ -308,13 +346,18 @@ mod opening {
         let mut out = Vec::new();
         a.draw(&mut out);
         let turn = out.iter().find_map(|d| match *d {
-            Draw::Quad { corners, tex: t, .. } if t == tex => {
+            Draw::Quad {
+                corners, tex: t, ..
+            } if t == tex => {
                 let (dx, dy) = (corners[1][0] - corners[0][0], corners[1][1] - corners[0][1]);
                 Some(dy.atan2(dx).to_degrees())
             }
             _ => None,
         });
-        assert!((turn.unwrap() - slot::studio_view::CART_TILT).abs() < 0.1, "{turn:?}");
+        assert!(
+            (turn.unwrap() - slot::studio_view::CART_TILT).abs() < 0.1,
+            "{turn:?}"
+        );
     }
 
     #[test]
@@ -371,17 +414,32 @@ mod opening {
     fn legends_follow_the_theme() {
         for appearance in [slot_store::Appearance::Dark, slot_store::Appearance::Light] {
             let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
-            write_slot_state(d.path(), &SlotState { clock_set: true, appearance, ..SlotState::default() }).unwrap();
+            write_slot_state(
+                d.path(),
+                &SlotState {
+                    clock_set: true,
+                    appearance,
+                    ..SlotState::default()
+                },
+            )
+            .unwrap();
             let (mut a, _clock) = app_booting_at(d.path(), CLOCK_IS_SET);
             let (dark, light) = (TexId::from_raw(21), TexId::from_raw(22));
             for (is_light, tex) in [(false, dark), (true, light)] {
-                for (l, left) in [(slot::studio::Legend::Back, true), (slot::studio::Legend::Open, false)] {
+                for (l, left) in [
+                    (slot::studio::Legend::Back, true),
+                    (slot::studio::Legend::Open, false),
+                ] {
                     a.set_studio_legend((l, left, is_light), (tex, 80));
                 }
             }
             a.apply(Action::SelectTap);
             a.tick_ms(a.now() + 400);
-            let (want, other) = if appearance == slot_store::Appearance::Light { (light, dark) } else { (dark, light) };
+            let (want, other) = if appearance == slot_store::Appearance::Light {
+                (light, dark)
+            } else {
+                (dark, light)
+            };
             assert!(face_rect(&a, want).is_some());
             assert!(face_rect(&a, other).is_none());
         }
@@ -434,8 +492,8 @@ mod reopening {
 mod printing {
     use super::*;
     use slot::app::StudioTex;
-    use slot::studio::LabelKind;
     use slot::art::jobs::{ArtEvent, ArtJob, ArtJobs, StudioArt};
+    use slot::studio::LabelKind;
     use slot_ui::TexId;
 
     struct Art(bool);
@@ -462,11 +520,16 @@ mod printing {
         a.apply(Action::SelectTap);
         let t = TexId::from_raw(3);
         a.set_studio_tex(StudioTex {
-            faces: vec![(LabelKind::Real, t), (LabelKind::Logo, t), (LabelKind::Title, t)],
+            faces: vec![
+                (LabelKind::Real, t),
+                (LabelKind::Logo, t),
+                (LabelKind::Hand, t),
+            ],
             bare: t,
             under: None,
             w: 360,
             h: 212,
+            hand: None,
         });
         a.tick_ms(a.now() + 50);
         assert_eq!(a.studio_slip_count(), 0, "printed before the screen opened");
@@ -498,56 +561,6 @@ fn shortcuts_fire_in_the_studio() {
     assert_ne!(a.blue_light(), blue);
     assert!(a.studio().is_some());
     assert!(count(&a) > before, "no HUD over the studio");
-}
-
-#[test]
-fn a_text_color_is_saved_as_a_tagged_label() {
-    let (d, mut a) = on_shelf();
-    a.apply(Action::SelectTap);
-    let t = a.now();
-    a.tick_ms(t + 400);
-    let cart = a.studio().unwrap().cart.clone();
-    assert!(cart.label.is_none());
-    press(&mut a, Btn::Down);
-    assert_eq!(a.studio().unwrap().row(), Some(slot::studio::Row::LabelColor));
-    press(&mut a, Btn::A);
-    press(&mut a, Btn::Down);
-    press(&mut a, Btn::B);
-    assert!(a.studio().unwrap().recolored());
-    press(&mut a, Btn::B);
-    let t = a.now();
-    a.tick_ms(t + 400);
-    assert!(a.studio().is_none());
-    let path = slot::art::make::label_path(d.path(), &cart);
-    let tag = slot_ui::house_label::label_tag(&std::fs::read(path).unwrap());
-    assert!(matches!(tag, Some(slot_ui::house_label::LabelTag::Text(_))), "{tag:?}");
-}
-
-#[test]
-fn a_text_color_saved_with_a_new_shape_uses_that_shape() {
-    use slot::studio::Row;
-    let d = tmp_root_with_gb_carts(&["Kirby", "Tetris"]);
-    write_slot_state(d.path(), &SlotState { clock_set: true, ..SlotState::default() }).unwrap();
-    let (mut a, _clock) = app_booting_at(d.path(), CLOCK_IS_SET);
-    a.apply(Action::SelectTap);
-    let t = a.now();
-    a.tick_ms(t + 400);
-    let mut cart = a.studio().unwrap().cart.clone();
-    assert_eq!(a.studio().unwrap().row(), Some(Row::LabelColor));
-    press(&mut a, Btn::A);
-    press(&mut a, Btn::Down);
-    press(&mut a, Btn::B);
-    let ground = a.studio().unwrap().ground.unwrap();
-    while a.studio().unwrap().row() != Some(Row::Shape) {
-        press(&mut a, Btn::Down);
-    }
-    let was = cart.shell;
-    press(&mut a, Btn::Right);
-    cart.shell = a.studio().unwrap().shell;
-    assert_ne!(cart.shell, was, "the shape did not change");
-    a.close_studio();
-    let saved = std::fs::read(slot::art::make::label_path(d.path(), &cart)).unwrap();
-    assert_eq!(saved, slot::art::make::text_label(&cart, ground));
 }
 
 #[test]
@@ -584,7 +597,10 @@ fn the_printer_body_stays_light_in_both_themes() {
     press(&mut a, Btn::A);
     let mut out = Vec::new();
     a.draw(&mut out);
-    let body = |tex: TexId| out.iter().any(|d| matches!(*d, Draw::Part { tex: t, .. } if t == tex));
+    let body = |tex: TexId| {
+        out.iter()
+            .any(|d| matches!(*d, Draw::Part { tex: t, .. } if t == tex))
+    };
     assert!(body(light));
     assert!(!body(themed));
 }
@@ -628,7 +644,10 @@ fn holding_a_on_the_shelf_does_not_launch_behind_the_studio() {
     a.apply(Action::GbaUp(Btn::A));
     let t = a.now();
     a.tick_ms(t + 800);
-    assert!(a.seated_cart().is_none(), "a game started behind the studio");
+    assert!(
+        a.seated_cart().is_none(),
+        "a game started behind the studio"
+    );
 }
 
 #[test]
@@ -637,9 +656,18 @@ fn powering_off_keeps_studio_edits() {
     a.apply(Action::SelectTap);
     press(&mut a, Btn::Down);
     press(&mut a, Btn::Down);
-    press(&mut a, Btn::Down);
     press(&mut a, Btn::Right);
     a.apply(Action::PowerHold);
     let text = std::fs::read_to_string(d.path().join("Labels/cart_shell.txt")).unwrap_or_default();
     assert!(text.contains("Emerald"), "{text:?}");
+}
+
+#[test]
+fn the_studio_knows_when_the_marker_lies_below_the_cart() {
+    for (panel, below) in [((720, 480), true), ((640, 480), false)] {
+        let (_d, mut a) = on_shelf();
+        a.set_panel(panel);
+        a.apply(Action::SelectTap);
+        assert_eq!(a.studio().unwrap().marker_below, below, "{panel:?}");
+    }
 }

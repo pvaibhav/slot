@@ -9,6 +9,7 @@ use slot::frontend::Frontend;
 use slot_gfx::{Compositor, HeadlessSurface, OUT_H, OUT_W};
 use slot_input::{Btn, InputSource, Millis, RawEvent};
 use slot_power::SimPlatform;
+use slot_store::{read_slot_state, write_slot_state};
 use slot_ui::{quick_row_top, quick_row_top_at, quick_scroll, QuickRow, MOUTH_H, QUICK_VISIBLE};
 
 struct Script(VecDeque<Vec<RawEvent>>);
@@ -792,8 +793,12 @@ fn the_wifi_page_renders() {
     f.upload_faces(&mut c);
     let mut input = Script(VecDeque::new());
     open_wifi(&mut f, &mut input);
-    tap(&mut f, &mut input, Btn::Down);
-    assert_eq!(f.app().quick_menu(), Some(QuickRow::Networks));
+    common::reach(
+        &mut f,
+        QuickRow::Networks,
+        |f| f.app().quick_menu(),
+        |f| tap(f, &mut input, Btn::Down),
+    );
     let px = composed(&mut f, &mut c, "network-page");
     let right = OUT_W as usize - 32;
     for row in QuickRow::WIFI {
@@ -1178,5 +1183,63 @@ fn the_shelf_footer_shows_what_battery_display_asks_for() {
     assert!(
         span(&text).abs_diff(span(&number)) <= 1,
         "Percentage prints {text:?}, Both printed {number:?}"
+    );
+}
+
+fn nickname_value_glow(name: &str, nickname: &str) -> u8 {
+    let Ok(surface) = HeadlessSurface::new() else {
+        return 0;
+    };
+    let Ok(mut c) = Compositor::new(&surface) else {
+        return 0;
+    };
+    let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
+    clocked(d.path());
+    if !nickname.is_empty() {
+        let mut s = read_slot_state(d.path());
+        s.nickname = nickname.to_string();
+        write_slot_state(d.path(), &s).unwrap();
+    }
+    let mut f = Frontend::boot(Box::new(SimPlatform::at(d.path().to_path_buf())));
+    common::connect(f.app_mut());
+    f.upload_faces(&mut c);
+    let mut input = Script(VecDeque::new());
+    open_system(&mut f, &mut input);
+    for _ in 0..QuickRow::About.position(&f.app().hidden_rows()) {
+        tap(&mut f, &mut input, Btn::Down);
+    }
+    assert_eq!(f.app().quick_menu(), Some(QuickRow::About));
+    let px = composed(&mut f, &mut c, name);
+    let hidden = f.app().hidden_rows();
+    let top = slot_ui::quick_row_top_at(
+        slot_ui::Canvas::FRAMED,
+        QuickRow::Nickname,
+        QuickRow::About,
+        &hidden,
+    ) as usize;
+    let mut glow = 0u8;
+    for y in top + 8..top + 44 {
+        for x in 450..OUT_W as usize - 20 {
+            let [r, g, b] = at(&px, x, y);
+            if r > 0x50 && g > 0x50 && b > 0x50 {
+                glow = glow.max(r.max(g).max(b));
+            }
+        }
+    }
+    glow
+}
+
+#[test]
+fn the_fallback_nickname_is_dimmer_than_a_stored_one() {
+    let stored = nickname_value_glow("nickname-stored", "dad");
+    let fallback = nickname_value_glow("nickname-fallback", "");
+    if stored == 0 && fallback == 0 {
+        return;
+    }
+    assert!(stored >= 0x90, "stored value glow {stored}");
+    assert!(fallback > 0, "the fallback value drew nothing");
+    assert!(
+        fallback < stored - 0x10,
+        "fallback {fallback} vs stored {stored}"
     );
 }

@@ -25,7 +25,10 @@ pub struct Body {
 
 impl Body {
     pub fn new(reader: Box<dyn Read + Send>, length: u64) -> Body {
-        Body { reader, remaining: length }
+        Body {
+            reader,
+            remaining: length,
+        }
     }
 
     pub fn from_bytes(bytes: Vec<u8>) -> Body {
@@ -54,7 +57,10 @@ impl Body {
     }
 
     pub fn save_to(mut self, dest: &Path) -> io::Result<()> {
-        let mut name = dest.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+        let mut name = dest
+            .file_name()
+            .map(|n| n.to_os_string())
+            .unwrap_or_default();
         name.push(".part");
         let part = dest.with_file_name(name);
         let result = (|| {
@@ -164,7 +170,8 @@ pub fn parse_target(target: &str) -> (Vec<String>, HashMap<String, String>) {
     let mut map = HashMap::new();
     for pair in query.split('&').filter(|p| !p.is_empty()) {
         let (k, v) = pair.split_once('=').unwrap_or((pair, ""));
-        map.entry(percent_decode(k, true)).or_insert_with(|| percent_decode(v, true));
+        map.entry(percent_decode(k, true))
+            .or_insert_with(|| percent_decode(v, true));
     }
     (segments, map)
 }
@@ -208,14 +215,23 @@ fn base64_decode(input: &str) -> Option<Vec<u8>> {
 }
 
 fn authorized(headers: &HashMap<String, String>, pin: &str) -> bool {
-    let Some(value) = headers.get("authorization") else { return false };
-    let Some((scheme, token)) = value.split_once(' ') else { return false };
+    let Some(value) = headers.get("authorization") else {
+        return false;
+    };
+    let Some((scheme, token)) = value.split_once(' ') else {
+        return false;
+    };
     if !scheme.eq_ignore_ascii_case("basic") {
         return false;
     }
-    let Some(decoded) = base64_decode(token) else { return false };
-    let Ok(text) = String::from_utf8(decoded) else { return false };
-    text.split_once(':').is_some_and(|(user, pass)| user == "slot" && pass == pin)
+    let Some(decoded) = base64_decode(token) else {
+        return false;
+    };
+    let Ok(text) = String::from_utf8(decoded) else {
+        return false;
+    };
+    text.split_once(':')
+        .is_some_and(|(user, pass)| user == "slot" && pass == pin)
 }
 
 struct StopReader {
@@ -228,14 +244,22 @@ impl Read for StopReader {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         loop {
             if self.stop.load(Ordering::SeqCst) {
-                return Err(io::Error::new(io::ErrorKind::ConnectionAborted, "server stopping"));
+                return Err(io::Error::new(
+                    io::ErrorKind::ConnectionAborted,
+                    "server stopping",
+                ));
             }
             match self.stream.read(buf) {
                 Ok(n) => {
                     self.last = Instant::now();
                     return Ok(n);
                 }
-                Err(e) if matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut) => {
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+                    ) =>
+                {
                     if self.last.elapsed() > IDLE {
                         return Err(io::ErrorKind::TimedOut.into());
                     }
@@ -258,12 +282,19 @@ fn read_line(r: &mut impl BufRead, budget: &mut usize) -> io::Result<String> {
 }
 
 fn parse_request(stream: &TcpStream, stop: &Arc<AtomicBool>) -> io::Result<Request> {
-    let reader = StopReader { stream: stream.try_clone()?, stop: stop.clone(), last: Instant::now() };
+    let reader = StopReader {
+        stream: stream.try_clone()?,
+        stop: stop.clone(),
+        last: Instant::now(),
+    };
     let mut reader = BufReader::new(reader);
     let mut budget = MAX_HEAD;
     let first = read_line(&mut reader, &mut budget)?;
     let mut parts = first.split_whitespace();
-    let method = parts.next().ok_or(io::ErrorKind::InvalidData)?.to_ascii_uppercase();
+    let method = parts
+        .next()
+        .ok_or(io::ErrorKind::InvalidData)?
+        .to_ascii_uppercase();
     let target = parts.next().ok_or(io::ErrorKind::InvalidData)?;
     let (path, query) = parse_target(target);
     let mut headers = HashMap::new();
@@ -277,10 +308,19 @@ fn parse_request(stream: &TcpStream, stop: &Arc<AtomicBool>) -> io::Result<Reque
         }
     }
     let length = match headers.get("content-length") {
-        Some(v) => v.parse::<u64>().map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?,
+        Some(v) => v
+            .parse::<u64>()
+            .map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?,
         None => 0,
     };
-    Ok(Request { method, path, query, headers, body: Body::new(Box::new(reader), length), stop: stop.clone() })
+    Ok(Request {
+        method,
+        path,
+        query,
+        headers,
+        body: Body::new(Box::new(reader), length),
+        stop: stop.clone(),
+    })
 }
 
 fn status_text(code: u16) -> &'static str {
@@ -302,7 +342,12 @@ fn status_text(code: u16) -> &'static str {
 }
 
 fn mime(path: &Path) -> &'static str {
-    match path.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() {
+    match path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .as_deref()
+    {
         Some("html") => "text/html; charset=utf-8",
         Some("css") => "text/css; charset=utf-8",
         Some("js") => "text/javascript; charset=utf-8",
@@ -334,14 +379,22 @@ impl Write for StopWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         loop {
             if self.stop.load(Ordering::SeqCst) {
-                return Err(io::Error::new(io::ErrorKind::ConnectionAborted, "server stopping"));
+                return Err(io::Error::new(
+                    io::ErrorKind::ConnectionAborted,
+                    "server stopping",
+                ));
             }
             match self.stream.write(buf) {
                 Ok(n) => {
                     self.last = Instant::now();
                     return Ok(n);
                 }
-                Err(e) if matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut) => {
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+                    ) =>
+                {
                     if self.last.elapsed() > IDLE {
                         return Err(io::ErrorKind::TimedOut.into());
                     }
@@ -357,20 +410,34 @@ impl Write for StopWriter {
     }
 }
 
-fn write_reply(raw: &TcpStream, stop: &Arc<AtomicBool>, reply: Reply, head_only: bool) -> io::Result<()> {
+fn write_reply(
+    raw: &TcpStream,
+    stop: &Arc<AtomicBool>,
+    reply: Reply,
+    head_only: bool,
+) -> io::Result<()> {
     let _ = raw.set_write_timeout(Some(POLL));
-    let mut stream = StopWriter { stream: raw.try_clone()?, stop: stop.clone(), last: Instant::now() };
+    let mut stream = StopWriter {
+        stream: raw.try_clone()?,
+        stop: stop.clone(),
+        last: Instant::now(),
+    };
     let stream = &mut stream;
     let (extra, reply) = match reply {
-        Reply::Headed(headers, inner) => {
-            (headers.iter().map(|(k, v)| format!("{k}: {v}\r\n")).collect::<String>(), *inner)
-        }
+        Reply::Headed(headers, inner) => (
+            headers
+                .iter()
+                .map(|(k, v)| format!("{k}: {v}\r\n"))
+                .collect::<String>(),
+            *inner,
+        ),
         other => (String::new(), other),
     };
     let extra = extra.as_str();
     match reply {
         Reply::Json(code, body) => {
-            stream.write_all(head(code, "application/json", body.len() as u64, extra).as_bytes())?;
+            stream
+                .write_all(head(code, "application/json", body.len() as u64, extra).as_bytes())?;
             if !head_only {
                 stream.write_all(body.as_bytes())?;
             }
@@ -388,7 +455,8 @@ fn write_reply(raw: &TcpStream, stop: &Arc<AtomicBool>, reply: Reply, head_only:
             }
             _ => {
                 let body = serde_json::json!({ "error": "not found" }).to_string();
-                stream.write_all(head(404, "application/json", body.len() as u64, "").as_bytes())?;
+                stream
+                    .write_all(head(404, "application/json", body.len() as u64, "").as_bytes())?;
                 stream.write_all(body.as_bytes())?;
             }
         },
@@ -409,7 +477,10 @@ fn handle(stream: TcpStream, root: &Path, pin: &str, stop: &Arc<AtomicBool>, han
     };
     let head_only = req.method == "HEAD";
     let reply = if req.path.first().map(String::as_str) == Some("api") {
-        if req.method == "GET" && req.path.get(1).map(String::as_str) == Some("auth") && req.path.len() == 2 {
+        if req.method == "GET"
+            && req.path.get(1).map(String::as_str) == Some("auth")
+            && req.path.len() == 2
+        {
             Reply::json(serde_json::json!({ "required": true }))
         } else if !authorized(&req.headers, pin) {
             Reply::error(401, "unauthorized")
@@ -434,14 +505,23 @@ impl Server {
         Server::start_with(root, port, pin, Arc::new(route))
     }
 
-    pub fn start_with(root: PathBuf, port: u16, pin: String, handler: Handler) -> io::Result<Server> {
+    pub fn start_with(
+        root: PathBuf,
+        port: u16,
+        pin: String,
+        handler: Handler,
+    ) -> io::Result<Server> {
         let listener = TcpListener::bind(("0.0.0.0", port))?;
         listener.set_nonblocking(true)?;
         let port = listener.local_addr()?.port();
         let stop = Arc::new(AtomicBool::new(false));
         let flag = stop.clone();
         let accept = thread::spawn(move || accept_loop(listener, root, pin, flag, handler));
-        Ok(Server { port, stop, accept: Some(accept) })
+        Ok(Server {
+            port,
+            stop,
+            accept: Some(accept),
+        })
     }
 
     pub fn port(&self) -> u16 {
@@ -489,7 +569,13 @@ fn refuse(mut stream: &TcpStream, stop: &Arc<AtomicBool>) {
                     break;
                 }
             }
-            Err(e) if matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut | io::ErrorKind::Interrupted) => {}
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    io::ErrorKind::WouldBlock
+                        | io::ErrorKind::TimedOut
+                        | io::ErrorKind::Interrupted
+                ) => {}
             Err(_) => return,
         }
     }
@@ -497,7 +583,13 @@ fn refuse(mut stream: &TcpStream, stop: &Arc<AtomicBool>) {
     let _ = stream.shutdown(Shutdown::Both);
 }
 
-fn accept_loop(listener: TcpListener, root: PathBuf, pin: String, stop: Arc<AtomicBool>, handler: Handler) {
+fn accept_loop(
+    listener: TcpListener,
+    root: PathBuf,
+    pin: String,
+    stop: Arc<AtomicBool>,
+    handler: Handler,
+) {
     let root = Arc::new(root);
     let pin = Arc::new(pin);
     let active = Arc::new(AtomicUsize::new(0));
@@ -524,7 +616,8 @@ fn accept_loop(listener: TcpListener, root: PathBuf, pin: String, stop: Arc<Atom
                 }
                 active.fetch_add(1, Ordering::SeqCst);
                 let guard = Slot(active.clone());
-                let (root, pin, stop, handler) = (root.clone(), pin.clone(), stop.clone(), handler.clone());
+                let (root, pin, stop, handler) =
+                    (root.clone(), pin.clone(), stop.clone(), handler.clone());
                 let h = thread::spawn(move || {
                     let _guard = guard;
                     handle(stream, &root, &pin, &stop, &handler);
@@ -533,7 +626,9 @@ fn accept_loop(listener: TcpListener, root: PathBuf, pin: String, stop: Arc<Atom
                 w.retain(|h| !h.is_finished());
                 w.push(h);
             }
-            Err(e) if e.kind() == io::ErrorKind::WouldBlock => thread::sleep(Duration::from_millis(15)),
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(15))
+            }
             Err(_) => thread::sleep(Duration::from_millis(15)),
         }
     }

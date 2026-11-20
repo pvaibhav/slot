@@ -177,7 +177,12 @@ fn denied_and_expired_report() {
 fn slow_down_lengthens_the_poll() {
     let api = fake(
         "5.4.0",
-        vec![Ok(Poll::Waiting), Ok(Poll::SlowDown), Ok(Poll::Waiting), Ok(paired())],
+        vec![
+            Ok(Poll::Waiting),
+            Ok(Poll::SlowDown),
+            Ok(Poll::Waiting),
+            Ok(paired()),
+        ],
     );
     let mut waits = Vec::new();
     run(&mut runner(&api), &mut waits, usize::MAX);
@@ -200,7 +205,10 @@ fn the_pairing_expires_locally_when_the_server_stays_quiet() {
     let api = fake("5.4.0", vec![]);
     let mut waits = Vec::new();
     let events = run(&mut runner(&api), &mut waits, usize::MAX);
-    assert_eq!(events.last(), Some(&RommEvent::PairFailed(PairFail::Expired)));
+    assert_eq!(
+        events.last(),
+        Some(&RommEvent::PairFailed(PairFail::Expired))
+    );
     assert_eq!(waits.iter().sum::<u64>(), 600);
 }
 
@@ -215,7 +223,10 @@ fn every_start_enables_install_for_a_paired_conf() {
     runner(&api).start(&saved);
     runner(&api).start(&saved);
     let enabled = api.0.lock().unwrap().enabled.clone();
-    assert_eq!(enabled, vec![("dev-1".to_string(), "rmm_tok".to_string()); 3]);
+    assert_eq!(
+        enabled,
+        vec![("dev-1".to_string(), "rmm_tok".to_string()); 3]
+    );
 }
 
 #[test]

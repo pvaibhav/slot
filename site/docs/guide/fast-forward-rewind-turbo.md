@@ -26,7 +26,7 @@ Rewind only records at normal speed. You can turn rewind off in Settings → Gam
 
 By default, hold <kbd>X</kbd> for turbo <kbd>A</kbd> and <kbd>Y</kbd> for turbo <kbd>B</kbd>. They fire about 10 times a second.
 
-Don't want 'em? Turn Turbo Buttons off in Settings → Gameplay. You can remap which buttons function as turbo in [Controls](controls.md).
+Don't want 'em? Clear Turbo A and Turbo B in [Controls](controls.md).
 
 ## While linked
 

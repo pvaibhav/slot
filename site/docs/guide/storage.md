@@ -16,6 +16,7 @@ If you use two cards, all of this is on the one in `SD2`.
 | `BIOS/`                                 | Optional BIOS files                 |
 | `Wallpapers/`                           | Your wallpapers                     |
 | `Bezels/GBA`, `Bezels/GB`, `Bezels/GBC` | Your bezels                         |
+| `Overlays/GBA`, `Overlays/GB`, `Overlays/GBC` | Your overlays                 |
 | `Config/`                               | Your settings                       |
 | `Logs/`                                 | Logs, for when something breaks     |
 | `System/`                               | slot itself                         |

@@ -31,6 +31,11 @@ fn main() {
         slot::root::ensure(std::path::Path::new(&dir));
         return;
     }
+    #[cfg(all(feature = "device", not(feature = "nds")))]
+    if let Some(mode) = std::env::var_os("SLOT_BLE_PROBE") {
+        slot::ble::probe(&mode.to_string_lossy());
+        return;
+    }
     slot::crash::install();
 
     #[cfg(feature = "host")]

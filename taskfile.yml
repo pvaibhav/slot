@@ -9,7 +9,7 @@ vars:
   CHEATS_DB_COMMIT: 25da22340889d04bd6e3a8c116d2750af4157d4f
   GAMBATTE_COMMIT: 77f2567d718b8973d02caa2daa8dce4953faf811
   ARMGBA_COMMIT: df6b2631291f249d54a00dd14f49bc893e438feb
-  DSPERATE_COMMIT: 99618eb956c66083618395dbae9bb5cbf0241d16
+  DSPERATE_COMMIT: 0688b410e0fc7f373023a7b4b0eb6caf48ce5f6d
   EXFATPROGS_VERSION: 1.4.3
   EXFATPROGS_SHA256: 4b5052cba6ff9f6dcb1c63eeeac328620472c5b0b3caf3d38e4ada50e75469d3
   SLOT_IN_PROCESS: >-
@@ -55,6 +55,24 @@ tasks:
       - cargo test -p slot-gfx --test pipeline
       - cargo test -p slot-ui --test render_row_edges
       - cargo test -p slot-retro --test options --test netpacket --test libretro
+      - task: test:nds
+
+  test:nds:
+    desc: >-
+      Run the RG DS+ build's tests: every test file that mentions the nds feature, and the unit tests of the
+      crates that have it, built with nds on
+    env:
+      SLOT_SILENT: '1'
+    vars:
+      NDS_TESTS:
+        sh: >-
+          git grep -l 'feature = "nds"' -- 'crates/*/tests/*.rs'
+          | sed -E 's#crates/([^/]+)/tests/(.+)\.rs#(package(\1) \& binary(\2))#'
+          | paste -sd'|' -
+    cmds:
+      - >-
+        cargo nextest run --workspace --features slot/romm,slot/nds --no-fail-fast
+        -E '(kind(lib) & (package(slot) | package(slot-ui) | package(slot-store))) | {{.NDS_TESTS}}'
 
   test:one:
     desc: Run tests matching FILTER, eg task test:one FILTER=gesture
@@ -83,12 +101,41 @@ tasks:
   lint:
     desc: Clippy over all targets with warnings denied
     cmds:
-      - cargo clippy --workspace --all-targets -- -D warnings
+      - cargo clippy --keep-going --workspace --all-targets -- -D warnings
 
   lint:device:
     desc: Clippy the device build, which the host lint never compiles
     cmds:
-      - cargo clippy -p slot --no-default-features --features device -- -D warnings
+      - cargo clippy --keep-going -p slot --no-default-features --features device -- -D warnings
+
+  lint:nds:
+    desc: Clippy the RG DS+ code, host and device, which the other lints never compile
+    cmds:
+      - cargo clippy --keep-going --workspace --all-targets --features slot/nds -- -D warnings
+      - cargo clippy --keep-going -p slot --no-default-features --features device,nds -- -D warnings
+
+  tag:
+    desc: >-
+      Run lint, lint:device, lint:nds, test and test:card on HEAD in a clean worktree, then tag HEAD as VERSION,
+      eg task tag VERSION=v1.15.4. The release workflow refuses a tag this did not make
+    requires:
+      vars: [ VERSION ]
+    vars:
+      SHA:
+        sh: git rev-parse HEAD
+      WT: '{{.ROOT_DIR}}/.worktrees/release-check'
+    preconditions:
+      - sh: '! git rev-parse -q --verify "refs/tags/{{.VERSION}}" >/dev/null'
+        msg: '{{.VERSION}} is already tagged'
+      - sh: '! pgrep -x cargo >/dev/null && ! pgrep -x rustc >/dev/null'
+        msg: Another build is running, wait for it to finish
+    cmds:
+      - git worktree remove --force "{{.WT}}" 2>/dev/null || true
+      - git worktree add --detach "{{.WT}}" {{.SHA}}
+      - ln -s "{{.ROOT_DIR}}/vendor" "{{.WT}}/vendor"
+      - cd "{{.WT}}" && CARGO_TARGET_DIR="{{.ROOT_DIR}}/target-check" task lint lint:device lint:nds test test:card
+      - git worktree remove --force "{{.WT}}"
+      - 'git tag -a "{{.VERSION}}" -m "slot {{.VERSION}}" -m "Checked: {{.SHA}}" {{.SHA}}'
 
   check:
     desc: Everything a CI run would do
@@ -96,6 +143,7 @@ tasks:
       - task: fmt:check
       - task: lint
       - task: lint:device
+      - task: lint:nds
       - task: test
       - task: test:card
 

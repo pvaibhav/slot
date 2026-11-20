@@ -35,7 +35,9 @@ impl Drop for Turn<'_> {
 }
 
 fn fnv(bytes: &[u8]) -> u64 {
-    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x0000_0100_0000_01b3))
+    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, b| {
+        (h ^ u64::from(*b)).wrapping_mul(0x0000_0100_0000_01b3)
+    })
 }
 
 fn stem_prefix(stem: &str) -> String {
@@ -44,17 +46,24 @@ fn stem_prefix(stem: &str) -> String {
 
 pub(super) fn key(cart: &Cart) -> String {
     let mtime = cart.label.as_deref().map_or(0, modified_ms);
-    let shell = cart.shell.map_or_else(|| "auto".to_string(), |c| c.to_value());
+    let shell = cart
+        .shell
+        .map_or_else(|| "auto".to_string(), |c| c.to_value());
     let state = format!("{RENDER_VERSION}\0{}\0{mtime}\0{shell}", cart.stem);
     format!("{}{:016x}", stem_prefix(&cart.stem), fnv(state.as_bytes()))
 }
 
 fn folder(root: &Path, platform: Platform) -> PathBuf {
-    root.join("Cache").join("server-carts").join(platform.dir_name())
+    root.join("Cache")
+        .join("server-carts")
+        .join(platform.dir_name())
 }
 
 fn hash_of(text: &str) -> Option<u64> {
-    let plain = text.len() == HASH_LEN && text.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
+    let plain = text.len() == HASH_LEN
+        && text
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
     if plain {
         u64::from_str_radix(text, 16).ok()
     } else {
@@ -73,7 +82,8 @@ pub(super) fn cached(root: &Path, platform: Platform, req: &Request) -> Option<R
         return None;
     }
     let path = file_for(root, platform, req.query.get("v")?)?;
-    path.is_file().then(|| Reply::file(path).with_header("Cache-Control", IMMUTABLE))
+    path.is_file()
+        .then(|| Reply::file(path).with_header("Cache-Control", IMMUTABLE))
 }
 
 fn over(dst: &mut [u8], src: &[u8]) {
@@ -106,12 +116,16 @@ fn draw(root: &Path, cart: &Cart) -> CartFace {
 
 fn encode(face: &CartFace) -> Option<Vec<u8>> {
     let mut out = Vec::new();
-    WebPEncoder::new(&mut out).encode(&face.rgba, face.w, face.h, ColorType::Rgba8).ok()?;
+    WebPEncoder::new(&mut out)
+        .encode(&face.rgba, face.w, face.h, ColorType::Rgba8)
+        .ok()?;
     Some(out)
 }
 
 fn remove_matching(dir: &Path, prefix: &str, keep: Option<&Path>) {
-    let Ok(entries) = fs::read_dir(dir) else { return };
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
     let keep = keep.and_then(Path::file_name);
     for entry in entries.filter_map(|e| e.ok()) {
         let name = entry.file_name();
@@ -141,7 +155,11 @@ fn store(dest: &Path, bytes: &[u8]) -> io::Result<()> {
     moved
 }
 
-pub fn render_once(dest: &Path, stop: &AtomicBool, render: impl FnOnce() -> Option<Vec<u8>>) -> bool {
+pub fn render_once(
+    dest: &Path,
+    stop: &AtomicBool,
+    render: impl FnOnce() -> Option<Vec<u8>>,
+) -> bool {
     let mut busy = rendering();
     loop {
         if dest.is_file() {
@@ -153,7 +171,10 @@ pub fn render_once(dest: &Path, stop: &AtomicBool, render: impl FnOnce() -> Opti
         if busy.len() < MAX_RENDERS && !busy.iter().any(|p| p == dest) {
             break;
         }
-        busy = FINISHED.wait_timeout(busy, STOP_POLL).unwrap_or_else(|e| e.into_inner()).0;
+        busy = FINISHED
+            .wait_timeout(busy, STOP_POLL)
+            .unwrap_or_else(|e| e.into_inner())
+            .0;
     }
     busy.push(dest.to_path_buf());
     drop(busy);

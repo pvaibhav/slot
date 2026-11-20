@@ -347,6 +347,9 @@ fn ending_link_play_with_wifi_off_blocks_the_radio_again() {
     assert!(!blocked.load(std::sync::atomic::Ordering::SeqCst));
     a.end_link();
     frames(&mut a, 2);
+    assert!(!blocked.load(std::sync::atomic::Ordering::SeqCst));
+    a.tick_ms(a.now() + slot::app::RADIO_BYE_MS);
+    frames(&mut a, 2);
     assert!(blocked.load(std::sync::atomic::Ordering::SeqCst));
 }
 
@@ -427,7 +430,7 @@ fn the_networks_row_names_the_joined_network() {
 }
 
 #[test]
-fn the_studio_offers_the_label_printer_only_while_connected() {
+fn the_studio_offers_the_label_printer_with_or_without_wifi() {
     let _g = serial();
     let (_d, mut a, _log) = booted(true, Fake::silent());
     settle(&mut a);
@@ -435,7 +438,7 @@ fn the_studio_offers_the_label_printer_only_while_connected() {
     a.apply(Action::SelectTap);
     a.tick_ms(a.now() + 1);
     let rows = a.studio().expect("no studio").rows();
-    assert!(!rows.contains(&slot::studio::Row::Label), "{rows:?}");
+    assert!(rows.contains(&slot::studio::Row::Label), "{rows:?}");
     a.close_studio();
     settle(&mut a);
     let (_d, mut a, _log) = on_shelf();

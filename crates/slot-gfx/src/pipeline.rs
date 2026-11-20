@@ -1,4 +1,5 @@
-use crate::authentic::{Ghost, Screen};
+use crate::authentic::Screen;
+use crate::ghost::{FrameBlend, Ghost, Lcd};
 use crate::lcd3x::ScreenEffect;
 use crate::power::{screen_brightness, screen_rect_above};
 use crate::quad::Quad;
@@ -11,19 +12,6 @@ pub const SRC_H: u32 = OUT_H / SCALE;
 
 pub const WHOLE_TEXTURE: [f32; 4] = [0.0, 0.0, 1.0, 1.0];
 
-/// How each new frame meets the ones before it, at the game's own size before any scaling.
-/// Authentic always draws its LCD's response, whatever this is.
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
-pub enum FrameBlend {
-    #[default]
-    Off,
-    /// Each frame half and half with the one before it.
-    Mix,
-    /// Authentic's LCD response for the screen in play: each pixel slow to change, slower
-    /// while it turns lighter.
-    Ghosting,
-}
-
 const FULL: [f32; 4] = [0.0, 0.0, OUT_W as f32, OUT_H as f32];
 
 pub struct GamePass {
@@ -34,6 +22,7 @@ pub struct GamePass {
     /// How many of `game` hold frames of the picture now showing, up to both.
     held: usize,
     blend: FrameBlend,
+    lcd: Lcd,
     u_rect: gl::types::GLint,
     u_bright: gl::types::GLint,
     u_uv: gl::types::GLint,
@@ -139,6 +128,7 @@ impl GamePass {
             at: 0,
             held: 0,
             blend: FrameBlend::Off,
+            lcd: Lcd::Gba,
             u_rect,
             u_bright,
             u_uv,
@@ -233,10 +223,18 @@ impl GamePass {
     pub fn set_effect(&mut self, effect: ScreenEffect, quad: &Quad) {
         if effect != self.effect {
             self.effect = effect;
-            self.ghost.set_filter(match effect {
+            let filter = match effect {
                 ScreenEffect::Authentic => gl::LINEAR,
                 _ => gl::NEAREST,
-            });
+            };
+            unsafe {
+                for game in self.game {
+                    gl::BindTexture(gl::TEXTURE_2D, game);
+                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, filter as i32);
+                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, filter as i32);
+                }
+            }
+            self.ghost.set_filter(filter);
             self.reblend(quad);
         }
     }
@@ -259,7 +257,7 @@ impl GamePass {
     fn reblend(&mut self, quad: &Quad) {
         self.ghost.reset();
         let (game, last) = (self.game[self.at], self.game[1 - self.at]);
-        match (self.blend(), self.held) {
+        match (self.blend, self.held) {
             (_, 0) | (FrameBlend::Off, _) => {}
             // One frame since the last cut: it is all there is to blend the next one with.
             (_, 1) => self.ghost.respond(game, [0.0; 2], quad),
@@ -269,15 +267,16 @@ impl GamePass {
             }
             (FrameBlend::Ghosting, _) => {
                 self.ghost.respond(last, [0.0; 2], quad);
-                self.ghost.respond(game, self.screen.look().ghost, quad);
+                self.ghost.respond(game, self.response(), quad);
             }
         }
     }
 
-    fn blend(&self) -> FrameBlend {
-        match self.effect {
-            ScreenEffect::Authentic => FrameBlend::Ghosting,
-            _ => self.blend,
+    fn response(&self) -> [f32; 2] {
+        if self.effect == ScreenEffect::Authentic {
+            self.screen.look().ghost
+        } else {
+            self.lcd.response()
         }
     }
 
@@ -287,6 +286,13 @@ impl GamePass {
 
     pub fn set_screen(&mut self, screen: Screen) {
         self.screen = screen;
+    }
+
+    pub fn set_lcd(&mut self, lcd: Lcd, quad: &Quad) {
+        if lcd != self.lcd {
+            self.lcd = lcd;
+            self.reblend(quad);
+        }
     }
 
     pub fn set_paper(&mut self, size: u32, gray: &[u8]) {
@@ -330,10 +336,10 @@ impl GamePass {
                 xrgb8888.as_ptr() as *const std::ffi::c_void,
             );
         }
-        match self.blend() {
+        match self.blend {
             FrameBlend::Off => {}
             FrameBlend::Mix => self.ghost.mix(game, last, quad),
-            FrameBlend::Ghosting => self.ghost.respond(game, self.screen.look().ghost, quad),
+            FrameBlend::Ghosting => self.ghost.respond(game, self.response(), quad),
         }
     }
 
@@ -345,7 +351,7 @@ impl GamePass {
             _ => self.src,
         };
         let game = self.game[self.at];
-        let shown = match self.blend() {
+        let shown = match self.blend {
             FrameBlend::Off => game,
             FrameBlend::Mix | FrameBlend::Ghosting => self.ghost.texture().unwrap_or(game),
         };

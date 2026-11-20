@@ -14,7 +14,9 @@ type Close = unsafe extern "C" fn(*mut u8);
 
 fn shim() -> Option<PathBuf> {
     let name = format!("slot_ds.{}", std::env::consts::DLL_EXTENSION);
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../vendor").join(name);
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../vendor")
+        .join(name);
     if !path.exists() {
         eprintln!("skipped: {} is not built", path.display());
         return None;
@@ -70,7 +72,8 @@ pub fn arm7_tick_rom() -> Vec<u8> {
 
 fn rom_with(arm9: &[u32], arm7: &[u32]) -> Vec<u8> {
     let mut rom = vec![0u8; 0x10000];
-    let put = |rom: &mut Vec<u8>, at: usize, v: u32| rom[at..at + 4].copy_from_slice(&v.to_le_bytes());
+    let put =
+        |rom: &mut Vec<u8>, at: usize, v: u32| rom[at..at + 4].copy_from_slice(&v.to_le_bytes());
     rom[..8].copy_from_slice(b"SLOTTEST");
     rom[0x0C..0x10].copy_from_slice(b"SLTT");
     put(&mut rom, 0x20, 0x8000);
@@ -189,7 +192,9 @@ fn a_bad_state_leaves_the_game_running() {
     let Some(path) = shim() else { return };
     let ds = Ds::boot(&path);
     ds.run(10);
-    let junk: Vec<u8> = (0..64u32).map(|i| (i.wrapping_mul(2654435761) >> 7) as u8).collect();
+    let junk: Vec<u8> = (0..64u32)
+        .map(|i| (i.wrapping_mul(2654435761) >> 7) as u8)
+        .collect();
     let refused = unsafe {
         let load: libloading::Symbol<StateLoad> = ds.lib.get(b"slot_ds_state_load").unwrap();
         load(ds.ds, junk.as_ptr(), junk.len())
@@ -201,7 +206,13 @@ fn a_bad_state_leaves_the_game_running() {
     assert!(uniform(&px[SCREEN..]).is_some_and(|c| c != 0));
 }
 
-fn core_on_rom(path: &Path) -> (std::sync::MutexGuard<'static, ()>, tempfile::TempDir, slot_retro::DsperateCore) {
+fn core_on_rom(
+    path: &Path,
+) -> (
+    std::sync::MutexGuard<'static, ()>,
+    tempfile::TempDir,
+    slot_retro::DsperateCore,
+) {
     use slot_retro::RetroCore;
     let one = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
@@ -226,7 +237,10 @@ fn dsperate_core_draws_both_screens_into_one_stacked_frame() {
     assert_eq!(v.len(), 256 * 384 * 4);
     let px = |i: usize| u32::from_le_bytes(v[i * 4..i * 4 + 4].try_into().unwrap());
     let (top, bottom) = (px(0), px(SCREEN));
-    assert!((red(top) && green(bottom)) || (green(top) && red(bottom)), "{top:06x} {bottom:06x}");
+    assert!(
+        (red(top) && green(bottom)) || (green(top) && red(bottom)),
+        "{top:06x} {bottom:06x}"
+    );
     assert!(core.take_audio().len() % 2 == 0);
 }
 
@@ -272,7 +286,10 @@ fn dsperate_core_plays_48_khz() {
         frames += core.take_audio().len() / 2;
     }
     let want = 120.0 * 48000.0 / av.fps;
-    assert!((frames as f64 - want).abs() < want * 0.02, "{frames} frames, want about {want:.0}");
+    assert!(
+        (frames as f64 - want).abs() < want * 0.02,
+        "{frames} frames, want about {want:.0}"
+    );
 }
 
 #[test]

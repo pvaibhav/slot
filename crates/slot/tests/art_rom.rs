@@ -49,8 +49,17 @@ fn a_second_lookup_does_not_read_the_rom() {
     assert_eq!(first, crc32fast::hash(b"first bytes!"));
     let when = mtime(&p);
     std::fs::write(&p, b"other bytes!").unwrap();
-    std::fs::File::options().write(true).open(&p).unwrap().set_modified(when).unwrap();
-    assert_eq!(cached_crc(d.path(), &p).unwrap(), first, "the ROM was read again");
+    std::fs::File::options()
+        .write(true)
+        .open(&p)
+        .unwrap()
+        .set_modified(when)
+        .unwrap();
+    assert_eq!(
+        cached_crc(d.path(), &p).unwrap(),
+        first,
+        "the ROM was read again"
+    );
 }
 
 #[test]
@@ -59,7 +68,10 @@ fn a_changed_rom_is_read_again() {
     let p = rom_at(d.path(), b"first bytes!");
     cached_crc(d.path(), &p).unwrap();
     std::fs::write(&p, b"a longer set of bytes").unwrap();
-    assert_eq!(cached_crc(d.path(), &p).unwrap(), crc32fast::hash(b"a longer set of bytes"));
+    assert_eq!(
+        cached_crc(d.path(), &p).unwrap(),
+        crc32fast::hash(b"a longer set of bytes")
+    );
 }
 
 #[test]
@@ -67,8 +79,15 @@ fn a_corrupt_cache_line_is_ignored() {
     let d = tempfile::tempdir().unwrap();
     let p = rom_at(d.path(), b"first bytes!");
     std::fs::create_dir_all(d.path().join("Cache/art")).unwrap();
-    std::fs::write(d.path().join("Cache/art/crc.txt"), "Games/NDS/Kart.nds\tnope\n\n\t\t\t\n").unwrap();
-    assert_eq!(cached_crc(d.path(), &p).unwrap(), crc32fast::hash(b"first bytes!"));
+    std::fs::write(
+        d.path().join("Cache/art/crc.txt"),
+        "Games/NDS/Kart.nds\tnope\n\n\t\t\t\n",
+    )
+    .unwrap();
+    assert_eq!(
+        cached_crc(d.path(), &p).unwrap(),
+        crc32fast::hash(b"first bytes!")
+    );
 }
 
 #[test]

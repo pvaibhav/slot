@@ -27,7 +27,11 @@ fn playing_ds() -> (tempfile::TempDir, App) {
     for _ in 0..120 {
         a.update(1.0 / 60.0);
     }
-    assert!(matches!(a.phase(), Phase::Playing { .. }), "{:?}", a.phase());
+    assert!(
+        matches!(a.phase(), Phase::Playing { .. }),
+        "{:?}",
+        a.phase()
+    );
     assert_eq!(a.playing_platform(), Platform::Nds);
     (d, a)
 }
@@ -52,8 +56,15 @@ fn a_ds_game_hides_fast_forward_and_rewind_and_gameplay_opens_on_turbo() {
     use slot_ui::QuickRow;
     let (_d, mut a) = playing_ds();
     let hidden = a.in_game_hidden();
-    for row in [QuickRow::FastForward, QuickRow::FastForwardSound, QuickRow::Rewind] {
-        assert!(hidden.contains(&row), "{row:?} is still offered in a DS game");
+    for row in [
+        QuickRow::FastForward,
+        QuickRow::FastForwardSound,
+        QuickRow::Rewind,
+    ] {
+        assert!(
+            hidden.contains(&row),
+            "{row:?} is still offered in a DS game"
+        );
     }
     a.apply(slot_input::Action::QuickMenu);
     for _ in 0..QuickRow::Settings.position(&a.in_game_hidden()) {
@@ -61,17 +72,24 @@ fn a_ds_game_hides_fast_forward_and_rewind_and_gameplay_opens_on_turbo() {
     }
     assert_eq!(a.in_game_menu(), Some(QuickRow::Settings));
     press(&mut a, Btn::A);
-    press(&mut a, Btn::Down);
-    assert_eq!(a.in_game_menu(), Some(QuickRow::PlayGameplay));
+    common::reach(
+        &mut a,
+        QuickRow::PlayGameplay,
+        |a| a.in_game_menu(),
+        |a| press(a, Btn::Down),
+    );
     press(&mut a, Btn::A);
-    assert_eq!(a.in_game_menu(), Some(QuickRow::Turbo));
+    assert_eq!(a.in_game_menu(), Some(QuickRow::Rumble));
 }
 
 #[test]
 fn a_ds_game_has_no_screen_shader_and_hides_the_row() {
     let (_d, a) = playing_ds();
     assert_eq!(a.screen_shader(), slot_store::Shader::Off);
-    assert!(a.in_game_hidden().contains(&slot_ui::QuickRow::Shader), "the Shader row is still offered in a DS game");
+    assert!(
+        a.in_game_hidden().contains(&slot_ui::QuickRow::Shader),
+        "the Shader row is still offered in a DS game"
+    );
 }
 
 fn overlay_tile(root: &std::path::Path, dir: &str, name: &str, n: u32) {
@@ -81,7 +99,9 @@ fn overlay_tile(root: &std::path::Path, dir: &str, name: &str, n: u32) {
     let mut enc = png::Encoder::new(&mut out, n, n);
     enc.set_color(png::ColorType::Rgba);
     let mut writer = enc.write_header().unwrap();
-    writer.write_image_data(&vec![0u8; (n * n * 4) as usize]).unwrap();
+    writer
+        .write_image_data(&vec![0u8; (n * n * 4) as usize])
+        .unwrap();
     drop(writer);
     std::fs::write(dir.join(name), out).unwrap();
 }
@@ -93,7 +113,10 @@ fn the_in_game_overlay_row_picks_the_ds_overlay_and_leaves_the_gba_one() {
     let (d, mut a) = playing_ds();
     overlay_tile(d.path(), "NDS", "grid_tile.png", 4);
     overlay_tile(d.path(), "GBA", "lcd_tile.png", 3);
-    assert!(!a.in_game_hidden().contains(&QuickRow::Overlay), "no Overlay row in a DS game");
+    assert!(
+        !a.in_game_hidden().contains(&QuickRow::Overlay),
+        "no Overlay row in a DS game"
+    );
     a.apply(slot_input::Action::QuickMenu);
     for _ in 0..QuickRow::Settings.position(&a.in_game_hidden()) {
         press(&mut a, Btn::Down);
@@ -105,6 +128,9 @@ fn the_in_game_overlay_row_picks_the_ds_overlay_and_leaves_the_gba_one() {
     }
     assert_eq!(a.in_game_menu(), Some(QuickRow::Overlay));
     press(&mut a, Btn::Right);
-    assert_eq!(a.resolved_overlay(Platform::Nds).map(|e| e.name).as_deref(), Some("grid"));
+    assert_eq!(
+        a.resolved_overlay(Platform::Nds).map(|e| e.name).as_deref(),
+        Some("grid")
+    );
     assert_eq!(a.resolved_overlay(Platform::Gba), None);
 }

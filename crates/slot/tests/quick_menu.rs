@@ -428,38 +428,37 @@ fn each_systems_colour_correction_flips_on_either_arrow_and_saves_alone() {
 }
 
 #[test]
-fn the_game_page_flips_turbo_rewind_and_both_resume_rows_and_saves_each() {
+fn the_game_page_flips_rewind_and_both_resume_rows_and_saves_each() {
     let (d, mut a, _) = on_carousel();
     open_at(&mut a, QuickRow::Rewind);
     let card = |d: &TempDir| {
         let s = read_slot_state(d.path());
-        (s.resume_insert, s.resume_power_on, s.turbo, s.rewind)
+        (s.resume_insert, s.resume_power_on, s.rewind)
     };
-    assert_eq!(card(&d), (true, true, true, true));
+    assert_eq!(card(&d), (true, true, true));
     press(&mut a, Btn::Right);
-    assert_eq!(card(&d), (true, true, true, false));
+    assert_eq!(card(&d), (true, true, false));
     assert!(!a.may_rewind(), "rewind still offered with it off");
-    press(&mut a, Btn::Down);
-    press(&mut a, Btn::Left);
-    assert_eq!(card(&d), (true, true, false, false));
-    assert!(!a.turbo());
-    press(&mut a, Btn::Down);
-    press(&mut a, Btn::Down);
-    assert_eq!(a.quick_menu(), Some(QuickRow::ResumeInsert));
+    common::reach(
+        &mut a,
+        QuickRow::ResumeInsert,
+        |a| a.quick_menu(),
+        |a| press(a, Btn::Down),
+    );
     press(&mut a, Btn::Right);
-    assert_eq!(card(&d), (false, true, false, false));
+    assert_eq!(card(&d), (false, true, false));
     assert_eq!(a.quick_value(QuickRow::ResumeInsert), Some(QuickValue::Off));
     press(&mut a, Btn::Down);
     assert_eq!(a.quick_menu(), Some(QuickRow::ResumePowerOn));
     press(&mut a, Btn::Right);
-    assert_eq!(card(&d), (false, false, false, false));
+    assert_eq!(card(&d), (false, false, false));
     assert_eq!(
         a.quick_value(QuickRow::ResumePowerOn),
         Some(QuickValue::Off)
     );
     press(&mut a, Btn::Up);
     press(&mut a, Btn::Left);
-    assert_eq!(card(&d), (true, false, false, false));
+    assert_eq!(card(&d), (true, false, false));
     press(&mut a, Btn::B);
     assert_eq!(a.quick_menu(), Some(QuickRow::Game));
 }
@@ -513,40 +512,44 @@ fn screen_opens_a_page_of_its_own_and_b_comes_back_to_it() {
 }
 
 #[test]
-fn each_systems_frame_blending_steps_off_mix_lcd_ghosting_wraps_and_saves_alone() {
-    let saved = |d: &TempDir| {
-        let s = read_slot_state(d.path());
-        (s.blending_gba, s.blending_gb, s.blending_gbc)
-    };
-    for row in [
+fn each_systems_authentic_frame_blending_defaults_to_ghosting_and_saves_alone() {
+    let rows = [
         QuickRow::GbaBlending,
         QuickRow::GbBlending,
         QuickRow::GbcBlending,
-    ] {
-        let (d, mut a, _) = on_carousel();
+    ];
+    for row in rows {
+        let (d, mut a, _) = on_carousel_with(SlotState {
+            shader_gba: Shader::Authentic,
+            shader_gb: Shader::Authentic,
+            shader_gbc: Shader::Authentic,
+            ..SlotState::default()
+        });
         open_at(&mut a, row);
-        assert_eq!(
-            a.quick_value(row),
-            Some(QuickValue::Off),
-            "{row:?} did not open on the default, which is off"
-        );
-        for (btn, want, shown) in [
-            (Btn::Right, Blending::Mix, QuickValue::Mix),
-            (Btn::Right, Blending::Ghosting, QuickValue::Ghosting),
-            (Btn::Right, Blending::Off, QuickValue::Off),
-            (Btn::Left, Blending::Ghosting, QuickValue::Ghosting),
-            (Btn::Left, Blending::Mix, QuickValue::Mix),
+        assert_eq!(a.quick_value(row), Some(QuickValue::Ghosting));
+        for (btn, shown) in [
+            (Btn::Right, QuickValue::Off),
+            (Btn::Right, QuickValue::Mix),
+            (Btn::Right, QuickValue::Ghosting),
+            (Btn::Left, QuickValue::Mix),
+            (Btn::Left, QuickValue::Off),
         ] {
             press(&mut a, btn);
-            let off = Blending::Off;
-            let alone = match row {
-                QuickRow::GbaBlending => (want, off, off),
-                QuickRow::GbBlending => (off, want, off),
-                _ => (off, off, want),
-            };
-            assert_eq!(saved(&d), alone, "{row:?} {btn:?}");
             assert_eq!(a.quick_value(row), Some(shown), "{row:?} {btn:?}");
+            let reopened = App::boot(d.path());
+            for other in rows {
+                let expected = if other == row {
+                    shown
+                } else {
+                    QuickValue::Ghosting
+                };
+                assert_eq!(reopened.quick_value(other), Some(expected), "{other:?}");
+            }
         }
+        let saved = read_slot_state(d.path());
+        assert_eq!(saved.blending_gba, Blending::Off);
+        assert_eq!(saved.blending_gb, Blending::Off);
+        assert_eq!(saved.blending_gbc, Blending::Off);
     }
 }
 
@@ -1091,7 +1094,12 @@ fn the_carousel_menu_keeps_the_empty_footer_where_the_shelf_left_it() {
         "Open is not on the right: {right}"
     );
     assert!(!drawn(&open, 403), "Resume is on the carousel menu");
-    press(&mut a, Btn::Down);
+    common::reach(
+        &mut a,
+        QuickRow::Game,
+        |a| a.quick_menu(),
+        |a| press(a, Btn::Down),
+    );
     press(&mut a, Btn::A);
     assert_eq!(a.quick_menu(), Some(QuickRow::FastForward));
     for _ in 0..30 {

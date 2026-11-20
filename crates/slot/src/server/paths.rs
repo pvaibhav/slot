@@ -10,7 +10,10 @@ pub struct Refused {
 
 impl Refused {
     pub fn new(status: u16, message: impl Into<String>) -> Refused {
-        Refused { status, message: message.into() }
+        Refused {
+            status,
+            message: message.into(),
+        }
     }
 }
 
@@ -29,14 +32,19 @@ pub fn resolve(root: &Path, segments: &[String]) -> Result<PathBuf, Refused> {
     let mut out = root.to_path_buf();
     for s in segments {
         if s != "." && s != ".." && s.ends_with(['.', ' ']) {
-            return Err(Refused::new(400, format!("{s:?} ends with a space or dot, which the card cannot store")));
+            return Err(Refused::new(
+                400,
+                format!("{s:?} ends with a space or dot, which the card cannot store"),
+            ));
         }
         if s.is_empty() || s == "." || s == ".." || s.contains(['/', '\\', '\0']) {
             return Err(Refused::new(403, "forbidden"));
         }
         out.push(s);
     }
-    let base = root.canonicalize().map_err(|_| Refused::new(500, "card unavailable"))?;
+    let base = root
+        .canonicalize()
+        .map_err(|_| Refused::new(500, "card unavailable"))?;
     let mut probe = out.as_path();
     let mut tail: Vec<&std::ffi::OsStr> = Vec::new();
     let anchor = loop {
@@ -82,7 +90,10 @@ pub fn card_name(name: &str) -> Result<(), Refused> {
             return bad("has a space before the extension, which the card cannot store");
         }
     }
-    if name.chars().any(|c| c.is_control() || "\\/:*?\"<>|".contains(c)) {
+    if name
+        .chars()
+        .any(|c| c.is_control() || "\\/:*?\"<>|".contains(c))
+    {
         return bad("has a character the card cannot store");
     }
     Ok(())

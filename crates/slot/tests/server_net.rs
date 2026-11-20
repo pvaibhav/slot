@@ -1,6 +1,6 @@
 use slot::server::{
-    announcement, answer, claims, conflicts, heard, mdns_off, model_name, names, probe, respond, wifi_ip, Heard,
-    Responder,
+    announcement, answer, claims, conflicts, heard, mdns_off, model_name, names, probe, respond,
+    wifi_ip, Heard, Responder,
 };
 use std::net::SocketAddr;
 use std::net::{Ipv4Addr, SocketAddrV4};
@@ -119,7 +119,9 @@ fn ignores_malformed_packets() {
 #[test]
 fn compressed_name_pointing_forward_is_followed() {
     let mut p = vec![0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0];
-    p.extend_from_slice(&[4, b's', b'l', b'o', b't', 0xc0, 23, 0, 1, 0, 1, 5, b'l', b'o', b'c', b'a', b'l', 0]);
+    p.extend_from_slice(&[
+        4, b's', b'l', b'o', b't', 0xc0, 23, 0, 1, 0, 1, 5, b'l', b'o', b'c', b'a', b'l', 0,
+    ]);
     assert!(answer(&p, IP, HOST).is_some());
 }
 
@@ -176,7 +178,8 @@ fn a_numbered_name_says_it_has_no_ipv6_address_in_a_well_formed_record() {
     for host in ["slot", "slot-2"] {
         let reply = answer(&query_type(&[host, "local"], 28), IP, host).unwrap();
         let encoded = host.len() + 1 + 6 + 1;
-        let rdlength = u16::from_be_bytes([reply[12 + encoded + 8], reply[12 + encoded + 9]]) as usize;
+        let rdlength =
+            u16::from_be_bytes([reply[12 + encoded + 8], reply[12 + encoded + 9]]) as usize;
         assert_eq!(rdlength, reply.len() - (12 + encoded + 10), "{host}");
         assert_eq!(rdlength, encoded + 3, "{host}");
     }
@@ -226,10 +229,22 @@ fn only_another_device_answering_takes_the_name() {
 #[test]
 fn of_two_devices_probing_at_once_the_higher_address_keeps_the_name() {
     let higher = Ipv4Addr::new(192, 168, 4, 200);
-    assert_eq!(heard(&probe("slot", higher), from(higher), IP, "slot"), Heard::Lost);
-    assert_eq!(heard(&probe("slot", OTHER), from(OTHER), IP, "slot"), Heard::Nothing);
-    assert_eq!(heard(&probe("slot-2", higher), from(higher), IP, "slot"), Heard::Nothing);
-    assert_eq!(heard(&probe("slot", IP), from(IP), IP, "slot"), Heard::Nothing);
+    assert_eq!(
+        heard(&probe("slot", higher), from(higher), IP, "slot"),
+        Heard::Lost
+    );
+    assert_eq!(
+        heard(&probe("slot", OTHER), from(OTHER), IP, "slot"),
+        Heard::Nothing
+    );
+    assert_eq!(
+        heard(&probe("slot-2", higher), from(higher), IP, "slot"),
+        Heard::Nothing
+    );
+    assert_eq!(
+        heard(&probe("slot", IP), from(IP), IP, "slot"),
+        Heard::Nothing
+    );
 }
 
 #[test]
@@ -237,7 +252,12 @@ fn another_address_for_the_held_name_is_a_conflict_and_the_same_one_is_not() {
     let theirs = announcement("slot", OTHER, 120);
     assert!(conflicts(&theirs, from(OTHER), IP, "slot"));
     assert!(!conflicts(&theirs, from(OTHER), IP, "slot-2"));
-    assert!(!conflicts(&announcement("slot", IP, 120), from(OTHER), IP, "slot"));
+    assert!(!conflicts(
+        &announcement("slot", IP, 120),
+        from(OTHER),
+        IP,
+        "slot"
+    ));
     assert!(!conflicts(&probe("slot", OTHER), from(OTHER), IP, "slot"));
     assert!(!conflicts(&theirs, from(IP), IP, "slot"));
 }

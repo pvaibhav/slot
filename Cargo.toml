@@ -15,6 +15,7 @@ png = "0.17"
 image-webp = "0.2"
 qrcode = { version = "0.14", default-features = false }
 fontdue = "0.9"
+rustybuzz = "0.20"
 libloading = "0.8"
 libc = "0.2"
 winit = "0.30"

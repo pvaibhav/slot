@@ -33,7 +33,11 @@ const STAGES: [(Stage, f64); 8] = [
 pub const SCENE_MS: f64 = 160.0 + 80.0 + 420.0 + 260.0 + 420.0 + 380.0 + 450.0 + 130.0;
 
 pub fn stage_start(stage: Stage) -> f64 {
-    STAGES.iter().take_while(|(s, _)| *s != stage).map(|(_, ms)| ms).sum()
+    STAGES
+        .iter()
+        .take_while(|(s, _)| *s != stage)
+        .map(|(_, ms)| ms)
+        .sum()
 }
 
 pub fn stage_at(elapsed_ms: f64) -> (Stage, f32) {
@@ -82,7 +86,10 @@ pub struct Run {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum FetchArt {
-    Choice { pick: Kind, missing: usize },
+    Choice {
+        pick: Kind,
+        missing: usize,
+    },
     Running(Run),
     Summary {
         featured: Option<Landed>,
@@ -194,6 +201,7 @@ pub struct FetchTex {
     pub under: Option<[slot_ui::TexId; 2]>,
     pub w: u32,
     pub h: u32,
+    pub inked: bool,
 }
 
 pub fn choice_xs(canvas_w: f32) -> [f32; 2] {

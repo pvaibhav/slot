@@ -20,7 +20,11 @@ fn start() -> (tempfile::TempDir, Server) {
 }
 
 fn get_with(port: u16, target: &str, auth: bool) -> (u16, String, Vec<u8>) {
-    let line = if auth { format!("Authorization: Basic {AUTH}\r\n") } else { String::new() };
+    let line = if auth {
+        format!("Authorization: Basic {AUTH}\r\n")
+    } else {
+        String::new()
+    };
     let raw = format!("GET {target} HTTP/1.1\r\nHost: x\r\n{line}\r\n");
     let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
     s.set_read_timeout(Some(Duration::from_secs(30))).unwrap();
@@ -29,7 +33,11 @@ fn get_with(port: u16, target: &str, auth: bool) -> (u16, String, Vec<u8>) {
     let _ = s.read_to_end(&mut out);
     let split = out.windows(4).position(|w| w == b"\r\n\r\n").unwrap();
     let head = String::from_utf8_lossy(&out[..split]).into_owned();
-    let status = head.split_whitespace().nth(1).and_then(|c| c.parse().ok()).unwrap_or(0);
+    let status = head
+        .split_whitespace()
+        .nth(1)
+        .and_then(|c| c.parse().ok())
+        .unwrap_or(0);
     (status, head, out[split + 4..].to_vec())
 }
 
@@ -86,7 +94,12 @@ fn decode(bytes: &[u8]) -> (u32, u32, Vec<u8>) {
 }
 
 fn scanned(root: &Path, platform: Platform, id: usize) -> Cart {
-    let mut cart = scan(root).unwrap().into_iter().filter(|c| c.platform == platform).nth(id).unwrap();
+    let mut cart = scan(root)
+        .unwrap()
+        .into_iter()
+        .filter(|c| c.platform == platform)
+        .nth(id)
+        .unwrap();
     cart.read_header();
     cart
 }
@@ -119,12 +132,19 @@ fn drawn(cart: &Cart) -> Vec<u8> {
 
 fn set_mtime(path: &Path, ago_secs: u64) {
     let when = SystemTime::now() - Duration::from_secs(ago_secs);
-    std::fs::File::options().write(true).open(path).unwrap().set_modified(when).unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(path)
+        .unwrap()
+        .set_modified(when)
+        .unwrap();
 }
 
 fn cached_files(root: &Path, tag: &str) -> Vec<PathBuf> {
     let dir = root.join("Cache/server-carts").join(tag);
-    let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
     entries.map(|e| e.unwrap().path()).collect()
 }
 
@@ -160,7 +180,9 @@ fn an_old_key_is_not_cached_forever() {
 fn cart_refuses_a_write() {
     let (dir, server) = start();
     put(dir.path(), "Games/GBA/Alpha.gba", b"rom");
-    let raw = format!("DELETE /api/games/GBA/0/cart HTTP/1.1\r\nHost: x\r\nAuthorization: Basic {AUTH}\r\n\r\n");
+    let raw = format!(
+        "DELETE /api/games/GBA/0/cart HTTP/1.1\r\nHost: x\r\nAuthorization: Basic {AUTH}\r\n\r\n"
+    );
     let mut s = TcpStream::connect(("127.0.0.1", server.port())).unwrap();
     s.write_all(raw.as_bytes()).unwrap();
     let mut out = String::new();
@@ -187,12 +209,19 @@ fn clear_shells_layer_interior_backing_and_face() {
     let (dir, server) = start();
     put(dir.path(), "Games/GBC/Alpha.gbc", &gb_rom(0xc0));
     let choice = ShellChoice::parse("rounded 3366aa clear").unwrap();
-    put(dir.path(), slot_store::LABELS_SHELL_FILE, format!("Alpha={}\n", choice.to_value()).as_bytes());
+    put(
+        dir.path(),
+        slot_store::LABELS_SHELL_FILE,
+        format!("Alpha={}\n", choice.to_value()).as_bytes(),
+    );
     let cart = scanned(dir.path(), Platform::Gbc, 0);
     assert!(shows_interior(&cart));
     let (_, _, body) = get(server.port(), &cart_url(server.port(), "GBC", 0));
     let (_, _, rgba) = decode(&body);
-    assert!(rgba == drawn(&cart), "served pixels differ from the layered cart");
+    assert!(
+        rgba == drawn(&cart),
+        "served pixels differ from the layered cart"
+    );
     server.stop();
 }
 
@@ -211,7 +240,11 @@ fn changed_label_changes_the_key() {
     assert_ne!(before, after);
     let (_, _, new) = get(port, &after);
     assert_ne!(decode(&old).2, decode(&new).2);
-    assert_eq!(cached_files(dir.path(), "GBA").len(), 1, "the stale render stays behind");
+    assert_eq!(
+        cached_files(dir.path(), "GBA").len(),
+        1,
+        "the stale render stays behind"
+    );
     server.stop();
 }
 
@@ -223,7 +256,11 @@ fn changed_shell_changes_the_key() {
     let before = cart_url(port, "GBA", 0);
     let (_, _, old) = get(port, &before);
     let choice = ShellChoice::parse("notched cc2211 solid").unwrap();
-    put(dir.path(), slot_store::LABELS_SHELL_FILE, format!("Alpha={}\n", choice.to_value()).as_bytes());
+    put(
+        dir.path(),
+        slot_store::LABELS_SHELL_FILE,
+        format!("Alpha={}\n", choice.to_value()).as_bytes(),
+    );
     let after = cart_url(port, "GBA", 0);
     assert_ne!(before, after);
     let (_, _, new) = get(port, &after);
@@ -256,7 +293,10 @@ fn no_label_gets_a_generated_cart() {
     let (status, _, body) = get(server.port(), row["cartUrl"].as_str().unwrap());
     assert_eq!(status, 200);
     let face = cart_face(&scanned(dir.path(), Platform::Gba, 0));
-    assert!(decode(&body).2 == face.rgba, "served pixels differ from the generated cart");
+    assert!(
+        decode(&body).2 == face.rgba,
+        "served pixels differ from the generated cart"
+    );
     server.stop();
 }
 
@@ -370,7 +410,11 @@ fn stop_returns_promptly_with_renders_queued() {
     for t in queued {
         assert!(!t.join().unwrap());
     }
-    assert!(begun.elapsed() < Duration::from_millis(500), "{:?}", begun.elapsed());
+    assert!(
+        begun.elapsed() < Duration::from_millis(500),
+        "{:?}",
+        begun.elapsed()
+    );
     assert_eq!(rendered.load(Ordering::SeqCst), 0);
     release.store(true, Ordering::SeqCst);
     for t in holders {
@@ -398,7 +442,10 @@ fn v_cannot_reach_outside_the_cache() {
     let (dir, server) = start();
     put(dir.path(), "Games/GBA/Alpha.gba", b"rom");
     put(dir.path(), "Secret.webp", b"secret");
-    let (status, _, body) = get(server.port(), "/api/games/GBA/0/cart?v=..%2F..%2F..%2FSecret");
+    let (status, _, body) = get(
+        server.port(),
+        "/api/games/GBA/0/cart?v=..%2F..%2F..%2FSecret",
+    );
     assert_eq!(status, 200);
     assert_ne!(body, b"secret");
     server.stop();
@@ -410,7 +457,10 @@ fn post(port: u16, target: &str) -> u16 {
     s.write_all(raw.as_bytes()).unwrap();
     let mut out = String::new();
     let _ = s.read_to_string(&mut out);
-    out.split_whitespace().nth(1).and_then(|c| c.parse().ok()).unwrap_or(0)
+    out.split_whitespace()
+        .nth(1)
+        .and_then(|c| c.parse().ok())
+        .unwrap_or(0)
 }
 
 #[test]
@@ -462,7 +512,13 @@ fn gb_mould_follows_header() {
     let cart_only = scanned(dir.path(), Platform::Gbc, 1);
     assert_eq!(gb_shell_of(&cart_dual), Some(slot_ui::GbShell::Notched));
     assert_eq!(gb_shell_of(&cart_only), Some(slot_ui::GbShell::Rounded));
-    assert!(dual == drawn(&cart_dual), "dual mode pak drew the wrong mould");
-    assert!(only == drawn(&cart_only), "color only pak drew the wrong mould");
+    assert!(
+        dual == drawn(&cart_dual),
+        "dual mode pak drew the wrong mould"
+    );
+    assert!(
+        only == drawn(&cart_only),
+        "color only pak drew the wrong mould"
+    );
     server.stop();
 }
