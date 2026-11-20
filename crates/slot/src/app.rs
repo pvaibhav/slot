@@ -4841,7 +4841,13 @@ impl App {
     }
 
     fn retire_switched_resume(&mut self) {
-        if self.link_core != Some(Core::Gpsp) || self.core != Core::Gpsp {
+        let plays_own_save = match self.link_core {
+            Some(Core::Gpsp | Core::Armgba) => true,
+            Some(Core::Mgba | Core::Gambatte) | None => false,
+            #[cfg(feature = "nds")]
+            Some(Core::Dsperate) => false,
+        };
+        if !plays_own_save || self.link_core != Some(self.core) {
             return;
         }
         let (Some(root), Some(cart)) = (self.root.clone(), self.seated_cart()) else {
@@ -4849,7 +4855,7 @@ impl App {
         };
         let (stem, platform) = (cart.stem.clone(), cart.platform);
         let own = slot_store::core_for_platform(&root, &stem, platform, self.gb_core());
-        if own == Core::Gpsp {
+        if own == self.core {
             return;
         }
         if let Some(h) = self.pending_save.take() {
@@ -4858,7 +4864,8 @@ impl App {
         let ring = StateRing::new(&root, platform, own, &stem);
         match ring.retire_resume(&format_stamp(self.wall_secs())) {
             Ok(Some(to)) => eprintln!(
-                "slot: link: gpSP keeps its own save, moved the {} resume to {}",
+                "slot: link: {} keeps its own save, moved the {} resume to {}",
+                self.core.text(),
                 own.as_str(),
                 to.display()
             ),
@@ -5672,7 +5679,7 @@ impl App {
             let known = match crate::art::rom::cached_crc(&root, &path) {
                 Ok(crc) => Some((
                     crc,
-                    [Core::Mgba, Core::Gpsp, Core::Gambatte]
+                    Core::ALL
                         .into_iter()
                         .map(|c| (c, crate::root::bios_crc(&root, platform, c)))
                         .collect(),
@@ -5877,7 +5884,7 @@ impl App {
         std::thread::spawn(move || {
             let mut list = Vec::new();
             for platform in [Platform::Gba, Platform::Gb, Platform::Gbc] {
-                for core in [Core::Mgba, Core::Gpsp, Core::Gambatte] {
+                for core in Core::ALL {
                     list.push((platform, core, crate::root::bios_crc(&root, platform, core)));
                 }
             }
