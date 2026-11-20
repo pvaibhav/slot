@@ -1343,6 +1343,11 @@ fn a_session_outlives_its_peer_leaving_cleanly_or_not_and_links_again() {
         !s.on("linked") && !s.on("live")
     });
     assert_eq!(told.text("toast"), "Some(PeerEnded)", "{told:?}");
+    for d in [&mut host, &mut joiner] {
+        d.wait_for("the unplug screen closing", Duration::from_secs(5), |s| {
+            s.text("speed") == "Normal"
+        });
+    }
     watch_both(&mut host, &mut joiner, 1000);
     let (h, j) = watch_both(&mut host, &mut joiner, 2000);
     for (side, w) in [("host", &h), ("joiner", &j)] {
