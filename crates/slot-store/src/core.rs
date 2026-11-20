@@ -11,21 +11,29 @@ pub enum Core {
     Mgba,
     Gpsp,
     Gambatte,
+    Armgba,
     #[cfg(feature = "nds")]
     Dsperate,
 }
 
 impl Core {
     #[cfg(not(feature = "nds"))]
-    pub const ALL: [Core; 3] = [Core::Mgba, Core::Gpsp, Core::Gambatte];
+    pub const ALL: [Core; 4] = [Core::Mgba, Core::Gpsp, Core::Gambatte, Core::Armgba];
     #[cfg(feature = "nds")]
-    pub const ALL: [Core; 4] = [Core::Mgba, Core::Gpsp, Core::Gambatte, Core::Dsperate];
+    pub const ALL: [Core; 5] = [
+        Core::Mgba,
+        Core::Gpsp,
+        Core::Gambatte,
+        Core::Armgba,
+        Core::Dsperate,
+    ];
 
     pub fn as_str(&self) -> &'static str {
         match self {
             Core::Mgba => "mgba",
             Core::Gpsp => "gpsp",
             Core::Gambatte => "gambatte",
+            Core::Armgba => "armgba",
             #[cfg(feature = "nds")]
             Core::Dsperate => "dsperate",
         }
@@ -40,6 +48,7 @@ impl Core {
             Core::Mgba => "mGBA",
             Core::Gpsp => "gpSP",
             Core::Gambatte => "Gambatte",
+            Core::Armgba => "armGBA",
             #[cfg(feature = "nds")]
             Core::Dsperate => "DSperate",
         }
@@ -50,6 +59,7 @@ impl Core {
             "mgba" => Some(Core::Mgba),
             "gpsp" => Some(Core::Gpsp),
             "gambatte" => Some(Core::Gambatte),
+            "armgba" => Some(Core::Armgba),
             #[cfg(feature = "nds")]
             "dsperate" => Some(Core::Dsperate),
             _ => None,
@@ -60,7 +70,7 @@ impl Core {
         match self {
             #[cfg(feature = "nds")]
             _ if platform == Platform::Nds => self == Core::Dsperate,
-            Core::Mgba => true,
+            Core::Mgba | Core::Armgba => true,
             Core::Gpsp => platform.hardware() == Platform::Gba,
             Core::Gambatte => matches!(platform, Platform::Gb | Platform::Gbc),
             #[cfg(feature = "nds")]
@@ -68,12 +78,13 @@ impl Core {
         }
     }
 
-    pub fn pair(platform: Platform) -> [Core; 2] {
+    /// The cores the picker offers for a platform's games, left to right.
+    pub fn row(platform: Platform) -> &'static [Core] {
         match platform {
-            Platform::Gba | Platform::Gbav => [Core::Mgba, Core::Gpsp],
-            Platform::Gb | Platform::Gbc => [Core::Mgba, Core::Gambatte],
+            Platform::Gba | Platform::Gbav => &[Core::Mgba, Core::Armgba, Core::Gpsp],
+            Platform::Gb | Platform::Gbc => &[Core::Mgba, Core::Armgba, Core::Gambatte],
             #[cfg(feature = "nds")]
-            Platform::Nds => [Core::Dsperate, Core::Dsperate],
+            Platform::Nds => &[Core::Dsperate],
         }
     }
 }
@@ -94,10 +105,12 @@ pub fn core_for_platform(root: &Path, stem: &str, platform: Platform, gb_core: C
         .and_then(Core::parse)
         .filter(|core| core.runs(platform))
         .unwrap_or_else(|| match platform {
+            Platform::Gba => Core::Armgba,
+            Platform::Gbav => Core::Mgba,
             Platform::Gb | Platform::Gbc if gb_core.runs(platform) => gb_core,
+            Platform::Gb | Platform::Gbc => Core::Mgba,
             #[cfg(feature = "nds")]
             Platform::Nds => Core::Dsperate,
-            _ => Core::Mgba,
         })
 }
 

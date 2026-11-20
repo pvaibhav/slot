@@ -512,10 +512,13 @@ fn the_link_screen_draws_its_role_over_the_game() {
 }
 
 fn session_playing_on_gpsp() -> (Session, TempDir, Millis) {
+    session_playing_on(Core::Gpsp)
+}
+
+fn session_playing_on(core: Core) -> (Session, TempDir, Millis) {
     let d = common::tmp_root_with_carts(&["Emerald"]);
     common::write_hack_header(&d, "Emerald", "POKEMON EMER", "BPEE");
-    slot_store::write_selected_core(d.path(), Platform::Gba, "Emerald", Core::Gpsp)
-        .expect("write core");
+    slot_store::write_selected_core(d.path(), Platform::Gba, "Emerald", core).expect("write core");
     write_slot_state(
         d.path(),
         &SlotState {
@@ -604,6 +607,30 @@ fn a_started_link_reaches_the_emulator_thread_with_its_transport() {
         step(&mut s, &mut now, &[]);
         std::thread::sleep(Duration::from_millis(2));
     }
+}
+
+#[test]
+fn an_armgba_session_plugs_its_core_into_the_link_at_once() {
+    let (mut s, _d, mut now) = session_playing_on(Core::Armgba);
+    let port = common::free_port();
+    let far = std::thread::spawn(move || TcpLink::host("127.0.0.1", port).expect("host"));
+    std::thread::sleep(Duration::from_millis(150));
+    s.app_mut().start_link(
+        fake_starter(move |_, _| TcpLink::join("127.0.0.1", port)),
+        1,
+    );
+    let deadline = Instant::now() + BAIL;
+    while !s.emu().is_some_and(|e| e.net().is_active()) {
+        assert!(Instant::now() < deadline, "the core's link never started");
+        step(&mut s, &mut now, &[]);
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let far = far.join().expect("host thread");
+    for _ in 0..30 {
+        step(&mut s, &mut now, &[]);
+    }
+    assert!(s.app().link_active(), "the session did not last");
+    assert!(!far.peer_ended(), "the far end was turned down");
 }
 
 #[test]
@@ -1710,6 +1737,112 @@ fn the_link_overlay_on_gambatte_says_to_switch_to_mgba() {
     app.apply(Action::GameMenu);
     assert!(!app.game_menu_open(), "Gambatte opened the link overlay");
     assert_eq!(app.toast(), Some(Toast::NeedsMgba));
+}
+
+#[test]
+fn armgba_opens_its_own_cable_for_any_game_boy_advance_cart() {
+    for (stem, title, code) in [
+        ("Kirby", "AGB KIRBY AM", "B8KE"),
+        ("Apotris", "APOTRIS", "2ATE"),
+        ("Ruby", "POKEMON RUBY", "AXVE"),
+        ("Emerald", "POKEMON EMER", "BPEE"),
+    ] {
+        let d = common::tmp_root_with_carts(&[stem, "Zzz"]);
+        common::write_retail_header(&d, stem, title, code);
+        let mut app = seated_on(&d, Core::Armgba);
+        app.apply(Action::GameMenu);
+        assert_eq!(
+            app.game_menu(),
+            Some(GameMenu::Pick(LinkRow::Host)),
+            "{code}"
+        );
+        assert_eq!(
+            app.toast(),
+            None,
+            "{code} opened the screen and said something too"
+        );
+        assert_eq!(
+            drawn_hardware(&app),
+            LinkKind::Cable,
+            "{code} was offered an adapter armGBA's link does not carry"
+        );
+    }
+}
+
+#[test]
+fn armgba_sends_a_wireless_only_cart_to_gpsp_and_a_game_boy_cart_to_mgba() {
+    let d = common::tmp_root_with_carts(&["Mario Golf", "Zzz"]);
+    common::write_retail_header(&d, "Mario Golf", "MARIO GOLF", "BMGE");
+    let mut app = seated_on(&d, Core::Armgba);
+    app.apply(Action::GameMenu);
+    assert!(
+        !app.game_menu_open(),
+        "armGBA offered a cable to a Wireless Adapter game"
+    );
+    assert_eq!(app.toast(), Some(Toast::NeedsGpsp));
+    assert!(!app.link_active());
+
+    let d = common::tmp_root_with_gb_carts(&["Pokemon Red", "Zzz"]);
+    let mut app = seated_on_platform(&d, Core::Armgba, Platform::Gb);
+    app.apply(Action::GameMenu);
+    assert!(
+        !app.game_menu_open(),
+        "armGBA opened a Game Boy link it has not been proven on"
+    );
+    assert_eq!(app.toast(), Some(Toast::NeedsMgba));
+    assert!(!app.link_active());
+}
+
+#[test]
+fn select_on_armgba_keeps_the_cable_even_for_a_cart_with_both_links() {
+    let d = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
+    common::write_retail_header(&d, "Emerald", "POKEMON EMER", "BPEE");
+    let mut app = seated_on(&d, Core::Armgba);
+    app.apply(Action::GameMenu);
+    select(&mut app);
+    assert_eq!(
+        drawn_hardware(&app),
+        LinkKind::Cable,
+        "armGBA switched to the adapter"
+    );
+    assert!(
+        app.refusal_active(app.now()),
+        "SELECT did nothing and said nothing"
+    );
+    assert_eq!(app.game_menu(), Some(GameMenu::Pick(LinkRow::Host)));
+}
+
+#[test]
+fn a_on_armgba_starts_the_link_without_loading_the_game_again() {
+    let _link = common::link_port_lock();
+    let (mut app, _d) = playing_on(Core::Armgba);
+    app.apply(Action::GameMenu);
+    app.apply(Action::GbaDown(Btn::Right));
+    app.apply(Action::GbaDown(Btn::A));
+    assert_eq!(
+        app.take_link_reload(),
+        None,
+        "armGBA asked for its game to load again"
+    );
+    assert_eq!(
+        app.link_player(),
+        None,
+        "armGBA was put on mGBA's two-console cable"
+    );
+    assert!(
+        matches!(
+            app.game_menu(),
+            Some(GameMenu::Working {
+                role: LinkRow::Join,
+                ..
+            })
+        ),
+        "{:?}",
+        app.game_menu()
+    );
+    assert!(reaches_waiting(&mut app), "A started no link");
+    app.apply(Action::GbaDown(Btn::B));
+    settle(&mut app);
 }
 
 #[test]

@@ -31,8 +31,14 @@ fn ap(last: u8) -> HostAp {
 type Roles = Arc<Mutex<Vec<RadioRole>>>;
 
 fn playing_on(core: Core) -> (App, TempDir, FakeBleRemote, Roles) {
+    playing_cart_on(core, |d| {
+        common::write_hack_header(d, "Emerald", "POKEMON EMER", "BPEE")
+    })
+}
+
+fn playing_cart_on(core: Core, header: impl Fn(&TempDir)) -> (App, TempDir, FakeBleRemote, Roles) {
     let d = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
-    common::write_hack_header(&d, "Emerald", "POKEMON EMER", "BPEE");
+    header(&d);
     let mut app = common::boot(d.path());
     app.apply(Action::Insert);
     app.set_core(core);
@@ -159,6 +165,25 @@ fn hosting_advertises_once_the_hotspot_is_up() {
 }
 
 #[test]
+fn hosting_on_armgba_advertises_armgba_and_its_cable() {
+    let (mut app, _d, ble, _roles) = playing_cart_on(Core::Armgba, |d| {
+        common::write_retail_header(d, "Emerald", "POKEMON EMER", "BPEE")
+    });
+    host(&mut app, &ble);
+    let Some(BleWant::Advertise { advert, .. }) = last_want(&ble) else {
+        unreachable!();
+    };
+    let advert = decode(&advert).expect("the advert does not decode");
+    assert_eq!(advert.core, Core::Armgba);
+    assert_eq!(
+        advert.kind,
+        slot::link_kind::LinkKind::Cable,
+        "armGBA advertised a link it has no adapter for"
+    );
+    cancel(&mut app);
+}
+
+#[test]
 fn hosting_stops_advertising_when_cancelled() {
     let (mut app, _d, ble, _roles) = playing_on(Core::Gpsp);
     host(&mut app, &ble);
@@ -182,6 +207,42 @@ fn join_listens_then_joins_the_matching_host() {
     assert_eq!(app.join_target(), Some(AP));
     assert_eq!(last_want(&ble), Some(BleWant::Off));
     cancel(&mut app);
+}
+
+#[test]
+fn an_armgba_joiner_joins_an_armgba_host_without_reloading() {
+    let (mut app, d, ble, roles) = playing_on(Core::Armgba);
+    join(&mut app);
+    assert!(waiting(&app), "Join did not wait: {:?}", app.game_menu());
+    let mut heard = common::heard_host(&d, "Emerald", 7, AP, -60);
+    heard.advert.core = Core::Armgba;
+    ble.hear(heard);
+    assert!(
+        pump(&mut app, |_| !roles.lock().unwrap().is_empty()),
+        "the armGBA host was never joined"
+    );
+    assert_eq!(*roles.lock().unwrap(), vec![RadioRole::Join(AP)]);
+    assert_eq!(app.take_link_reload(), None, "armGBA reloaded its own game");
+    cancel(&mut app);
+}
+
+#[test]
+fn an_armgba_joiner_reloads_on_a_gpsp_hosts_core_before_joining() {
+    let (mut app, d, ble, roles) = playing_on(Core::Armgba);
+    join(&mut app);
+    ble.hear(common::heard_host(&d, "Emerald", 7, AP, -60));
+    assert!(
+        pump(&mut app, |a| a.link_core() == Some(Core::Gpsp)),
+        "the gpSP host was never taken up"
+    );
+    assert!(
+        app.take_link_reload().is_some(),
+        "the joiner never reloaded onto gpSP"
+    );
+    assert!(
+        roles.lock().unwrap().is_empty(),
+        "armGBA joined a gpSP host without switching"
+    );
 }
 
 #[test]
@@ -736,6 +797,28 @@ fn accepting_switches_to_the_hosts_core() {
 }
 
 #[test]
+fn accepting_switches_to_and_from_armgba() {
+    for (own, host) in [
+        (Core::Gpsp, Core::Armgba),
+        (Core::Mgba, Core::Armgba),
+        (Core::Armgba, Core::Mgba),
+        (Core::Armgba, Core::Gpsp),
+    ] {
+        let mut kid = emerald_on(own, Far::Waits);
+        kid.card_for(emerald_from(host));
+        kid.press(Btn::A);
+        kid.ready_on(host);
+        assert_eq!(kid.s.app().link_core(), Some(host));
+        kid.until("the join never started", |k| !k.joined().is_empty());
+        assert_eq!(
+            kid.joined(),
+            vec![RadioRole::Join(AP)],
+            "{own:?} joining {host:?}"
+        );
+    }
+}
+
+#[test]
 fn the_switch_lasts_one_link() {
     let port = common::free_port();
     let mut kid = emerald_on(Core::Gpsp, Far::Hosts(port));
@@ -785,6 +868,23 @@ fn accepting_from_the_shelf_starts_the_game() {
     );
     assert_eq!(kid.s.app().join_target(), Some(AP));
     kid.ready_on(Core::Gpsp);
+    kid.until("the join never started", |k| !k.joined().is_empty());
+    assert_eq!(kid.joined(), vec![RadioRole::Join(AP)]);
+}
+
+#[test]
+fn an_armgba_host_invites_a_kid_on_the_shelf() {
+    let d = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
+    common::write_hack_header(&d, "Emerald", "POKEMON EMER", "BPEE");
+    let mut kid = kid_session(
+        d,
+        kid_slot(slot_store::KidMode::Shelves, None),
+        (Platform::Gba, Core::Armgba, "Emerald"),
+        Far::Waits,
+    );
+    kid.card_for(emerald_from(Core::Armgba));
+    kid.press(Btn::A);
+    kid.ready_on(Core::Armgba);
     kid.until("the join never started", |k| !k.joined().is_empty());
     assert_eq!(kid.joined(), vec![RadioRole::Join(AP)]);
 }
@@ -1176,33 +1276,35 @@ fn back_in_play(kid: &mut Kid, core: Core, below: u64) {
     });
 }
 
-#[test]
-fn a_gpsp_switch_comes_back_from_the_in_game_save() {
+fn switch_comes_back_from_the_in_game_save(own: Core, link: Core) {
     const OLD: u64 = 1_000_000;
     let port = common::free_port();
-    let mut kid = emerald_on(Core::Mgba, Far::Hosts(port));
+    let mut kid = emerald_on(own, Far::Hosts(port));
     jump_to(&mut kid, OLD);
     let far = host_far(port);
-    kid.card_for(emerald_from(Core::Gpsp));
+    kid.card_for(emerald_from(link));
     kid.press(Btn::A);
     assert!(
-        frames_of(&kid.resume(Platform::Gba, Core::Mgba, "Emerald")) >= OLD,
+        frames_of(&kid.resume(Platform::Gba, own, "Emerald")) >= OLD,
         "A did not write the kid's resume"
     );
-    kid.ready_on(Core::Gpsp);
+    kid.ready_on(link);
     kid.until("the link never came up", |k| k.s.app().link_active());
     let mut far = far.join().expect("host thread");
     assert_eq!(
-        kid.resume(Platform::Gba, Core::Mgba, "Emerald"),
+        kid.resume(Platform::Gba, own, "Emerald"),
         None,
         "the pre-link resume is still there to load"
     );
     let traded: Vec<u8> = (0..8 * 1024).map(|i| (i % 251) as u8).collect();
     slot::persist::write_sav(kid.d.path(), Platform::Gba, "Emerald", &traded)
         .expect("the trade lands in the save");
-    kid.s.emu().expect("gpSP is running").refuse_save_ram();
+    kid.s
+        .emu()
+        .expect("the link core is running")
+        .refuse_save_ram();
     far.send_end();
-    back_in_play(&mut kid, Core::Mgba, OLD);
+    back_in_play(&mut kid, own, OLD);
     assert_eq!(kid.s.app().link_core(), None);
     eject_and_land(&mut kid);
     assert_eq!(
@@ -1211,11 +1313,27 @@ fn a_gpsp_switch_comes_back_from_the_in_game_save() {
         "the kid's game did not start from the traded save"
     );
     kid.s.app_mut().apply(Action::Insert);
-    kid.ready_on(Core::Mgba);
+    kid.ready_on(own);
     assert!(
         frame_now(&kid).is_some_and(|f| f < OLD),
         "the next launch resumed into the pre-link game"
     );
+}
+
+#[test]
+fn a_gpsp_switch_comes_back_from_the_in_game_save() {
+    switch_comes_back_from_the_in_game_save(Core::Mgba, Core::Gpsp);
+}
+
+#[test]
+fn an_armgba_switch_comes_back_from_the_in_game_save() {
+    for (own, link) in [
+        (Core::Mgba, Core::Armgba),
+        (Core::Gpsp, Core::Armgba),
+        (Core::Armgba, Core::Gpsp),
+    ] {
+        switch_comes_back_from_the_in_game_save(own, link);
+    }
 }
 
 fn mgba_link_comes_back(own: Core) {

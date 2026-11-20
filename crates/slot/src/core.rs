@@ -9,7 +9,6 @@ pub use slot_store::SUNLIGHT_MAX;
 
 const CORE_ENV: &str = "SLOT_CORE";
 
-pub const SUNLIGHT_OPTION: &str = "mgba_solar_sensor_level";
 const SUNLIGHT_NOON: i64 = 8;
 
 pub fn dylib_name(core: Core) -> String {
@@ -144,7 +143,7 @@ fn open_named(
                     core,
                     platform,
                     serial,
-                    root::has_real_bios(root),
+                    has_firmware(root, platform),
                     colour,
                     palette,
                 );
@@ -159,6 +158,13 @@ fn open_named(
         }
     }
     None
+}
+
+fn has_firmware(root: &Path, platform: Platform) -> bool {
+    match platform.hardware() {
+        Platform::Gb | Platform::Gbc => root::has_gb_boot_rom(root),
+        _ => root::has_real_bios(root),
+    }
 }
 
 pub fn palette_for(
@@ -222,6 +228,13 @@ pub fn colour_option(
                 "GBC only"
             },
         )),
+        Core::Armgba => Some((
+            match platform.hardware() {
+                Platform::Gb | Platform::Gbc => "armgba_gb_color_correction",
+                _ => "armgba_color_correction",
+            },
+            if on { "enabled" } else { "disabled" },
+        )),
     }
 }
 
@@ -242,6 +255,16 @@ pub fn apply_game_boy_player(
     }
 }
 
+pub fn sunlight_option(which: Core) -> Option<&'static str> {
+    match which {
+        Core::Mgba => Some("mgba_solar_sensor_level"),
+        Core::Armgba => Some("armgba_solar_sensor"),
+        Core::Gpsp | Core::Gambatte => None,
+        #[cfg(feature = "nds")]
+        Core::Dsperate => None,
+    }
+}
+
 pub fn sunlight_at(local_secs: i64) -> u8 {
     let from_noon = (local_secs.rem_euclid(86_400) / 60 - 720).abs();
     (SUNLIGHT_NOON * (360 - from_noon) / 360).max(0) as u8
@@ -253,6 +276,8 @@ pub fn blending_off(which: Core) -> (&'static str, &'static str) {
         Core::Mgba => ("mgba_interframe_blending", "OFF"),
         Core::Gpsp => ("gpsp_frame_mixing", "disabled"),
         Core::Gambatte => ("gambatte_mix_frames", "disabled"),
+        // The switch over all its LCD effects: LCD Scale, under it too, would resize the picture.
+        Core::Armgba => ("armgba_lcd_effects", "disabled"),
         #[cfg(feature = "nds")]
         Core::Dsperate => ("dsperate_blending", "off"),
     }
@@ -272,6 +297,18 @@ pub fn apply_link_options(core: &mut LibretroCore, which: Core, player: u8) {
     eprintln!("slot: core: link mode on, player {player}");
 }
 
+/// Whether the core's link waits inside a frame for the other device, so its packets must cross
+/// as it sends and polls them. armGBA's cable does, for every transfer; gpSP's link and mGBA's
+/// cable trade their packets between frames.
+pub fn links_live(which: Core) -> bool {
+    match which {
+        Core::Armgba => true,
+        Core::Mgba | Core::Gpsp | Core::Gambatte => false,
+        #[cfg(feature = "nds")]
+        Core::Dsperate => false,
+    }
+}
+
 pub fn palette_options(which: Core, colors: GbColors) -> Vec<(&'static str, &'static str)> {
     match (which, colors) {
         (Core::Gambatte, GbColors::Palette(p)) => vec![
@@ -279,7 +316,10 @@ pub fn palette_options(which: Core, colors: GbColors) -> Vec<(&'static str, &'st
             ("gambatte_gb_internal_palette", p.gambatte_name()),
         ],
         (Core::Gambatte, GbColors::Auto) => vec![("gambatte_gb_colorization", "GBC")],
-        _ => vec![("mgba_gb_colors", colors.core_name())],
+        (Core::Mgba, _) => vec![("mgba_gb_colors", colors.core_name())],
+        (Core::Gpsp | Core::Armgba, _) => Vec::new(),
+        #[cfg(feature = "nds")]
+        (Core::Dsperate, _) => Vec::new(),
     }
 }
 
@@ -293,54 +333,99 @@ fn init_options(core: Core) -> &'static [(&'static str, &'static str)] {
     }
 }
 
+/// armGBA's options for a game. `firmware` says whether the card holds the console's own BIOS or
+/// boot ROM, which armGBA would otherwise replace with its own and its own start-up animation.
+pub fn armgba_options(
+    platform: Platform,
+    firmware: bool,
+    colour: bool,
+) -> Vec<(&'static str, &'static str)> {
+    let game_boy = matches!(platform.hardware(), Platform::Gb | Platform::Gbc);
+    let start = match game_boy {
+        true => (
+            "armgba_gb_boot_rom",
+            if firmware { "enabled" } else { "disabled" },
+        ),
+        false => (
+            "armgba_skip_bios",
+            if firmware { "disabled" } else { "enabled" },
+        ),
+    };
+    let mut options = vec![
+        ("armgba_frame_skip", "auto"),
+        ("armgba_clock_source", "real"),
+        // slot reports L, R and Start, so L + R + Start held would restart the game under it.
+        ("armgba_restart_buttons", "off"),
+        start,
+    ];
+    options.extend(colour_option(Core::Armgba, platform, colour));
+    if !game_boy {
+        // Separate offers the cable from the moment the game loads, so a link needs no reload;
+        // until a session starts the console has nothing on its port, as with Link Mode Off.
+        options.extend([
+            ("armgba_link_mode", "separate"),
+            ("armgba_link_port", "cable"),
+        ]);
+    }
+    options
+}
+
 pub fn apply_core_options(
     core: &mut LibretroCore,
     which: Core,
     platform: Platform,
     serial: &str,
-    bios: bool,
+    firmware: bool,
     colour: bool,
     palette: Option<GbColors>,
 ) {
-    if which != Core::Gambatte {
-        core.set_option(&format!("{}_frameskip", which.as_str()), "auto");
-    }
-    if which == Core::Mgba {
-        core.set_option("mgba_sgb_borders", "OFF");
-        match palette {
-            Some(p) => {
-                core.set_option("mgba_gb_model", "Game Boy");
-                core.set_option("mgba_gb_colors_preset", "0");
-                core.set_option("mgba_gb_colors", p.core_name());
+    match which {
+        Core::Mgba => {
+            core.set_option("mgba_frameskip", "auto");
+            core.set_option("mgba_sgb_borders", "OFF");
+            match palette {
+                Some(p) => {
+                    core.set_option("mgba_gb_model", "Game Boy");
+                    core.set_option("mgba_gb_colors_preset", "0");
+                    core.set_option("mgba_gb_colors", p.core_name());
+                }
+                None => {
+                    core.set_option("mgba_gb_model", "Autodetect");
+                    core.set_option("mgba_gb_colors_preset", "1");
+                    core.set_option("mgba_gb_colors", "GBC Dark Green →A");
+                }
             }
-            None => {
-                core.set_option("mgba_gb_model", "Autodetect");
-                core.set_option("mgba_gb_colors_preset", "1");
-                core.set_option("mgba_gb_colors", "GBC Dark Green →A");
+            if let Some((key, value)) = colour_option(which, platform, colour) {
+                core.set_option(key, value);
             }
         }
-        if let Some((key, value)) = colour_option(which, platform, colour) {
-            core.set_option(key, value);
+        Core::Gambatte => {
+            core.set_option("gambatte_gb_hwmode", "Auto");
+            for (key, value) in palette_options(which, palette.unwrap_or(GbColors::Auto)) {
+                core.set_option(key, value);
+            }
+            if let Some((key, value)) = colour_option(which, platform, colour) {
+                core.set_option(key, value);
+            }
         }
-    }
-    if which == Core::Gambatte {
-        core.set_option("gambatte_gb_hwmode", "Auto");
-        for (key, value) in palette_options(which, palette.unwrap_or(GbColors::Auto)) {
-            core.set_option(key, value);
+        Core::Gpsp => {
+            core.set_option("gpsp_frameskip", "auto");
+            core.set_option("gpsp_serial", serial);
+            core.set_option("gpsp_rtc_time_source", "system");
+            if firmware {
+                core.set_option("gpsp_boot_mode", "bios");
+            }
+            if let Some((key, value)) = colour_option(which, platform, colour) {
+                core.set_option(key, value);
+            }
         }
-        if let Some((key, value)) = colour_option(which, platform, colour) {
-            core.set_option(key, value);
+        Core::Armgba => {
+            for (key, value) in armgba_options(platform, firmware, colour) {
+                core.set_option(key, value);
+            }
         }
-    }
-    if which == Core::Gpsp {
-        core.set_option("gpsp_serial", serial);
-        core.set_option("gpsp_rtc_time_source", "system");
-        if bios {
-            core.set_option("gpsp_boot_mode", "bios");
-        }
-        if let Some((key, value)) = colour_option(which, platform, colour) {
-            core.set_option(key, value);
-        }
+        #[cfg(feature = "nds")]
+        Core::Dsperate => {}
     }
 }
 
@@ -373,6 +458,7 @@ mod tests {
             palette_options(Core::Gambatte, GbColors::Auto),
             vec![("gambatte_gb_colorization", "GBC")]
         );
+        assert_eq!(palette_options(Core::Armgba, GbColors::Palette(p)), vec![]);
     }
 
     #[test]
@@ -402,6 +488,10 @@ mod tests {
             ("mgba_interframe_blending", "OFF")
         );
         assert_eq!(blending_off(Core::Gpsp), ("gpsp_frame_mixing", "disabled"));
+        assert_eq!(
+            blending_off(Core::Armgba),
+            ("armgba_lcd_effects", "disabled")
+        );
     }
 
     #[test]
@@ -421,6 +511,18 @@ mod tests {
         assert_eq!(
             colour_option(Core::Gpsp, Platform::Gba, false),
             Some(("gpsp_color_correction", "disabled"))
+        );
+        assert_eq!(
+            colour_option(Core::Armgba, Platform::Gbav, true),
+            Some(("armgba_color_correction", "enabled"))
+        );
+        assert_eq!(
+            colour_option(Core::Armgba, Platform::Gb, true),
+            Some(("armgba_gb_color_correction", "enabled"))
+        );
+        assert_eq!(
+            colour_option(Core::Armgba, Platform::Gbc, false),
+            Some(("armgba_gb_color_correction", "disabled"))
         );
     }
 

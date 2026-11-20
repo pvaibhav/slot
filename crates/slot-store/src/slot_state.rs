@@ -432,7 +432,7 @@ impl Blending {
     /// Slot blends frames on the GPU, so every Game Boy and GBA core offers every choice.
     pub fn choices(core: Core) -> &'static [Blending] {
         match core {
-            Core::Mgba | Core::Gpsp | Core::Gambatte => &Blending::ALL,
+            Core::Mgba | Core::Gpsp | Core::Gambatte | Core::Armgba => &Blending::ALL,
             #[cfg(feature = "nds")]
             Core::Dsperate => &[Blending::Off],
         }

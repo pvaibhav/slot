@@ -176,7 +176,7 @@ fn start_opens_the_picker_on_a_game_boy_cart() {
             common::tmp_root_with_carts(&["Emerald", "Zzz"]),
             common::tmp_root_with_carts(&["Emerald", "Zzz"]),
             "gba",
-            Core::Mgba,
+            Core::Armgba,
         ),
     ] {
         let mut pressed = shelf(&d, &mut c);
@@ -294,23 +294,78 @@ fn render_core_picker_gb() {
             app.apply(Action::GbaDown(Btn::Start));
             let_it_hop(&mut app);
             let_it_hop(&mut app);
-            let name = format!("picker-{shell}-{}", panel.0);
-            let gambatte = shot(&app, &mut c, &format!("{name}-gambatte"));
+            let name = format!("picker3-{shell}-{}", panel.0);
             assert_eq!(app.core_picker_chip().unwrap().seated, Some(Core::Gambatte));
-            app.apply(Action::GbaDown(Btn::Left));
-            let_it_hop(&mut app);
-            let mgba = shot(&app, &mut c, &format!("{name}-mgba"));
-            assert_eq!(
-                app.core_picker_chip().unwrap().seated,
-                Some(Core::Mgba),
-                "the chip did not land in the mGBA socket"
-            );
-            assert!(
-                mgba != gambatte,
-                "the chip moved and the panel did not change"
-            );
+            let mut seen = vec![shot(&app, &mut c, &format!("{name}-gambatte"))];
+            for core in [Core::Armgba, Core::Mgba] {
+                app.apply(Action::GbaDown(Btn::Left));
+                let_it_hop(&mut app);
+                assert_eq!(
+                    app.core_picker_chip().unwrap().seated,
+                    Some(core),
+                    "the chip did not land in the {core:?} socket"
+                );
+                let px = shot(&app, &mut c, &format!("{name}-{}", core.as_str()));
+                assert!(
+                    !seen.contains(&px),
+                    "the chip moved to {core:?} and the panel did not change"
+                );
+                seen.push(px);
+            }
         }
     }
+}
+
+#[test]
+fn render_core_picker_gba() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        eprintln!("no GL on this host, skipping");
+        return;
+    };
+    let d = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
+    let open = |app: &mut App| {
+        app.apply(Action::GbaDown(Btn::Start));
+        let_it_hop(app);
+        let_it_hop(app);
+    };
+    let landed = |app: &App| app.core_picker_chip().unwrap().seated;
+    for panel in [(640, 480), (720, 480)] {
+        let mut app = shelf(&d, &mut c);
+        app.set_panel(panel);
+        open(&mut app);
+        let name = format!("picker3-gba-{}", panel.0);
+        assert_eq!(
+            landed(&app),
+            Some(Core::Armgba),
+            "a GBA cart opened off armGBA"
+        );
+        let mut seen = vec![shot(&app, &mut c, &format!("{name}-armgba"))];
+        for (presses, core) in [
+            (&[Btn::Left][..], Core::Mgba),
+            (&[Btn::Right, Btn::Right][..], Core::Gpsp),
+        ] {
+            for press in presses {
+                app.apply(Action::GbaDown(*press));
+                let_it_hop(&mut app);
+            }
+            assert_eq!(
+                landed(&app),
+                Some(core),
+                "the chip did not land in {core:?}"
+            );
+            let px = shot(&app, &mut c, &format!("{name}-{}", core.as_str()));
+            assert!(
+                !seen.contains(&px),
+                "the chip moved to {core:?} and the panel did not change"
+            );
+            seen.push(px);
+        }
+    }
+    let mut app = shelf_in(&d, &mut c, Appearance::Light);
+    app.set_panel((720, 480));
+    open(&mut app);
+    assert_eq!(landed(&app), Some(Core::Armgba));
+    shot(&app, &mut c, "picker3-gba-light-720-armgba");
 }
 
 #[test]

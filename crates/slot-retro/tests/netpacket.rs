@@ -101,6 +101,101 @@ fn a_core_that_never_registers_netpacket_hands_back_an_inert_link() {
     assert_eq!(link.take_outbound(), None);
 }
 
+/// One end of a two-way pipe: what one end sends, the other receives.
+struct End {
+    out: std::sync::Arc<Mutex<std::collections::VecDeque<Vec<u8>>>>,
+    into: std::sync::Arc<Mutex<std::collections::VecDeque<Vec<u8>>>>,
+}
+
+fn pipe() -> (End, End) {
+    let (a, b) = (Default::default(), std::sync::Arc::<Mutex<_>>::default());
+    let a: std::sync::Arc<Mutex<_>> = a;
+    (
+        End {
+            out: a.clone(),
+            into: b.clone(),
+        },
+        End { out: b, into: a },
+    )
+}
+
+impl LinkChannel for End {
+    fn send(&mut self, _flags: i32, buf: &[u8]) {
+        self.out.lock().unwrap().push_back(buf.to_vec());
+    }
+
+    fn try_recv(&mut self) -> Option<Vec<u8>> {
+        self.into.lock().unwrap().pop_front()
+    }
+}
+
+#[test]
+fn a_plugged_link_puts_the_cores_packet_straight_on_the_wire() {
+    let link = Link::default();
+    let (here, mut there) = pipe();
+    link.plug(Box::new(here));
+
+    link.push_outbound(b"mid-frame".to_vec());
+
+    assert_eq!(there.try_recv().as_deref(), Some(&b"mid-frame"[..]));
+    assert_eq!(
+        link.take_outbound(),
+        None,
+        "the packet also waited for the frontend to move it"
+    );
+}
+
+#[test]
+fn a_plugged_link_reads_the_wire_once_its_queue_is_empty() {
+    let link = Link::default();
+    let (here, mut there) = pipe();
+    link.push_inbound(b"queued first".to_vec());
+    link.plug(Box::new(here));
+    there.send(NETPACKET_RELIABLE, b"on the wire");
+
+    assert_eq!(link.take_inbound().as_deref(), Some(&b"queued first"[..]));
+    assert_eq!(link.take_inbound().as_deref(), Some(&b"on the wire"[..]));
+    assert_eq!(link.take_inbound(), None);
+}
+
+#[test]
+fn an_unplugged_link_queues_for_the_frontend_again() {
+    let link = Link::default();
+    let (here, mut there) = pipe();
+    link.plug(Box::new(here));
+    link.unplug();
+
+    link.push_outbound(b"after".to_vec());
+    there.send(NETPACKET_RELIABLE, b"left on the wire");
+
+    assert_eq!(
+        there.try_recv(),
+        None,
+        "an unplugged link still wrote to the wire"
+    );
+    assert_eq!(link.take_outbound().as_deref(), Some(&b"after"[..]));
+    assert_eq!(
+        link.take_inbound(),
+        None,
+        "an unplugged link still read the wire"
+    );
+}
+
+#[test]
+fn a_clone_of_a_plugged_link_sends_on_the_same_wire() {
+    let link = Link::default();
+    let (here, mut there) = pipe();
+    link.plug(Box::new(here));
+
+    link.clone()
+        .push_outbound(b"from the core's handle".to_vec());
+
+    assert_eq!(
+        there.try_recv().as_deref(),
+        Some(&b"from the core's handle"[..])
+    );
+}
+
 static CORE_LOCK: Mutex<()> = Mutex::new(());
 
 fn lock() -> std::sync::MutexGuard<'static, ()> {

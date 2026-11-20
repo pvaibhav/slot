@@ -25,7 +25,7 @@ fn a_cart_that_took_slot_down_while_loading_comes_back_on_the_shelf() {
     persist::flush(
         d.path(),
         Platform::Gba,
-        Core::Mgba,
+        Core::Armgba,
         "Emerald",
         Some(&[5u8; 64]),
         None,
@@ -43,7 +43,7 @@ fn a_cart_that_took_slot_down_while_loading_comes_back_on_the_shelf() {
     );
     assert_eq!(mark.left(), None, "the mark outlived the boot it guarded");
     assert!(
-        StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
+        StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
             .read_resume()
             .unwrap()
             .is_none(),

@@ -434,7 +434,7 @@ fn a_game_boy_cart_shows_its_own_board() {
         [f.rgba[i], f.rgba[i + 1], f.rgba[i + 2]]
     };
     let navy = |p: [u8; 3]| p[2] > p[1] && p[0] < 45;
-    for (x, y) in [(100, 215), (218, 210)] {
+    for (x, y) in [(70, 185), (155, 185), (240, 185)] {
         assert!(
             navy(at(&backing, x, y)),
             "the pak board lost its chip at {x},{y}"
@@ -466,4 +466,83 @@ fn a_gba_cart_keeps_the_gba_picker_geometry() {
         );
     }
     assert_eq!(slot_ui::seats(None), slot_ui::GBA_SEATS);
+}
+
+fn inked(named: &CartFace, blank: &CartFace) -> Option<(u32, u32, u32, u32)> {
+    let mut ink: Option<(u32, u32, u32, u32)> = None;
+    for y in 0..named.h {
+        for x in 0..named.w {
+            let i = ((y * named.w + x) * 4) as usize;
+            if named.rgba[i..i + 4] == blank.rgba[i..i + 4] {
+                continue;
+            }
+            ink = Some(match ink {
+                None => (x, y, x, y),
+                Some((l, t, r, b)) => (l.min(x), t.min(y), r.max(x), b.max(y)),
+            });
+        }
+    }
+    ink
+}
+
+#[test]
+fn every_chip_name_in_a_board_row_fits_its_chip_with_room_either_side() {
+    let rows = [
+        (
+            Core::row(Platform::Gba),
+            chip_face(None),
+            chip_face as fn(Option<Core>) -> CartFace,
+        ),
+        (
+            Core::row(Platform::Gb),
+            slot_ui::gb_chip_face(None),
+            slot_ui::gb_chip_face as fn(Option<Core>) -> CartFace,
+        ),
+    ];
+    for (row, blank, face) in rows {
+        for core in row {
+            let (left, _, right, _) = inked(&face(Some(*core)), &blank)
+                .unwrap_or_else(|| panic!("{core:?} left no name"));
+            assert!(
+                left >= TURN_PAD + 2 && right < blank.w - TURN_PAD - 2,
+                "{core:?}'s name runs from {left} to {right} on a {} px face",
+                blank.w
+            );
+        }
+    }
+}
+
+#[test]
+fn the_names_on_a_board_are_one_size() {
+    let caps = |face: CartFace, blank: &CartFace| {
+        let (_, top, _, bottom) = inked(&face, blank).unwrap();
+        bottom - top
+    };
+    let blank = chip_face(None);
+    assert_eq!(
+        caps(chip_face(Some(Core::Mgba)), &blank),
+        caps(chip_face(Some(Core::Armgba)), &blank),
+        "mGBA and armGBA are printed at different sizes on the GBA board"
+    );
+    let blank = slot_ui::gb_chip_face(None);
+    assert_eq!(
+        caps(slot_ui::gb_chip_face(Some(Core::Mgba)), &blank),
+        caps(slot_ui::gb_chip_face(Some(Core::Armgba)), &blank),
+        "mGBA and armGBA are printed at different sizes on the Game Boy board"
+    );
+}
+
+#[test]
+fn a_game_boy_socket_is_open_in_the_middle_and_wears_its_core_name() {
+    let socket = slot_ui::gb_socket_face(Core::Gambatte);
+    assert_eq!((socket.w, socket.h), (79, 46));
+    assert!(
+        socket.rgba.chunks_exact(4).any(|p| p[3] == 0),
+        "the socket bitmap has no opening"
+    );
+    assert_ne!(
+        socket.rgba,
+        slot_ui::gb_socket_face(Core::Mgba).rgba,
+        "both sockets wear the same name"
+    );
 }

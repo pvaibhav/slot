@@ -419,23 +419,128 @@ fn the_sunlight_follows_the_clock_dark_at_night_and_brightest_at_noon() {
 }
 
 #[test]
-fn mgba_takes_every_sunlight_level_slot_can_send() {
+fn the_cores_with_a_solar_sensor_take_every_sunlight_level_slot_can_send() {
     let _g = common::core_lock();
-    let path = dylib_for(Core::Mgba);
-    if !path.exists() {
-        eprintln!("no mgba dylib on this host, skipping");
-        return;
+    for which in Core::ALL {
+        let Some(key) = slot::core::sunlight_option(which) else {
+            continue;
+        };
+        let path = dylib_for(which);
+        if !path.exists() {
+            eprintln!("no {} dylib on this host, skipping", which.as_str());
+            continue;
+        }
+        let core = LibretroCore::open(&path).expect("open core");
+        let levels = core
+            .declared_options()
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| panic!("{} declares no {key}", which.as_str()));
+        for level in 0..=slot::core::SUNLIGHT_MAX {
+            assert!(
+                levels.contains(&level.to_string()),
+                "{} has no sunlight level {level} in {levels:?}",
+                which.as_str()
+            );
+        }
     }
-    let core = LibretroCore::open(&path).expect("open core");
-    let levels = core
-        .declared_options()
-        .get(slot::core::SUNLIGHT_OPTION)
-        .cloned()
-        .expect("mgba declares no solar sensor option");
-    for level in 0..=slot::core::SUNLIGHT_MAX {
-        assert!(
-            levels.contains(&level.to_string()),
-            "mgba has no sunlight level {level} in {levels:?}"
-        );
-    }
+}
+
+#[test]
+fn mgba_and_armgba_are_the_cores_with_a_solar_sensor() {
+    let named: Vec<_> = Core::ALL
+        .into_iter()
+        .map(|c| (c, slot::core::sunlight_option(c)))
+        .filter(|(_, key)| key.is_some())
+        .collect();
+    assert_eq!(
+        named,
+        [
+            (Core::Mgba, Some("mgba_solar_sensor_level")),
+            (Core::Armgba, Some("armgba_solar_sensor")),
+        ]
+    );
+}
+
+#[test]
+fn armgba_starts_through_the_cards_own_bios_or_straight_into_the_game() {
+    let start = |platform, firmware| {
+        slot::core::armgba_options(platform, firmware, false)
+            .into_iter()
+            .filter(|(key, _)| *key == "armgba_skip_bios" || *key == "armgba_gb_boot_rom")
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        start(Platform::Gba, true),
+        [("armgba_skip_bios", "disabled")]
+    );
+    assert_eq!(
+        start(Platform::Gba, false),
+        [("armgba_skip_bios", "enabled")]
+    );
+    assert_eq!(
+        start(Platform::Gbav, false),
+        [("armgba_skip_bios", "enabled")]
+    );
+    assert_eq!(
+        start(Platform::Gb, true),
+        [("armgba_gb_boot_rom", "enabled")]
+    );
+    assert_eq!(
+        start(Platform::Gbc, false),
+        [("armgba_gb_boot_rom", "disabled")]
+    );
+}
+
+#[test]
+fn armgba_skips_frames_on_the_audio_buffer_keeps_the_real_clock_and_has_no_restart_combo() {
+    assert_eq!(
+        slot::core::armgba_options(Platform::Gba, true, true),
+        [
+            ("armgba_frame_skip", "auto"),
+            ("armgba_clock_source", "real"),
+            ("armgba_restart_buttons", "off"),
+            ("armgba_skip_bios", "disabled"),
+            ("armgba_color_correction", "enabled"),
+            ("armgba_link_mode", "separate"),
+            ("armgba_link_port", "cable"),
+        ]
+    );
+    assert_eq!(
+        slot::core::armgba_options(Platform::Gbc, false, false),
+        [
+            ("armgba_frame_skip", "auto"),
+            ("armgba_clock_source", "real"),
+            ("armgba_restart_buttons", "off"),
+            ("armgba_gb_boot_rom", "disabled"),
+            ("armgba_gb_color_correction", "disabled"),
+        ]
+    );
+}
+
+#[test]
+fn armgba_offers_its_own_cable_on_game_boy_advance_games_only() {
+    let link = |platform| {
+        slot::core::armgba_options(platform, false, false)
+            .into_iter()
+            .filter(|(key, _)| key.starts_with("armgba_link"))
+            .collect::<Vec<_>>()
+    };
+    let cable = [
+        ("armgba_link_mode", "separate"),
+        ("armgba_link_port", "cable"),
+    ];
+    assert_eq!(link(Platform::Gba), cable);
+    assert_eq!(link(Platform::Gbav), cable);
+    assert_eq!(link(Platform::Gb), []);
+    assert_eq!(link(Platform::Gbc), []);
+}
+
+#[test]
+fn only_armgba_carries_its_link_packets_as_they_are_sent() {
+    let live: Vec<Core> = Core::ALL
+        .into_iter()
+        .filter(|c| slot::core::links_live(*c))
+        .collect();
+    assert_eq!(live, [Core::Armgba]);
 }

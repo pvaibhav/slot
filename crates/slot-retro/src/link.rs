@@ -2,6 +2,8 @@ use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use crate::ffi::NETPACKET_RELIABLE;
+
 pub trait LinkChannel: Send {
     fn send(&mut self, flags: i32, buf: &[u8]);
 
@@ -40,11 +42,12 @@ pub struct Link(Arc<LinkState>);
 struct LinkState {
     inbound: Mutex<VecDeque<Vec<u8>>>,
     outbound: Mutex<VecDeque<Vec<u8>>>,
+    wire: Mutex<Option<Box<dyn LinkChannel>>>,
     active: AtomicBool,
 }
 
-fn lock(queue: &Mutex<VecDeque<Vec<u8>>>) -> MutexGuard<'_, VecDeque<Vec<u8>>> {
-    queue.lock().unwrap_or_else(|e| e.into_inner())
+fn lock<T>(held: &Mutex<T>) -> MutexGuard<'_, T> {
+    held.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 impl Link {
@@ -53,11 +56,27 @@ impl Link {
     }
 
     pub fn take_inbound(&self) -> Option<Vec<u8>> {
-        lock(&self.0.inbound).pop_front()
+        let queued = lock(&self.0.inbound).pop_front();
+        queued.or_else(|| lock(&self.0.wire).as_mut()?.try_recv())
     }
 
     pub fn push_outbound(&self, packet: Vec<u8>) {
+        if let Some(wire) = lock(&self.0.wire).as_mut() {
+            wire.send(NETPACKET_RELIABLE, &packet);
+            return;
+        }
         lock(&self.0.outbound).push_back(packet);
+    }
+
+    /// Carries the core's packets over `wire` as it sends and polls them, instead of queueing
+    /// them for the frontend to move between frames. A core that waits inside a frame for its
+    /// peer's answer needs its packet on the wire, and the answer read, before that frame ends.
+    pub fn plug(&self, wire: Box<dyn LinkChannel>) {
+        *lock(&self.0.wire) = Some(wire);
+    }
+
+    pub fn unplug(&self) {
+        *lock(&self.0.wire) = None;
     }
 
     pub fn take_outbound(&self) -> Option<Vec<u8>> {

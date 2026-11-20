@@ -70,7 +70,7 @@ pub use board::{
     socket_face, socket_face_text, update_cart_face, Placed, Seats, BOARD_H, BOARD_W, BOARD_Y,
     CHIP_H, CHIP_TIP, CHIP_U, CHIP_V, CHIP_W, FINGERS, FINGER_H, FINGER_Y, GBA_SEATS, HOP_LIFT,
     LID_TURN, ROM_H, ROM_W, ROM_X, ROM_Y, SHADOW_H, SHADOW_W, SLIDE_SHARE, SLIDE_UP, SOCKET_H,
-    SOCKET_U, SOCKET_V, SOCKET_W, TURN_PAD,
+    SOCKET_U, SOCKET_V, SOCKET_W, TURN_PAD, UPDATE_SEATS,
 };
 pub use cart::{
     bare_face, cart_backing, cart_box, cart_face, cart_face_with, cart_interior, cart_shadow,

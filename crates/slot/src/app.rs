@@ -19,7 +19,7 @@ use slot_ui::{
     ClockFaces, ClockPicker, ClockRow, ClockScreen, Draw, FfState, GbShell, Guide, Hud, HudKind,
     Icon, LinkBadge, Millis, Placed, Polaroids, PowerChoice, QuickMenu, QuickMenuFaces, QuickRow,
     QuickValue, Refusal, Seats, Shelf, ShotMode, ShotViewer, SlotChrome, TexId, Toast, CART_W,
-    GBA_SEATS, HINT_EDGE, HOP_LIFT, MOUTH_H, REPEAT_DELAY_MS, SHADOW_H, SHADOW_W, TURN_PAD,
+    HINT_EDGE, HOP_LIFT, MOUTH_H, REPEAT_DELAY_MS, SHADOW_H, SHADOW_W, TURN_PAD, UPDATE_SEATS,
 };
 
 use crate::art::jobs::{no_art_jobs, ArtEvent, ArtJob, ArtJobs};
@@ -4841,7 +4841,13 @@ impl App {
     }
 
     fn retire_switched_resume(&mut self) {
-        if self.link_core != Some(Core::Gpsp) || self.core != Core::Gpsp {
+        let plays_own_save = match self.link_core {
+            Some(Core::Gpsp | Core::Armgba) => true,
+            Some(Core::Mgba | Core::Gambatte) | None => false,
+            #[cfg(feature = "nds")]
+            Some(Core::Dsperate) => false,
+        };
+        if !plays_own_save || self.link_core != Some(self.core) {
             return;
         }
         let (Some(root), Some(cart)) = (self.root.clone(), self.seated_cart()) else {
@@ -4849,7 +4855,7 @@ impl App {
         };
         let (stem, platform) = (cart.stem.clone(), cart.platform);
         let own = slot_store::core_for_platform(&root, &stem, platform, self.gb_core());
-        if own == Core::Gpsp {
+        if own == self.core {
             return;
         }
         if let Some(h) = self.pending_save.take() {
@@ -4858,7 +4864,8 @@ impl App {
         let ring = StateRing::new(&root, platform, own, &stem);
         match ring.retire_resume(&format_stamp(self.wall_secs())) {
             Ok(Some(to)) => eprintln!(
-                "slot: link: gpSP keeps its own save, moved the {} resume to {}",
+                "slot: link: {} keeps its own save, moved the {} resume to {}",
+                self.core.text(),
                 own.as_str(),
                 to.display()
             ),
@@ -4956,18 +4963,14 @@ impl App {
     }
 
     pub fn bios_mismatch(&mut self) {
-        if !self.link_active() {
-            return;
-        }
-        let role = self
-            .link_client_id()
-            .map_or(self.last_role, LinkRow::from_client_id);
-        self.end_link();
-        self.hud.toast(Toast::BiosMismatch, self.now());
-        self.unplug(role);
+        self.end_link_saying(Toast::BiosMismatch);
     }
 
     pub fn peer_ended(&mut self) {
+        self.end_link_saying(Toast::PeerEnded);
+    }
+
+    fn end_link_saying(&mut self, why: Toast) {
         if !self.link_active() {
             return;
         }
@@ -4975,7 +4978,7 @@ impl App {
             .link_client_id()
             .map_or(self.last_role, LinkRow::from_client_id);
         self.end_link();
-        self.hud.toast(Toast::PeerEnded, self.now());
+        self.hud.toast(why, self.now());
         self.unplug(role);
     }
 
@@ -5342,7 +5345,7 @@ impl App {
     }
 
     pub fn sunlight(&self) -> Option<u8> {
-        if self.core != Core::Mgba
+        if crate::core::sunlight_option(self.core).is_none()
             || self.seated_cart().is_none()
             || self.playing_platform() != Platform::Gba
         {
@@ -5676,7 +5679,7 @@ impl App {
             let known = match crate::art::rom::cached_crc(&root, &path) {
                 Ok(crc) => Some((
                     crc,
-                    [Core::Mgba, Core::Gpsp, Core::Gambatte]
+                    Core::ALL
                         .into_iter()
                         .map(|c| (c, crate::root::bios_crc(&root, platform, c)))
                         .collect(),
@@ -5712,7 +5715,7 @@ impl App {
             game_crc: *crc,
             core: self.core,
             bios_crc: bios_of(bios, self.core),
-            kind: self.link_mode(&cart.stem).0,
+            kind: self.link_hardware,
             freq_mhz: ap.freq_mhz,
             bssid: ap.bssid,
             platform: cart.platform.hardware(),
@@ -5881,7 +5884,7 @@ impl App {
         std::thread::spawn(move || {
             let mut list = Vec::new();
             for platform in [Platform::Gba, Platform::Gb, Platform::Gbc] {
-                for core in [Core::Mgba, Core::Gpsp, Core::Gambatte] {
+                for core in Core::ALL {
                     list.push((platform, core, crate::root::bios_crc(&root, platform, core)));
                 }
             }
@@ -10767,7 +10770,7 @@ impl App {
         &self,
         board: Placed,
         seats: Seats,
-        pair: [Core; 2],
+        row: &[Core],
         sockets: &[TexId],
         chip: Chip,
         faces: &[TexId],
@@ -10776,11 +10779,13 @@ impl App {
         out: &mut Vec<Draw>,
     ) {
         let zoom = seats.zoom(board);
-        for (place, core) in pair.into_iter().enumerate() {
+        // A row shorter than the board's sockets sits in the middle ones.
+        let first = seats.socket_u.len().saturating_sub(row.len()) / 2;
+        for (place, core) in row.iter().enumerate() {
             let Some(tex) = sockets.get(core.index()).copied() else {
                 continue;
             };
-            let (x, y) = seats.at(board, seats.socket_u[place], seats.socket_v);
+            let (x, y) = seats.at(board, seats.socket_u[first + place], seats.socket_v);
             out.push(Draw::Tex {
                 x: x.round(),
                 y: y.round(),
@@ -10790,7 +10795,7 @@ impl App {
                 alpha: 1.0,
             });
         }
-        let u = seats.chip_u[0] + (seats.chip_u[1] - seats.chip_u[0]) * chip.across;
+        let u = seats.chip_u_at(first as f32 + chip.across);
         if chip.lift > 0.0 {
             if let Some(tex) = self.core_chip_shadow_face {
                 let (du, dv) = seats.shadow_uv;
@@ -10877,7 +10882,7 @@ impl App {
             self.draw_board_chip(
                 board,
                 seats(shell),
-                picker.pair(),
+                picker.row(),
                 sockets,
                 picker.chip(now),
                 chips,
@@ -11363,7 +11368,7 @@ impl App {
         let seat =
             slot_store::core_for_platform(&root, &cart.stem, cart.platform, self.state.gb_core);
         let now = self.now();
-        let mut picker = CorePicker::open(Core::pair(cart.platform), seat, now);
+        let mut picker = CorePicker::open(Core::row(cart.platform), seat, now);
         if self.core_faces_ready() {
             picker.start(now);
         }
@@ -11409,24 +11414,40 @@ impl App {
             self.hud.toast(Toast::NoWifi, self.now());
             return;
         }
-        if self.core == Core::Gambatte {
-            self.hud.toast(Toast::NeedsMgba, self.now());
-            return;
-        }
-        if self.core == Core::Mgba {
-            let wireless = self
-                .seated()
-                .is_some_and(|stem| self.link_mode(stem).0 == LinkKind::Wireless);
-            if wireless {
-                self.hud.toast(Toast::NeedsGpsp, self.now());
+        let wireless = || {
+            self.seated()
+                .is_some_and(|stem| self.link_mode(stem).0 == LinkKind::Wireless)
+        };
+        match self.core {
+            Core::Gambatte => {
+                self.hud.toast(Toast::NeedsMgba, self.now());
                 return;
             }
-            self.link_hardware = LinkKind::Cable;
-            self.radio_down();
-            self.radio.ask(RadioJob::Warm);
-            self.learn_game();
-            self.game_menu = Some(GameMenu::Pick(self.last_role));
-            return;
+            Core::Armgba => {
+                let refused = match self.platform {
+                    Platform::Gba if self.wireless_only() => Some(Toast::NeedsGpsp),
+                    Platform::Gba => None,
+                    Platform::Gb | Platform::Gbc => Some(Toast::NeedsMgba),
+                    Platform::Gbav => Some(Toast::NoLink),
+                    #[cfg(feature = "nds")]
+                    Platform::Nds => Some(Toast::NoLink),
+                };
+                match refused {
+                    Some(toast) => self.hud.toast(toast, self.now()),
+                    None => self.open_cable_menu(),
+                }
+                return;
+            }
+            Core::Mgba => {
+                match wireless() {
+                    true => self.hud.toast(Toast::NeedsGpsp, self.now()),
+                    false => self.open_cable_menu(),
+                }
+                return;
+            }
+            Core::Gpsp => {}
+            #[cfg(feature = "nds")]
+            Core::Dsperate => {}
         }
         if self.platform != Platform::Gba {
             self.hud.toast(Toast::NoLink, self.now());
@@ -11452,6 +11473,23 @@ impl App {
         self.radio.ask(RadioJob::Warm);
         self.learn_game();
         self.game_menu = Some(GameMenu::Pick(self.last_role));
+    }
+
+    fn open_cable_menu(&mut self) {
+        self.link_hardware = LinkKind::Cable;
+        self.radio_down();
+        self.radio.ask(RadioJob::Warm);
+        self.learn_game();
+        self.game_menu = Some(GameMenu::Pick(self.last_role));
+    }
+
+    /// Whether the seated game links only over the Wireless Adapter, which only gpSP carries.
+    fn wireless_only(&self) -> bool {
+        self.seated()
+            .and_then(|stem| self.auto_link(stem))
+            .is_some_and(|(cart, auto)| {
+                auto == LinkKind::Wireless && !link_dual(&cart.code, &cart.title)
+            })
     }
 
     fn game_menu_shortcut(&mut self) {
@@ -14947,7 +14985,7 @@ impl App {
         self.hold_wifi();
         self.update_jobs.ask(UpdateJob::Install(r.clone()));
         self.update_busy = true;
-        let mut picker = CorePicker::open(Core::pair(Platform::Gba), Core::Mgba, self.now());
+        let mut picker = CorePicker::open(&[Core::Mgba, Core::Gpsp], Core::Mgba, self.now());
         picker.start(self.now());
         self.update_picker = Some(picker);
         self.update_seat_at = None;
@@ -15276,8 +15314,8 @@ impl App {
         if let Some(picker) = &self.update_picker {
             self.draw_board_chip(
                 board,
-                GBA_SEATS,
-                picker.pair(),
+                UPDATE_SEATS,
+                picker.row(),
                 &self.update_sockets,
                 picker.chip(self.now()),
                 &self.update_chips,
@@ -15509,31 +15547,37 @@ impl App {
         let since = self.working_role(role.client_id()).1;
         let loaded = self.link_loaded.unwrap_or("auto");
         let switching = self.link_core.is_some_and(|c| c != self.core);
-        if self.link_core.unwrap_or(self.core) == Core::Mgba {
-            let player = role.client_id() as u8;
-            if self.link_player == Some(player) && !switching {
-                return self.begin_role(role, join, since);
+        match self.link_core.unwrap_or(self.core) {
+            Core::Armgba if !switching => return self.begin_role(role, join, since),
+            Core::Mgba => {
+                let player = role.client_id() as u8;
+                if self.link_player == Some(player) && !switching {
+                    return self.begin_role(role, join, since);
+                }
+                if self.snapshot.as_ref().is_some_and(|s| !s.resume_trusted()) {
+                    return self.refuse_join(join);
+                }
+                self.link_player = Some(player);
+                self.link_reload = Some((stem.clone(), loaded));
+                self.reload = Some(Reload {
+                    stem,
+                    role,
+                    cancelled: false,
+                    from: self.link_hardware,
+                    from_serial: loaded,
+                    fallback: false,
+                    join,
+                });
+                self.game_menu = Some(GameMenu::Working {
+                    role,
+                    step: LinkStep::Radio,
+                    since,
+                });
+                return;
             }
-            if self.snapshot.as_ref().is_some_and(|s| !s.resume_trusted()) {
-                return self.refuse_join(join);
-            }
-            self.link_player = Some(player);
-            self.link_reload = Some((stem.clone(), loaded));
-            self.reload = Some(Reload {
-                stem,
-                role,
-                cancelled: false,
-                from: self.link_hardware,
-                from_serial: loaded,
-                fallback: false,
-                join,
-            });
-            self.game_menu = Some(GameMenu::Working {
-                role,
-                step: LinkStep::Radio,
-                since,
-            });
-            return;
+            Core::Armgba | Core::Gpsp | Core::Gambatte => {}
+            #[cfg(feature = "nds")]
+            Core::Dsperate => {}
         }
         let (_, serial) = self.link_mode(&stem);
         if serial == loaded && !switching {
@@ -15690,8 +15734,25 @@ impl App {
         ) else {
             return;
         };
+        let was =
+            slot_store::core_for_platform(&root, &cart.stem, cart.platform, self.state.gb_core);
         if let Err(e) = slot_store::write_selected_core(&root, cart.platform, &cart.stem, core) {
             eprintln!("slot: core: could not write selected_core.txt: {e}");
+            return;
+        }
+        if was == core {
+            return;
+        }
+        let stamp = format_stamp(self.wall_secs());
+        match persist::retire_resume_older_than_sav(&root, cart.platform, core, &cart.stem, &stamp)
+        {
+            Ok(Some(to)) => eprintln!(
+                "slot: core: the save is newer than the {} resume, moved it to {}",
+                core.as_str(),
+                to.display()
+            ),
+            Ok(None) => {}
+            Err(e) => eprintln!("slot: core: could not move the resume aside: {e}"),
         }
     }
 

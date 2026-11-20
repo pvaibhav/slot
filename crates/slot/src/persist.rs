@@ -115,6 +115,27 @@ pub fn read_resume(
     StateRing::new(root, platform, core, stem).read_resume()
 }
 
+/// A flush writes the resume and the save within moments of each other, so a save has to be
+/// this much newer before it counts as written by a later session on another core.
+const SAVED_SINCE: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Moves `core`'s resume aside when the battery save was written after it. A resume carries the
+/// save as it was, so loading an older one would put that save back over the newer file.
+pub fn retire_resume_older_than_sav(
+    root: &Path,
+    platform: Platform,
+    core: Core,
+    stem: &str,
+    stamp: &str,
+) -> std::io::Result<Option<PathBuf>> {
+    let ring = StateRing::new(root, platform, core, stem);
+    let saved = std::fs::metadata(sav_path(root, platform, stem)).and_then(|m| m.modified());
+    match (ring.resume_modified(), saved) {
+        (Some(resume), Ok(sav)) if sav > resume + SAVED_SINCE => ring.retire_resume(stamp),
+        _ => Ok(None),
+    }
+}
+
 fn sav_path(root: &Path, platform: Platform, stem: &str) -> PathBuf {
     crate::root::saves_dir(root)
         .join(platform.dir_name())

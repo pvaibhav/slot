@@ -1382,3 +1382,228 @@ fn state_loads_resets_and_refreshes_each_cut_the_picture_and_frames_carry_their_
         "the refreshed frame was not tagged as a new picture"
     );
 }
+
+/// A core with a netpacket link of its own, which can wait inside a frame for its peer as
+/// armGBA's cable does: it sends "ask" and polls for the answer, for up to two seconds.
+struct Waiter {
+    inner: MockCore,
+    net: slot_retro::Link,
+    waits: bool,
+    linked: bool,
+    started: Arc<Mutex<Vec<u16>>>,
+    stops: Arc<AtomicUsize>,
+    answers: Arc<Mutex<Vec<Duration>>>,
+}
+
+impl Waiter {
+    fn new(waits: bool) -> Waiter {
+        Waiter {
+            inner: MockCore::new(),
+            net: slot_retro::Link::default(),
+            waits,
+            linked: false,
+            started: Arc::default(),
+            stops: Arc::default(),
+            answers: Arc::default(),
+        }
+    }
+}
+
+impl RetroCore for Waiter {
+    fn load(&mut self, rom: &Path) -> Result<(), CoreError> {
+        self.inner.load(rom)
+    }
+    fn run_frame(&mut self, input: ButtonMask) {
+        self.inner.run_frame(input);
+        if !(self.waits && self.linked) {
+            return;
+        }
+        let asked = Instant::now();
+        self.net.push_outbound(b"ask".to_vec());
+        while asked.elapsed() < Duration::from_secs(2) {
+            if self.net.take_inbound().as_deref() == Some(b"answer") {
+                self.answers.lock().unwrap().push(asked.elapsed());
+                return;
+            }
+            std::thread::sleep(Duration::from_micros(100));
+        }
+    }
+    fn video_xrgb8888(&self) -> &[u8] {
+        self.inner.video_xrgb8888()
+    }
+    fn take_audio(&mut self) -> Vec<i16> {
+        self.inner.take_audio()
+    }
+    fn serialize(&mut self) -> Result<Vec<u8>, CoreError> {
+        self.inner.serialize()
+    }
+    fn unserialize(&mut self, data: &[u8]) -> Result<(), CoreError> {
+        self.inner.unserialize(data)
+    }
+    fn save_ram(&self) -> Option<Vec<u8>> {
+        self.inner.save_ram()
+    }
+    fn load_save_ram(&mut self, data: &[u8]) -> Result<(), CoreError> {
+        self.inner.load_save_ram(data)
+    }
+    fn av_info(&self) -> AvInfo {
+        self.inner.av_info()
+    }
+    fn net(&self) -> slot_retro::Link {
+        self.net.clone()
+    }
+    fn start_link(&mut self, client_id: u16) {
+        self.linked = true;
+        self.started.lock().unwrap().push(client_id);
+    }
+    fn stop_link(&mut self) {
+        self.linked = false;
+        self.stops.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+#[test]
+fn a_live_link_starts_the_cores_link_at_once_and_carries_its_packets_both_ways() {
+    let core = Waiter::new(false);
+    let started = core.started.clone();
+    let emu = spawn_with_core(Box::new(core));
+    let (mut here, there) = paired_links();
+
+    emu.begin_live_link(1, Box::new(there));
+    assert!(
+        wait_for(|| emu.net().is_active()),
+        "the core's link never started"
+    );
+    assert_eq!(*started.lock().unwrap(), [1]);
+    here.send(NETPACKET_RELIABLE, b"the core's first packet");
+    assert_eq!(
+        wait_for_packet(|| emu.net().take_inbound()).as_deref(),
+        Some(&b"the core's first packet"[..]),
+        "the other device's packet did not reach the core"
+    );
+    emu.net().push_outbound(b"its reply".to_vec());
+    assert_eq!(
+        wait_for_packet(|| here.try_recv()).as_deref(),
+        Some(&b"its reply"[..]),
+        "the core's packet did not reach the wire"
+    );
+}
+
+#[test]
+fn a_core_that_waits_inside_a_frame_hears_its_answer_inside_that_frame() {
+    let core = Waiter::new(true);
+    let answers = core.answers.clone();
+    let emu = spawn_with_core(Box::new(core));
+    let (mut here, there) = paired_links();
+    emu.begin_live_link(0, Box::new(there));
+
+    let peer = std::thread::spawn(move || {
+        let until = Instant::now() + Duration::from_secs(3);
+        let mut asked = 0;
+        while Instant::now() < until && asked < 10 {
+            match here.try_recv() {
+                Some(p) if p == b"ask" => {
+                    asked += 1;
+                    here.send(NETPACKET_RELIABLE, b"answer");
+                }
+                _ => std::thread::sleep(Duration::from_micros(100)),
+            }
+        }
+        asked
+    });
+    assert_eq!(
+        peer.join().unwrap(),
+        10,
+        "the core's mid-frame asks never reached the wire"
+    );
+    let answers = answers.lock().unwrap().clone();
+    assert!(answers.len() >= 9, "answered {} of 10 asks", answers.len());
+    assert!(
+        answers
+            .iter()
+            .all(|took| *took < Duration::from_millis(100)),
+        "an answer waited for the frame to end: {answers:?}"
+    );
+}
+
+#[test]
+fn the_other_device_ending_takes_the_cores_link_down_before_the_app_does() {
+    struct Ends {
+        inner: PairedLink,
+        ended: Arc<AtomicBool>,
+    }
+    impl LinkChannel for Ends {
+        fn send(&mut self, flags: i32, buf: &[u8]) {
+            self.inner.send(flags, buf)
+        }
+        fn try_recv(&mut self) -> Option<Vec<u8>> {
+            self.inner.try_recv()
+        }
+        fn peer_ended(&self) -> bool {
+            self.ended.load(Ordering::SeqCst)
+        }
+    }
+
+    let core = Waiter::new(false);
+    let stops = core.stops.clone();
+    let emu = spawn_with_core(Box::new(core));
+    let (mut here, there) = paired_links();
+    let ended = Arc::new(AtomicBool::new(false));
+    emu.begin_live_link(
+        0,
+        Box::new(Ends {
+            inner: there,
+            ended: ended.clone(),
+        }),
+    );
+    assert!(wait_for(|| emu.net().is_active()));
+    assert_eq!(stops.load(Ordering::Relaxed), 0);
+
+    ended.store(true, Ordering::SeqCst);
+    assert!(
+        wait_for(|| stops.load(Ordering::Relaxed) == 1),
+        "the core went on linked to a device that had left"
+    );
+    assert!(
+        emu.peer_ended(),
+        "the app was not told the other device ended it"
+    );
+    emu.net().push_outbound(b"after the peer left".to_vec());
+    assert_eq!(here.try_recv(), None, "the core still wrote to the wire");
+}
+
+#[test]
+fn a_framed_link_is_left_to_the_app_when_its_peer_ends() {
+    struct Ends {
+        ended: Arc<AtomicBool>,
+    }
+    impl LinkChannel for Ends {
+        fn send(&mut self, _flags: i32, _buf: &[u8]) {}
+        fn try_recv(&mut self) -> Option<Vec<u8>> {
+            None
+        }
+        fn peer_ended(&self) -> bool {
+            self.ended.load(Ordering::SeqCst)
+        }
+    }
+
+    let core = Waiter::new(false);
+    let stops = core.stops.clone();
+    let emu = spawn_with_core(Box::new(core));
+    let ended = Arc::new(AtomicBool::new(false));
+    emu.begin_link(
+        0,
+        Box::new(Ends {
+            ended: ended.clone(),
+        }),
+    );
+    assert!(wait_for(|| emu.net().is_active()));
+    ended.store(true, Ordering::SeqCst);
+    assert!(wait_for(|| emu.peer_ended()));
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(
+        stops.load(Ordering::Relaxed),
+        0,
+        "a gpSP-style link was stopped before the app ended the session"
+    );
+}

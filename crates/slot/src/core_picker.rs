@@ -24,6 +24,7 @@ pub enum Outcome {
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Chip {
+    /// Where the chip is along the row, counted in seats from the first.
     pub across: f32,
     pub lift: f32,
     pub tip: f32,
@@ -32,9 +33,28 @@ pub struct Chip {
 }
 
 #[derive(Copy, Clone)]
+enum Motion {
+    Seated(usize),
+    Hopping(Hop),
+}
+
+/// A hop to a neighbouring seat, and the seat after it that a press made in flight asked for.
+#[derive(Copy, Clone)]
 struct Hop {
-    from: Core,
+    from: usize,
+    to: usize,
     started: Millis,
+    then: Option<usize>,
+}
+
+impl Hop {
+    fn rightward(&self) -> bool {
+        self.to > self.from
+    }
+
+    fn progress(&self, now: Millis) -> f32 {
+        now.saturating_sub(self.started) as f32 / HOP_MS as f32
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -45,23 +65,22 @@ struct Close {
 
 #[derive(Copy, Clone)]
 pub struct CorePicker {
-    pair: [Core; 2],
-    seat: Core,
+    row: &'static [Core],
+    motion: Motion,
     opened: Millis,
     started: Option<Millis>,
-    hop: Option<Hop>,
     close: Option<Close>,
     refusal: Option<Refusal>,
 }
 
 impl CorePicker {
-    pub fn open(pair: [Core; 2], seat: Core, now: Millis) -> Self {
+    pub fn open(row: &'static [Core], seat: Core, now: Millis) -> Self {
+        let at = row.iter().position(|c| *c == seat).unwrap_or(0);
         CorePicker {
-            pair,
-            seat,
+            row,
+            motion: Motion::Seated(at),
             opened: now,
             started: None,
-            hop: None,
             close: None,
             refusal: None,
         }
@@ -79,12 +98,16 @@ impl CorePicker {
         now.saturating_sub(self.opened)
     }
 
+    /// The core the chip ends up in once it stops hopping.
     pub fn seat(&self) -> Core {
-        self.seat
+        self.row[match self.motion {
+            Motion::Seated(seat) => seat,
+            Motion::Hopping(hop) => hop.then.unwrap_or(hop.to),
+        }]
     }
 
-    pub fn pair(&self) -> [Core; 2] {
-        self.pair
+    pub fn row(&self) -> &'static [Core] {
+        self.row
     }
 
     pub fn closing(&self) -> bool {
@@ -109,74 +132,106 @@ impl CorePicker {
         if self.close.is_some() {
             return Outcome::Nothing;
         }
-        let target = match press {
+        let rightward = match press {
             Press::Keep => {
                 self.begin_close(now);
-                return Outcome::Write(self.seat);
+                return Outcome::Write(self.seat());
             }
             Press::Back => {
                 self.begin_close(now);
                 return Outcome::Nothing;
             }
-            Press::Left => self.pair[0],
-            Press::Right => self.pair[1],
+            Press::Left => false,
+            Press::Right => true,
         };
         if self.waiting() {
             return Outcome::Nothing;
         }
-        if let Some(progress) = self.hop_progress(now) {
-            if target == self.seat {
-                return Outcome::Nothing;
+        self.motion = self.motion_at(now);
+        let seats = self.row.len();
+        let beside = |seat: usize| match rightward {
+            true => Some(seat + 1).filter(|s| *s < seats),
+            false => seat.checked_sub(1),
+        };
+        self.motion = match self.motion {
+            Motion::Seated(seat) => {
+                let Some(to) = beside(seat) else {
+                    self.refusal = Some(Refusal::started(now));
+                    return Outcome::Refused;
+                };
+                self.refusal = None;
+                Motion::Hopping(Hop {
+                    from: seat,
+                    to,
+                    started: now,
+                    then: None,
+                })
             }
-            let done = ((1.0 - progress) * HOP_MS as f32) as Millis;
-            self.hop = Some(Hop {
-                from: self.seat,
-                started: now.saturating_sub(done),
-            });
-            self.seat = target;
-            self.refusal = None;
-            return Outcome::Nothing;
-        }
-        if target == self.seat {
-            self.refusal = Some(Refusal::started(now));
-            return Outcome::Refused;
-        }
-        self.hop = Some(Hop {
-            from: self.seat,
-            started: now,
-        });
-        self.seat = target;
-        self.refusal = None;
+            Motion::Hopping(hop) if hop.rightward() == rightward => Motion::Hopping(Hop {
+                then: hop.then.or_else(|| beside(hop.to)),
+                ..hop
+            }),
+            Motion::Hopping(hop) if hop.then.is_some() => {
+                Motion::Hopping(Hop { then: None, ..hop })
+            }
+            Motion::Hopping(hop) => {
+                let left = ((1.0 - hop.progress(now)) * HOP_MS as f32) as Millis;
+                self.refusal = None;
+                Motion::Hopping(Hop {
+                    from: hop.to,
+                    to: hop.from,
+                    started: now.saturating_sub(left),
+                    then: None,
+                })
+            }
+        };
         Outcome::Nothing
     }
 
     pub fn chip(&self, now: Millis) -> Chip {
         let shake = self.refusal.map_or(0.0, |r| r.offset(now));
-        match (self.hop, self.hop_progress(now)) {
-            (Some(hop), Some(q)) => {
-                let rightward = hop.from == self.pair[0];
-                let lean = if rightward { 1.0 } else { -1.0 };
+        match self.motion_at(now) {
+            Motion::Hopping(hop) => {
+                let q = hop.progress(now);
+                let lean = if hop.rightward() { 1.0 } else { -1.0 };
                 let arc = (std::f32::consts::PI * q).sin();
                 Chip {
-                    across: if rightward { ease(q) } else { 1.0 - ease(q) },
+                    across: hop.from as f32 + lean * ease(q),
                     lift: arc,
                     tip: lean * CHIP_TIP * arc,
                     seated: None,
                     shake,
                 }
             }
-            _ => Chip {
-                across: self.place(self.seat) as f32,
+            Motion::Seated(seat) => Chip {
+                across: seat as f32,
                 lift: 0.0,
                 tip: 0.0,
-                seated: Some(self.seat),
+                seated: Some(self.row[seat]),
                 shake,
             },
         }
     }
 
-    fn place(&self, core: Core) -> usize {
-        usize::from(core == self.pair[1])
+    /// The motion at `now`: a hop that has landed is in its seat, or already on the hop asked for
+    /// while it flew.
+    fn motion_at(&self, now: Millis) -> Motion {
+        let mut motion = self.motion;
+        while let Motion::Hopping(hop) = motion {
+            if hop.progress(now) < 1.0 {
+                break;
+            }
+            motion = match hop.then {
+                Some(to) => Motion::Hopping(Hop {
+                    from: hop.to,
+                    to,
+                    started: hop.started + HOP_MS,
+                    then: None,
+                }),
+                None => Motion::Seated(hop.to),
+            };
+        }
+        motion
     }
 
     fn begin_close(&mut self, now: Millis) {
@@ -184,11 +239,5 @@ impl CorePicker {
             started: now,
             from: self.openness(now),
         });
-    }
-
-    fn hop_progress(&self, now: Millis) -> Option<f32> {
-        let hop = self.hop?;
-        let q = now.saturating_sub(hop.started) as f32 / HOP_MS as f32;
-        (q < 1.0).then_some(q)
     }
 }

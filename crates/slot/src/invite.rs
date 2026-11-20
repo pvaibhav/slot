@@ -41,6 +41,7 @@ fn core_byte(core: Core) -> u8 {
         Core::Mgba => 1,
         Core::Gpsp => 2,
         Core::Gambatte => 3,
+        Core::Armgba => 4,
         #[cfg(feature = "nds")]
         Core::Dsperate => 0,
     }
@@ -51,6 +52,7 @@ fn core_from(byte: u8) -> Option<Core> {
         1 => Some(Core::Mgba),
         2 => Some(Core::Gpsp),
         3 => Some(Core::Gambatte),
+        4 => Some(Core::Armgba),
         _ => None,
     }
 }
