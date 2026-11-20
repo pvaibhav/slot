@@ -297,6 +297,18 @@ pub fn apply_link_options(core: &mut LibretroCore, which: Core, player: u8) {
     eprintln!("slot: core: link mode on, player {player}");
 }
 
+/// Whether the core's link waits inside a frame for the other device, so its packets must cross
+/// as it sends and polls them. armGBA's cable does, for every transfer; gpSP's link and mGBA's
+/// cable trade their packets between frames.
+pub fn links_live(which: Core) -> bool {
+    match which {
+        Core::Armgba => true,
+        Core::Mgba | Core::Gpsp | Core::Gambatte => false,
+        #[cfg(feature = "nds")]
+        Core::Dsperate => false,
+    }
+}
+
 pub fn palette_options(which: Core, colors: GbColors) -> Vec<(&'static str, &'static str)> {
     match (which, colors) {
         (Core::Gambatte, GbColors::Palette(p)) => vec![

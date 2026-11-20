@@ -506,9 +506,13 @@ fn the_link_screen_draws_its_role_over_the_game() {
 }
 
 fn session_playing_on_gpsp() -> (Session, TempDir, Millis) {
+    session_playing_on(Core::Gpsp)
+}
+
+fn session_playing_on(core: Core) -> (Session, TempDir, Millis) {
     let d = common::tmp_root_with_carts(&["Emerald"]);
     common::write_hack_header(&d, "Emerald", "POKEMON EMER", "BPEE");
-    slot_store::write_selected_core(d.path(), Platform::Gba, "Emerald", Core::Gpsp).expect("write core");
+    slot_store::write_selected_core(d.path(), Platform::Gba, "Emerald", core).expect("write core");
     write_slot_state(
         d.path(),
         &SlotState {
@@ -597,6 +601,43 @@ fn a_started_link_reaches_the_emulator_thread_with_its_transport() {
         step(&mut s, &mut now, &[]);
         std::thread::sleep(Duration::from_millis(2));
     }
+}
+
+#[test]
+fn an_armgba_session_whose_core_offers_no_link_is_turned_down_on_both_ends() {
+    let (mut s, _d, mut now) = session_playing_on(Core::Armgba);
+    let port = common::free_port();
+    let far = std::thread::spawn(move || TcpLink::host("127.0.0.1", port).expect("host"));
+    std::thread::sleep(Duration::from_millis(150));
+    s.app_mut().start_link(
+        fake_starter(move |_, _| TcpLink::join("127.0.0.1", port)),
+        1,
+    );
+    let deadline = Instant::now() + BAIL;
+    while s.app().toast() != Some(Toast::CoreMismatch) {
+        assert!(
+            Instant::now() < deadline,
+            "the refusal never reached the app"
+        );
+        step(&mut s, &mut now, &[]);
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let mut far = far.join().expect("host thread");
+    assert!(!s.app().link_active(), "the session outlived the refusal");
+    let deadline = Instant::now() + BAIL;
+    while !far.peer_ended() {
+        assert!(
+            Instant::now() < deadline,
+            "the far end was never told the link was over"
+        );
+        step(&mut s, &mut now, &[]);
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    assert_eq!(
+        far.try_recv(),
+        None,
+        "a core with no link protocol said hello anyway"
+    );
 }
 
 #[test]
@@ -1584,6 +1625,26 @@ fn armgba_has_no_link_and_names_the_core_that_does() {
         assert_eq!(app.toast(), Some(needs), "{code}");
         assert!(!app.link_active(), "armGBA started a link session for {code}");
     }
+}
+
+#[test]
+fn a_device_on_another_core_ends_the_session_and_unplugs_saying_why() {
+    let (mut app, _d) = playing_on(Core::Armgba);
+    app.begin_link(1);
+    app.core_mismatch();
+    assert!(!app.link_active(), "the session outlived the refusal");
+    assert_eq!(app.toast(), Some(Toast::CoreMismatch));
+    assert!(
+        matches!(
+            app.game_menu(),
+            Some(GameMenu::Unplug {
+                role: LinkRow::Join,
+                ..
+            })
+        ),
+        "{:?}",
+        app.game_menu()
+    );
 }
 
 #[test]

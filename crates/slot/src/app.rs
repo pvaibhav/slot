@@ -4750,18 +4750,18 @@ impl App {
     }
 
     pub fn bios_mismatch(&mut self) {
-        if !self.link_active() {
-            return;
-        }
-        let role = self
-            .link_client_id()
-            .map_or(self.last_role, LinkRow::from_client_id);
-        self.end_link();
-        self.hud.toast(Toast::BiosMismatch, self.now());
-        self.unplug(role);
+        self.end_link_saying(Toast::BiosMismatch);
+    }
+
+    pub fn core_mismatch(&mut self) {
+        self.end_link_saying(Toast::CoreMismatch);
     }
 
     pub fn peer_ended(&mut self) {
+        self.end_link_saying(Toast::PeerEnded);
+    }
+
+    fn end_link_saying(&mut self, why: Toast) {
         if !self.link_active() {
             return;
         }
@@ -4769,7 +4769,7 @@ impl App {
             .link_client_id()
             .map_or(self.last_role, LinkRow::from_client_id);
         self.end_link();
-        self.hud.toast(Toast::PeerEnded, self.now());
+        self.hud.toast(why, self.now());
         self.unplug(role);
     }
 

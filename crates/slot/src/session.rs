@@ -400,10 +400,12 @@ impl Session {
             emu.set_volume(self.app.output_volume());
         }
         if let Some((client_id, transport)) = self.app.take_link_transport() {
+            let live = crate::core::links_live(self.app.core());
             match &self.emu {
-                Some(emu) => match self.app.link_player() {
-                    Some(player) => emu.begin_cable(player, transport),
-                    None => emu.begin_link(client_id, transport),
+                Some(emu) => match (self.app.link_player(), live) {
+                    (Some(player), _) => emu.begin_cable(player, transport),
+                    (None, true) => emu.begin_live_link(client_id, transport),
+                    (None, false) => emu.begin_link(client_id, transport),
                 },
                 None => eprintln!("slot: link: a transport arrived with no core to run it"),
             }
@@ -450,6 +452,8 @@ impl Session {
         if self.app.link_active() {
             if self.emu.as_ref().is_some_and(EmuHandle::bios_mismatch) {
                 self.bridge_link(|app| app.bios_mismatch());
+            } else if self.emu.as_ref().is_some_and(EmuHandle::core_mismatch) {
+                self.bridge_link(|app| app.core_mismatch());
             } else if self.emu.as_ref().is_some_and(EmuHandle::peer_ended) {
                 self.bridge_link(|app| app.peer_ended());
             } else if self.emu.as_ref().is_some_and(EmuHandle::link_lost) {

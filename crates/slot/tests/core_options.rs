@@ -515,3 +515,12 @@ fn armgba_skips_frames_on_the_audio_buffer_keeps_the_real_clock_and_has_no_resta
         ]
     );
 }
+
+#[test]
+fn only_armgba_carries_its_link_packets_as_they_are_sent() {
+    let live: Vec<Core> = Core::ALL
+        .into_iter()
+        .filter(|c| slot::core::links_live(*c))
+        .collect();
+    assert_eq!(live, [Core::Armgba]);
+}
