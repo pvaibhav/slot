@@ -1412,7 +1412,6 @@ fn the_cable_keeps_every_word_in_turn_as_the_network_slows_and_breaks_past_three
 }
 
 #[test]
-#[ignore = "armGBA 1.8.1 hangs: link.c's stopReached schedules exact.stop while it is still queued"]
 fn back_to_back_transfers_keep_both_games_running_over_a_20_ms_link() {
     let _g = common::core_lock();
     if !armgba() {

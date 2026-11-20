@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+here="$(cd "$(dirname "$0")" && pwd)"
+
 device_cflags="-mcpu=cortex-a53"
 cmake_version="3.28.6"
 
@@ -9,11 +11,19 @@ usage() {
 	exit 2
 }
 
+sha256() {
+	if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi |
+		cut -d' ' -f1
+}
+
 stamp() {
 	echo "commit=$1"
 	echo "source=https://github.com/MagnominusGit/armGBA/archive/$1.tar.gz"
 	echo "recipe=cmake -DCMAKE_BUILD_TYPE=Release, target armgba_libretro"
 	echo "device_cflags=$device_cflags"
+	for p in "$here"/*.patch; do
+		echo "patch=$(basename "$p") sha256:$(sha256 "$p")"
+	done
 }
 
 build() {
@@ -33,6 +43,10 @@ build() {
 		echo "$tarball does not hold armGBA-$commit/CMakeLists.txt" >&2
 		exit 1
 	fi
+
+	for p in "$here"/*.patch; do
+		patch -p1 --batch --forward -d "$src" <"$p"
+	done
 
 	cmake -S "$src" -B "$work/build" -DCMAKE_BUILD_TYPE=Release \
 		-DCMAKE_C_FLAGS="$device_cflags" -DCMAKE_CXX_FLAGS="$device_cflags"

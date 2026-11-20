@@ -1,0 +1,10 @@
+--- a/libretro/link.c	2026-11-20 05:49:41
++++ b/libretro/link.c	2026-11-20 05:49:41
+@@ -548,6 +548,7 @@
+ 		exact.held = true;
+ 		machine->returnRequested = true;
+ 		timingInterrupt(machine);
++		timingDeschedule(machine, &exact.stop);
+ 		timingSchedule(machine, &exact.stop, 0);
+ 		return;
+ 	}

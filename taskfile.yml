@@ -684,6 +684,9 @@ tasks:
         sha="$(cat vendor/armgba-src.sha)"
         cp vendor/armgba-src.tar.gz "{{.OUT}}/System/licenses/armgba-${sha}.tar.gz"
         cp vendor/armgba-src.meta "{{.OUT}}/System/licenses/armgba-${sha}.meta"
+        for p in cores/armgba/*.patch; do
+          cp "$p" "{{.OUT}}/System/licenses/armgba-$(basename "$p")"
+        done
       - |
         set -euo pipefail
         commit="$(grep '^commit=' vendor/mgba_libretro.so.meta | cut -d= -f2)"
@@ -741,6 +744,9 @@ tasks:
         sha="$(cat vendor/armgba-src.sha)"
         cp vendor/armgba-src.tar.gz "{{.OUT}}/System/licenses/armgba-${sha}.tar.gz"
         cp vendor/armgba-src.meta "{{.OUT}}/System/licenses/armgba-${sha}.meta"
+        for p in cores/armgba/*.patch; do
+          cp "$p" "{{.OUT}}/System/licenses/armgba-$(basename "$p")"
+        done
       - |
         set -euo pipefail
         commit="$(grep '^commit=' vendor/mgba_libretro.so.meta | cut -d= -f2)"
@@ -819,6 +825,9 @@ tasks:
         sha="$(cat vendor/armgba-src.sha)"
         {{.ADB}} push vendor/armgba-src.tar.gz "{{.SD}}/System/licenses/armgba-${sha}.tar.gz"
         {{.ADB}} push vendor/armgba-src.meta "{{.SD}}/System/licenses/armgba-${sha}.meta"
+        for p in cores/armgba/*.patch; do
+          {{.ADB}} push "$p" "{{.SD}}/System/licenses/armgba-$(basename "$p")"
+        done
       - |
         set -euo pipefail
         commit="$(grep '^commit=' vendor/mgba_libretro.so.meta | cut -d= -f2)"
