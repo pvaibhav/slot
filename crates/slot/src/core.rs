@@ -340,12 +340,13 @@ pub fn armgba_options(
     firmware: bool,
     colour: bool,
 ) -> Vec<(&'static str, &'static str)> {
-    let start = match platform.hardware() {
-        Platform::Gb | Platform::Gbc => (
+    let game_boy = matches!(platform.hardware(), Platform::Gb | Platform::Gbc);
+    let start = match game_boy {
+        true => (
             "armgba_gb_boot_rom",
             if firmware { "enabled" } else { "disabled" },
         ),
-        _ => (
+        false => (
             "armgba_skip_bios",
             if firmware { "disabled" } else { "enabled" },
         ),
@@ -358,6 +359,14 @@ pub fn armgba_options(
         start,
     ];
     options.extend(colour_option(Core::Armgba, platform, colour));
+    if !game_boy {
+        // Separate offers the cable from the moment the game loads, so a link needs no reload;
+        // until a session starts the console has nothing on its port, as with Link Mode Off.
+        options.extend([
+            ("armgba_link_mode", "separate"),
+            ("armgba_link_port", "cable"),
+        ]);
+    }
     options
 }
 
